@@ -1,4 +1,4 @@
-import { lecturers, subjects, upsertUser } from '@studies/db';
+import { type ClassKind, lecturers, subjects, upsertUser } from '@studies/db';
 import {
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -18,7 +18,6 @@ import {
   assignLecturer,
   banReply,
   editSubject,
-  type LecturerRole,
   listSubjects,
 } from './admin.js';
 import { replyOptions } from './reply.js';
@@ -168,7 +167,8 @@ async function runCommand(
         await assignLecturer(db, {
           subjectCode: i.options.getString('subject', true),
           lecturerId,
-          role: i.options.getString('role', true) as LecturerRole,
+          classKind: i.options.getString('class', true) as ClassKind,
+          groupNumber: i.options.getInteger('group') ?? undefined,
         }),
       );
       return;

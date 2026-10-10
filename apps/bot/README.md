@@ -11,7 +11,7 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History, Add Reactions, Send Messages in Threads:
    `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=274877973568`
    (= View Channels + Read Message History + Add Reactions + Send Messages in Threads).
-5. Create forum channels with the tags Wykład, Laboratorium, Ćwiczenia, Kolokwium, Egzamin.
+5. Create forum channels with the tags Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium and Gr. 1 … Gr. N (one per group). A post tagged e.g. Laboratorium + Gr. 3 lands under that class/group; other tags (Kolokwium, Egzamin, ...) stay plain tags.
 6. Fill the bot variables in `.env` (see `.env.example`), start the DB (`pnpm db:up && pnpm db:migrate`).
 7. Register slash commands: `pnpm --filter @studies/bot register`.
 8. Run: `pnpm dev:bot` (watch mode) or `pnpm --filter @studies/bot start`.
@@ -34,6 +34,8 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
 7. Delete a post that has been archived for more than 4 h -> its materials are hidden on the site (raw gateway events cover uncached threads).
 8. Create a post as a new student -> `topics.created_by` is set (not NULL).
 9. `/subject add` on a forum the bot cannot see -> ephemeral warning about View Channel / Read Message History.
+10. `/lecturer assign` with `class` (and optionally `group`) -> reply "Przypisano prowadzącego do <KOD> / <Rodzaj>[, Gr. N].".
+11. Tag a post Laboratorium + Gr. 3, then re-tag it Ćwiczenia -> it moves to Ćwiczenia with no group.
 
 Note: if the gateway connection is down while the bot runs, events in that window are missed;
 recover by restarting the bot (startup catch-up) or running `/resync`.

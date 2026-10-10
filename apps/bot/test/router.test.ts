@@ -37,6 +37,7 @@ const mkInteraction = (over: Record<string, unknown>) => ({
   member: { roles: ['r'] },
   reply: vi.fn().mockResolvedValue(undefined),
   followUp: vi.fn().mockResolvedValue(undefined),
+  editReply: vi.fn().mockResolvedValue(undefined),
   ...over,
 });
 

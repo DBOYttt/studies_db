@@ -1,4 +1,6 @@
 import {
+  classes,
+  classGroups,
   type Db,
   insertMaterial,
   materials,
@@ -159,5 +161,65 @@ describe('upsertTopic concurrency', () => {
       expect(a).toBe(b);
       expect(await tagNames(a as number)).toHaveLength(2);
     }
+  });
+});
+
+describe('upsertTopic hierarchy', () => {
+  beforeAll(async () => {
+    await syncForumTags(db, subjectId, [
+      { id: 'tagA', name: 'A' },
+      { id: 'tagLab', name: 'Laboratorium' },
+      { id: 'tagCw', name: 'Ćwiczenia' },
+      { id: 'tagG3', name: 'Gr. 3' },
+    ]);
+  });
+
+  async function placement(topicId: number) {
+    const [r] = await db
+      .select({ kind: classes.kind, group: classGroups.number })
+      .from(topics)
+      .leftJoin(classes, eq(classes.id, topics.classId))
+      .leftJoin(classGroups, eq(classGroups.id, topics.groupId))
+      .where(eq(topics.id, topicId));
+    return r;
+  }
+
+  it('assigns class and group from tags, and re-tag clears group', async () => {
+    const id = (await upsertTopic(
+      db,
+      thread({ threadId: 'h1', tagIds: ['tagG3', 'tagLab'] }),
+      owner,
+    )) as number;
+    expect(await placement(id)).toEqual({ kind: 'laboratorium', group: 3 });
+    await upsertTopic(
+      db,
+      thread({ threadId: 'h1', tagIds: ['tagCw', 'unknown'] }),
+      owner,
+    );
+    expect(await placement(id)).toEqual({ kind: 'cwiczenia', group: null });
+    await upsertTopic(db, thread({ threadId: 'h1', tagIds: ['tagA'] }), owner);
+    expect(await placement(id)).toEqual({ kind: null, group: null });
+  });
+
+  it('concurrent upserts create one class and group row', async () => {
+    await db.delete(classes).where(eq(classes.subjectId, subjectId));
+    const ids = await Promise.all(
+      ['c1', 'c2', 'c3'].map((threadId) =>
+        upsertTopic(
+          db,
+          thread({ threadId, tagIds: ['tagLab', 'tagG3'] }),
+          owner,
+        ),
+      ),
+    );
+    expect(
+      await db.select().from(classes).where(eq(classes.subjectId, subjectId)),
+    ).toHaveLength(1);
+    expect(await db.select().from(classGroups)).toHaveLength(1);
+    for (const id of ids)
+      expect(await placement(id as number)).toEqual({
+        kind: 'laboratorium',
+        group: 3,
+      });
   });
 });

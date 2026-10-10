@@ -1,10 +1,10 @@
+import { CLASS_KINDS, CLASS_NAMES } from '@studies/db';
 import {
   ChannelType,
   PermissionFlagsBits,
   type RESTPostAPIApplicationCommandsJSONBody,
   SlashCommandBuilder,
 } from 'discord.js';
-import { LECTURER_ROLES } from './admin.js';
 
 const subject = new SlashCommandBuilder()
   .setName('subject')
@@ -129,10 +129,19 @@ const lecturer = new SlashCommandBuilder()
       )
       .addStringOption((o) =>
         o
-          .setName('role')
-          .setDescription('Rola')
-          .addChoices(...LECTURER_ROLES.map((r) => ({ name: r, value: r })))
+          .setName('class')
+          .setDescription('Rodzaj zajęć')
+          .addChoices(
+            ...CLASS_KINDS.map((k) => ({ name: CLASS_NAMES[k], value: k })),
+          )
           .setRequired(true),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('group')
+          .setDescription('Numer grupy')
+          .setMinValue(1)
+          .setMaxValue(99),
       ),
   );
 

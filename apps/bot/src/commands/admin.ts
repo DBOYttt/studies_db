@@ -1,21 +1,16 @@
 import {
   CLASS_NAMES,
-  classes,
+  type ClassKind,
   classLecturers,
   type Db,
+  ensureClass,
+  ensureGroup,
+  groupName,
   lecturers,
   setBanned,
   subjects,
 } from '@studies/db';
 import { and, asc, eq, isNull } from 'drizzle-orm';
-
-export const LECTURER_ROLES = [
-  'wyklad',
-  'laboratorium',
-  'cwiczenia',
-  'projekt',
-] as const;
-export type LecturerRole = (typeof LECTURER_ROLES)[number];
 
 export type SubjectInput = {
   channelId: string;
@@ -107,7 +102,12 @@ export async function addLecturer(
 
 export async function assignLecturer(
   db: Db,
-  i: { subjectCode: string; lecturerId: number; role: LecturerRole },
+  i: {
+    subjectCode: string;
+    lecturerId: number;
+    classKind: ClassKind;
+    groupNumber?: number;
+  },
 ): Promise<string> {
   const code = i.subjectCode.trim().toUpperCase();
   const [subject] = await db
@@ -120,33 +120,33 @@ export async function assignLecturer(
     .from(lecturers)
     .where(eq(lecturers.id, i.lecturerId));
   if (!lecturer) return `Nie znaleziono prowadzącego o id ${i.lecturerId}.`;
-  await db
-    .insert(classes)
-    .values({
-      subjectId: subject.id,
-      kind: i.role,
-      name: CLASS_NAMES[i.role],
-    })
-    .onDuplicateKeyUpdate({ set: { kind: i.role } });
-  const [cls] = await db
-    .select({ id: classes.id })
-    .from(classes)
-    .where(and(eq(classes.subjectId, subject.id), eq(classes.kind, i.role)));
+  const classId = await ensureClass(db, subject.id, i.classKind);
+  const groupId =
+    i.groupNumber === undefined
+      ? null
+      : await ensureGroup(db, classId, i.groupNumber);
+  // NULL group_id is not unique-enforced, so check for an existing row.
   const [existing] = await db
     .select({ id: classLecturers.id })
     .from(classLecturers)
     .where(
       and(
-        eq(classLecturers.classId, cls.id),
+        eq(classLecturers.classId, classId),
         eq(classLecturers.lecturerId, i.lecturerId),
-        isNull(classLecturers.groupId),
+        groupId === null
+          ? isNull(classLecturers.groupId)
+          : eq(classLecturers.groupId, groupId),
       ),
     );
   if (!existing)
     await db
       .insert(classLecturers)
-      .values({ classId: cls.id, lecturerId: i.lecturerId, groupId: null });
-  return `Przypisano prowadzącego do ${code} jako ${i.role}.`;
+      .values({ classId, lecturerId: i.lecturerId, groupId });
+  const where =
+    i.groupNumber === undefined
+      ? CLASS_NAMES[i.classKind]
+      : `${CLASS_NAMES[i.classKind]}, ${groupName(i.groupNumber)}`;
+  return `Przypisano prowadzącego do ${code} / ${where}.`;
 }
 
 export async function banReply(

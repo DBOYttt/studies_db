@@ -1,4 +1,6 @@
 import {
+  classGroups,
+  classLecturers,
   consumeLoginToken,
   type Db,
   insertMaterial,
@@ -81,15 +83,31 @@ describe('lecturers', () => {
     const r = await addLecturer(db, { name: 'Jan Kowalski', title: 'dr' });
     const id = Number(/id (\d+)/.exec(r)?.[1]);
     expect(r).toBe(`Dodano prowadzącego dr Jan Kowalski (id ${id}).`);
-    const a = { subjectCode: 'alg', lecturerId: id, role: 'wyklad' as const };
+    const a = {
+      subjectCode: 'alg',
+      lecturerId: id,
+      classKind: 'laboratorium' as const,
+    };
     expect(await assignLecturer(db, a)).toBe(
-      'Przypisano prowadzącego do ALG jako wyklad.',
+      'Przypisano prowadzącego do ALG / Laboratorium.',
     );
     expect(await assignLecturer(db, a)).toBe(
-      'Przypisano prowadzącego do ALG jako wyklad.',
+      'Przypisano prowadzącego do ALG / Laboratorium.',
     );
+    expect(await db.select().from(classLecturers)).toHaveLength(1);
+    expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
+      'Przypisano prowadzącego do ALG / Laboratorium, Gr. 3.',
+    );
+    expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
+      'Przypisano prowadzącego do ALG / Laboratorium, Gr. 3.',
+    );
+    expect(await db.select().from(classLecturers)).toHaveLength(2);
+    expect(await db.select().from(classGroups)).toHaveLength(1);
     expect(await assignLecturer(db, { ...a, subjectCode: 'zzz' })).toBe(
       'Nie znaleziono przedmiotu zzz.',
+    );
+    expect(await assignLecturer(db, { ...a, lecturerId: 9999 })).toBe(
+      'Nie znaleziono prowadzącego o id 9999.',
     );
   });
 });
@@ -225,6 +243,37 @@ describe('commandDefinitions', () => {
     expect(find('lecturer', 'add', 'name')).toBe(200);
     expect(find('lecturer', 'add', 'title')).toBe(50);
     expect(find('lecturer', 'add', 'email')).toBe(200);
+  });
+
+  it('lecturer assign takes class choices and optional group 1-99', () => {
+    type Opt = {
+      name: string;
+      required?: boolean;
+      min_value?: number;
+      max_value?: number;
+      choices?: { name: string; value: string }[];
+      options?: Opt[];
+    };
+    const c = commandDefinitions.find(
+      (x) => x.name === 'lecturer',
+    ) as unknown as {
+      options: Opt[];
+    };
+    const opts = c.options.find((o) => o.name === 'assign')?.options ?? [];
+    expect(opts.find((o) => o.name === 'role')).toBeUndefined();
+    const cls = opts.find((o) => o.name === 'class');
+    expect(cls?.required).toBe(true);
+    expect(cls?.choices).toEqual([
+      { name: 'Wykład', value: 'wyklad' },
+      { name: 'Laboratorium', value: 'laboratorium' },
+      { name: 'Ćwiczenia', value: 'cwiczenia' },
+      { name: 'Projekt', value: 'projekt' },
+      { name: 'Seminarium', value: 'seminarium' },
+    ]);
+    const g = opts.find((o) => o.name === 'group');
+    expect(g?.required).toBeFalsy();
+    expect(g?.min_value).toBe(1);
+    expect(g?.max_value).toBe(99);
   });
 
   it('restricts admin commands by default permissions only', () => {

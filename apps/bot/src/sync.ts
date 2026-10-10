@@ -1,4 +1,5 @@
 import {
+  assignTopicHierarchy,
   type DbExecutor,
   materials,
   subjects,
@@ -79,7 +80,11 @@ export async function upsertTopic(
   const wanted =
     t.tagIds.length > 0
       ? await db
-          .select({ id: tags.id })
+          .select({
+            id: tags.id,
+            name: tags.name,
+            discordId: tags.discordTagId,
+          })
           .from(tags)
           .where(
             and(
@@ -107,6 +112,12 @@ export async function upsertTopic(
       .values(wantedIds.map((tagId) => ({ topicId: row.id, tagId })))
       .onDuplicateKeyUpdate({ set: { topicId: sql`topic_id` } });
   }
+  const nameByDiscordId = new Map(wanted.map((w) => [w.discordId, w.name]));
+  const orderedNames = t.tagIds.flatMap((id) => {
+    const n = nameByDiscordId.get(id);
+    return n === undefined ? [] : [n];
+  });
+  await assignTopicHierarchy(db, row.id, subject.id, orderedNames);
   return row.id;
 }
 
