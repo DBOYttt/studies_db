@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { DataGrid } from '@/components/DataGrid';
 import { TagBadge } from '@/components/TagBadge';
 import { getDb } from '@/lib/db';
-import { formatDate, ROLE_LABELS } from '@/lib/format';
+import { formatDate, pluralPl, ROLE_LABELS } from '@/lib/format';
 import { getSubject, listSubjectTags, listTopics } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -45,7 +45,9 @@ export default async function SubjectPage({
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">{subject.name}</h1>
         <p className="text-sm text-[var(--muted)]">
-          {subject.code} · semestr {subject.semester} · {subject.ects} ECTS
+          {subject.code} · semestr {subject.semester} · {subject.ects} ECTS ·{' '}
+          {topics.length}{' '}
+          {pluralPl(topics.length, 'temat', 'tematy', 'tematów')}
         </p>
         {subject.description && (
           <p className="max-w-3xl">{subject.description}</p>

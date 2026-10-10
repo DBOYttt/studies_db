@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { getDb } from '@/lib/db';
-import { formatDate } from '@/lib/format';
+import { formatDate, pluralPl } from '@/lib/format';
 import { listSubjectsOverview } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -46,7 +46,7 @@ export default async function Home() {
                   )}
                   <p className="mt-auto pt-2 text-sm">
                     {s.materialCount}{' '}
-                    {s.materialCount === 1 ? 'plik' : 'plików'}
+                    {pluralPl(s.materialCount, 'plik', 'pliki', 'plików')}
                     {s.lastUploadAt && (
                       <span className="text-[var(--muted)]">
                         {' '}

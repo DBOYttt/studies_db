@@ -4,7 +4,7 @@ import { FilePreview } from '@/components/FilePreview';
 import { StatusBadge } from '@/components/StatusBadge';
 import { TagBadge } from '@/components/TagBadge';
 import { getDb } from '@/lib/db';
-import { formatDate, formatSize } from '@/lib/format';
+import { formatDate, formatSize, pluralPl } from '@/lib/format';
 import { getTopicWithMaterials } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -43,7 +43,10 @@ export default async function TopicPage({
       <header className="space-y-2">
         <h1 className="text-2xl font-semibold">{topic.title}</h1>
         <p className="flex flex-wrap items-center gap-2 text-sm text-[var(--muted)]">
-          <span>Dodano {formatDate(topic.createdAt)}</span>
+          <span>
+            Dodano {formatDate(topic.createdAt)} · {materials.length}{' '}
+            {pluralPl(materials.length, 'plik', 'pliki', 'plików')}
+          </span>
           {tags.map((t) => (
             <TagBadge key={t.id} name={t.name} />
           ))}
