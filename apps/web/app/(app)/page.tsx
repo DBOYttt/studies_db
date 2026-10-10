@@ -39,10 +39,17 @@ export default async function Home() {
                     </span>
                   </div>
                   <p className="text-xs text-[var(--muted)]">{s.code}</p>
-                  {s.lecturers.length > 0 && (
-                    <p className="text-sm text-[var(--muted)]">
-                      {[...new Set(s.lecturers.map((l) => l.name))].join(', ')}
-                    </p>
+                  {s.classes.length > 0 && (
+                    <ul className="flex flex-wrap gap-1.5">
+                      {s.classes.map((c) => (
+                        <li
+                          key={c.kind}
+                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]"
+                        >
+                          {c.name}
+                        </li>
+                      ))}
+                    </ul>
                   )}
                   <p className="mt-auto pt-2 text-sm">
                     {s.materialCount}{' '}

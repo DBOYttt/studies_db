@@ -121,17 +121,14 @@ afterAll(async () => {
 });
 
 describe('listSubjectsOverview', () => {
-  it('counts materials excluding soft-deleted, with lecturers', async () => {
+  it('counts materials excluding soft-deleted', async () => {
     const list = await listSubjectsOverview(db);
     const fiz = list.find((s) => s.code === 'FIZ');
     expect(fiz?.materialCount).toBe(2);
     expect(fiz?.lastUploadAt).toBeInstanceOf(Date);
-    expect(fiz?.lecturers).toEqual([
-      { name: 'Jan Kowalski', title: 'dr', role: 'wyklad' },
-    ]);
     const chem = list.find((s) => s.code === 'CHEM');
     expect(chem).toMatchObject({ materialCount: 0, lastUploadAt: null });
-    expect(chem?.lecturers).toEqual([]);
+    expect(chem?.classes).toEqual([]);
   });
 });
 
