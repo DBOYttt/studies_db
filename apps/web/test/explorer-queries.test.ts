@@ -353,6 +353,14 @@ describe('listExplorerFiles', () => {
     );
     expect(await names(P(), { sort: 'uploader' })).toHaveLength(5);
   });
+  it('unknown sort keys fall back to created (no throw)', async () => {
+    const base = await names(P(), { dir: 'desc' });
+    for (const sort of ['constructor', '__proto__', 'toString', 'nope']) {
+      expect(
+        await names(P(), { sort: sort as unknown as 'topic', dir: 'desc' }),
+      ).toEqual(base);
+    }
+  });
   it('returns full row shape', async () => {
     const [f] = await listExplorerFiles(db, sid, P({ topic: ids.zad1 }), {});
     expect(f).toMatchObject({

@@ -92,7 +92,7 @@ describe('RO pool options', () => {
   });
 });
 
-const BUSY = 'Serwer jest zajęty — spróbuj za chwilę.';
+const BUSY = 'Serwer jest zajęty. Spróbuj za chwilę.';
 const NO_DB = 'Nie udało się połączyć z bazą danych.';
 const tooMany = () =>
   Object.assign(new Error("User 'studies_ro' has exceeded the limit"), {
@@ -441,7 +441,7 @@ describe('POST /api/sql', () => {
     expect(res?.status).toBe(429);
     expect(await res?.json()).toEqual({
       ok: false,
-      error: 'Za dużo zapytań — odczekaj chwilę.',
+      error: 'Za dużo zapytań. Odczekaj chwilę.',
     });
   });
 

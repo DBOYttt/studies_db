@@ -11,13 +11,6 @@ export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-export const ROLE_LABELS: Record<string, string> = {
-  wyklad: 'Wykład',
-  cwiczenia: 'Ćwiczenia',
-  laboratorium: 'Laboratorium',
-  projekt: 'Projekt',
-};
-
 /**
  * Polish plural form: pluralPl(n, 'plik', 'pliki', 'plików') ->
  * 1 plik, 2–4 pliki (but 12–14 plików), everything else plików.

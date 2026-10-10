@@ -25,15 +25,7 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import type { ExplorerParams } from './explorer';
-
-export type LecturerRole = 'wyklad' | 'laboratorium' | 'cwiczenia' | 'projekt';
-
-export interface SubjectLecturer {
-  name: string;
-  title: string | null;
-  role: LecturerRole;
-}
+import type { ExplorerParams, SortDir, SortKey } from './explorer';
 
 export interface SubjectInfo {
   id: number;
@@ -42,57 +34,12 @@ export interface SubjectInfo {
   semester: number;
   ects: number;
   description: string | null;
-  lecturers: SubjectLecturer[];
 }
 
-export interface SubjectOverview extends Omit<SubjectInfo, 'lecturers'> {
+export interface SubjectOverview extends SubjectInfo {
   classes: { kind: ClassKind | 'none'; name: string }[];
   materialCount: number;
   lastUploadAt: Date | null;
-}
-
-const ROLE_ORDER: LecturerRole[] = [
-  'wyklad',
-  'cwiczenia',
-  'laboratorium',
-  'projekt',
-];
-
-async function lecturersBySubject(
-  db: Db,
-  subjectIds: number[],
-): Promise<Map<number, SubjectLecturer[]>> {
-  const map = new Map<number, SubjectLecturer[]>();
-  if (subjectIds.length === 0) return map;
-  const rows = await db
-    .select({
-      subjectId: classes.subjectId,
-      name: lecturers.name,
-      title: lecturers.title,
-      kind: classes.kind,
-    })
-    .from(classLecturers)
-    .innerJoin(classes, eq(classes.id, classLecturers.classId))
-    .innerJoin(lecturers, eq(lecturers.id, classLecturers.lecturerId))
-    .where(
-      and(
-        inArray(classes.subjectId, subjectIds),
-        // seminarium has no legacy role; the current UI shows the four roles
-        inArray(classes.kind, [...ROLE_ORDER]),
-      ),
-    )
-    .orderBy(asc(lecturers.name));
-  for (const r of rows) {
-    const list = map.get(r.subjectId) ?? [];
-    list.push({ name: r.name, title: r.title, role: r.kind as LecturerRole });
-    map.set(r.subjectId, list);
-  }
-  for (const list of map.values()) {
-    list.sort(
-      (a, b) => ROLE_ORDER.indexOf(a.role) - ROLE_ORDER.indexOf(b.role),
-    );
-  }
-  return map;
 }
 
 const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
@@ -160,7 +107,6 @@ export async function getSubject(
 ): Promise<SubjectInfo | null> {
   const [s] = await db.select().from(subjects).where(eq(subjects.code, code));
   if (!s) return null;
-  const lecs = await lecturersBySubject(db, [s.id]);
   return {
     id: s.id,
     code: s.code,
@@ -168,8 +114,20 @@ export async function getSubject(
     semester: s.semester,
     ects: s.ects,
     description: s.description,
-    lecturers: lecs.get(s.id) ?? [],
   };
+}
+
+/** Subject code of a live topic (for redirects into the explorer). */
+export async function getTopicSubjectCode(
+  db: Db,
+  topicId: number,
+): Promise<string | null> {
+  const [r] = await db
+    .select({ code: subjects.code })
+    .from(topics)
+    .innerJoin(subjects, eq(subjects.id, topics.subjectId))
+    .where(and(eq(topics.id, topicId), isNull(topics.deletedAt)));
+  return r?.code ?? null;
 }
 
 export async function listSubjectTags(
@@ -592,8 +550,8 @@ export async function listExplorerFiles(
   opts: {
     tagId?: number;
     q?: string;
-    sort?: 'topic' | 'filename' | 'created' | 'uploader';
-    dir?: 'asc' | 'desc';
+    sort?: SortKey;
+    dir?: SortDir;
   },
 ): Promise<ExplorerFile[]> {
   const conds: SQL[] = [
@@ -616,16 +574,20 @@ export async function listExplorerFiles(
   if (q) {
     const esc = q.replace(/[\\%_]/g, (c) => `\\${c}`);
     conds.push(
-      sql`LOWER(${materials.originalFilename}) LIKE LOWER(${`%${esc}%`})`,
+      sql`LOWER(${materials.originalFilename}) LIKE LOWER(${`%${esc}%`}) ESCAPE '\\\\'`,
     );
   }
-  const col = {
+  const sortCols = {
     topic: topics.title,
     filename: materials.originalFilename,
     created: materials.createdAt,
     uploader: users.displayName,
-  }[opts.sort ?? 'created'];
-  const ord = (opts.dir ?? (opts.sort ? 'asc' : 'desc')) === 'asc' ? asc : desc;
+  };
+  // own-property check: the URL value is untrusted, 'constructor' etc. must not match
+  const sortKey =
+    opts.sort && Object.hasOwn(sortCols, opts.sort) ? opts.sort : undefined;
+  const col = sortCols[sortKey ?? 'created'];
+  const ord = (opts.dir ?? (sortKey ? 'asc' : 'desc')) === 'asc' ? asc : desc;
   const rows = await explorerFileSelect(db)
     .where(and(...conds))
     .orderBy(ord(col), ord(materials.id))

@@ -27,7 +27,7 @@ const ER_QUERY_INTERRUPTED = 1317;
 const ER_TOO_MANY_USER_CONNECTIONS = 1226;
 const KILL_RETRY_MS = 250;
 
-const BUSY_ERROR = 'Serwer jest zajęty — spróbuj za chwilę.';
+const BUSY_ERROR = 'Serwer jest zajęty. Spróbuj za chwilę.';
 const CONNECT_ERROR = 'Nie udało się połączyć z bazą danych.';
 
 type DbError = Error & { errno?: number };
@@ -258,7 +258,7 @@ export async function handleSqlRequest(
   }
   if (!limiter.check(String(user.id))) {
     return Response.json(
-      { ok: false, error: 'Za dużo zapytań — odczekaj chwilę.' },
+      { ok: false, error: 'Za dużo zapytań. Odczekaj chwilę.' },
       { status: 429, headers: NO_STORE },
     );
   }

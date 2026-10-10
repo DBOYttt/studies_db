@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { explorerHref, parseExplorerParams } from '../lib/explorer';
+import {
+  explorerHref,
+  parseExplorerFilters,
+  parseExplorerParams,
+} from '../lib/explorer';
 
 describe('parseExplorerParams', () => {
   it('defaults', () => {
@@ -81,5 +85,65 @@ describe('explorerHref', () => {
     const qs = explorerHref('X', p).split('?')[1];
     const sp = Object.fromEntries(new URLSearchParams(qs));
     expect(parseExplorerParams(sp)).toEqual(p);
+  });
+});
+
+describe('parseExplorerFilters', () => {
+  it('defaults', () => {
+    expect(parseExplorerFilters({})).toEqual({
+      tag: null,
+      q: '',
+      sort: null,
+      dir: null,
+    });
+  });
+  it('parses valid values', () => {
+    expect(
+      parseExplorerFilters({
+        tag: '4',
+        q: '  tarcie ',
+        sort: 'uploader',
+        dir: 'desc',
+      }),
+    ).toEqual({ tag: 4, q: 'tarcie', sort: 'uploader', dir: 'desc' });
+  });
+  it('whitelists sort and dir at runtime', () => {
+    expect(
+      parseExplorerFilters({ sort: 'constructor', dir: 'sideways', tag: 'x' }),
+    ).toEqual({ tag: null, q: '', sort: null, dir: null });
+    expect(parseExplorerFilters({ sort: '__proto__' }).sort).toBeNull();
+    expect(parseExplorerFilters({ sort: ['topic'] }).sort).toBeNull();
+  });
+  it('caps q length', () => {
+    expect(parseExplorerFilters({ q: 'a'.repeat(500) }).q).toHaveLength(100);
+  });
+});
+
+describe('explorerHref with filters', () => {
+  it('appends tag, q, sort, dir in stable order after tab', () => {
+    expect(
+      explorerHref(
+        'FIZ',
+        { classKind: 'wyklad', file: 5 },
+        { dir: 'desc', sort: 'topic', q: 'a b', tag: 3 },
+      ),
+    ).toBe('/subjects/FIZ?class=wyklad&file=5&tag=3&q=a+b&sort=topic&dir=desc');
+  });
+  it('omits empty filters', () => {
+    expect(
+      explorerHref('FIZ', {}, { tag: null, q: '', sort: null, dir: null }),
+    ).toBe('/subjects/FIZ');
+  });
+  it('round-trips filters', () => {
+    const f = {
+      tag: 2,
+      q: 'x&y',
+      sort: 'created' as const,
+      dir: 'asc' as const,
+    };
+    const qs = explorerHref('X', {}, f).split('?')[1];
+    expect(
+      parseExplorerFilters(Object.fromEntries(new URLSearchParams(qs))),
+    ).toEqual(f);
   });
 });
