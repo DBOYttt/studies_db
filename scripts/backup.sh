@@ -7,7 +7,8 @@ set -euo pipefail
 cd "$(dirname "$0")/.."
 
 if [ -z "${BACKUP_DIR:-}" ] && [ -f .env ]; then
-  BACKUP_DIR="$(grep -E '^BACKUP_DIR=' .env | head -n1 | cut -d= -f2- || true)"
+  # strip surrounding quotes and a CRLF line ending
+  BACKUP_DIR="$(grep -E '^BACKUP_DIR=' .env | head -n1 | cut -d= -f2- | tr -d "\"'\r" || true)"
 fi
 : "${BACKUP_DIR:?BACKUP_DIR not set (env or .env)}"
 CONTAINER="${DB_CONTAINER:-studies-mariadb}"

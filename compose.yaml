@@ -14,6 +14,8 @@ services:
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD in .env}
       MARIADB_DATABASE: studies
+      # run mariadb-upgrade automatically when the 11.x image is bumped
+      MARIADB_AUTO_UPGRADE: "1"
     command: >-
       --character-set-server=utf8mb4
       --collation-server=utf8mb4_unicode_ci
