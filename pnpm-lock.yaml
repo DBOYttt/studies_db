@@ -173,6 +173,28 @@ importers:
         specifier: ^26.6.4
         version: 26.6.4
 
+  apps/bot:
+    dependencies:
+      '@studies/db':
+        specifier: workspace:*
+        version: link:../../packages/db
+      drizzle-orm:
+        specifier: ^0.45.0
+        version: 0.45.4(mysql2@3.24.5(@types/node@26.6.4))
+    devDependencies:
+      tsx:
+        specifier: ^4.0.0
+        version: 4.23.15
+      typescript:
+        specifier: ^7.0.0
+        version: 7.0.2
+      vite:
+        specifier: ^8.3.4
+        version: 8.3.4(@types/node@26.6.4)(esbuild@0.28.2)(tsx@4.23.15)
+      vitest:
+        specifier: ^5.0.0
+        version: 5.0.3(@types/node@26.6.4)(vite@8.3.4(@types/node@26.6.4)(esbuild@0.28.2)(tsx@4.23.15))
+
   packages/db:
     dependencies:
       drizzle-orm:
