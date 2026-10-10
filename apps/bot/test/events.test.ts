@@ -1,11 +1,7 @@
 import type { Message } from 'discord.js';
 import { ChannelType } from 'discord.js';
 import { describe, expect, it, vi } from 'vitest';
-import {
-  handleMessageCreate,
-  handleMessageDelete,
-  registerEvents,
-} from '../src/discord/events.js';
+import { handleMessageCreate, registerEvents } from '../src/discord/events.js';
 
 const forumThread = {
   id: 't1',
@@ -77,24 +73,8 @@ describe('handleMessageCreate', () => {
   });
 });
 
-describe('handleMessageDelete', () => {
-  it('never throws when db fails', async () => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
-    const db = {
-      update: () => {
-        throw new Error('db');
-      },
-    } as never;
-    await expect(
-      handleMessageDelete({ db, storageDir: '', fetchBody: vi.fn() }, {
-        id: 'm',
-      } as never),
-    ).resolves.toBeUndefined();
-  });
-});
-
 describe('registerEvents', () => {
-  it('registers all seven events', () => {
+  it('registers the cached and raw events', () => {
     const on = vi.fn();
     registerEvents({ on } as never, {
       db: {} as never,
@@ -104,10 +84,8 @@ describe('registerEvents', () => {
     expect(on.mock.calls.map((c) => c[0]).sort()).toEqual([
       'channelUpdate',
       'messageCreate',
-      'messageDelete',
-      'messageUpdate',
+      'raw',
       'threadCreate',
-      'threadDelete',
       'threadUpdate',
     ]);
   });

@@ -5,6 +5,7 @@ import {
   toAttachmentInputs,
   toDiscordUser,
   toThreadInfo,
+  withIdleTimeout,
 } from '../src/discord/map.js';
 import { reactForResult } from '../src/discord/react.js';
 import type { IngestResult } from '../src/ingest.js';
@@ -92,6 +93,27 @@ describe('toAttachmentInputs', () => {
     expect(out[0]?.thread.threadId).toBe('t1');
     expect(out[0]?.threadOwner).toBeNull();
   });
+
+  it('sets threadOwner to the uploader for the forum starter message', () => {
+    const msg = {
+      id: 't1',
+      createdAt: new Date(0),
+      attachments: new Map([
+        ['1', { id: '1', url: 'u', name: 'a.pdf', contentType: null, size: 1 }],
+      ]),
+      author: {
+        id: 'u',
+        username: 'x',
+        globalName: null,
+        displayAvatarURL: () => 'av',
+      },
+      member: null,
+      channel: { ...thread(ChannelType.GuildForum), isThread: () => true },
+    } as unknown as Message;
+    const [a] = toAttachmentInputs(msg);
+    expect(a?.threadOwner).toEqual(a?.uploader);
+    expect(a?.threadOwner?.discordUserId).toBe('u');
+  });
 });
 
 describe('reactForResult', () => {
@@ -115,5 +137,31 @@ describe('reactForResult', () => {
     await expect(
       reactForResult({ react } as unknown as Message, ['created']),
     ).resolves.toBeUndefined();
+  });
+});
+
+describe('withIdleTimeout', () => {
+  const enc = new TextEncoder();
+  it('passes through a slow but progressing stream', async () => {
+    let n = 0;
+    const src = new ReadableStream<Uint8Array>({
+      async pull(c) {
+        await new Promise((r) => setTimeout(r, 30));
+        if (++n > 3) c.close();
+        else c.enqueue(enc.encode('x'));
+      },
+    });
+    const out = await new Response(withIdleTimeout(src, 100)).text();
+    expect(out).toBe('xxx');
+  });
+  it('errors and calls onTimeout when no chunk arrives', async () => {
+    const src = new ReadableStream<Uint8Array>({
+      pull: () => new Promise(() => {}),
+    });
+    const onTimeout = vi.fn();
+    await expect(
+      new Response(withIdleTimeout(src, 40, onTimeout)).text(),
+    ).rejects.toThrow(/stalled/);
+    expect(onTimeout).toHaveBeenCalled();
   });
 });

@@ -83,6 +83,12 @@ const deps = (fetchBody = streamOf(fixture)) => ({
 });
 
 describe('ingestAttachment', () => {
+  it('sets topics.created_by from threadOwner (starter message)', async () => {
+    expect(await ingestAttachment(deps(), input())).toBe('created');
+    const [t] = await db.select().from(topics);
+    expect(t?.createdBy).not.toBeNull();
+  });
+
   it('stores file by hash and creates material + jobs', async () => {
     expect(await ingestAttachment(deps(), input())).toBe('created');
     expect(await readFile(join(dir, 'originals', `${sha}.pdf`))).toEqual(

@@ -4,10 +4,10 @@ import {
   ChannelType,
   type Client,
   type DMChannel,
+  Events,
   type ForumChannel,
   type Message,
   type NonThreadGuildBasedChannel,
-  type PartialMessage,
 } from 'discord.js';
 import {
   type AttachmentInput,
@@ -23,6 +23,7 @@ import {
   syncForumTags,
   upsertTopic,
 } from '../sync.js';
+import type { DiscordUser } from '../types.js';
 import { toAttachmentInputs, toDiscordUser, toThreadInfo } from './map.js';
 import { reactForResult } from './react.js';
 
@@ -62,12 +63,20 @@ export function handleThreadCreate(
     if (!info) return;
     if (!(await findSubjectByChannel(deps.db, info.forumChannelId))) return;
     await syncParentTags(deps.db, thread);
-    let owner = null;
+    let owner: DiscordUser | null = null;
     try {
-      const member = await thread.fetchOwner();
-      if (member?.user) owner = toDiscordUser(member.user, member.guildMember);
+      const member = await thread.fetchOwner({ withMember: true });
+      const user = member?.guildMember?.user ?? member?.user;
+      if (user) owner = toDiscordUser(user, member?.guildMember);
     } catch {
       owner = null;
+    }
+    if (!owner && thread.ownerId) {
+      try {
+        owner = toDiscordUser(await thread.client.users.fetch(thread.ownerId));
+      } catch {
+        owner = null;
+      }
     }
     await upsertTopic(deps.db, info, owner);
   });
@@ -87,14 +96,6 @@ export function handleThreadUpdate(
   });
 }
 
-export function handleThreadDelete(
-  deps: HandlerDeps,
-  thread: { id: string },
-): Promise<void> {
-  // No-op when the thread was never stored (unlinked forum).
-  return guarded('threadDelete', () => softDeleteTopic(deps.db, thread.id));
-}
-
 export function handleMessageCreate(
   deps: HandlerDeps,
   message: Message,
@@ -111,32 +112,45 @@ export function handleMessageCreate(
   });
 }
 
-export function handleMessageUpdate(
-  deps: HandlerDeps,
-  _old: Message | PartialMessage,
-  next: Message | PartialMessage,
-): Promise<void> {
-  return guarded('messageUpdate', async () => {
-    let msg = next;
-    if (msg.partial) {
-      try {
-        msg = await msg.fetch();
-      } catch {
-        return;
-      }
-    }
-    if (!msg.channel.isThread()) return;
-    await softDeleteMissingAttachments(deps.db, msg.id, [
-      ...msg.attachments.keys(),
-    ]);
-  });
-}
+type RawPacket = { t?: string | null; d?: unknown };
+type RawData = {
+  id?: string;
+  ids?: string[];
+  attachments?: { id: string }[];
+};
 
-export function handleMessageDelete(
+/**
+ * Deletes/edits are handled from raw gateway packets: discord.js only emits
+ * the cached events for entities still in its caches, which misses archived
+ * (swept) threads and uncached messages.
+ */
+export function handleRawPacket(
   deps: HandlerDeps,
-  message: { id: string },
+  packet: RawPacket,
 ): Promise<void> {
-  return guarded('messageDelete', () => softDeleteMessage(deps.db, message.id));
+  return guarded(`raw ${packet.t ?? '?'}`, async () => {
+    const d = (packet.d ?? {}) as RawData;
+    switch (packet.t) {
+      case 'THREAD_DELETE':
+        if (d.id) await softDeleteTopic(deps.db, d.id);
+        return;
+      case 'MESSAGE_DELETE':
+        if (d.id) await softDeleteMessage(deps.db, d.id);
+        return;
+      case 'MESSAGE_DELETE_BULK':
+        for (const id of d.ids ?? []) await softDeleteMessage(deps.db, id);
+        return;
+      case 'MESSAGE_UPDATE':
+        if (d.id && Array.isArray(d.attachments)) {
+          await softDeleteMissingAttachments(
+            deps.db,
+            d.id,
+            d.attachments.map((a) => a.id),
+          );
+        }
+        return;
+    }
+  });
 }
 
 export function handleChannelUpdate(
@@ -159,9 +173,7 @@ export function handleChannelUpdate(
 export function registerEvents(client: Client, deps: HandlerDeps): void {
   client.on('threadCreate', (t) => void handleThreadCreate(deps, t));
   client.on('threadUpdate', (o, n) => void handleThreadUpdate(deps, o, n));
-  client.on('threadDelete', (t) => void handleThreadDelete(deps, t));
   client.on('messageCreate', (m) => void handleMessageCreate(deps, m));
-  client.on('messageUpdate', (o, n) => void handleMessageUpdate(deps, o, n));
-  client.on('messageDelete', (m) => void handleMessageDelete(deps, m));
+  client.on(Events.Raw, (p) => void handleRawPacket(deps, p));
   client.on('channelUpdate', (o, n) => void handleChannelUpdate(deps, o, n));
 }

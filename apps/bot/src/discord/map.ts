@@ -37,6 +37,9 @@ export function toAttachmentInputs(message: Message): AttachmentInput[] {
   const thread = toThreadInfo(channel);
   if (!thread) return [];
   const uploader = toDiscordUser(message.author, message.member);
+  // In a forum post the starter message shares the thread's id, and its
+  // author is the thread owner.
+  const threadOwner = message.id === channel.id ? uploader : null;
   return [...message.attachments.values()].map((a) => ({
     attachmentId: a.id,
     messageId: message.id,
@@ -47,16 +50,66 @@ export function toAttachmentInputs(message: Message): AttachmentInput[] {
     postedAt: message.createdAt,
     uploader,
     thread,
-    threadOwner: null,
+    threadOwner,
   }));
 }
 
 export async function fetchAttachmentBody(
   url: string,
 ): Promise<ReadableStream<Uint8Array>> {
-  const res = await fetch(url);
+  const controller = new AbortController();
+  const headerTimer = setTimeout(
+    () => controller.abort(),
+    ATTACHMENT_IDLE_TIMEOUT_MS,
+  );
+  let res: Response;
+  try {
+    res = await fetch(url, { signal: controller.signal });
+  } finally {
+    clearTimeout(headerTimer);
+  }
   if (!res.ok || !res.body) {
     throw new Error(`download failed: HTTP ${res.status}`);
   }
-  return res.body;
+  return withIdleTimeout(res.body, ATTACHMENT_IDLE_TIMEOUT_MS, () =>
+    controller.abort(),
+  );
+}
+
+export const ATTACHMENT_IDLE_TIMEOUT_MS = 60_000;
+
+/**
+ * Wraps a stream so it errors (and `onTimeout` runs) if no chunk arrives
+ * within `ms`. A slow-but-progressing body is never aborted.
+ */
+export function withIdleTimeout(
+  source: ReadableStream<Uint8Array>,
+  ms: number,
+  onTimeout?: () => void,
+): ReadableStream<Uint8Array> {
+  const reader = source.getReader();
+  return new ReadableStream<Uint8Array>({
+    async pull(controller) {
+      let timer: NodeJS.Timeout | undefined;
+      const timeout = new Promise<never>((_, reject) => {
+        timer = setTimeout(() => {
+          onTimeout?.();
+          reject(new Error(`download stalled: no data for ${ms} ms`));
+        }, ms);
+      });
+      try {
+        const r = await Promise.race([reader.read(), timeout]);
+        if (r.done) controller.close();
+        else controller.enqueue(r.value);
+      } catch (err) {
+        reader.cancel().catch(() => {});
+        controller.error(err);
+      } finally {
+        clearTimeout(timer);
+      }
+    },
+    cancel(reason) {
+      return reader.cancel(reason);
+    },
+  });
 }
