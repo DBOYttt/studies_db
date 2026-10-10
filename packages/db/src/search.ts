@@ -27,7 +27,7 @@ function sanitizeQuery(q: string): string {
     .trim();
 }
 
-function stripMarks(s: string): string {
+export function stripMarks(s: string): string {
   // ł/Ł have no Unicode decomposition, so map them explicitly.
   return s
     .normalize('NFD')
