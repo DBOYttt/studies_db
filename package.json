@@ -7,6 +7,7 @@
     "test": "pnpm -r --workspace-concurrency=1 test",
     "lint": "biome check .",
     "dev:bot": "pnpm --filter @studies/bot dev",
+    "dev:worker": "pnpm --filter @studies/worker dev",
     "db:up": "sh scripts/db-up.sh",
     "db:migrate": "pnpm --filter @studies/db migrate"
   },
