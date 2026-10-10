@@ -16,7 +16,9 @@ import { closeTestDb, resetTestDb, testRoUrl } from '../src/testing.js';
 const TABLES = [
   'subjects',
   'lecturers',
-  'subject_lecturers',
+  'classes',
+  'class_groups',
+  'class_lecturers',
   'topics',
   'tags',
   'topic_tags',

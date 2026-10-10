@@ -1,8 +1,9 @@
 import {
+  classes,
+  classLecturers,
   type Db,
   insertMaterial,
   lecturers,
-  subjectLecturers,
   subjects,
   tags,
   topics,
@@ -73,9 +74,13 @@ beforeAll(async () => {
     .insert(lecturers)
     .values({ name: 'Jan Kowalski', title: 'dr' })
     .$returningId();
+  const [cls] = await db
+    .insert(classes)
+    .values({ subjectId, kind: 'wyklad', name: 'Wykład' })
+    .$returningId();
   await db
-    .insert(subjectLecturers)
-    .values({ subjectId, lecturerId: lec.id, role: 'wyklad' });
+    .insert(classLecturers)
+    .values({ classId: cls.id, lecturerId: lec.id });
   const uid = await upsertUser(db, {
     discordUserId: 'u1',
     displayName: 'Ann',

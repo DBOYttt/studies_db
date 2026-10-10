@@ -203,7 +203,7 @@ describe('GET /api/schema', () => {
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.v_users).toEqual(['id', 'display_name', 'created_at']);
-    expect(Object.keys(body).length).toBe(8);
+    expect(Object.keys(body).length).toBe(PUBLIC_VIEWS.length);
   });
 });
 

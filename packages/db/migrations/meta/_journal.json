@@ -22,6 +22,20 @@
       "when": 1791653532349,
       "tag": "0002_search_name",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1791667722195,
+      "tag": "0003_hierarchy_tables",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1791667726747,
+      "tag": "0004_hierarchy_views",
+      "breakpoints": true
     }
   ]
 }

@@ -10,8 +10,10 @@ import {
   mysqlEnum,
   mysqlTable,
   primaryKey,
+  smallint,
   text,
   tinyint,
+  unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
 import type { JobType, PreviewKind } from './files.js';
@@ -50,23 +52,65 @@ export const lecturers = mysqlTable('lecturers', {
   email: varchar('email', { length: 200 }),
 });
 
-export const subjectLecturers = mysqlTable(
-  'subject_lecturers',
+export const CLASS_KINDS = [
+  'wyklad',
+  'laboratorium',
+  'cwiczenia',
+  'projekt',
+  'seminarium',
+] as const;
+export type ClassKind = (typeof CLASS_KINDS)[number];
+export const CLASS_NAMES: Record<ClassKind, string> = {
+  wyklad: 'Wykład',
+  laboratorium: 'Laboratorium',
+  cwiczenia: 'Ćwiczenia',
+  projekt: 'Projekt',
+  seminarium: 'Seminarium',
+};
+
+export const classes = mysqlTable(
+  'classes',
   {
+    id: int('id').autoincrement().primaryKey(),
     subjectId: int('subject_id')
       .notNull()
       .references(() => subjects.id, { onDelete: 'cascade' }),
+    kind: mysqlEnum('kind', CLASS_KINDS).notNull(),
+    name: varchar('name', { length: 50 }).notNull(),
+  },
+  (t) => [unique('uq_classes_subject_kind').on(t.subjectId, t.kind)],
+);
+
+export const classGroups = mysqlTable(
+  'class_groups',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    classId: int('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    number: smallint('number').notNull(),
+    name: varchar('name', { length: 20 }).notNull(),
+  },
+  (t) => [unique('uq_class_groups_class_number').on(t.classId, t.number)],
+);
+
+// group_id NULL = lecturer of the whole class. MariaDB treats NULLs as
+// distinct in UNIQUE, so insert paths must check (class, lecturer, NULL).
+export const classLecturers = mysqlTable(
+  'class_lecturers',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    classId: int('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
     lecturerId: int('lecturer_id')
       .notNull()
       .references(() => lecturers.id, { onDelete: 'cascade' }),
-    role: mysqlEnum('role', [
-      'wyklad',
-      'laboratorium',
-      'cwiczenia',
-      'projekt',
-    ]).notNull(),
+    groupId: int('group_id').references(() => classGroups.id, {
+      onDelete: 'cascade',
+    }),
   },
-  (t) => [primaryKey({ columns: [t.subjectId, t.lecturerId, t.role] })],
+  (t) => [unique('uq_class_lecturers').on(t.classId, t.lecturerId, t.groupId)],
 );
 
 export const users = mysqlTable('users', {
@@ -78,19 +122,32 @@ export const users = mysqlTable('users', {
   createdAt: now(),
 });
 
-export const topics = mysqlTable('topics', {
-  id: int('id').autoincrement().primaryKey(),
-  subjectId: int('subject_id')
-    .notNull()
-    .references(() => subjects.id),
-  title: varchar('title', { length: 300 }).notNull(),
-  discordThreadId: varchar('discord_thread_id', { length: 32 })
-    .notNull()
-    .unique(),
-  createdBy: int('created_by').references(() => users.id),
-  createdAt: now(),
-  deletedAt: datetime('deleted_at'),
-});
+export const topics = mysqlTable(
+  'topics',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    subjectId: int('subject_id')
+      .notNull()
+      .references(() => subjects.id),
+    title: varchar('title', { length: 300 }).notNull(),
+    discordThreadId: varchar('discord_thread_id', { length: 32 })
+      .notNull()
+      .unique(),
+    createdBy: int('created_by').references(() => users.id),
+    classId: int('class_id').references(() => classes.id, {
+      onDelete: 'set null',
+    }),
+    groupId: int('group_id').references(() => classGroups.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: now(),
+    deletedAt: datetime('deleted_at'),
+  },
+  (t) => [
+    index('idx_topics_class').on(t.classId),
+    index('idx_topics_group').on(t.groupId),
+  ],
+);
 
 export const tags = mysqlTable('tags', {
   id: int('id').autoincrement().primaryKey(),
@@ -199,10 +256,13 @@ export const botState = mysqlTable('bot_state', {
 export const PUBLIC_VIEWS = [
   'v_subjects',
   'v_lecturers',
-  'v_subject_lecturers',
+  'v_classes',
+  'v_class_groups',
+  'v_class_lecturers',
   'v_topics',
   'v_tags',
   'v_topic_tags',
   'v_materials',
+  'v_files',
   'v_users',
 ] as const;

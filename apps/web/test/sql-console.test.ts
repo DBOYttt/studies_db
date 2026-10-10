@@ -2,6 +2,7 @@ import {
   consumeLoginToken,
   createLoginToken,
   type Db,
+  PUBLIC_VIEWS,
   subjects,
   upsertUser,
 } from '@studies/db';
@@ -324,7 +325,7 @@ describe('runReadonlyQuery', () => {
     expect(r.ok).toBe(true);
     if (r.ok) {
       const names = r.rows.map((row) => String(row[0])).sort();
-      expect(names.length).toBe(8);
+      expect(names.length).toBe(PUBLIC_VIEWS.length);
       for (const n of names) expect(n).toMatch(/^v_/);
     }
   });

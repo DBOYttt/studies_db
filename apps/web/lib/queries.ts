@@ -1,8 +1,9 @@
 import {
+  classes,
+  classLecturers,
   type Db,
   lecturers,
   materials,
-  subjectLecturers,
   subjects,
   tags,
   topics,
@@ -49,18 +50,25 @@ async function lecturersBySubject(
   if (subjectIds.length === 0) return map;
   const rows = await db
     .select({
-      subjectId: subjectLecturers.subjectId,
+      subjectId: classes.subjectId,
       name: lecturers.name,
       title: lecturers.title,
-      role: subjectLecturers.role,
+      kind: classes.kind,
     })
-    .from(subjectLecturers)
-    .innerJoin(lecturers, eq(lecturers.id, subjectLecturers.lecturerId))
-    .where(inArray(subjectLecturers.subjectId, subjectIds))
+    .from(classLecturers)
+    .innerJoin(classes, eq(classes.id, classLecturers.classId))
+    .innerJoin(lecturers, eq(lecturers.id, classLecturers.lecturerId))
+    .where(
+      and(
+        inArray(classes.subjectId, subjectIds),
+        // seminarium has no legacy role; the current UI shows the four roles
+        inArray(classes.kind, [...ROLE_ORDER]),
+      ),
+    )
     .orderBy(asc(lecturers.name));
   for (const r of rows) {
     const list = map.get(r.subjectId) ?? [];
-    list.push({ name: r.name, title: r.title, role: r.role });
+    list.push({ name: r.name, title: r.title, role: r.kind as LecturerRole });
     map.set(r.subjectId, list);
   }
   for (const list of map.values()) {

@@ -1,11 +1,13 @@
 import {
+  CLASS_NAMES,
+  classes,
+  classLecturers,
   type Db,
   lecturers,
   setBanned,
-  subjectLecturers,
   subjects,
 } from '@studies/db';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, isNull } from 'drizzle-orm';
 
 export const LECTURER_ROLES = [
   'wyklad',
@@ -119,9 +121,31 @@ export async function assignLecturer(
     .where(eq(lecturers.id, i.lecturerId));
   if (!lecturer) return `Nie znaleziono prowadzącego o id ${i.lecturerId}.`;
   await db
-    .insert(subjectLecturers)
-    .values({ subjectId: subject.id, lecturerId: i.lecturerId, role: i.role })
-    .onDuplicateKeyUpdate({ set: { role: i.role } });
+    .insert(classes)
+    .values({
+      subjectId: subject.id,
+      kind: i.role,
+      name: CLASS_NAMES[i.role],
+    })
+    .onDuplicateKeyUpdate({ set: { kind: i.role } });
+  const [cls] = await db
+    .select({ id: classes.id })
+    .from(classes)
+    .where(and(eq(classes.subjectId, subject.id), eq(classes.kind, i.role)));
+  const [existing] = await db
+    .select({ id: classLecturers.id })
+    .from(classLecturers)
+    .where(
+      and(
+        eq(classLecturers.classId, cls.id),
+        eq(classLecturers.lecturerId, i.lecturerId),
+        isNull(classLecturers.groupId),
+      ),
+    );
+  if (!existing)
+    await db
+      .insert(classLecturers)
+      .values({ classId: cls.id, lecturerId: i.lecturerId, groupId: null });
   return `Przypisano prowadzącego do ${code} jako ${i.role}.`;
 }
 
