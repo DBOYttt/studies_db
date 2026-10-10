@@ -1,11 +1,13 @@
 import { SqlConsole } from '@/components/SqlConsole';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
+import { requireUser } from '@/lib/session';
 import { listViewColumns } from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SqlPage() {
+  await requireUser();
   let schema: Record<string, string[]> = {};
   let error: string | null = null;
   try {

@@ -6,6 +6,7 @@ import { TagBadge } from '@/components/TagBadge';
 import { getDb } from '@/lib/db';
 import { formatDate, formatSize } from '@/lib/format';
 import { getTopicWithMaterials } from '@/lib/queries';
+import { requireUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export default async function TopicPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
+  await requireUser();
   const { id } = await params;
   if (!/^[1-9]\d{0,9}$/.test(id)) notFound();
   const data = await getTopicWithMaterials(getDb(), Number(id));

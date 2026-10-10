@@ -5,6 +5,7 @@ import { DataGrid } from '@/components/DataGrid';
 import { toCells } from '@/lib/cells';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
+import { requireUser } from '@/lib/session';
 import { browseView, isPublicView, PAGE_SIZE } from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
@@ -19,6 +20,7 @@ export default async function TablePage({
   params: Promise<{ view: string }>;
   searchParams: Promise<SP>;
 }) {
+  await requireUser();
   const { view } = await params;
   if (!isPublicView(view)) notFound();
   const sp = await searchParams;

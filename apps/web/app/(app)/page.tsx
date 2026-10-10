@@ -2,10 +2,12 @@ import Link from 'next/link';
 import { getDb } from '@/lib/db';
 import { formatDate } from '@/lib/format';
 import { listSubjectsOverview } from '@/lib/queries';
+import { requireUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
 export default async function Home() {
+  await requireUser();
   const subjects = await listSubjectsOverview(getDb());
   const semesters = [...new Set(subjects.map((s) => s.semester))].sort();
   return (

@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { Highlight } from '@/components/Highlight';
 import { getDb } from '@/lib/db';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
+import { requireUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,6 +15,7 @@ export default async function SearchPage({
 }: {
   searchParams: Promise<{ q?: string; subject?: string; tag?: string }>;
 }) {
+  await requireUser();
   const sp = await searchParams;
   const q = (sp.q ?? '').slice(0, 200).trim();
   const subjectId = posInt(sp.subject);

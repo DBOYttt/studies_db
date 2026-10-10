@@ -5,6 +5,7 @@ import { TagBadge } from '@/components/TagBadge';
 import { getDb } from '@/lib/db';
 import { formatDate, ROLE_LABELS } from '@/lib/format';
 import { getSubject, listSubjectTags, listTopics } from '@/lib/queries';
+import { requireUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,6 +16,7 @@ export default async function SubjectPage({
   params: Promise<{ code: string }>;
   searchParams: Promise<{ tag?: string }>;
 }) {
+  await requireUser();
   const { code } = await params;
   const { tag } = await searchParams;
   const db = getDb();
