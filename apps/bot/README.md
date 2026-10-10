@@ -23,9 +23,17 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
 
 ## Manual end-to-end checklist (private test server)
 
+> **Not verified live.** The bot has only been tested against fakes and the test DB; this checklist is the first real run on a live server.
+
 1. `/subject add` for a forum channel -> OK reply.
 2. New post with a PDF in the starter message -> reaction OK, row in `materials`.
 3. Same PDF in another post -> duplicate reaction.
 4. Stop the bot, post a DOCX, start the bot -> file ingested by catch-up (`Catch-up: ...` log line).
 5. Delete the message -> `deleted_at` set.
 6. `/link` -> DM with the login link received.
+7. Delete a post that has been archived for more than 4 h -> its materials are hidden on the site (raw gateway events cover uncached threads).
+8. Create a post as a new student -> `topics.created_by` is set (not NULL).
+9. `/subject add` on a forum the bot cannot see -> ephemeral warning about View Channel / Read Message History.
+
+Note: if the gateway connection is down while the bot runs, events in that window are missed;
+recover by restarting the bot (startup catch-up) or running `/resync`.
