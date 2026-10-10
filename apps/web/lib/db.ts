@@ -26,7 +26,8 @@ export function getDb(): Db {
 export const RO_POOL_OPTIONS = {
   charset: 'utf8mb4',
   timezone: 'Z',
-  connectionLimit: 5,
+  // MAX_USER_CONNECTIONS is 10: leave room for watchdog KILL connections.
+  connectionLimit: 4,
   // Security: one statement per query, always (the server also enforces it).
   multipleStatements: false,
   // BIGINT/DECIMAL as exact strings rather than lossy JS numbers.

@@ -22,6 +22,25 @@ export interface QueryOptions {
 
 const ER_STATEMENT_TIMEOUT = 1969;
 const ER_QUERY_INTERRUPTED = 1317;
+const ER_TOO_MANY_USER_CONNECTIONS = 1226;
+const KILL_RETRY_MS = 250;
+
+const BUSY_ERROR = 'Serwer jest zajęty — spróbuj za chwilę.';
+const CONNECT_ERROR = 'Nie udało się połączyć z bazą danych.';
+
+type DbError = Error & { errno?: number };
+
+/** getConnection() failure -> user message (never leaks host/port). */
+export function connectionErrorMessage(err: unknown): string {
+  return (err as DbError)?.errno === ER_TOO_MANY_USER_CONNECTIONS
+    ? BUSY_ERROR
+    : CONNECT_ERROR;
+}
+
+/** Query failure -> user message (MariaDB errors verbatim, except 1226). */
+export function queryErrorMessage(err: DbError): string {
+  return err.errno === ER_TOO_MANY_USER_CONNECTIONS ? BUSY_ERROR : err.message;
+}
 /** Extra time past max_statement_time before we KILL the query ourselves. */
 const WATCHDOG_GRACE_MS = 500;
 /** If even KILL QUERY doesn't end it, give up on the connection after this. */
@@ -83,7 +102,7 @@ export async function runReadonlyQuery(
   try {
     conn = await pool.getConnection();
   } catch (err) {
-    return { ok: false, error: (err as Error).message };
+    return { ok: false, error: connectionErrorMessage(err) };
   }
 
   return new Promise<QueryResult>((resolve) => {
@@ -115,7 +134,7 @@ export async function runReadonlyQuery(
     const watchdog = setTimeout(
       () => {
         watchdogFired = true;
-        void killQuery(conn);
+        void killQuery(Number(conn.threadId), killerFactory(conn));
         hardTimer = setTimeout(
           () => finish({ ok: false, error: timeoutError }),
           WATCHDOG_HARD_MS,
@@ -147,14 +166,14 @@ export async function runReadonlyQuery(
       rows.push(out);
     });
     stream.on('end', success);
-    stream.on('error', (err: Error & { errno?: number }) => {
+    stream.on('error', (err: DbError) => {
       if (
         err.errno === ER_STATEMENT_TIMEOUT ||
         (err.errno === ER_QUERY_INTERRUPTED && watchdogFired)
       ) {
         finish({ ok: false, error: timeoutError });
       } else {
-        finish({ ok: false, error: err.message });
+        finish({ ok: false, error: queryErrorMessage(err) });
       }
     });
   });
@@ -164,12 +183,11 @@ export async function runReadonlyQuery(
 const core = (conn: mysql.PoolConnection) =>
   conn.connection as unknown as CoreConnection;
 
-/** KILL QUERY from a separate, short-lived connection (never from the pool, which may be exhausted). */
-async function killQuery(conn: mysql.PoolConnection): Promise<void> {
+/** Opens a fresh connection with the same credentials as `conn` (never from the pool, which may be exhausted). */
+function killerFactory(conn: mysql.PoolConnection) {
   const c = core(conn).config;
-  let killer: mysql.Connection | undefined;
-  try {
-    killer = await mysql.createConnection({
+  return () =>
+    mysql.createConnection({
       host: c.host,
       port: c.port,
       socketPath: c.socketPath,
@@ -179,12 +197,33 @@ async function killQuery(conn: mysql.PoolConnection): Promise<void> {
       ssl: c.ssl,
       connectTimeout: 2000,
     });
-    await killer.query(`KILL QUERY ${Number(conn.threadId)}`);
-  } catch {
-    // Hard timer will destroy the connection regardless.
-  } finally {
-    killer?.destroy();
+}
+
+/** KILL QUERY <threadId> on a separate connection; one retry, then log. */
+export async function killQuery(
+  threadId: number,
+  connect: () => Promise<mysql.Connection>,
+  retryMs = KILL_RETRY_MS,
+): Promise<void> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    if (attempt > 0) await new Promise((r) => setTimeout(r, retryMs));
+    let killer: mysql.Connection | undefined;
+    try {
+      killer = await connect();
+      await killer.query(`KILL QUERY ${Math.trunc(threadId)}`);
+      return;
+    } catch (err) {
+      lastErr = err;
+    } finally {
+      killer?.destroy();
+    }
   }
+  // The hard timer still destroys our socket, but the server query may keep running.
+  console.error(
+    `[sql-console] KILL QUERY ${threadId} failed:`,
+    (lastErr as Error)?.message ?? lastErr,
+  );
 }
 
 export const MAX_SQL_LENGTH = 20_000;

@@ -28,9 +28,14 @@ vi.mock('next/headers', () => ({
 }));
 
 const { RO_POOL_OPTIONS } = await import('../lib/db');
-const { runReadonlyQuery, toJsonValue, handleSqlRequest } = await import(
-  '../lib/sql-console'
-);
+const {
+  runReadonlyQuery,
+  toJsonValue,
+  handleSqlRequest,
+  connectionErrorMessage,
+  queryErrorMessage,
+  killQuery,
+} = await import('../lib/sql-console');
 const { createRateLimiter } = await import('../lib/rate-limit');
 const { POST, dynamic } = await import('../app/api/sql/route');
 
@@ -80,6 +85,95 @@ const TIMEOUT_MSG = 'Przekroczono limit czasu (5 s).';
 describe('RO pool options', () => {
   it('never allows multiple statements', () => {
     expect(RO_POOL_OPTIONS.multipleStatements).toBe(false);
+  });
+  it('leaves headroom under MAX_USER_CONNECTIONS 10 for killer connections', () => {
+    expect(RO_POOL_OPTIONS.connectionLimit).toBe(4);
+  });
+});
+
+const BUSY = 'Serwer jest zajęty — spróbuj za chwilę.';
+const NO_DB = 'Nie udało się połączyć z bazą danych.';
+const tooMany = () =>
+  Object.assign(new Error("User 'studies_ro' has exceeded the limit"), {
+    errno: 1226,
+    code: 'ER_TOO_MANY_USER_CONNECTIONS',
+  });
+const refused = () =>
+  Object.assign(new Error('connect ECONNREFUSED 10.0.0.5:3306'), {
+    code: 'ECONNREFUSED',
+    errno: -111,
+  });
+
+describe('error mapping', () => {
+  it('maps connection errors without leaking host/port', () => {
+    expect(connectionErrorMessage(tooMany())).toBe(BUSY);
+    expect(connectionErrorMessage(refused())).toBe(NO_DB);
+    expect(connectionErrorMessage(new Error('weird'))).toBe(NO_DB);
+  });
+  it('maps 1226 on queries, passes other MariaDB errors through', () => {
+    expect(queryErrorMessage(tooMany())).toBe(BUSY);
+    const e = Object.assign(new Error('SELECT command denied'), {
+      errno: 1142,
+    });
+    expect(queryErrorMessage(e)).toBe('SELECT command denied');
+  });
+  it('runReadonlyQuery maps getConnection failures', async () => {
+    for (const [err, msg] of [
+      [tooMany(), BUSY],
+      [refused(), NO_DB],
+    ] as const) {
+      const pool = {
+        getConnection: async () => {
+          throw err;
+        },
+      } as unknown as mysql.Pool;
+      expect(await runReadonlyQuery(pool, 'SELECT 1')).toEqual({
+        ok: false,
+        error: msg,
+      });
+    }
+  });
+});
+
+describe('killQuery', () => {
+  it('retries a failing killer once, then logs thread id and error', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const connect = vi.fn(async () => {
+        throw tooMany();
+      });
+      await killQuery(4242, connect, 10);
+      expect(connect).toHaveBeenCalledTimes(2);
+      expect(spy).toHaveBeenCalledTimes(1);
+      const logged = spy.mock.calls[0].map(String).join(' ');
+      expect(logged).toContain('4242');
+      expect(logged).toContain('exceeded the limit');
+    } finally {
+      spy.mockRestore();
+    }
+  });
+  it('succeeds on the retry without logging', async () => {
+    const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      const queries: string[] = [];
+      let n = 0;
+      const connect = vi.fn(async () => {
+        if (n++ === 0) throw tooMany();
+        return {
+          query: async (q: string) => {
+            queries.push(q);
+            return [[], []];
+          },
+          destroy: () => {},
+        } as unknown as mysql.Connection;
+      });
+      await killQuery(7, connect, 10);
+      expect(connect).toHaveBeenCalledTimes(2);
+      expect(queries).toEqual(['KILL QUERY 7']);
+      expect(spy).not.toHaveBeenCalled();
+    } finally {
+      spy.mockRestore();
+    }
   });
 });
 
