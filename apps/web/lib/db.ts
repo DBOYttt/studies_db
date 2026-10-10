@@ -22,12 +22,22 @@ export function getDb(): Db {
   return cache.db.db;
 }
 
+/** Options for the read-only pool (SQL console / table browser). */
+export const RO_POOL_OPTIONS = {
+  charset: 'utf8mb4',
+  timezone: 'Z',
+  connectionLimit: 5,
+  // Security: one statement per query, always (the server also enforces it).
+  multipleStatements: false,
+  // BIGINT/DECIMAL as exact strings rather than lossy JS numbers.
+  supportBigNumbers: true,
+  bigNumberStrings: true,
+} as const satisfies mysql.PoolOptions;
+
 export function getRoPool(): mysql.Pool {
   cache.ro ??= mysql.createPool({
+    ...RO_POOL_OPTIONS,
     uri: env('DATABASE_RO_URL'),
-    charset: 'utf8mb4',
-    timezone: 'Z',
-    connectionLimit: 5,
   });
   return cache.ro;
 }
