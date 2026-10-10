@@ -1,5 +1,5 @@
 import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+import { open, stat } from 'node:fs/promises';
 import { resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { materials } from '@studies/db';
@@ -58,6 +58,22 @@ const SAFE_IMAGE_MIMES = new Set([
   'image/webp',
 ]);
 
+function looksLikePdf(mimeType: string, filename: string): boolean {
+  const mime = mimeType.split(';')[0].trim().toLowerCase();
+  return mime === 'application/pdf' || /\.pdf$/i.test(filename);
+}
+
+async function startsWithPdfMagic(path: string): Promise<boolean> {
+  const fh = await open(path, 'r');
+  try {
+    const buf = Buffer.alloc(5);
+    const { bytesRead } = await fh.read(buf, 0, 5, 0);
+    return bytesRead === 5 && buf.toString('latin1') === '%PDF-';
+  } finally {
+    await fh.close();
+  }
+}
+
 const NOSNIFF = { 'X-Content-Type-Options': 'nosniff' };
 const notFound = () =>
   new Response('Not found', { status: 404, headers: NOSNIFF });
@@ -88,6 +104,7 @@ export async function handleFileRequest(
     'Cache-Control': 'private, no-store',
   });
   let rel: string;
+  let sniffPdf = false;
   if (variant === 'original') {
     rel = m.storagePath;
     headers.set('Content-Type', m.mimeType || 'application/octet-stream');
@@ -103,6 +120,10 @@ export async function handleFileRequest(
     );
     if (m.previewKind === 'pdf') {
       rel = m.previewPath ?? m.storagePath;
+      // No converted preview yet (e.g. pending docx): only fall back to the
+      // original when it really is a PDF.
+      sniffPdf =
+        !m.previewPath && !looksLikePdf(m.mimeType, m.originalFilename);
       headers.set('Content-Type', 'application/pdf');
     } else if (m.previewKind === 'text') {
       rel = m.previewPath ?? m.storagePath;
@@ -134,6 +155,7 @@ export async function handleFileRequest(
   } catch {
     return notFound();
   }
+  if (sniffPdf && !(await startsWithPdfMagic(abs))) return notFound();
 
   const range = parseRange(req.headers.get('range'), size);
   if (range === 'invalid') {

@@ -195,6 +195,36 @@ describe('file route', () => {
     expect(res.headers.get('content-disposition')).toMatch(/^inline;/);
   });
 
+  it('pdf preview of a not-yet-converted non-PDF original is 404', async () => {
+    const docx = await seed({
+      originalFilename: 'notatki.docx',
+      mimeType:
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      status: 'pending',
+    });
+    expect((await call(docx, 'preview')).status).toBe(404);
+    // the original is still downloadable
+    expect((await call(docx, 'original')).status).toBe(200);
+  });
+
+  it('pdf preview falls back to an original that sniffs as PDF', async () => {
+    const id = await seed({
+      originalFilename: 'skan',
+      mimeType: 'application/octet-stream',
+    });
+    expect((await call(id, 'preview')).status).toBe(404); // body is digits
+    await writeFile(join(storage, 'originals', `f${seq}`), '%PDF-1.7 ...');
+    const res = await call(id, 'preview');
+    expect(res.status).toBe(200);
+    expect(await res.text()).toBe('%PDF-1.7 ...');
+    // extension alone is enough
+    const byExt = await seed({
+      originalFilename: 'Wykład.PDF',
+      mimeType: 'application/octet-stream',
+    });
+    expect((await call(byExt, 'preview')).status).toBe(200);
+  });
+
   it('pdf preview uses preview_path when set', async () => {
     const id = await seed({ previewPath: 'previews/p.pdf' });
     await writeFile(join(storage, 'previews', 'p.pdf'), 'PREVIEW');
