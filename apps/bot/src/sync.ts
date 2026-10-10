@@ -76,22 +76,36 @@ export async function upsertTopic(
     .where(eq(topics.discordThreadId, t.threadId))
     .limit(1);
   if (!row) throw new Error(`topic ${t.threadId} missing after upsert`);
-  await db.delete(topicTags).where(eq(topicTags.topicId, row.id));
-  if (t.tagIds.length > 0) {
-    const existing = await db
-      .select({ id: tags.id })
-      .from(tags)
-      .where(
-        and(
-          eq(tags.subjectId, subject.id),
-          inArray(tags.discordTagId, t.tagIds),
-        ),
-      );
-    if (existing.length > 0) {
-      await db
-        .insert(topicTags)
-        .values(existing.map((e) => ({ topicId: row.id, tagId: e.id })));
-    }
+  const wanted =
+    t.tagIds.length > 0
+      ? await db
+          .select({ id: tags.id })
+          .from(tags)
+          .where(
+            and(
+              eq(tags.subjectId, subject.id),
+              inArray(tags.discordTagId, t.tagIds),
+            ),
+          )
+      : [];
+  const wantedIds = wanted.map((w) => w.id);
+  // Idempotent replacement (safe under concurrent upserts): remove only tags
+  // not wanted, then insert wanted ones ignoring existing rows.
+  await db
+    .delete(topicTags)
+    .where(
+      wantedIds.length > 0
+        ? and(
+            eq(topicTags.topicId, row.id),
+            notInArray(topicTags.tagId, wantedIds),
+          )
+        : eq(topicTags.topicId, row.id),
+    );
+  if (wantedIds.length > 0) {
+    await db
+      .insert(topicTags)
+      .values(wantedIds.map((tagId) => ({ topicId: row.id, tagId })))
+      .onDuplicateKeyUpdate({ set: { topicId: sql`topic_id` } });
   }
   return row.id;
 }

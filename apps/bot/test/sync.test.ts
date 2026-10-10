@@ -147,3 +147,17 @@ describe('sync', () => {
     expect(t?.deletedAt).not.toBeNull();
   });
 });
+
+describe('upsertTopic concurrency', () => {
+  it('concurrent upserts of the same new thread do not throw', async () => {
+    for (let i = 0; i < 15; i++) {
+      const t = thread({ threadId: `race${i}` });
+      const [a, b] = await Promise.all([
+        upsertTopic(db, t, owner),
+        upsertTopic(db, t, null),
+      ]);
+      expect(a).toBe(b);
+      expect(await tagNames(a as number)).toHaveLength(2);
+    }
+  });
+});
