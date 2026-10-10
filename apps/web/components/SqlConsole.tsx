@@ -6,6 +6,7 @@ import { keymap } from '@codemirror/view';
 import CodeMirror from '@uiw/react-codemirror';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toCells } from '@/lib/cells';
+import { toCsv } from '@/lib/csv';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
 import { DataGrid } from './DataGrid';
 
@@ -84,6 +85,25 @@ export function SqlConsole() {
     }
   }, [query, running]);
   runRef.current = run;
+
+  const exportCsv = () => {
+    if (!result?.ok) return;
+    const d = new Date();
+    const p = (n: number) => String(n).padStart(2, '0');
+    const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
+    const url = URL.createObjectURL(
+      new Blob([toCsv(result.columns, result.rows)], {
+        type: 'text/csv;charset=utf-8',
+      }),
+    );
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `zapytanie-${stamp}.csv`;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
 
   const extensions = useMemo(
     () => [
@@ -173,10 +193,20 @@ export function SqlConsole() {
       )}
       {result?.ok && (
         <div className="space-y-2">
-          <p className="text-sm text-[var(--muted)]">
-            {result.rows.length} wierszy · {result.durationMs} ms
-            {result.truncated && ' · wynik obcięty (limit wierszy)'}
-          </p>
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="text-sm text-[var(--muted)]">
+              {result.rows.length} wierszy · {result.durationMs} ms
+              {result.truncated && ' · wynik obcięty (limit wierszy)'}
+            </p>
+            <button
+              type="button"
+              onClick={exportCsv}
+              title={result.truncated ? 'Pierwsze 1000 wierszy' : undefined}
+              className="rounded border border-[var(--border)] px-3 py-1 text-sm hover:border-[var(--accent)]"
+            >
+              Eksport CSV{result.truncated && ' (pierwsze 1000 wierszy)'}
+            </button>
+          </div>
           <DataGrid
             columns={result.columns}
             rows={toCells(result.rows)}
