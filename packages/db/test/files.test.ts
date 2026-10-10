@@ -4,6 +4,7 @@ import {
   originalRelPath,
   planProcessing,
   previewRelPath,
+  searchNameFor,
 } from '../src/files.js';
 
 describe('planProcessing', () => {
@@ -61,5 +62,37 @@ describe('storage paths', () => {
 
   it('builds the preview path', () => {
     expect(previewRelPath(sha)).toBe(`previews/${sha}.pdf`);
+  });
+});
+
+describe('fileExtension hardening', () => {
+  it('ignores dots in directory components', () => {
+    expect(fileExtension('a/b.d/Makefile')).toBe('');
+    expect(fileExtension('a\\b.d\\Makefile')).toBe('');
+  });
+  it('rejects overlong or odd extensions', () => {
+    expect(fileExtension(`x.${'a'.repeat(50)}`)).toBe('');
+    expect(fileExtension('x.a b')).toBe('');
+  });
+  it('lowercases', () => {
+    expect(fileExtension('x.PDF')).toBe('pdf');
+  });
+});
+
+describe('planProcessing mime normalization', () => {
+  it('handles case and parameters', () => {
+    expect(planProcessing('scan', 'Application/PDF; charset=binary')).toEqual({
+      previewKind: 'pdf',
+      jobs: ['extract_text'],
+    });
+  });
+});
+
+describe('searchNameFor', () => {
+  it('splits Discord-style names into words', () => {
+    expect(searchNameFor('kolokwium_2023_zad1.jpg')).toBe(
+      'kolokwium 2023 zad1 jpg',
+    );
+    expect(searchNameFor('  a--b__c..d  ')).toBe('a b c d');
   });
 });

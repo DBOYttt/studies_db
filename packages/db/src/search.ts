@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import type { Db } from './client.js';
+import type { DbExecutor } from './client.js';
 
 export type SearchHit = {
   materialId: number | null;
@@ -13,6 +13,12 @@ export type SearchHit = {
 };
 
 const DEFAULT_LIMIT = 20;
+const MAX_LIMIT = 100;
+
+export function clampLimit(limit: number | undefined): number {
+  if (limit === undefined || !Number.isFinite(limit)) return DEFAULT_LIMIT;
+  return Math.min(MAX_LIMIT, Math.max(1, Math.trunc(limit)));
+}
 
 function sanitizeQuery(q: string): string {
   return q
@@ -91,13 +97,13 @@ type Row = {
 };
 
 export async function searchAll(
-  db: Db,
+  db: DbExecutor,
   opts: { q: string; subjectId?: number; tagId?: number; limit?: number },
 ): Promise<SearchHit[]> {
   const q = sanitizeQuery(opts.q);
   if (!q) return [];
   const firstWord = q.split(' ')[0];
-  const limit = opts.limit ?? DEFAULT_LIMIT;
+  const limit = clampLimit(opts.limit);
   const subj = opts.subjectId
     ? sql`AND t.subject_id = ${opts.subjectId}`
     : sql``;
@@ -113,13 +119,13 @@ export async function searchAll(
              SUBSTRING(COALESCE(m.extracted_text, m.original_filename),
                GREATEST(1, LOCATE(${firstWord}, COALESCE(m.extracted_text, m.original_filename)) - 300),
                1000) AS body,
-             MATCH(m.original_filename, m.extracted_text)
+             MATCH(m.search_name, m.extracted_text)
                AGAINST (${q} IN NATURAL LANGUAGE MODE) AS score
       FROM materials m
       JOIN topics t ON t.id = m.topic_id
       JOIN subjects s ON s.id = t.subject_id
       WHERE m.deleted_at IS NULL AND t.deleted_at IS NULL
-        AND MATCH(m.original_filename, m.extracted_text)
+        AND MATCH(m.search_name, m.extracted_text)
             AGAINST (${q} IN NATURAL LANGUAGE MODE)
         ${subj} ${tag}
       UNION ALL

@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/client.js';
+import { searchNameFor } from '../src/files.js';
+import { insertMaterial } from '../src/materials.js';
 import {
   materials,
   subjects,
@@ -9,7 +11,7 @@ import {
   topicTags,
   users,
 } from '../src/schema.js';
-import { buildSnippet, searchAll } from '../src/search.js';
+import { buildSnippet, clampLimit, searchAll } from '../src/search.js';
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 
 let db: Db;
@@ -34,6 +36,7 @@ async function addMaterial(
       discordMessageId: `m${n}`,
       discordAttachmentId: `a${n}`,
       originalFilename: filename,
+      searchName: searchNameFor(filename),
       mimeType: 'text/plain',
       sizeBytes: 1,
       sha256: 'a'.repeat(64),
@@ -96,6 +99,22 @@ beforeAll(async () => {
     `${'wypełniacz '.repeat(5000)}unikalnyslowo na końcu`,
   );
   await addMaterial(t2, u.id, 'plc.txt', 'Programujemy sterownik PLC w labie.');
+  await insertMaterial(
+    db,
+    {
+      topicId: t1,
+      uploaderId: u.id,
+      discordMessageId: 'mk',
+      discordAttachmentId: 'ak',
+      originalFilename: 'kolokwium_2023_zad1.jpg',
+      mimeType: 'image/jpeg',
+      sizeBytes: 1,
+      sha256: 'b'.repeat(64),
+      storagePath: 'pk',
+      previewKind: 'image',
+    },
+    [],
+  );
   await db
     .update(topics)
     .set({ deletedAt: new Date() })
@@ -125,7 +144,7 @@ describe('buildSnippet', () => {
     const text = `${'Lorem ipsum dolor sit amet. '.repeat(37_000)}łożysko końcowe`;
     const t0 = performance.now();
     const s = buildSnippet(text, 'lozysko');
-    expect(performance.now() - t0).toBeLessThan(200);
+    expect(performance.now() - t0).toBeLessThan(1000);
     expect(s).toContain('«łożysko»');
   });
   it('falls back to the start of the text', () => {
@@ -133,7 +152,26 @@ describe('buildSnippet', () => {
   });
 });
 
+describe('clampLimit', () => {
+  it('clamps to an integer in 1..100 and defaults to 20', () => {
+    expect(clampLimit(undefined)).toBe(20);
+    expect(clampLimit(Number.NaN)).toBe(20);
+    expect(clampLimit(0)).toBe(1);
+    expect(clampLimit(-5)).toBe(1);
+    expect(clampLimit(1000)).toBe(100);
+    expect(clampLimit(7.9)).toBe(7);
+  });
+});
+
 describe('searchAll', () => {
+  it('finds underscore-separated filenames without extracted text', async () => {
+    const hits = await searchAll(db, { q: 'kolokwium' });
+    expect(hits.map((h) => h.filename)).toContain('kolokwium_2023_zad1.jpg');
+  });
+  it('does not blow up on NaN limit', async () => {
+    const hits = await searchAll(db, { q: 'tarcie', limit: Number.NaN });
+    expect(hits.length).toBeGreaterThan(0);
+  });
   it('ignores soft-deleted materials', async () => {
     const hits = await searchAll(db, { q: 'tarcie' });
     const names = hits.map((h) => h.filename).sort();

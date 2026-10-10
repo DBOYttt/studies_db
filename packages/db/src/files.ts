@@ -37,9 +37,18 @@ const TEXT_EXTS = new Set([
 const IMAGE_EXTS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
 
 export function fileExtension(filename: string): string {
-  const dot = filename.lastIndexOf('.');
-  if (dot <= 0 || dot === filename.length - 1) return '';
-  return filename.slice(dot + 1).toLowerCase();
+  const base = filename.slice(
+    Math.max(filename.lastIndexOf('/'), filename.lastIndexOf('\\')) + 1,
+  );
+  const dot = base.lastIndexOf('.');
+  if (dot <= 0 || dot === base.length - 1) return '';
+  const ext = base.slice(dot + 1).toLowerCase();
+  return /^[a-z0-9]{1,10}$/.test(ext) ? ext : '';
+}
+
+/** Filename with `_`, `-`, `.` turned into spaces so FULLTEXT can tokenize it. */
+export function searchNameFor(filename: string): string {
+  return filename.replace(/[_.-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
 export function planProcessing(
@@ -47,6 +56,7 @@ export function planProcessing(
   mime: string,
 ): { previewKind: PreviewKind; jobs: JobType[] } {
   const ext = fileExtension(filename);
+  mime = mime.split(';')[0].trim().toLowerCase();
 
   if (ext === 'pdf' || mime === 'application/pdf') {
     return { previewKind: 'pdf', jobs: ['extract_text'] };

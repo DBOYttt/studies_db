@@ -1,9 +1,9 @@
 import { eq } from 'drizzle-orm';
 import type { Db } from './client.js';
-import type { JobType } from './files.js';
+import { type JobType, searchNameFor } from './files.js';
 import { jobs, materials } from './schema.js';
 
-export type NewMaterial = typeof materials.$inferInsert;
+export type NewMaterial = Omit<typeof materials.$inferInsert, 'searchName'>;
 
 // drizzle wraps driver errors in DrizzleQueryError, so check the cause chain too.
 function isDuplicateEntry(err: unknown): boolean {
@@ -28,6 +28,7 @@ export async function insertMaterial(
         .insert(materials)
         .values({
           ...values,
+          searchName: searchNameFor(values.originalFilename),
           status:
             jobTypes.length === 0 ? 'ready' : (values.status ?? 'pending'),
         })

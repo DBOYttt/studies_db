@@ -129,6 +129,8 @@ export const materials = mysqlTable(
       .notNull()
       .unique(),
     originalFilename: varchar('original_filename', { length: 500 }).notNull(),
+    // Tokenizable copy of the filename (see searchNameFor) for FULLTEXT.
+    searchName: varchar('search_name', { length: 500 }).notNull().default(''),
     mimeType: varchar('mime_type', { length: 150 }).notNull(),
     sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
     sha256: char('sha256', { length: 64 }).notNull(),
