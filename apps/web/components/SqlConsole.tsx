@@ -32,6 +32,16 @@ function loadHistory(): string[] {
   }
 }
 
+/** requireUser()/proxy send an expired session to /login-info (fetch follows). */
+function isSessionExpired(res: Response): boolean {
+  if (res.redirected) return true;
+  try {
+    return new URL(res.url).pathname.startsWith('/login-info');
+  } catch {
+    return false;
+  }
+}
+
 export function SqlConsole() {
   const [query, setQuery] = useState('SELECT * FROM v_subjects LIMIT 10');
   const [schema, setSchema] = useState<Record<string, string[]>>({});
@@ -63,11 +73,16 @@ export function SqlConsole() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ sql: query }),
       });
+      if (isSessionExpired(res)) {
+        window.location.href = '/login-info';
+        return;
+      }
       const isJson = res.headers
         .get('content-type')
         ?.includes('application/json');
-      if (res.redirected || !isJson) {
-        window.location.href = '/login-info'; // session expired
+      if (!isJson) {
+        // e.g. a proxy/tunnel error page; keep the query so it can be retried
+        setResult({ ok: false, error: `Błąd serwera (${res.status}).` });
         return;
       }
       const data = (await res.json()) as Result;

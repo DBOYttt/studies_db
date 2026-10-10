@@ -28,7 +28,17 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await page.getByRole('link', { name: /Fizyka techniczna/ }).click();
   await page.getByRole('link', { name: 'Kolokwium 1 — tarcie' }).click();
 
-  await expect(page.locator('canvas').first()).toBeVisible({ timeout: 30_000 });
+  const canvas = page.locator('canvas').first();
+  await expect(canvas).toBeVisible({ timeout: 30_000 });
+  // The PDF page is sized to its container, not a fixed 720 px.
+  await page.setViewportSize({ width: 375, height: 800 });
+  await expect
+    .poll(async () => (await canvas.boundingBox())?.width ?? 0)
+    .toBeLessThanOrEqual(375);
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await expect
+    .poll(async () => (await canvas.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(375);
   await expect(page.getByText('Przetwarzanie…')).toBeVisible();
   await expect(page.getByText('Podgląd niedostępny')).toBeVisible();
 
@@ -69,9 +79,30 @@ test('browse, preview, search and sql console', async ({ page }) => {
   expect(csv).toContain('x');
   expect(csv).toContain('1');
 
+  // A non-JSON error (e.g. tunnel 502 page) is a server error, not a logout.
+  await page.route('**/api/sql', (route) =>
+    route.fulfill({
+      status: 502,
+      contentType: 'text/html',
+      body: '<html>Bad gateway</html>',
+    }),
+  );
+  await page.getByRole('button', { name: 'Uruchom' }).click();
+  await expect(
+    page.getByRole('alert').filter({ hasText: 'Błąd serwera (502).' }),
+  ).toBeVisible();
+  await expect(page).toHaveURL(/\/sql$/);
+  await expect(editor).toHaveText('SELECT 1 AS x');
+  await page.unroute('**/api/sql');
+
   await editor.click();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('DELETE FROM v_subjects');
   await page.keyboard.press('ControlOrMeta+Enter');
-  await expect(page.getByRole('alert')).toBeVisible();
+  await expect(
+    page
+      .getByRole('alert')
+      .filter({ hasText: /\S/ })
+      .filter({ hasNotText: 'Błąd serwera' }),
+  ).toBeVisible();
 });
