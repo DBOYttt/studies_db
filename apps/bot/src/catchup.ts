@@ -48,14 +48,19 @@ export async function catchUp(
       );
       const threads = await source.listThreads(subject.discordChannelId);
       for (const t of threads) {
-        await upsertTopic(db, t, null);
-        result.topics++;
-        for await (const msg of source.listMessages(t.threadId, after)) {
-          for (const a of msg.attachments) {
-            const r = await ingestAttachment(deps, a);
-            if (r === 'created' || r === 'duplicate') result.created++;
-            else if (r === 'failed') subjectFailed++;
+        try {
+          await upsertTopic(db, t, null);
+          result.topics++;
+          for await (const msg of source.listMessages(t.threadId, after)) {
+            for (const a of msg.attachments) {
+              const r = await ingestAttachment(deps, a);
+              if (r === 'created' || r === 'duplicate') result.created++;
+              else if (r === 'failed') subjectFailed++;
+            }
           }
+        } catch (err) {
+          console.error(`catch-up failed for thread ${t.threadId}`, err);
+          subjectFailed++;
         }
       }
     } catch (err) {
@@ -74,6 +79,23 @@ export async function catchUp(
   return result;
 }
 
+export type Page<T> = { items: T[]; hasMore: boolean; cursor: number | null };
+
+/** Collects pages until hasMore is false or the cursor stops advancing. */
+export async function fetchAllPages<T>(
+  fetchPage: (before: number | undefined) => Promise<Page<T>>,
+): Promise<T[]> {
+  const all: T[] = [];
+  let before: number | undefined;
+  for (;;) {
+    const page = await fetchPage(before);
+    all.push(...page.items);
+    if (!page.hasMore || page.cursor === null) return all;
+    if (before !== undefined && page.cursor >= before) return all;
+    before = page.cursor;
+  }
+}
+
 export function discordForumSource(client: Client): ForumSource {
   const forumOf = async (id: string) => {
     const ch = await client.channels.fetch(id);
@@ -90,12 +112,24 @@ export function discordForumSource(client: Client): ForumSource {
     async listThreads(forumChannelId) {
       const forum = await forumOf(forumChannelId);
       const active = await forum.threads.fetchActive();
-      const archived = await forum.threads.fetchArchived({ fetchAll: true });
+      const archived = await fetchAllPages(async (before) => {
+        const r = await forum.threads.fetchArchived({
+          type: 'public',
+          limit: 100,
+          before,
+        });
+        const items = [...r.threads.values()];
+        const stamps = items
+          .map((th) => th.archiveTimestamp)
+          .filter((x): x is number => x !== null);
+        return {
+          items,
+          hasMore: r.hasMore,
+          cursor: stamps.length > 0 ? Math.min(...stamps) : null,
+        };
+      });
       const byId = new Map<string, ThreadInfo>();
-      for (const th of [
-        ...active.threads.values(),
-        ...archived.threads.values(),
-      ]) {
+      for (const th of [...active.threads.values(), ...archived]) {
         if (th.parentId !== forumChannelId) continue;
         const info = toThreadInfo(th);
         if (info) byId.set(info.threadId, info);

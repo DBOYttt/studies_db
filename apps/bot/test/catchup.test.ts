@@ -14,7 +14,7 @@ import {
   it,
   vi,
 } from 'vitest';
-import { catchUp, type ForumSource } from '../src/catchup.js';
+import { catchUp, type ForumSource, fetchAllPages } from '../src/catchup.js';
 import type { AttachmentInput } from '../src/ingest.js';
 import type { ThreadInfo } from '../src/types.js';
 
@@ -149,5 +149,59 @@ describe('catchUp', () => {
     expect(
       await db.select().from(botState).where(eq(botState.subjectId, s2.id)),
     ).toHaveLength(0);
+  });
+});
+
+describe('catchUp thread isolation', () => {
+  it('a failing thread does not block the rest of the subject', async () => {
+    const tA = thread('tA', 'f1');
+    const tB = thread('tB', 'f1');
+    const source: ForumSource = {
+      listTags: async () => [],
+      listThreads: async (f) => (f === 'f1' ? [tA, tB] : []),
+      listMessages: async function* (id) {
+        if (id === 'tA') throw new Error('boom');
+        yield { messageId: 'mB', attachments: [att('aB', tB)] };
+      },
+    };
+    const r = await catchUp(mkDeps(), source, { ignoreWatermark: false, now });
+    expect(r.failed).toBeGreaterThanOrEqual(1);
+    expect(r.created).toBe(1);
+    expect(await db.select().from(materials)).toHaveLength(1);
+    const [s1] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.discordChannelId, 'f1'));
+    expect(
+      await db.select().from(botState).where(eq(botState.subjectId, s1.id)),
+    ).toHaveLength(0);
+  });
+});
+
+describe('fetchAllPages', () => {
+  it('collects all pages while hasMore', async () => {
+    const pages = [
+      { items: [1, 2], hasMore: true, cursor: 30 },
+      { items: [3], hasMore: true, cursor: 20 },
+      { items: [4], hasMore: false, cursor: 10 },
+    ];
+    const seen: (number | undefined)[] = [];
+    let i = 0;
+    const out = await fetchAllPages(async (b) => {
+      seen.push(b);
+      return pages[i++];
+    });
+    expect(out).toEqual([1, 2, 3, 4]);
+    expect(seen).toEqual([undefined, 30, 20]);
+  });
+
+  it('stops when the cursor does not advance', async () => {
+    let calls = 0;
+    const out = await fetchAllPages(async () => {
+      calls++;
+      return { items: [calls], hasMore: true, cursor: 5 };
+    });
+    expect(calls).toBe(2);
+    expect(out).toEqual([1, 2]);
   });
 });
