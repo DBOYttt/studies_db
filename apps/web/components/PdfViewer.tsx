@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
@@ -9,11 +9,34 @@ import 'react-pdf/dist/Page/TextLayer.css';
 // `new URL(..., import.meta.url)` handling is disabled globally).
 pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
+const MAX_WIDTH = 1600;
+const FALLBACK_WIDTH = 720;
+const PADDING = 16; // p-2 on both sides of the scroll box
+
 export default function PdfViewer({ src }: { src: string }) {
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
   const [error, setError] = useState(false);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const boxRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const measure = () =>
+      setContainerWidth(Math.max(0, Math.floor(el.clientWidth - PADDING)));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // Fit the page to the container at 100%, then zoom from there.
+  const width = Math.min(
+    Math.round((containerWidth || FALLBACK_WIDTH) * zoom),
+    MAX_WIDTH,
+  );
 
   if (error) {
     return (
@@ -65,15 +88,18 @@ export default function PdfViewer({ src }: { src: string }) {
           +
         </button>
       </div>
-      <div className="max-h-[80vh] overflow-auto rounded border border-[var(--border)] bg-neutral-200 p-2 dark:bg-neutral-800">
+      <div
+        ref={boxRef}
+        className="max-h-[80vh] overflow-auto rounded border border-[var(--border)] bg-neutral-200 p-2 dark:bg-neutral-800"
+      >
         <Document
           file={src}
           loading="Wczytywanie PDF…"
           onLoadSuccess={(d) => setPages(d.numPages)}
           onLoadError={() => setError(true)}
-          className="flex justify-center"
+          className="flex justify-center-safe"
         >
-          <Page pageNumber={page} scale={zoom} width={720} />
+          <Page pageNumber={page} width={width} />
         </Document>
       </div>
     </div>
