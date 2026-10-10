@@ -1,4 +1,9 @@
-import { createLoginToken, type Db, upsertUser } from '@studies/db';
+import {
+  createLoginToken,
+  type Db,
+  getSessionUser,
+  upsertUser,
+} from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { NextRequest } from 'next/server';
 import {
@@ -18,6 +23,7 @@ vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
 const { sessionCookieOptions } = await import('../lib/session');
 const { GET } = await import('../app/auth/callback/route');
+const { POST } = await import('../app/auth/logout/route');
 
 beforeAll(async () => {
   db = await resetTestDb();
@@ -68,7 +74,7 @@ describe('GET /auth/callback', () => {
   it('valid token sets the sid cookie and redirects to /', async () => {
     const res = await call(token);
     expect(res.status).toBe(303);
-    expect(new URL(res.headers.get('location') as string).pathname).toBe('/');
+    expect(res.headers.get('location')).toBe('/');
     const cookie = res.cookies.get('sid');
     expect(cookie?.value).toBeTruthy();
     expect(res.headers.get('set-cookie')).toMatch(/sid=/);
@@ -79,14 +85,42 @@ describe('GET /auth/callback', () => {
     await call(token);
     const res = await call(token);
     expect(res.status).toBe(303);
-    const loc = new URL(res.headers.get('location') as string);
-    expect(loc.pathname + loc.search).toBe('/login-info?error=expired');
+    expect(res.headers.get('location')).toBe('/login-info?error=expired');
     expect(res.headers.get('set-cookie')).toBeNull();
   });
 
   it('missing token redirects to expired', async () => {
     const res = await call(null);
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toContain('error=expired');
+    expect(res.headers.get('location')).toBe('/login-info?error=expired');
+  });
+});
+
+describe('POST /auth/logout', () => {
+  it('deletes the session, clears the cookie, redirects relatively', async () => {
+    const userId = await upsertUser(db, {
+      discordUserId: 'u2',
+      displayName: 'Bob',
+      avatarUrl: null,
+    });
+    const login = await createLoginToken(db, userId);
+    const cb = await GET(
+      new NextRequest(`http://localhost:3000/auth/callback?token=${login}`),
+    );
+    const sid = cb.cookies.get('sid')?.value as string;
+    expect(await getSessionUser(db, sid)).not.toBeNull();
+
+    const res = await POST(
+      new NextRequest('http://localhost:3000/auth/logout', {
+        method: 'POST',
+        headers: { cookie: `sid=${sid}` },
+      }),
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/login-info');
+    const set = res.headers.get('set-cookie') as string;
+    expect(set).toMatch(/sid=;/);
+    expect(set).toMatch(/Max-Age=0/i);
+    expect(await getSessionUser(db, sid)).toBeNull();
   });
 });
