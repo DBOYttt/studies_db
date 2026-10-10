@@ -45,7 +45,7 @@ export async function claimJob(
   });
 }
 
-/** Marks the material ready once none of its jobs are pending or failed. */
+/** Marks a pending material ready once all of its jobs are done. */
 export async function finalizeMaterial(
   db: Db,
   materialId: number,
@@ -58,15 +58,30 @@ export async function finalizeMaterial(
   await db
     .update(materials)
     .set({ status: 'ready' })
-    .where(eq(materials.id, materialId));
+    .where(and(eq(materials.id, materialId), eq(materials.status, 'pending')));
 }
 
-export async function completeJob(db: Db, job: Job): Promise<void> {
-  await db
+// attempts acts as a fencing token: a worker that lost its lock (stale
+// requeue + re-claim) no longer matches and its transitions become no-ops.
+const owns = (job: Job) =>
+  and(
+    eq(jobs.id, job.id),
+    eq(jobs.status, 'running'),
+    eq(jobs.attempts, job.attempts),
+  );
+
+const affected = (res: unknown): number =>
+  (res as [{ affectedRows: number }])[0].affectedRows;
+
+/** Returns false if this worker no longer owns the job. */
+export async function completeJob(db: Db, job: Job): Promise<boolean> {
+  const res = await db
     .update(jobs)
     .set({ status: 'done', lockedAt: null })
-    .where(eq(jobs.id, job.id));
+    .where(owns(job));
+  if (affected(res) === 0) return false;
   await finalizeMaterial(db, job.materialId);
+  return true;
 }
 
 export async function enqueueJob(
@@ -82,14 +97,14 @@ export async function failJob(
   job: Job,
   err: unknown,
   now: Date = new Date(),
-): Promise<'retry' | 'failed'> {
+): Promise<'retry' | 'failed' | 'lost'> {
   const message = (err instanceof Error ? err.message : String(err)).slice(
     0,
     MAX_ERROR_LENGTH,
   );
   if (job.attempts < MAX_ATTEMPTS) {
     const delay = BACKOFF_MS[job.attempts - 1] ?? BACKOFF_MS.at(-1) ?? 0;
-    await db
+    const res = await db
       .update(jobs)
       .set({
         status: 'queued',
@@ -97,20 +112,21 @@ export async function failJob(
         runAfter: new Date(now.getTime() + delay),
         lockedAt: null,
       })
-      .where(eq(jobs.id, job.id));
-    return 'retry';
+      .where(owns(job));
+    return affected(res) === 0 ? 'lost' : 'retry';
   }
-  await db.transaction(async (tx) => {
-    await tx
+  return db.transaction(async (tx) => {
+    const res = await tx
       .update(jobs)
       .set({ status: 'failed', lastError: message, lockedAt: null })
-      .where(eq(jobs.id, job.id));
+      .where(owns(job));
+    if (affected(res) === 0) return 'lost' as const;
     await tx
       .update(materials)
       .set({ status: 'failed' })
       .where(eq(materials.id, job.materialId));
+    return 'failed' as const;
   });
-  return 'failed';
 }
 
 /**

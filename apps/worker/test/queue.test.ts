@@ -173,6 +173,56 @@ describe('completeJob / finalizeMaterial', () => {
   });
 });
 
+describe('ownership fencing', () => {
+  async function lostOwnership() {
+    const m = await seed();
+    const w1 = await claim();
+    await db
+      .update(jobs)
+      .set({ lockedAt: plus(-11 * 60_000) })
+      .where(eq(jobs.id, w1.id));
+    expect(await requeueStale(db, T0)).toBe(1);
+    const w2 = await claim();
+    return { m, w1, w2 };
+  }
+
+  it('failJob from a stale worker is lost and leaves the job running', async () => {
+    const { m, w1, w2 } = await lostOwnership();
+    expect(w2.attempts).toBe(w1.attempts + 1);
+    expect(await failJob(db, w1, 'late', T0)).toBe('lost');
+    const [row] = await jobRows(m);
+    expect(row.status).toBe('running');
+    expect(row.attempts).toBe(w2.attempts);
+    expect(row.lastError).toBeNull();
+  });
+
+  it('failJob final-attempt from a stale worker does not fail the material', async () => {
+    const m = await seed();
+    await db.update(jobs).set({ status: 'queued', attempts: MAX_ATTEMPTS });
+    const [row] = await jobRows(m);
+    const stale = { ...row, attempts: MAX_ATTEMPTS };
+    expect(await failJob(db, stale, 'x', T0)).toBe('lost');
+    expect(await materialStatus(m)).toBe('pending');
+  });
+
+  it('completeJob from a stale worker returns false and does not finalize', async () => {
+    const { m, w1, w2 } = await lostOwnership();
+    expect(await completeJob(db, w1)).toBe(false);
+    expect((await jobRows(m))[0].status).toBe('running');
+    expect(await materialStatus(m)).toBe('pending');
+    expect(await completeJob(db, w2)).toBe(true);
+    expect(await materialStatus(m)).toBe('ready');
+  });
+
+  it('finalizeMaterial never flips a failed material to ready', async () => {
+    const m = await seed();
+    await db.update(jobs).set({ status: 'done' });
+    await db.update(materials).set({ status: 'failed' });
+    await finalizeMaterial(db, m);
+    expect(await materialStatus(m)).toBe('failed');
+  });
+});
+
 describe('enqueueJob', () => {
   it('inserts a queued job', async () => {
     const m = await seed([]);
