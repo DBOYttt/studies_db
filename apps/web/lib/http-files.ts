@@ -58,7 +58,9 @@ const SAFE_IMAGE_MIMES = new Set([
   'image/webp',
 ]);
 
-const notFound = () => new Response('Not found', { status: 404 });
+const NOSNIFF = { 'X-Content-Type-Options': 'nosniff' };
+const notFound = () =>
+  new Response('Not found', { status: 404, headers: NOSNIFF });
 
 /**
  * Serves a stored file. Auth is done by the caller (route GET -> requireUser);
@@ -105,12 +107,10 @@ export async function handleFileRequest(
     } else if (m.previewKind === 'text') {
       rel = m.previewPath ?? m.storagePath;
       headers.set('Content-Type', 'text/plain; charset=utf-8');
-    } else {
+    } else if (m.previewKind === 'image') {
       rel = m.previewPath ?? m.storagePath;
-      const mime = (m.mimeType || 'application/octet-stream')
-        .split(';')[0]
-        .trim()
-        .toLowerCase();
+      const mime = m.mimeType.split(';')[0].trim().toLowerCase();
+      if (!mime.startsWith('image/')) return notFound();
       headers.set('Content-Type', mime);
       if (!SAFE_IMAGE_MIMES.has(mime)) {
         headers.set(
@@ -118,6 +118,8 @@ export async function handleFileRequest(
           "default-src 'none'; style-src 'unsafe-inline'; sandbox",
         );
       }
+    } else {
+      return notFound();
     }
   }
 

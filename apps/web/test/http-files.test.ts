@@ -23,7 +23,8 @@ import {
 } from 'vitest';
 
 let db: Db;
-vi.mock('@/lib/db', () => ({ getDb: () => db }));
+let fakeDb: unknown;
+vi.mock('@/lib/db', () => ({ getDb: () => fakeDb ?? db }));
 
 let cookieSid: string | undefined;
 vi.mock('next/headers', () => ({
@@ -223,6 +224,46 @@ describe('file route', () => {
     const r2 = await call(png, 'preview');
     expect(r2.headers.get('content-security-policy')).toBeNull();
     expect(r2.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('image preview with non-image mime is 404; unknown kind is 404', async () => {
+    const html = await seed({ previewKind: 'image', mimeType: 'text/html' });
+    expect((await call(html, 'preview')).status).toBe(404);
+    const unk = await seed();
+    const [real] = await db
+      .select()
+      .from(materials)
+      .where(eq(materials.id, unk));
+    fakeDb = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [{ ...real, previewKind: 'weird' }],
+          }),
+        }),
+      }),
+    };
+    try {
+      const res = await handleFileRequest(
+        new Request('http://x/'),
+        String(unk),
+        'preview',
+        { id: userId, displayName: 'Ann', avatarUrl: null },
+      );
+      expect(res.status).toBe(404);
+    } finally {
+      fakeDb = undefined;
+    }
+  });
+
+  it('nosniff on 404 and 416', async () => {
+    const r404 = await call(999999, 'original');
+    expect(r404.status).toBe(404);
+    expect(r404.headers.get('x-content-type-options')).toBe('nosniff');
+    const id = await seed();
+    const r416 = await call(id, 'original', 'bytes=100-');
+    expect(r416.status).toBe(416);
+    expect(r416.headers.get('x-content-type-options')).toBe('nosniff');
   });
 
   it('404 for preview kind none, soft-deleted, missing, bad id, bad variant', async () => {
