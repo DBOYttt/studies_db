@@ -76,7 +76,7 @@ async function ingest(
   seq++;
   const bytes = bytesOverride ?? (await readFile(join(fixtures, fixture)));
   const sha256 = createHash('sha256').update(bytes).digest('hex');
-  const ext = filename.split('.').pop() ?? '';
+  const ext = filename.includes('.') ? (filename.split('.').pop() ?? '') : '';
   const storagePath = originalRelPath(sha256, ext);
   await mkdir(join(storageDir, 'originals'), { recursive: true });
   await writeFile(join(storageDir, storagePath), bytes);
@@ -135,6 +135,19 @@ describe('processOne', () => {
     expect(m.status).toBe('ready');
     expect(m.extractedText?.trim().length).toBeGreaterThan(0);
     expect(await sofficeCalls()).toBe(0);
+  });
+
+  it('pdf without extension gets text', async () => {
+    const { materialId } = await ingest(
+      'sample.pdf',
+      'skan',
+      'application/pdf',
+    );
+    await drain(deps());
+    const m = await material(materialId);
+    expect(m.storagePath).not.toContain('.');
+    expect(m.status).toBe('ready');
+    expect(m.extractedText?.trim().length).toBeGreaterThan(0);
   });
 
   it('markdown gets text, preview_kind text', async () => {

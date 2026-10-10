@@ -67,10 +67,7 @@ export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
   const pdfOpts = { timeoutMs: EXTRACT_TIMEOUT_MS, bin: deps.pdftotextBin };
   if (m.previewKind === 'pdf' && m.previewPath) {
     text = await extractPdfText(join(deps.storageDir, m.previewPath), pdfOpts);
-  } else if (
-    m.previewKind === 'pdf' &&
-    m.storagePath.toLowerCase().endsWith('.pdf')
-  ) {
+  } else if (m.previewKind === 'pdf') {
     text = await extractPdfText(original, pdfOpts);
   } else if (m.previewKind === 'text') {
     text = await readTextFile(original);
