@@ -1,24 +1,36 @@
 import { toCsv } from '@/lib/csv';
 import { getRoPool } from '@/lib/db';
+import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
 import { runReadonlyQuery } from '@/lib/sql-console';
-import { isPublicView } from '@/lib/tables';
+import { buildViewSql, isPublicView, parseViewParams } from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
 
 const MAX_EXPORT_ROWS = 50_000;
 
+/** Same rows as the table page: honours its sort/dir/f_<col> params. */
 export async function GET(
-  _req: Request,
+  req: Request,
   { params }: { params: Promise<{ view: string }> },
 ) {
   await requireUser();
   const { view } = await params;
   if (!isPublicView(view)) return new Response('Not found', { status: 404 });
-  // `view` is whitelisted above, so interpolating it is safe.
-  const r = await runReadonlyQuery(getRoPool(), `SELECT * FROM \`${view}\``, {
-    maxRows: MAX_EXPORT_ROWS,
-  });
+  const pool = getRoPool();
+  let r: Awaited<ReturnType<typeof runReadonlyQuery>>;
+  try {
+    const q = parseViewParams(new URL(req.url).searchParams);
+    // `view` and every identifier in `from`/`orderBy` are whitelisted;
+    // filter values are `?` params.
+    const { from, orderBy, params: values } = await buildViewSql(pool, view, q);
+    r = await runReadonlyQuery(pool, `SELECT *${from}${orderBy}`, {
+      maxRows: MAX_EXPORT_ROWS,
+      values,
+    });
+  } catch (err) {
+    r = { ok: false, error: roErrorMessage(err) };
+  }
   if (!r.ok) {
     return new Response(r.error, {
       status: 503,

@@ -58,6 +58,19 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await page.goto('/search?q=tarcie');
   await expect(page.locator('mark').first()).toBeVisible();
 
+  // Table CSV export keeps the active filters and sort.
+  await page.goto('/tables/v_subjects?sort=name&dir=desc&f_name=Fizyka');
+  const csvLink = page.getByRole('link', { name: 'Eksport CSV' });
+  await expect(csvLink).toHaveAttribute(
+    'href',
+    '/tables/v_subjects/csv?sort=name&dir=desc&f_name=Fizyka',
+  );
+  const tableCsv = await page.request.get(
+    (await csvLink.getAttribute('href')) as string,
+  );
+  expect(tableCsv.status()).toBe(200);
+  expect(await tableCsv.text()).toContain('Fizyka techniczna');
+
   await page.goto('/sql');
   const editor = page.locator('.cm-content');
   await editor.click();

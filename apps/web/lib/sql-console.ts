@@ -18,6 +18,8 @@ export interface QueryOptions {
   timeoutSec?: number;
   /** Rough cap on result size held in memory (default 20 MB). */
   maxBytes?: number;
+  /** `?` placeholder values (server-built SQL only, never console input). */
+  values?: unknown[];
 }
 
 const ER_STATEMENT_TIMEOUT = 1969;
@@ -145,6 +147,7 @@ export async function runReadonlyQuery(
 
     const query = core(conn).query({
       sql: `SET STATEMENT max_statement_time=${timeoutSec} FOR ${text}`,
+      ...(opts.values ? { values: opts.values } : {}),
       rowsAsArray: true,
     });
     query.on('fields', (fields: FieldPacket[] | undefined) => {

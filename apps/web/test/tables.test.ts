@@ -28,9 +28,14 @@ vi.mock('next/headers', () => ({
 }));
 
 const { RO_POOL_OPTIONS } = await import('../lib/db');
-const { browseView, listViewColumns, PAGE_SIZE } = await import(
-  '../lib/tables'
-);
+const {
+  browseView,
+  listViewColumns,
+  PAGE_SIZE,
+  parseViewParams,
+  viewQueryString,
+} = await import('../lib/tables');
+const { GET: CSV } = await import('../app/(app)/tables/[view]/csv/route');
 const { GET, dynamic } = await import('../app/api/schema/route');
 
 let sid: string;
@@ -199,5 +204,104 @@ describe('GET /api/schema', () => {
     const body = await res.json();
     expect(body.v_users).toEqual(['id', 'display_name', 'created_at']);
     expect(Object.keys(body).length).toBe(8);
+  });
+});
+
+describe('parseViewParams / viewQueryString', () => {
+  it('reads sort, dir, f_<col> and page from URLSearchParams or a record', () => {
+    const fromUrl = parseViewParams(
+      new URLSearchParams('sort=name&dir=desc&f_name=Me&f_code=&page=3&x=1'),
+    );
+    expect(fromUrl).toEqual({
+      sort: 'name',
+      dir: 'desc',
+      filters: { name: 'Me' },
+      page: 3,
+    });
+    const fromRecord = parseViewParams({
+      sort: ['ects', 'name'],
+      dir: 'sideways',
+      f_name: 'x'.repeat(300),
+    });
+    expect(fromRecord.sort).toBe('ects');
+    expect(fromRecord.dir).toBe('asc');
+    expect(fromRecord.filters.name).toHaveLength(200);
+    expect(fromRecord.page).toBe(1);
+  });
+  it('round-trips without the page', () => {
+    const q = parseViewParams(
+      new URLSearchParams('sort=name&dir=desc&f_name=Me&page=2'),
+    );
+    expect(viewQueryString(q).toString()).toBe('sort=name&dir=desc&f_name=Me');
+    expect(viewQueryString({ filters: {} }).toString()).toBe('');
+  });
+});
+
+describe('GET /tables/[view]/csv', () => {
+  const csv = (view: string, qs = '') =>
+    CSV(new Request(`http://localhost/tables/${view}/csv${qs}`), {
+      params: Promise.resolve({ view }),
+    });
+  const lines = async (res: Response) =>
+    (await res.text())
+      .replace(/^\uFEFF/, '')
+      .trim()
+      .split('\r\n');
+
+  it('redirects without a session', async () => {
+    cookieSid = undefined;
+    await expect(csv('v_subjects')).rejects.toMatchObject({
+      digest: expect.stringMatching(/^NEXT_REDIRECT;.*\/login-info;/),
+    });
+  });
+
+  it('exports every row without params; 404 for non-public views', async () => {
+    cookieSid = sid;
+    const res = await csv('v_subjects');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('content-type')).toBe('text/csv; charset=utf-8');
+    expect(await lines(res)).toHaveLength(1 + 120);
+    expect((await csv('sessions')).status).toBe(404);
+  });
+
+  it('applies the same filters and sort as the table page', async () => {
+    cookieSid = sid;
+    const filtered = await lines(await csv('v_subjects', '?f_name=Mech'));
+    expect(filtered).toHaveLength(2);
+    expect(filtered[1]).toContain('MECH');
+
+    const sorted = await lines(
+      await csv('v_subjects', '?sort=name&dir=desc&f_name=Przedmiot%2011'),
+    );
+    const header = sorted[0].split(',');
+    const nameIdx = header.indexOf('name');
+    const names = sorted.slice(1).map((l) => l.split(',')[nameIdx]);
+    expect(names).toEqual([
+      'Przedmiot 119',
+      'Przedmiot 118',
+      'Przedmiot 117',
+      'Przedmiot 116',
+      'Przedmiot 115',
+      'Przedmiot 114',
+      'Przedmiot 113',
+      'Przedmiot 112',
+      'Przedmiot 111',
+      'Przedmiot 110',
+    ]);
+    // same as the page builder
+    const page = await browseView(roPool, 'v_subjects', {
+      sort: 'name',
+      dir: 'desc',
+      filters: { name: 'Przedmiot 11' },
+    });
+    expect(page?.rows.map((r) => r[nameIdx])).toEqual(names);
+  });
+
+  it('ignores unknown columns and treats LIKE wildcards literally', async () => {
+    cookieSid = sid;
+    expect(
+      await lines(await csv('v_subjects', '?f_bogus=x&sort=1%3BDROP')),
+    ).toHaveLength(121);
+    expect(await lines(await csv('v_subjects', '?f_name=%25'))).toHaveLength(2);
   });
 });

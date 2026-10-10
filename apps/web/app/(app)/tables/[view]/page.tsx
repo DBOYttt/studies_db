@@ -6,12 +6,17 @@ import { toCells } from '@/lib/cells';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
-import { browseView, isPublicView, PAGE_SIZE } from '@/lib/tables';
+import {
+  browseView,
+  isPublicView,
+  PAGE_SIZE,
+  parseViewParams,
+  viewQueryString,
+} from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
 
 type SP = Record<string, string | string[] | undefined>;
-const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
 
 export default async function TablePage({
   params,
@@ -23,33 +28,29 @@ export default async function TablePage({
   await requireUser();
   const { view } = await params;
   if (!isPublicView(view)) notFound();
-  const sp = await searchParams;
-  const filters: Record<string, string> = {};
-  for (const [k, v] of Object.entries(sp)) {
-    const val = one(v);
-    if (k.startsWith('f_') && val) filters[k.slice(2)] = val.slice(0, 200);
-  }
-  const dir = one(sp.dir) === 'desc' ? 'desc' : 'asc';
-  const sort = one(sp.sort);
-  const page = Number(one(sp.page)) || 1;
+  const { sort, dir, filters, page } = parseViewParams(await searchParams);
 
   let result: Awaited<ReturnType<typeof browseView>> = null;
   let error: string | null = null;
   try {
-    result = await browseView(getRoPool(), view, { page, sort, dir, filters });
+    result = await browseView(getRoPool(), view, {
+      page,
+      sort,
+      dir,
+      filters,
+    });
   } catch (err) {
     error = roErrorMessage(err);
   }
 
   const base = `/tables/${view}`;
+  const current = viewQueryString({ sort, dir, filters });
   const qs = (over: Record<string, string | number>) => {
-    const p = new URLSearchParams();
-    if (sort) p.set('sort', sort);
-    if (sort) p.set('dir', dir);
-    for (const [k, v] of Object.entries(filters)) p.set(`f_${k}`, v);
+    const p = new URLSearchParams(current);
     for (const [k, v] of Object.entries(over)) p.set(k, String(v));
     return `${base}?${p}`;
   };
+  const csvHref = `${base}/csv${current.size ? `?${current}` : ''}`;
 
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-6 md:flex-row">
@@ -74,7 +75,7 @@ export default async function TablePage({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h1 className="font-mono text-xl font-semibold">{view}</h1>
           <a
-            href={`${base}/csv`}
+            href={csvHref}
             className="rounded border border-[var(--border)] px-3 py-1.5 text-sm hover:border-[var(--accent)]"
           >
             Eksport CSV

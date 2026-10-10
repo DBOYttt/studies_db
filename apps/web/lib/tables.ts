@@ -40,11 +40,14 @@ export async function listViewColumns(
   return value;
 }
 
-export interface BrowseQuery {
-  page?: number;
+export interface ViewQuery {
   sort?: string;
   dir?: 'asc' | 'desc';
   filters?: Record<string, string>;
+}
+
+export interface BrowseQuery extends ViewQuery {
+  page?: number;
 }
 
 export interface BrowseResult {
@@ -55,20 +58,67 @@ export interface BrowseResult {
   pageCount: number;
 }
 
+const MAX_FILTER_LEN = 200;
+
+/**
+ * Table-page URL params (`sort`, `dir`, `f_<col>`, `page`) -> query. Shared by
+ * the table page and its CSV export so both see the same rows.
+ */
+export function parseViewParams(
+  sp: URLSearchParams | Record<string, string | string[] | undefined>,
+): {
+  sort?: string;
+  dir: 'asc' | 'desc';
+  filters: Record<string, string>;
+  page: number;
+} {
+  const params =
+    sp instanceof URLSearchParams
+      ? sp
+      : new URLSearchParams(
+          Object.entries(sp).flatMap(([k, v]) => {
+            const val = Array.isArray(v) ? v[0] : v;
+            return val === undefined ? [] : [[k, val]];
+          }),
+        );
+  const filters: Record<string, string> = {};
+  for (const [k, v] of params) {
+    if (k.startsWith('f_') && v && !(k.slice(2) in filters)) {
+      filters[k.slice(2)] = v.slice(0, MAX_FILTER_LEN);
+    }
+  }
+  return {
+    sort: params.get('sort') || undefined,
+    dir: params.get('dir') === 'desc' ? 'desc' : 'asc',
+    filters,
+    page: Number(params.get('page')) || 1,
+  };
+}
+
+/** Back to URL params (no page), e.g. for links that keep the current view. */
+export function viewQueryString(q: ViewQuery): URLSearchParams {
+  const p = new URLSearchParams();
+  if (q.sort) {
+    p.set('sort', q.sort);
+    p.set('dir', q.dir === 'desc' ? 'desc' : 'asc');
+  }
+  for (const [k, v] of Object.entries(q.filters ?? {})) p.set(`f_${k}`, v);
+  return p;
+}
+
 const quoteId = (name: string) => `\`${name.replace(/`/g, '``')}\``;
 const escapeLike = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
 
 /**
- * One page of a public view. Returns null for anything not in PUBLIC_VIEWS;
- * unknown sort/filter columns are ignored. Identifiers are only interpolated
- * after being matched against the whitelist; values are always parameters.
+ * `FROM ... WHERE ...` and `ORDER BY ...` for a public view. Unknown
+ * sort/filter columns are ignored. Identifiers are only interpolated after
+ * being matched against the view's real columns; values are always `?` params.
  */
-export async function browseView(
+export async function buildViewSql(
   pool: mysql.Pool,
-  view: string,
-  q: BrowseQuery,
-): Promise<BrowseResult | null> {
-  if (!isPublicView(view)) return null;
+  view: PublicView,
+  q: ViewQuery,
+): Promise<{ from: string; orderBy: string; params: string[] }> {
   const known = (await listViewColumns(pool))[view];
 
   const where: string[] = [];
@@ -81,7 +131,30 @@ export async function browseView(
     params.push(`%${escapeLike(value)}%`);
   }
   const whereSql = where.length ? ` WHERE ${where.join(' AND ')}` : '';
-  const from = ` FROM ${quoteId(view)}${whereSql}`;
+
+  // Stable order: chosen column, then the first column as a tiebreaker.
+  const order: string[] = [];
+  const dir = q.dir === 'desc' ? 'DESC' : 'ASC';
+  if (q.sort && known.includes(q.sort)) {
+    order.push(`${quoteId(q.sort)} ${dir}`);
+  }
+  if (known[0] && q.sort !== known[0]) order.push(`${quoteId(known[0])} ASC`);
+
+  return {
+    from: ` FROM ${quoteId(view)}${whereSql}`,
+    orderBy: order.length ? ` ORDER BY ${order.join(', ')}` : '',
+    params,
+  };
+}
+
+/** One page of a public view; null for anything not in PUBLIC_VIEWS. */
+export async function browseView(
+  pool: mysql.Pool,
+  view: string,
+  q: BrowseQuery,
+): Promise<BrowseResult | null> {
+  if (!isPublicView(view)) return null;
+  const { from, orderBy, params } = await buildViewSql(pool, view, q);
 
   const [countRows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT COUNT(*) AS n${from}`,
@@ -94,17 +167,8 @@ export async function browseView(
     ? Math.min(Math.max(requested, 1), pageCount)
     : 1;
 
-  // Stable order: chosen column, then the first column as a tiebreaker.
-  const order: string[] = [];
-  const dir = q.dir === 'desc' ? 'DESC' : 'ASC';
-  if (q.sort && known.includes(q.sort)) {
-    order.push(`${quoteId(q.sort)} ${dir}`);
-  }
-  if (known[0] && q.sort !== known[0]) order.push(`${quoteId(known[0])} ASC`);
-  const orderSql = order.length ? ` ORDER BY ${order.join(', ')}` : '';
-
   const [rows, fields] = await pool.query<mysql.RowDataPacket[][]>({
-    sql: `SELECT *${from}${orderSql} LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`,
+    sql: `SELECT *${from}${orderBy} LIMIT ${PAGE_SIZE} OFFSET ${(page - 1) * PAGE_SIZE}`,
     values: params,
     rowsAsArray: true,
   });
