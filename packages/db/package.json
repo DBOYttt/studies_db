@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "migrate": "node --env-file=../../.env --import tsx src/migrate.ts"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.0",
