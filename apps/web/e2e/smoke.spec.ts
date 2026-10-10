@@ -8,7 +8,19 @@ test('anonymous visitors are sent to login info', async ({ page }) => {
 });
 
 test('browse, preview, search and sql console', async ({ page }) => {
-  await page.goto(`/auth/callback?token=${process.env.E2E_TOKEN}`);
+  const link = `/auth/callback?token=${process.env.E2E_TOKEN}`;
+  // A Discord link preview / mail scanner fetching the link must not burn it.
+  for (let n = 0; n < 2; n++) {
+    const preview = await page.request.get(link, { maxRedirects: 0 });
+    expect(preview.status()).toBe(200);
+    expect(preview.headers()['set-cookie']).toBeUndefined();
+  }
+  await page.goto(link);
+  await expect(
+    page.getByRole('heading', { name: 'Zaloguj się do Studies DB' }),
+  ).toBeVisible();
+  await page.getByRole('button', { name: 'Zaloguj się' }).click();
+  await expect(page).toHaveURL(/\/$/);
   await expect(
     page.getByRole('heading', { name: 'Fizyka techniczna' }),
   ).toBeVisible();

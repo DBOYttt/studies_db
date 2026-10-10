@@ -1,6 +1,7 @@
 import { subjects, users } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
+import { MessageFlags } from 'discord.js';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInteractionHandler, isAdmin } from '../src/commands/router.js';
 
@@ -92,6 +93,38 @@ describe('router', () => {
     expect(s?.code).toBe('ALG');
     expect(i.followUp.mock.calls[0]?.[0].content).toContain(
       'bot nie widzi tego forum',
+    );
+  });
+
+  it('/link DMs the URL in <> with embeds suppressed', async () => {
+    const send = vi.fn().mockResolvedValue(undefined);
+    const i = mkInteraction({
+      commandName: 'link',
+      user: {
+        id: 'stud',
+        username: 'stud',
+        globalName: null,
+        displayAvatarURL: () => 'a',
+        send,
+      },
+      member: null,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      editReply: vi.fn().mockResolvedValue(undefined),
+    });
+    const handler = createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      config,
+    });
+    await handler(asI(i));
+    expect(send).toHaveBeenCalledTimes(1);
+    const msg = send.mock.calls[0]?.[0];
+    expect(msg.content).toMatch(
+      /^Twój link do Studies DB \(ważny 15 minut, jednorazowy\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
+    );
+    expect(msg.flags).toBe(MessageFlags.SuppressEmbeds);
+    expect(i.editReply.mock.calls[0]?.[0].content).toBe(
+      'Wysłałem Ci link w wiadomości prywatnej.',
     );
   });
 });

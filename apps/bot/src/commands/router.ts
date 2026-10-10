@@ -206,9 +206,12 @@ async function runCommand(
       }
       await i.deferReply(eph);
       try {
-        await i.user.send(
-          `Twój link do Studies DB (ważny 15 minut, jednorazowy): ${res.url}`,
-        );
+        // <url> + SuppressEmbeds: no link preview, so Discord's crawler
+        // never fetches the one-time URL.
+        await i.user.send({
+          content: `Twój link do Studies DB (ważny 15 minut, jednorazowy): <${res.url}>`,
+          flags: MessageFlags.SuppressEmbeds,
+        });
       } catch {
         await i.editReply(
           replyOptions(
