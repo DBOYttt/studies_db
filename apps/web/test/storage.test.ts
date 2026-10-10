@@ -16,3 +16,15 @@ it('passes absolute STORAGE_DIR through', () => {
   vi.stubEnv('STORAGE_DIR', '/srv/x');
   expect(storageDir()).toBe('/srv/x');
 });
+
+it('throws on relative STORAGE_DIR in production', () => {
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('STORAGE_DIR', './storage');
+  expect(() => storageDir()).toThrow(/absolute/);
+});
+
+it('allows absolute STORAGE_DIR in production', () => {
+  vi.stubEnv('NODE_ENV', 'production');
+  vi.stubEnv('STORAGE_DIR', '/data/storage');
+  expect(storageDir()).toBe('/data/storage');
+});

@@ -1,0 +1,14 @@
+**/node_modules
+**/.next
+**/dist
+**/*.tsbuildinfo
+.git
+.env
+.env.*
+!.env.example
+!.env.prod.example
+storage
+.superpowers
+**/test-results
+**/playwright-report
+apps/web/public/pdf.worker.min.mjs

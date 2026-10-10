@@ -1,0 +1,11 @@
+# Build from the repo root: podman build -f apps/bot/Containerfile .
+FROM docker.io/library/node:22-bookworm-slim
+
+ENV NODE_ENV=production
+RUN corepack enable
+WORKDIR /app
+COPY . .
+# tsx is a devDependency used at runtime, so install the full dependency set.
+RUN pnpm install --frozen-lockfile --prod=false --filter @studies/bot...
+WORKDIR /app/apps/bot
+CMD ["node", "--import", "tsx", "src/index.ts"]

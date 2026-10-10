@@ -1,0 +1,9 @@
+# Migration job. Build from the repo root: podman build -f packages/db/Containerfile .
+FROM docker.io/library/node:22-bookworm-slim
+ENV NODE_ENV=production
+RUN corepack enable
+WORKDIR /app
+COPY . .
+RUN pnpm install --frozen-lockfile --prod=false --filter @studies/db...
+WORKDIR /app/packages/db
+CMD ["node", "--import", "tsx", "src/cli/migrate.ts"]

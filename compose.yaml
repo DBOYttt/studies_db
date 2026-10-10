@@ -1,11 +1,16 @@
+# Production-style stack.
+#   podman compose --profile app up -d --build                 # local full stack
+#   podman compose --profile app --profile prod up -d --build  # + cloudflared tunnel
+# Dev: publish the DB on 127.0.0.1:3307 with the override file:
+#   podman compose -f compose.yaml -f compose.dev.yaml up -d mariadb
+# (or keep using `pnpm db:up`, which runs its own container).
 services:
   mariadb:
     image: docker.io/library/mariadb:11
     container_name: studies-mariadb
-    ports:
-      - "127.0.0.1:3307:3306"
+    restart: unless-stopped
     environment:
-      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD}
+      MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD in .env}
       MARIADB_DATABASE: studies
     command: >-
       --character-set-server=utf8mb4
@@ -14,6 +19,83 @@ services:
       --default-time-zone=+00:00
     volumes:
       - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+  migrate:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: packages/db/Containerfile
+    env_file: .env
+    environment:
+      DATABASE_ADMIN_URL: mysql://root:${MARIADB_ROOT_PASSWORD}@mariadb:3306/studies
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    restart: "no"
+
+  bot:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/bot/Containerfile
+    env_file: .env
+    environment:
+      STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  worker:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/worker/Containerfile
+    env_file: .env
+    environment:
+      STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  web:
+    profiles: ["app"]
+    build:
+      context: .
+      dockerfile: apps/web/Containerfile
+    env_file: .env
+    environment:
+      STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    expose:
+      - "3000"
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  cloudflared:
+    profiles: ["prod"]
+    image: docker.io/cloudflare/cloudflared:latest
+    command: tunnel --no-autoupdate run
+    environment:
+      TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    depends_on:
+      - web
+    restart: unless-stopped
 
 volumes:
   mariadb-data:
+  storage:

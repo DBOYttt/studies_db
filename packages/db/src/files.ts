@@ -90,6 +90,11 @@ export function previewRelPath(sha256: string): string {
 /** Absolute paths pass through; relative ones resolve against the monorepo root. */
 export function resolveStorageDir(dir: string): string {
   if (isAbsolute(dir)) return dir;
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      `STORAGE_DIR must be an absolute path in production (got "${dir}"), e.g. /data/storage`,
+    );
+  }
   const root = fileURLToPath(new URL('../../..', import.meta.url));
   return resolve(root, dir);
 }

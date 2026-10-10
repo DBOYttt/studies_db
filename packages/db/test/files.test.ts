@@ -114,3 +114,16 @@ describe('resolveStorageDir', () => {
     expect(JSON.parse(readFileSync(pkgPath, 'utf8')).name).toBe('studies-db');
   });
 });
+
+describe('resolveStorageDir in production', () => {
+  it('rejects relative paths', () => {
+    const prev = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() => resolveStorageDir('./storage')).toThrow(/absolute/);
+      expect(resolveStorageDir('/data/storage')).toBe('/data/storage');
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
+  });
+});

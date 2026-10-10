@@ -1,0 +1,6 @@
+# Dev override: publishes MariaDB on loopback only. Never use on the server.
+#   podman compose -f compose.yaml -f compose.dev.yaml up -d mariadb
+services:
+  mariadb:
+    ports:
+      - "127.0.0.1:3307:3306"
