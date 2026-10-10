@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "vitest run",
+    "register": "node --env-file-if-exists=../../.env --import tsx src/register-commands.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
