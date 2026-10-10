@@ -5,6 +5,7 @@ import {
   upsertUser,
   users,
 } from '@studies/db';
+import { escapeMarkdown } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { DiscordUser } from '../types.js';
 
@@ -29,12 +30,12 @@ export async function searchReply(
   q: string,
 ): Promise<string> {
   const hits = await searchAll(db, { q, limit: 5 });
-  if (hits.length === 0) return `Brak wyników dla „${q}”.`;
+  if (hits.length === 0) return `Brak wyników dla „${escapeMarkdown(q)}”.`;
   return hits
     .slice(0, 5)
     .map((h) => {
-      const file = h.filename ? ` — ${h.filename}` : '';
-      return `**${h.subjectCode}** · ${h.topicTitle}${file} ${webBaseUrl}/topics/${h.topicId}`;
+      const file = h.filename ? ` — ${escapeMarkdown(h.filename)}` : '';
+      return `**${h.subjectCode}** · ${escapeMarkdown(h.topicTitle)}${file} ${webBaseUrl}/topics/${h.topicId}`;
     })
     .join('\n');
 }

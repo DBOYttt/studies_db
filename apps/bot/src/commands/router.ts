@@ -21,6 +21,7 @@ import {
   type LecturerRole,
   listSubjects,
 } from './admin.js';
+import { replyOptions } from './reply.js';
 import { linkFor, searchReply } from './student.js';
 
 export type RouterDeps = {
@@ -90,7 +91,7 @@ async function runCommand(
 ): Promise<void> {
   const { db } = deps.ingest;
   const eph = { flags: MessageFlags.Ephemeral } as const;
-  const reply = (content: string) => i.reply({ content, ...eph });
+  const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
 
   if (ADMIN_COMMANDS.has(name) && !isAdmin(i, deps.config.adminRoleId)) {
@@ -178,7 +179,9 @@ async function runCommand(
         ignoreWatermark: true,
       });
       await i.editReply(
-        `Zsynchronizowano: ${r.topics} tematów, ${r.created} nowych plików, ${r.failed} błędów.`,
+        replyOptions(
+          `Zsynchronizowano: ${r.topics} tematów, ${r.created} nowych plików, ${r.failed} błędów.`,
+        ),
       );
       return;
     }
@@ -199,21 +202,27 @@ async function runCommand(
         );
       } catch {
         await i.editReply(
-          'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.',
+          replyOptions(
+            'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.',
+          ),
         );
         return;
       }
-      await i.editReply('Wysłałem Ci link w wiadomości prywatnej.');
+      await i.editReply(
+        replyOptions('Wysłałem Ci link w wiadomości prywatnej.'),
+      );
       return;
     }
     case 'search': {
       await i.deferReply();
       await i.editReply(
-        truncate(
-          await searchReply(
-            db,
-            deps.config.webBaseUrl,
-            i.options.getString('query', true),
+        replyOptions(
+          truncate(
+            await searchReply(
+              db,
+              deps.config.webBaseUrl,
+              i.options.getString('query', true),
+            ),
           ),
         ),
       );
@@ -235,17 +244,12 @@ export function createInteractionHandler(deps: RouterDeps) {
       if (interaction.isAutocomplete() || !interaction.isRepliable()) return;
       try {
         const content = ERROR_TEXT;
-        if (interaction.deferred) await interaction.editReply(content);
+        if (interaction.deferred)
+          await interaction.editReply(replyOptions(content));
         else if (interaction.replied) {
-          await interaction.followUp({
-            content,
-            flags: MessageFlags.Ephemeral,
-          });
+          await interaction.followUp(replyOptions(content, true));
         } else {
-          await interaction.reply({
-            content,
-            flags: MessageFlags.Ephemeral,
-          });
+          await interaction.reply(replyOptions(content, true));
         }
       } catch (err2) {
         console.error('failed to report interaction error', err2);

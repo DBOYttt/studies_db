@@ -18,6 +18,7 @@ import {
   listSubjects,
 } from '../src/commands/admin.js';
 import { commandDefinitions } from '../src/commands/definitions.js';
+import { replyOptions } from '../src/commands/reply.js';
 import { linkFor, searchReply } from '../src/commands/student.js';
 
 let db: Db;
@@ -174,6 +175,18 @@ describe('searchReply', () => {
     expect(lines[0]).toMatch(
       /^\*\*ALG\*\* · Temat \d — notatki\d\.pdf https:\/\/x\.pl\/topics\/\d+$/,
     );
+  });
+});
+
+describe('escaping and mentions', () => {
+  it('escapes markdown in the echoed query', async () => {
+    expect(await searchReply(db, 'https://x.pl', '@everyone *x*')).toBe(
+      'Brak wyników dla „@everyone \\*x\\*”.',
+    );
+  });
+  it('replyOptions never allows mentions', () => {
+    expect(replyOptions('@everyone').allowedMentions.parse).toEqual([]);
+    expect(replyOptions('x', true).flags).toBeDefined();
   });
 });
 
