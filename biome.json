@@ -9,6 +9,7 @@
       "!.superpowers",
       "!**/node_modules",
       "!**/.next",
+      "!**/public/pdf.worker.min.mjs",
       "!**/next-env.d.ts"
     ]
   }

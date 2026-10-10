@@ -4,21 +4,29 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "next dev --webpack -p 3000",
-    "build": "next build --webpack",
+    "dev": "node scripts/copy-pdf-worker.mjs && next dev --webpack -p 3000",
+    "build": "node scripts/copy-pdf-worker.mjs && next build --webpack",
     "start": "next start -p 3000",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "e2e": "playwright test"
   },
   "dependencies": {
+    "@codemirror/lang-sql": "^6.10.0",
+    "@codemirror/state": "^6.7.6",
+    "@codemirror/view": "^6.43.14",
     "@studies/db": "workspace:*",
+    "@uiw/react-codemirror": "^4.25.12",
     "drizzle-orm": "^0.45.4",
     "mysql2": "^3.24.0",
     "next": "^16.0.0",
+    "pdfjs-dist": "6.3.289",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-pdf": "^11.0.0"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
     "@tailwindcss/postcss": "^4.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

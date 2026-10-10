@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { ReactNode } from 'react';
 import { requireUser } from '@/lib/session';
 
@@ -12,15 +13,15 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
   return (
     <>
-      <header className="flex items-center gap-6 border-b border-[var(--border)] px-6 py-3">
-        <a href="/" className="font-semibold">
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[var(--border)] px-4 py-3 sm:px-6">
+        <Link href="/" className="font-semibold">
           Studies DB · TP 4.0
-        </a>
+        </Link>
         <nav className="flex flex-1 gap-4 text-sm">
           {NAV.map((n) => (
-            <a key={n.href} href={n.href} className="hover:underline">
+            <Link key={n.href} href={n.href} className="hover:underline">
               {n.label}
-            </a>
+            </Link>
           ))}
         </nav>
         <div className="flex items-center gap-3 text-sm">
@@ -42,7 +43,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           </form>
         </div>
       </header>
-      <main className="p-6">{children}</main>
+      <main className="p-4 sm:p-6">{children}</main>
     </>
   );
 }
