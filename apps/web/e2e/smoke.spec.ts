@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import { expect, test } from '@playwright/test';
 
 test('anonymous visitors are sent to login info', async ({ page }) => {
@@ -44,6 +45,17 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await expect(
     page.getByRole('cell', { name: '1', exact: true }),
   ).toBeVisible();
+
+  const [download] = await Promise.all([
+    page.waitForEvent('download'),
+    page.getByRole('button', { name: /Eksport CSV/ }).click(),
+  ]);
+  expect(download.suggestedFilename()).toMatch(
+    /^zapytanie-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/,
+  );
+  const csv = await readFile((await download.path()) as string, 'utf8');
+  expect(csv).toContain('x');
+  expect(csv).toContain('1');
 
   await editor.click();
   await page.keyboard.press('ControlOrMeta+a');
