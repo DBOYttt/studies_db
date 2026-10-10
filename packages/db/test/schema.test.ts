@@ -11,7 +11,7 @@ import {
   topics,
   users,
 } from '../src/schema.js';
-import { resetTestDb, testRoUrl } from '../src/testing.js';
+import { closeTestDb, resetTestDb, testRoUrl } from '../src/testing.js';
 
 const TABLES = [
   'subjects',
@@ -76,7 +76,7 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await pool.end();
+  await closeTestDb(db);
 });
 
 describe('schema', () => {

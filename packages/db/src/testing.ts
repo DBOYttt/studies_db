@@ -40,3 +40,7 @@ export async function resetTestDb(): Promise<Db> {
   await ensureReadonlyUser(url, TEST_RO_PASSWORD, TEST_RO_USER);
   return createDb(url).db;
 }
+
+export async function closeTestDb(db: Db): Promise<void> {
+  await (db as unknown as { $client: mysql.Pool }).$client.end();
+}
