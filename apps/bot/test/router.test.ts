@@ -1,7 +1,7 @@
 import { subjects, users } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import { eq } from 'drizzle-orm';
 import { MessageFlags } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createInteractionHandler, isAdmin } from '../src/commands/router.js';
 
