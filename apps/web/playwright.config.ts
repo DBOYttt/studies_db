@@ -27,6 +27,7 @@ export default defineConfig({
     reuseExistingServer: false,
     timeout: 120_000,
     env: {
+      NEXT_DIST_DIR: '.next-e2e',
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? '',
       DATABASE_RO_URL: testRoUrl(),
       STORAGE_DIR: E2E_STORAGE_DIR,

@@ -13,13 +13,18 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
   return (
     <>
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-[var(--border)] px-4 py-3 sm:px-6">
-        <Link href="/" className="font-semibold">
-          Studies DB · TP 4.0
+      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-panel px-4 py-3 sm:px-6">
+        <Link href="/" className="font-semibold tracking-tight">
+          Studies DB{' '}
+          <span className="font-mono text-xs text-muted">TP 4.0</span>
         </Link>
-        <nav className="flex flex-1 gap-4 text-sm">
+        <nav className="flex flex-1 gap-1 text-sm">
           {NAV.map((n) => (
-            <Link key={n.href} href={n.href} className="hover:underline">
+            <Link
+              key={n.href}
+              href={n.href}
+              className="rounded-lg px-2.5 py-1.5 text-muted hover:bg-surface hover:text-fg"
+            >
               {n.label}
             </Link>
           ))}
@@ -37,7 +42,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           )}
           <span>{user.displayName}</span>
           <form action="/auth/logout" method="post">
-            <button type="submit" className="underline">
+            <button
+              type="submit"
+              className="rounded-lg px-2.5 py-1.5 text-muted hover:bg-surface hover:text-fg"
+            >
               Wyloguj
             </button>
           </form>

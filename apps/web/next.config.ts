@@ -8,6 +8,8 @@ const rootEnv = fileURLToPath(new URL('../../.env', import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
 
 const config: NextConfig = {
+  // e2e / side-by-side dev servers set NEXT_DIST_DIR so they don't fight over the .next lock.
+  distDir: process.env.NEXT_DIST_DIR || '.next',
   output: 'standalone',
   transpilePackages: ['@studies/db'],
   serverExternalPackages: ['mysql2'],

@@ -48,7 +48,7 @@ export function FilePreview({
   if (kind === 'none') {
     return (
       <p className="text-sm text-[var(--muted)]">
-        Ten typ pliku nie ma podglądu — użyj „Pobierz”.
+        Ten typ pliku nie ma podglądu. Użyj „Pobierz”.
       </p>
     );
   }

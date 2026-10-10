@@ -26,33 +26,74 @@ test('browse, preview, search and sql console', async ({ page }) => {
   ).toBeVisible();
 
   await page.getByRole('link', { name: /Fizyka techniczna/ }).click();
-  await page.getByRole('link', { name: 'Kolokwium 1 — tarcie' }).click();
+  await expect(page).toHaveURL(/\/subjects\/FIZ$/);
+  const tree = page.getByRole('navigation', { name: 'Drzewo przedmiotu' });
+  await tree.getByRole('link', { name: /Bez kategorii/ }).click();
+  await tree.getByRole('link', { name: /Kolokwium 1/ }).click();
+  await expect(page).toHaveURL(/class=none&topic=(\d+)$/);
+  const topicId = /topic=(\d+)/.exec(page.url())?.[1];
 
-  const canvas = page.locator('canvas').first();
+  // The old topic URL lands in the explorer.
+  await page.goto(`/topics/${topicId}`);
+  await expect(page).toHaveURL(new RegExp(`/subjects/FIZ\\?topic=${topicId}$`));
+
+  // Statuses are visible in the table without opening anything.
+  await expect(page.getByText('Przetwarzanie…')).toBeVisible();
+  await expect(page.getByText('Podgląd niedostępny')).toBeVisible();
+
+  await page.getByRole('link', { name: 'sample.pdf' }).click();
+  const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
+  const canvas = panel.locator('canvas').first();
   await expect(canvas).toBeVisible({ timeout: 30_000 });
-  // The PDF page is sized to its container, not a fixed 720 px.
+  await expect(panel.getByRole('link', { name: 'Pełny ekran' })).toBeVisible();
+  // The PDF page is sized to its container (360 px side panel / full-width mobile sheet).
+  await expect
+    .poll(async () => (await canvas.boundingBox())?.width ?? 0)
+    .toBeLessThanOrEqual(360);
   await page.setViewportSize({ width: 375, height: 800 });
+  await expect
+    .poll(async () => (await canvas.boundingBox())?.width ?? 0)
+    .toBeGreaterThan(320);
   await expect
     .poll(async () => (await canvas.boundingBox())?.width ?? 0)
     .toBeLessThanOrEqual(375);
   await page.setViewportSize({ width: 1280, height: 800 });
   await expect
     .poll(async () => (await canvas.boundingBox())?.width ?? 0)
-    .toBeGreaterThan(375);
-  await expect(page.getByText('Przetwarzanie…')).toBeVisible();
-  await expect(page.getByText('Podgląd niedostępny')).toBeVisible();
+    .toBeLessThanOrEqual(360);
 
-  const failedCard = page.locator('li', { hasText: 'prezentacja.pptx' });
-  const href = await failedCard
+  // A file without a preview: no "Pelny ekran", download works, Discord link set.
+  await page.getByRole('link', { name: 'prezentacja.pptx' }).click();
+  const failedPanel = page.getByRole('complementary', {
+    name: 'Podgląd pliku',
+  });
+  await expect(
+    failedPanel.getByRole('heading', { name: 'prezentacja.pptx' }),
+  ).toBeVisible();
+  await expect(
+    failedPanel.getByRole('link', { name: 'Pełny ekran' }),
+  ).toHaveCount(0);
+  const href = await failedPanel
     .getByRole('link', { name: 'Pobierz' })
     .getAttribute('href');
   const res = await page.request.get(href as string);
   expect(res.status()).toBe(200);
   await expect(
-    failedCard.getByRole('link', { name: 'Otwórz w Discordzie' }),
+    failedPanel.getByRole('link', { name: 'Otwórz w Discordzie' }),
   ).toHaveAttribute(
     'href',
     'https://discord.com/channels/e2eguild/e2e-thread/m3',
+  );
+  // Closing the panel drops only `file`.
+  await failedPanel.getByRole('link', { name: 'Zamknij podgląd' }).click();
+  await expect(page).toHaveURL(new RegExp(`class=none&topic=${topicId}$`));
+  await expect(failedPanel).toHaveCount(0);
+
+  // "Otwórz w SQL" prefills the editor without running it.
+  await page.getByRole('link', { name: 'Otwórz w SQL' }).click();
+  await expect(page).toHaveURL(/\/sql\?q=/);
+  await expect(page.locator('.cm-content')).toContainText(
+    "subject_code = 'FIZ'",
   );
 
   await page.goto('/search?q=tarcie');

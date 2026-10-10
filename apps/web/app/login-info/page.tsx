@@ -13,7 +13,7 @@ export default async function LoginInfo({
         </p>
       )}
       <p>
-        Aby wejść, wpisz /link na serwerze Discord rocznika — bot wyśle Ci link
+        Aby wejść, wpisz /link na serwerze Discord rocznika. Bot wyśle Ci link
         logowania.
       </p>
     </main>

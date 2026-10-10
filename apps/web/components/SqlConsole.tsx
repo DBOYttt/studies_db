@@ -42,8 +42,12 @@ function isSessionExpired(res: Response): boolean {
   }
 }
 
-export function SqlConsole() {
-  const [query, setQuery] = useState('SELECT * FROM v_subjects LIMIT 10');
+export function SqlConsole({
+  initialQuery = 'SELECT * FROM v_subjects LIMIT 10',
+}: {
+  initialQuery?: string;
+}) {
+  const [query, setQuery] = useState(initialQuery);
   const [schema, setSchema] = useState<Record<string, string[]>>({});
   const [result, setResult] = useState<Result | null>(null);
   const [running, setRunning] = useState(false);

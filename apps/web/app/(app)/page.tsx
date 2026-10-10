@@ -30,7 +30,7 @@ export default async function Home() {
                 <Link
                   key={s.code}
                   href={`/subjects/${encodeURIComponent(s.code)}`}
-                  className="flex flex-col gap-2 rounded-lg border border-[var(--border)] bg-[var(--surface)] p-4 transition hover:border-[var(--accent)]"
+                  className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-4 transition-colors hover:border-accent"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <h3 className="font-semibold">{s.name}</h3>

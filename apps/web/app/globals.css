@@ -1,30 +1,62 @@
 @import "tailwindcss";
 
+/*
+ * Design tokens. Zinc neutrals, one emerald accent.
+ * --accent: fills, selection, indicators (emerald-600 light / emerald-500 dark).
+ * --accent-ink: accent used as text or under white text (emerald-700 / emerald-400),
+ *   chosen for WCAG AA contrast on the panel colors.
+ * Radii: controls 8px (rounded-lg), panels 12px (rounded-xl), chips full.
+ */
 :root {
-  --bg: #ffffff;
-  --fg: #111827;
-  --muted: #6b7280;
-  --border: #e5e7eb;
-  --surface: #f9fafb;
-  --accent: #2563eb;
+  --bg: #fafafa;
+  --fg: #18181b;
+  --muted: #52525b;
+  --border: #e4e4e7;
+  --surface: #f4f4f5;
+  --panel: #ffffff;
+  --accent: #059669;
+  --accent-ink: #047857;
+  --on-accent: #ffffff;
   --mark: #fde68a;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg: #0b0f14;
-    --fg: #e5e7eb;
-    --muted: #9ca3af;
-    --border: #1f2937;
-    --surface: #111827;
-    --accent: #60a5fa;
+    --bg: #09090b;
+    --fg: #e4e4e7;
+    --muted: #a1a1aa;
+    --border: #27272a;
+    --surface: #18181b;
+    --panel: #111113;
+    --accent: #10b981;
+    --accent-ink: #34d399;
+    --on-accent: #052e22;
     --mark: #854d0e;
   }
+}
+
+@theme inline {
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-surface: var(--surface);
+  --color-panel: var(--panel);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-on-accent: var(--on-accent);
 }
 
 body {
   background: var(--bg);
   color: var(--fg);
+  font-family: var(--font-sans);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 mark {
@@ -35,8 +67,28 @@ mark {
 }
 
 a.link {
-  color: var(--accent);
+  color: var(--accent-ink);
 }
 a.link:hover {
   text-decoration: underline;
+}
+
+/* Preview panel: the only motion in the app. Transform + opacity, 150 ms. */
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.panel-in {
+  animation: panel-in 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .panel-in {
+    animation: none;
+  }
 }

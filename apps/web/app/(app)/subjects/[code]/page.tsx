@@ -1,11 +1,24 @@
-import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { DataGrid } from '@/components/DataGrid';
-import { TagBadge } from '@/components/TagBadge';
+import { ExplorerShell } from '@/components/explorer/ExplorerShell';
+import { ExplorerTable } from '@/components/explorer/ExplorerTable';
+import { ExplorerTree } from '@/components/explorer/ExplorerTree';
+import { PreviewPanel } from '@/components/explorer/PreviewPanel';
 import { getDb } from '@/lib/db';
-import { formatDate, pluralPl, ROLE_LABELS } from '@/lib/format';
-import { getSubject, listSubjectTags, listTopics } from '@/lib/queries';
+import {
+  explorerHref,
+  parseExplorerFilters,
+  parseExplorerParams,
+} from '@/lib/explorer';
+import {
+  getExplorerFile,
+  getSubject,
+  getSubjectTree,
+  listExplorerFiles,
+  listSubjectTags,
+  resolveSelection,
+} from '@/lib/queries';
 import { requireUser } from '@/lib/session';
+import { buildExplorerSql } from '@/lib/sql-prefill';
 
 export const dynamic = 'force-dynamic';
 
@@ -14,85 +27,145 @@ export default async function SubjectPage({
   searchParams,
 }: {
   params: Promise<{ code: string }>;
-  searchParams: Promise<{ tag?: string }>;
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   await requireUser();
-  const { code } = await params;
-  const { tag } = await searchParams;
+  const { code: rawCode } = await params;
+  const sp = await searchParams;
   const db = getDb();
-  const subject = await getSubject(db, decodeURIComponent(code));
+  const subject = await getSubject(db, decodeURIComponent(rawCode));
   if (!subject) notFound();
-  const tagId = /^\d{1,9}$/.test(tag ?? '') ? Number(tag) : undefined;
-  const [tags, topics] = await Promise.all([
+  const code = subject.code;
+
+  const requested = parseExplorerParams(sp);
+  const parsedFilters = parseExplorerFilters(sp);
+  const [tree, subjectTags] = await Promise.all([
+    getSubjectTree(db, subject.id),
     listSubjectTags(db, subject.id),
-    listTopics(db, subject.id, { tagId }),
   ]);
-  const byRole = new Map<string, string[]>();
-  for (const l of subject.lecturers) {
-    const list = byRole.get(l.role) ?? [];
-    list.push([l.title, l.name].filter(Boolean).join(' '));
-    byRole.set(l.role, list);
+  const sel = resolveSelection(tree, requested);
+  // A tag from another subject is ignored rather than emptying the table.
+  const filters = {
+    ...parsedFilters,
+    tag: subjectTags.some((t) => t.id === parsedFilters.tag)
+      ? parsedFilters.tag
+      : null,
+  };
+  const isExplorer = sel.tab === 'explorer';
+  const [files, openFile] = await Promise.all([
+    isExplorer
+      ? listExplorerFiles(db, subject.id, sel, {
+          tagId: filters.tag ?? undefined,
+          q: filters.q,
+          sort: filters.sort ?? undefined,
+          dir: filters.dir ?? undefined,
+        })
+      : Promise.resolve([]),
+    isExplorer && sel.file != null
+      ? getExplorerFile(db, subject.id, sel.file)
+      : Promise.resolve(null),
+  ]);
+
+  const cls = tree.find((c) => c.kind === sel.classKind);
+  const grp = cls?.groups.find((g) => g.number === sel.group);
+  const topic =
+    sel.topic == null
+      ? undefined
+      : [...(grp?.topics ?? []), ...(cls?.topics ?? [])].find(
+          (t) => t.id === sel.topic,
+        );
+  const node = (p: Parameters<typeof explorerHref>[1]) =>
+    explorerHref(code, p, filters);
+  const crumbs = [{ label: subject.name, href: node({}) }];
+  if (cls) {
+    crumbs.push({ label: cls.name, href: node({ classKind: cls.kind }) });
   }
-  const base = `/subjects/${encodeURIComponent(subject.code)}`;
+  if (cls && grp) {
+    crumbs.push({
+      label: grp.name,
+      href: node({ classKind: cls.kind, group: grp.number }),
+    });
+  }
+  if (cls && topic) {
+    crumbs.push({
+      label: topic.title,
+      href: node({ classKind: cls.kind, group: grp?.number, topic: topic.id }),
+    });
+  }
+
+  const scopeLabel = topic
+    ? 'w tym temacie'
+    : grp
+      ? 'w tej grupie'
+      : cls
+        ? 'w tej kategorii'
+        : 'w tym przedmiocie';
+  const sqlHref = `/sql?${new URLSearchParams({
+    q: buildExplorerSql(code, {
+      className: cls && cls.kind !== 'none' ? cls.name : undefined,
+      noClass: cls?.kind === 'none',
+      groupName: grp?.name,
+      topicId: sel.topic ?? undefined,
+    }),
+  })}`;
+  const csvQs = new URLSearchParams(
+    explorerHref(code, { ...sel, file: null, tab: 'explorer' }, filters).split(
+      '?',
+    )[1] ?? '',
+  ).toString();
+  const csvHref = `/subjects/${encodeURIComponent(code)}/csv${csvQs ? `?${csvQs}` : ''}`;
+  const closeHref = explorerHref(code, { ...sel, file: null }, filters);
+
   return (
-    <div className="mx-auto max-w-6xl space-y-6">
-      <nav className="text-sm text-[var(--muted)]">
-        <Link href="/" className="link">
-          Przedmioty
-        </Link>{' '}
-        / {subject.name}
-      </nav>
-      <header className="space-y-2">
-        <h1 className="text-2xl font-semibold">{subject.name}</h1>
-        <p className="text-sm text-[var(--muted)]">
-          {subject.code} · semestr {subject.semester} · {subject.ects} ECTS ·{' '}
-          {topics.length}{' '}
-          {pluralPl(topics.length, 'temat', 'tematy', 'tematów')}
-        </p>
-        {subject.description && (
-          <p className="max-w-3xl">{subject.description}</p>
-        )}
-        {byRole.size > 0 && (
-          <dl className="grid gap-x-6 gap-y-1 text-sm sm:grid-cols-[max-content_1fr]">
-            {[...byRole].map(([role, names]) => (
-              <div key={role} className="contents">
-                <dt className="text-[var(--muted)]">
-                  {ROLE_LABELS[role] ?? role}
-                </dt>
-                <dd>{names.join(', ')}</dd>
-              </div>
-            ))}
-          </dl>
-        )}
-      </header>
-      {tags.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 text-sm">
-          <span className="text-[var(--muted)]">Tag:</span>
-          <Link href={base} className={tagId ? 'link' : 'font-semibold'}>
-            Wszystkie
-          </Link>
-          {tags.map((t) => (
-            <Link
-              key={t.id}
-              href={`${base}?tag=${t.id}`}
-              className={t.id === tagId ? 'font-semibold' : ''}
-            >
-              <TagBadge name={t.name} />
-            </Link>
-          ))}
+    <ExplorerShell
+      title={subject.name}
+      meta={`${subject.code}, semestr ${subject.semester}, ${subject.ects} ECTS`}
+      crumbs={crumbs}
+      tab={sel.tab}
+      tabHref={(tab) =>
+        explorerHref(code, { ...sel, file: null, tab }, filters)
+      }
+    >
+      {!isExplorer ? (
+        <div className="rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
+          <p className="font-medium">Ten widok jest w przygotowaniu</p>
+          <p className="mt-1 text-sm text-muted">
+            Wróć do karty Explorer, aby przeglądać pliki.
+          </p>
+        </div>
+      ) : tree.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
+          <p className="font-medium">Brak tematów w tym przedmiocie</p>
+          <p className="mt-1 text-sm text-muted">
+            Tematy pojawią się po dodaniu wątku w kanale przedmiotu na
+            Discordzie.
+          </p>
+        </div>
+      ) : (
+        <div
+          className={`grid gap-4 md:grid-cols-[220px_minmax(0,1fr)] ${
+            sel.file != null ? 'lg:grid-cols-[220px_minmax(0,1fr)_360px]' : ''
+          }`}
+        >
+          <ExplorerTree code={code} tree={tree} sel={sel} filters={filters} />
+          <ExplorerTable
+            code={code}
+            files={files}
+            sel={sel}
+            filters={filters}
+            subjectTags={subjectTags}
+            selectedFileId={openFile?.id ?? null}
+            scopeLabel={scopeLabel}
+            sqlHref={sqlHref}
+            csvHref={csvHref}
+          />
+          {sel.file != null && (
+            <div className="lg:sticky lg:top-4 lg:self-start">
+              <PreviewPanel file={openFile} closeHref={closeHref} />
+            </div>
+          )}
         </div>
       )}
-      <DataGrid
-        columns={['Temat', 'Tagi', 'Pliki', 'Autor', 'Dodano']}
-        empty="Brak tematów."
-        rows={topics.map((t) => [
-          { text: t.title, href: `/topics/${t.id}` },
-          { text: t.tags.map((x) => x.name).join(', '), badges: t.tags },
-          t.fileCount,
-          t.author ?? '—',
-          { text: formatDate(t.createdAt), sort: t.createdAt.toISOString() },
-        ])}
-      />
-    </div>
+    </ExplorerShell>
   );
 }

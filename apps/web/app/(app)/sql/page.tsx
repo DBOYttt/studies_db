@@ -6,8 +6,18 @@ import { listViewColumns } from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
 
-export default async function SqlPage() {
+const MAX_PREFILL = 4000;
+
+export default async function SqlPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string | string[] }>;
+}) {
   await requireUser();
+  const { q } = await searchParams;
+  // Prefill only: the editor shows it, the user runs it.
+  const initialQuery =
+    typeof q === 'string' && q.trim() ? q.slice(0, MAX_PREFILL) : undefined;
   let schema: Record<string, string[]> = {};
   let error: string | null = null;
   try {
@@ -45,7 +55,7 @@ export default async function SqlPage() {
         <p className="text-sm text-[var(--muted)]">
           Tylko odczyt (SELECT) na widokach v_*. Limit 1000 wierszy i 5 sekund.
         </p>
-        <SqlConsole />
+        <SqlConsole initialQuery={initialQuery} />
       </section>
     </div>
   );

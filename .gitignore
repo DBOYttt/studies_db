@@ -2,6 +2,7 @@ node_modules/
 storage/
 .env
 .next/
+.next-*/
 dist/
 .superpowers/
 next-env.d.ts
