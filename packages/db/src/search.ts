@@ -30,33 +30,40 @@ function stripMarks(s: string): string {
     .replace(/Ł/g, 'L');
 }
 
-// Normalise char-by-char so indices stay aligned with the original text
-function foldWithMap(text: string): { folded: string; map: number[] } {
-  let folded = '';
-  const map: number[] = [];
-  let i = 0;
-  for (const ch of text) {
-    const f = stripMarks(ch).toLowerCase();
-    for (let k = 0; k < f.length; k++) map.push(i);
-    folded += f;
-    i += ch.length;
+// Map each folded letter to every Latin variant that folds to it, so the
+// original text can be searched with one native regex (no per-char folding).
+let variants: Map<string, string> | null = null;
+function variantClass(c: string): string {
+  if (!variants) {
+    const groups = new Map<string, string>();
+    for (let cp = 0x20; cp <= 0x24f; cp++) {
+      const ch = String.fromCodePoint(cp);
+      const f = stripMarks(ch).toLowerCase();
+      if (f.length === 1) {
+        groups.set(f, (groups.get(f) ?? '') + ch + ch.toLowerCase());
+      }
+    }
+    variants = groups;
   }
-  return { folded, map };
+  const extra = variants.get(c);
+  const esc = c.replace(/[.*+?^${}()|[\]\\-]/g, '\\$&');
+  return extra ? `[${extra.replace(/[\]\\^-]/g, '\\$&')}]` : esc;
+}
+
+function wordRegex(word: string): RegExp {
+  const src = [...word].map((c) => `${variantClass(c)}\\p{M}*`).join('');
+  return new RegExp(src, 'iu');
 }
 
 export function buildSnippet(text: string, q: string, radius = 120): string {
   const words = stripMarks(sanitizeQuery(q).toLowerCase())
     .split(' ')
     .filter(Boolean);
-  const { folded, map } = foldWithMap(text);
   for (const w of words) {
-    const idx = folded.indexOf(stripMarks(w));
-    if (idx < 0) continue;
-    const start = map[idx];
-    const lastFolded = idx + stripMarks(w).length - 1;
-    const lastStart = map[lastFolded];
-    const end =
-      lastStart + String.fromCodePoint(text.codePointAt(lastStart) ?? 0).length;
+    const m = wordRegex(w).exec(text);
+    if (!m) continue;
+    const start = m.index;
+    const end = start + m[0].length;
     const from = Math.max(0, start - radius);
     const to = Math.min(text.length, end + radius);
     return (
@@ -89,6 +96,7 @@ export async function searchAll(
 ): Promise<SearchHit[]> {
   const q = sanitizeQuery(opts.q);
   if (!q) return [];
+  const firstWord = q.split(' ')[0];
   const limit = opts.limit ?? DEFAULT_LIMIT;
   const subj = opts.subjectId
     ? sql`AND t.subject_id = ${opts.subjectId}`
@@ -102,7 +110,9 @@ export async function searchAll(
       SELECT m.id AS material_id, t.id AS topic_id, t.title AS topic_title,
              s.code AS subject_code, s.name AS subject_name,
              m.original_filename AS filename,
-             COALESCE(m.extracted_text, m.original_filename) AS body,
+             SUBSTRING(COALESCE(m.extracted_text, m.original_filename),
+               GREATEST(1, LOCATE(${firstWord}, COALESCE(m.extracted_text, m.original_filename)) - 300),
+               1000) AS body,
              MATCH(m.original_filename, m.extracted_text)
                AGAINST (${q} IN NATURAL LANGUAGE MODE) AS score
       FROM materials m

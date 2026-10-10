@@ -87,6 +87,14 @@ beforeAll(async () => {
   await addMaterial(t1, u.id, 'tarcie.txt', 'Tarcie suche i poślizg.');
   await addMaterial(t1, u.id, 'stare.txt', 'tarcie usunięte', true);
   await addMaterial(t2, u.id, 'tarcie2.txt', 'Tarcie w napędach.');
+  await addMaterial(t1, u.id, 'lozysko.txt', 'Zadanie: łożysko toczne.');
+  await addMaterial(t2, u.id, 'ai.txt', 'Wstęp do AI w automatyce.');
+  await addMaterial(
+    t2,
+    u.id,
+    'long.txt',
+    `${'wypełniacz '.repeat(5000)}unikalnyslowo na końcu`,
+  );
   await addMaterial(t2, u.id, 'plc.txt', 'Programujemy sterownik PLC w labie.');
   await db
     .update(topics)
@@ -112,6 +120,13 @@ describe('buildSnippet', () => {
     expect(buildSnippet('Zadanie: łożysko toczne', 'lozysko')).toContain(
       '«łożysko»',
     );
+  });
+  it('stays fast on ~1 MB text with the match near the end', () => {
+    const text = `${'Lorem ipsum dolor sit amet. '.repeat(37_000)}łożysko końcowe`;
+    const t0 = performance.now();
+    const s = buildSnippet(text, 'lozysko');
+    expect(performance.now() - t0).toBeLessThan(200);
+    expect(s).toContain('«łożysko»');
   });
   it('falls back to the start of the text', () => {
     expect(buildSnippet('abcdef', 'xyz', 3)).toBe('abcdef');
@@ -157,5 +172,26 @@ describe('searchAll', () => {
   });
   it('respects limit', async () => {
     expect(await searchAll(db, { q: 'tarcie', limit: 1 })).toHaveLength(1);
+  });
+  it('finds Polish diacritics', async () => {
+    const hits = await searchAll(db, { q: 'łożysko' });
+    expect(hits.map((h) => h.filename)).toContain('lozysko.txt');
+  });
+  it('finds 2-character words', async () => {
+    const hits = await searchAll(db, { q: 'AI' });
+    expect(hits.map((h) => h.filename)).toEqual(['ai.txt']);
+  });
+  it('tolerates mixed operator input', async () => {
+    const hits = await searchAll(db, { q: 'tarcie "+' });
+    expect(hits.map((h) => h.filename).sort()).toEqual([
+      'tarcie.txt',
+      'tarcie2.txt',
+    ]);
+  });
+  it('snippets from long texts come from a bounded slice', async () => {
+    const hits = await searchAll(db, { q: 'unikalnyslowo' });
+    expect(hits).toHaveLength(1);
+    expect(hits[0].snippet).toContain('«unikalnyslowo»');
+    expect(hits[0].snippet.length).toBeLessThan(400);
   });
 });
