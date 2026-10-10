@@ -1,0 +1,16 @@
+{
+  "name": "studies-db",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@12.11.2",
+  "scripts": {
+    "test": "pnpm -r --workspace-concurrency=1 test",
+    "lint": "biome check .",
+    "db:up": "sh scripts/db-up.sh",
+    "db:migrate": "pnpm --filter @studies/db migrate"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
+    "@types/node": "^26.6.4"
+  }
+}
