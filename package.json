@@ -9,7 +9,8 @@
     "dev:bot": "pnpm --filter @studies/bot dev",
     "dev:worker": "pnpm --filter @studies/worker dev",
     "db:up": "sh scripts/db-up.sh",
-    "db:migrate": "pnpm --filter @studies/db migrate"
+    "db:migrate": "pnpm --filter @studies/db migrate",
+    "dev:web": "pnpm --filter @studies/web dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

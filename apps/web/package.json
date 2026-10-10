@@ -1,0 +1,29 @@
+{
+  "name": "@studies/web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "next dev --webpack -p 3000",
+    "build": "next build --webpack",
+    "start": "next start -p 3000",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@studies/db": "workspace:*",
+    "mysql2": "^3.24.0",
+    "next": "^16.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "^4.0.0",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^7.0.0",
+    "vite": "^8.3.4",
+    "vitest": "^5.0.0"
+  }
+}
