@@ -1,6 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
 import { and, eq, gt, isNull } from 'drizzle-orm';
-import type { Db } from './client.js';
+import type { Db, DbExecutor } from './client.js';
 import { loginTokens, sessions, users } from './schema.js';
 
 export const LOGIN_TOKEN_TTL_MS = 15 * 60_000;
@@ -15,7 +15,7 @@ function newToken(): string {
 }
 
 export async function upsertUser(
-  db: Db,
+  db: DbExecutor,
   u: { discordUserId: string; displayName: string; avatarUrl: string | null },
 ): Promise<number> {
   await db
@@ -32,7 +32,7 @@ export async function upsertUser(
 }
 
 export async function createLoginToken(
-  db: Db,
+  db: DbExecutor,
   userId: number,
   now: Date = new Date(),
 ): Promise<string> {
@@ -51,6 +51,8 @@ export async function consumeLoginToken(
   now: Date = new Date(),
 ): Promise<{ sessionToken: string; expiresAt: Date } | null> {
   const tokenHash = hashToken(token);
+  // The token is marked used before the ban check on purpose: a banned
+  // user's token is burned on consume and cannot be replayed after an unban.
   return db.transaction(async (tx) => {
     const [res] = await tx
       .update(loginTokens)
@@ -82,7 +84,7 @@ export async function consumeLoginToken(
 }
 
 export async function getSessionUser(
-  db: Db,
+  db: DbExecutor,
   sessionToken: string,
   now: Date = new Date(),
 ): Promise<{
@@ -109,7 +111,7 @@ export async function getSessionUser(
 }
 
 export async function deleteSession(
-  db: Db,
+  db: DbExecutor,
   sessionToken: string,
 ): Promise<void> {
   await db
