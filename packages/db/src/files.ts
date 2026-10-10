@@ -1,3 +1,6 @@
+import { isAbsolute, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 export type PreviewKind = 'pdf' | 'image' | 'text' | 'none';
 export type JobType = 'convert' | 'extract_text';
 
@@ -82,4 +85,11 @@ export function originalRelPath(sha256: string, ext: string): string {
 
 export function previewRelPath(sha256: string): string {
   return `previews/${sha256}.pdf`;
+}
+
+/** Absolute paths pass through; relative ones resolve against the monorepo root. */
+export function resolveStorageDir(dir: string): string {
+  if (isAbsolute(dir)) return dir;
+  const root = fileURLToPath(new URL('../../..', import.meta.url));
+  return resolve(root, dir);
 }

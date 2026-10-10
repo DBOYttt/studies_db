@@ -1,9 +1,12 @@
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
   fileExtension,
   originalRelPath,
   planProcessing,
   previewRelPath,
+  resolveStorageDir,
   searchNameFor,
 } from '../src/files.js';
 
@@ -94,5 +97,20 @@ describe('searchNameFor', () => {
       'kolokwium 2023 zad1 jpg',
     );
     expect(searchNameFor('  a--b__c..d  ')).toBe('a b c d');
+  });
+});
+
+describe('resolveStorageDir', () => {
+  it('returns absolute paths unchanged', () => {
+    expect(resolveStorageDir('/var/data/storage')).toBe('/var/data/storage');
+  });
+
+  it('resolves relative paths against the monorepo root', () => {
+    const out = resolveStorageDir('./storage');
+    expect(out.endsWith('/storage')).toBe(true);
+    const root = out.slice(0, -'/storage'.length);
+    const pkgPath = join(root, 'package.json');
+    expect(existsSync(pkgPath)).toBe(true);
+    expect(JSON.parse(readFileSync(pkgPath, 'utf8')).name).toBe('studies-db');
   });
 });

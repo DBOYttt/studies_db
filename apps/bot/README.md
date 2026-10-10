@@ -16,6 +16,8 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
 7. Register slash commands: `pnpm --filter @studies/bot register`.
 8. Run: `pnpm dev:bot` (watch mode) or `pnpm --filter @studies/bot start`.
 
+A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
+
 Missing env vars make the process exit with `Missing env: ...`; a login failure logs
 `Nie udało się zalogować bota: ...` and exits with code 1.
 

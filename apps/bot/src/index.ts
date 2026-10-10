@@ -1,4 +1,4 @@
-import { createDb } from '@studies/db';
+import { createDb, resolveStorageDir } from '@studies/db';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { catchUp, discordForumSource } from './catchup.js';
 import { createInteractionHandler } from './commands/router.js';
@@ -31,7 +31,7 @@ const client = new Client({
 
 const ingest = {
   db,
-  storageDir: config.storageDir,
+  storageDir: resolveStorageDir(config.storageDir),
   fetchBody: fetchAttachmentBody,
 };
 
