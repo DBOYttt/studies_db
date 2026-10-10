@@ -61,6 +61,25 @@ export async function finalizeMaterial(
     .where(and(eq(materials.id, materialId), eq(materials.status, 'pending')));
 }
 
+/**
+ * Sweeps pending materials whose jobs are all done (e.g. the process lost its
+ * DB connection between completeJob and finalizeMaterial) to ready. Materials
+ * without any jobs are left alone. Returns the number of materials updated.
+ */
+export async function finalizeStuckMaterials(db: Db): Promise<number> {
+  const res = await db
+    .update(materials)
+    .set({ status: 'ready' })
+    .where(
+      and(
+        eq(materials.status, 'pending'),
+        sql`exists (select 1 from ${jobs} where ${jobs.materialId} = ${materials.id})`,
+        sql`not exists (select 1 from ${jobs} where ${jobs.materialId} = ${materials.id} and ${jobs.status} <> 'done')`,
+      ),
+    );
+  return affected(res);
+}
+
 // attempts acts as a fencing token: a worker that lost its lock (stale
 // requeue + re-claim) no longer matches and its transitions become no-ops.
 const owns = (job: Job) =>
@@ -178,7 +197,12 @@ export async function requeueStale(
     if (alive.length > 0) {
       await tx
         .update(jobs)
-        .set({ status: 'queued', runAfter: now, lockedAt: null })
+        .set({
+          status: 'queued',
+          runAfter: now,
+          lockedAt: null,
+          lastError: 'stale lock requeued',
+        })
         .where(
           inArray(
             jobs.id,

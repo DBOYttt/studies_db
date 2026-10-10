@@ -3,12 +3,18 @@ import { join } from 'node:path';
 import { type Db, materials, previewRelPath } from '@studies/db';
 import { eq } from 'drizzle-orm';
 import { convertToPdf } from './convert.js';
-import { extractPdfText, readTextFile, truncateUtf8 } from './extract.js';
+import {
+  extractPdfText,
+  MAX_TEXT_BYTES,
+  readTextFile,
+  truncateUtf8,
+} from './extract.js';
 import {
   claimJob,
   completeJob,
   enqueueJob,
   failJob,
+  finalizeStuckMaterials,
   type Job,
   requeueStale,
 } from './queue.js';
@@ -23,7 +29,6 @@ export type WorkerDeps = {
 
 const CONVERT_TIMEOUT_MS = 120_000;
 const EXTRACT_TIMEOUT_MS = 30_000;
-const MAX_TEXT_BYTES = 1_048_576;
 const REQUEUE_EVERY_MS = 60_000;
 
 const exists = (path: string) =>
@@ -147,8 +152,10 @@ export async function startWorker(
       try {
         const n = await requeueStale(deps.db, now());
         if (n > 0) console.log(`Worker: wznowiono ${n} zawieszonych jobów`);
+        const f = await finalizeStuckMaterials(deps.db);
+        if (f > 0) console.log(`Worker: sfinalizowano ${f} materiałów`);
       } catch (err) {
-        console.error('Worker: błąd requeueStale:', err);
+        console.error('Worker: błąd requeueStale/finalizeStuckMaterials:', err);
       }
       await sleep(REQUEUE_EVERY_MS, signal);
     }

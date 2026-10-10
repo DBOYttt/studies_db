@@ -17,6 +17,7 @@ import {
   enqueueJob,
   failJob,
   finalizeMaterial,
+  finalizeStuckMaterials,
   MAX_ATTEMPTS,
   requeueStale,
 } from '../src/queue.js';
@@ -193,7 +194,7 @@ describe('ownership fencing', () => {
     const [row] = await jobRows(m);
     expect(row.status).toBe('running');
     expect(row.attempts).toBe(w2.attempts);
-    expect(row.lastError).toBeNull();
+    expect(row.lastError).toBe('stale lock requeued'); // late failJob must not overwrite
   });
 
   it('failJob final-attempt from a stale worker does not fail the material', async () => {
@@ -220,6 +221,40 @@ describe('ownership fencing', () => {
     await db.update(materials).set({ status: 'failed' });
     await finalizeMaterial(db, m);
     expect(await materialStatus(m)).toBe('failed');
+  });
+});
+
+describe('finalizeStuckMaterials', () => {
+  it('sweeps all-done pending materials, leaves others', async () => {
+    const stuck = await seed(['convert', 'extract_text']);
+    const open = await seed(['convert', 'extract_text']);
+    const failed = await seed();
+    const noJobs = await seed([]);
+    await db
+      .update(jobs)
+      .set({ status: 'done' })
+      .where(eq(jobs.materialId, stuck));
+    await db
+      .update(jobs)
+      .set({ status: 'done' })
+      .where(eq(jobs.id, (await jobRows(open))[0].id));
+    await db
+      .update(jobs)
+      .set({ status: 'done' })
+      .where(eq(jobs.materialId, failed));
+    await db
+      .update(materials)
+      .set({ status: 'failed' })
+      .where(eq(materials.id, failed));
+    await db
+      .update(materials)
+      .set({ status: 'pending' })
+      .where(eq(materials.id, noJobs));
+    expect(await finalizeStuckMaterials(db)).toBe(1);
+    expect(await materialStatus(stuck)).toBe('ready');
+    expect(await materialStatus(open)).toBe('pending');
+    expect(await materialStatus(failed)).toBe('failed');
+    expect(await materialStatus(noJobs)).toBe('pending');
   });
 });
 
@@ -253,6 +288,7 @@ describe('requeueStale', () => {
     expect(ja.status).toBe('queued');
     expect(ja.lockedAt).toBeNull();
     expect(ja.runAfter).toEqual(T0);
+    expect(ja.lastError).toBe('stale lock requeued');
     expect((await jobRows(b))[0].status).toBe('running');
   });
 
