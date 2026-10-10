@@ -1,0 +1,49 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { convertToPdf } from '../src/convert.js';
+import { extractPdfText } from '../src/extract.js';
+
+const fx = (n: string) =>
+  fileURLToPath(new URL(`./fixtures/${n}`, import.meta.url));
+let dir: string;
+beforeAll(async () => {
+  dir = await mkdtemp(join(tmpdir(), 'conv-test-'));
+});
+afterAll(async () => {
+  await rm(dir, { recursive: true, force: true });
+});
+
+describe('convertToPdf', () => {
+  it('converts docx to pdf and text is extractable', async () => {
+    const out = join(dir, 'nested', 'a.pdf');
+    await convertToPdf(fx('sample.docx'), out);
+    expect((await readFile(out)).subarray(0, 4).toString()).toBe('%PDF');
+    expect(await extractPdfText(out)).toContain('sterownik');
+  }, 60_000);
+
+  it('converts pptx to pdf', async () => {
+    const out = join(dir, 'b.pdf');
+    await convertToPdf(fx('sample.pptx'), out);
+    expect((await readFile(out)).subarray(0, 4).toString()).toBe('%PDF');
+  }, 60_000);
+
+  it('rejects on corrupt input', async () => {
+    await expect(
+      convertToPdf(fx('corrupt.docx'), join(dir, 'c.pdf')),
+    ).rejects.toThrow();
+  }, 60_000);
+
+  it('kills and rejects on timeout', async () => {
+    const t = Date.now();
+    await expect(
+      convertToPdf(fx('sample.docx'), join(dir, 'd.pdf'), {
+        bin: fx('fake-soffice.sh'),
+        timeoutMs: 200,
+      }),
+    ).rejects.toThrow();
+    expect(Date.now() - t).toBeLessThan(1000);
+  });
+});
