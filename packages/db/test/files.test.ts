@@ -1,6 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fileExtension,
   originalRelPath,
@@ -116,14 +116,10 @@ describe('resolveStorageDir', () => {
 });
 
 describe('resolveStorageDir in production', () => {
+  afterEach(() => vi.unstubAllEnvs());
   it('rejects relative paths', () => {
-    const prev = process.env.NODE_ENV;
-    process.env.NODE_ENV = 'production';
-    try {
-      expect(() => resolveStorageDir('./storage')).toThrow(/absolute/);
-      expect(resolveStorageDir('/data/storage')).toBe('/data/storage');
-    } finally {
-      process.env.NODE_ENV = prev;
-    }
+    vi.stubEnv('NODE_ENV', 'production');
+    expect(() => resolveStorageDir('./storage')).toThrow(/absolute/);
+    expect(resolveStorageDir('/data/storage')).toBe('/data/storage');
   });
 });

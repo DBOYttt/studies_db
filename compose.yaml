@@ -4,6 +4,8 @@
 # Dev: publish the DB on 127.0.0.1:3307 with the override file:
 #   podman compose -f compose.yaml -f compose.dev.yaml up -d mariadb
 # (or keep using `pnpm db:up`, which runs its own container).
+name: studies_db
+
 services:
   mariadb:
     image: docker.io/library/mariadb:11

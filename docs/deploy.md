@@ -17,7 +17,10 @@ sudo dnf install podman-compose      # or install docker compose
 cp .env.prod.example .env
 ```
 
-Fill in: strong `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
+Generate secrets with `openssl rand -hex 32`. They must be URL-safe: the passwords are embedded in
+`mysql://` URLs and compose interpolation, and characters such as `@ / # ? % : $ \ ; &` or spaces break them.
+
+Fill in: `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
 `DATABASE_URL` / `DATABASE_RO_URL` in sync), Discord values, `BACKUP_DIR`.
 `STORAGE_DIR` is forced to `/data/storage` by compose; it must be absolute in production
 (the apps throw at startup otherwise).
@@ -58,7 +61,7 @@ rebuilding FULLTEXT indexes (`OPTIMIZE TABLE <t>` after the restart, or drop and
 
 `scripts/backup.sh` dumps the DB (`mariadb-dump --single-transaction`), rsyncs the storage volume
 to `$BACKUP_DIR/storage/`, and deletes dumps older than 14 days. The volume name defaults to
-`studies_db_storage` (`<project dir>_storage`); override with `STORAGE_VOLUME`. Nightly at 03:00:
+`studies_db_storage` (compose pins `name: studies_db`, so it does not depend on the checkout dir); override with `STORAGE_VOLUME`. Nightly at 03:00:
 
 ```cron
 0 3 * * * /path/to/studies_db/scripts/backup.sh >> /var/log/studies-backup.log 2>&1
@@ -66,6 +69,20 @@ to `$BACKUP_DIR/storage/`, and deletes dumps older than 14 days. The volume name
 
 or a systemd timer with `OnCalendar=*-*-* 03:00:00` running the same script. Rootless podman: run
 it as the same user that owns the containers.
+
+`backup.sh` runs under bash with `pipefail`, runs the dump with the password read inside the container
+(not visible in `ps`), verifies the dump (`gzip -t` + `Dump completed` trailer) before keeping it, and
+prunes old dumps only after success. It reads only `BACKUP_DIR` from `.env` (never sources it).
+
+## Surviving a server reboot (rootless podman)
+
+```sh
+loginctl enable-linger <user>                      # user services/timers run without a login session
+systemctl --user enable --now podman-restart.service   # restarts containers with restart policies at boot
+```
+
+Linger is also required for container healthchecks, which use systemd user timers. `depends_on`
+conditions (`service_healthy`, `service_completed_successfully`) need podman-compose >= 1.1.
 
 ## Verification status
 
