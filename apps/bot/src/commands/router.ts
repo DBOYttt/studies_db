@@ -1,4 +1,4 @@
-import { lecturers, subjects } from '@studies/db';
+import { lecturers, subjects, upsertUser } from '@studies/db';
 import {
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -38,12 +38,17 @@ const ADMIN_COMMANDS = new Set([
   'resync',
 ]);
 const ERROR_TEXT = 'Wystąpił błąd. Spróbuj ponownie później.';
+const FORUM_VISIBILITY_WARNING =
+  'Uwaga: bot nie widzi tego forum — sprawdź uprawnienia (View Channel, Read Message History).';
 const MAX_LEN = 2000;
 
 const truncate = (s: string) =>
   s.length <= MAX_LEN ? s : `${s.slice(0, MAX_LEN - 1)}…`;
 
-function isAdmin(i: ChatInputCommandInteraction, adminRoleId: string): boolean {
+export function isAdmin(
+  i: ChatInputCommandInteraction,
+  adminRoleId: string,
+): boolean {
   const roles = i.member?.roles;
   if (!roles) return false;
   return Array.isArray(roles)
@@ -126,6 +131,7 @@ async function runCommand(
             }
           } catch (err) {
             console.error('tag sync after subject add failed', err);
+            await i.followUp(replyOptions(FORUM_VISIBILITY_WARNING, true));
           }
         }
         return;
@@ -168,11 +174,14 @@ async function runCommand(
       return;
     }
     case 'ban':
-    case 'unban':
-      await reply(
-        await banReply(db, i.options.getUser('user', true).id, name === 'ban'),
-      );
+    case 'unban': {
+      const target = i.options.getUser('user', true);
+      // Make sure the user row exists so the ban applies even if they never
+      // used the bot.
+      await upsertUser(db, toDiscordUser(target));
+      await reply(await banReply(db, target.id, name === 'ban'));
       return;
+    }
     case 'resync': {
       await i.deferReply(eph);
       const r = await catchUp(deps.ingest, discordForumSource(deps.client), {

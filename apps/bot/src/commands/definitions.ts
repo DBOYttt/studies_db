@@ -1,5 +1,6 @@
 import {
   ChannelType,
+  PermissionFlagsBits,
   type RESTPostAPIApplicationCommandsJSONBody,
   SlashCommandBuilder,
 } from 'discord.js';
@@ -8,6 +9,7 @@ import { LECTURER_ROLES } from './admin.js';
 const subject = new SlashCommandBuilder()
   .setName('subject')
   .setDescription('Zarządzanie przedmiotami')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
       .setName('add')
@@ -20,10 +22,18 @@ const subject = new SlashCommandBuilder()
           .setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('name').setDescription('Nazwa').setRequired(true),
+        o
+          .setName('name')
+          .setDescription('Nazwa')
+          .setMaxLength(200)
+          .setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('code').setDescription('Kod').setRequired(true),
+        o
+          .setName('code')
+          .setDescription('Kod')
+          .setMaxLength(20)
+          .setRequired(true),
       )
       .addIntegerOption((o) =>
         o
@@ -40,7 +50,9 @@ const subject = new SlashCommandBuilder()
           .setMaxValue(30)
           .setRequired(true),
       )
-      .addStringOption((o) => o.setName('description').setDescription('Opis')),
+      .addStringOption((o) =>
+        o.setName('description').setDescription('Opis').setMaxLength(1000),
+      ),
   )
   .addSubcommand((s) =>
     s
@@ -53,7 +65,9 @@ const subject = new SlashCommandBuilder()
           .setAutocomplete(true)
           .setRequired(true),
       )
-      .addStringOption((o) => o.setName('name').setDescription('Nazwa'))
+      .addStringOption((o) =>
+        o.setName('name').setDescription('Nazwa').setMaxLength(200),
+      )
       .addIntegerOption((o) =>
         o
           .setName('semester')
@@ -67,22 +81,33 @@ const subject = new SlashCommandBuilder()
           .setMinValue(0)
           .setMaxValue(30),
       )
-      .addStringOption((o) => o.setName('description').setDescription('Opis')),
+      .addStringOption((o) =>
+        o.setName('description').setDescription('Opis').setMaxLength(1000),
+      ),
   )
   .addSubcommand((s) => s.setName('list').setDescription('Lista przedmiotów'));
 
 const lecturer = new SlashCommandBuilder()
   .setName('lecturer')
   .setDescription('Zarządzanie prowadzącymi')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
       .setName('add')
       .setDescription('Dodaj prowadzącego')
       .addStringOption((o) =>
-        o.setName('name').setDescription('Imię i nazwisko').setRequired(true),
+        o
+          .setName('name')
+          .setDescription('Imię i nazwisko')
+          .setMaxLength(200)
+          .setRequired(true),
       )
-      .addStringOption((o) => o.setName('title').setDescription('Tytuł'))
-      .addStringOption((o) => o.setName('email').setDescription('E-mail')),
+      .addStringOption((o) =>
+        o.setName('title').setDescription('Tytuł').setMaxLength(50),
+      )
+      .addStringOption((o) =>
+        o.setName('email').setDescription('E-mail').setMaxLength(200),
+      ),
   )
   .addSubcommand((s) =>
     s
@@ -115,6 +140,7 @@ const userCmd = (name: string, description: string) =>
   new SlashCommandBuilder()
     .setName(name)
     .setDescription(description)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addUserOption((o) =>
       o.setName('user').setDescription('Użytkownik').setRequired(true),
     );
@@ -126,7 +152,8 @@ export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
   userCmd('unban', 'Odblokuj dostęp użytkownika do strony'),
   new SlashCommandBuilder()
     .setName('resync')
-    .setDescription('Zsynchronizuj fora z bazą'),
+    .setDescription('Zsynchronizuj fora z bazą')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('link')
     .setDescription('Otrzymaj link do logowania na stronie'),

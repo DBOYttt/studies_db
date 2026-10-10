@@ -8,6 +8,7 @@ import {
   upsertUser,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import { PermissionFlagsBits } from 'discord.js';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   addLecturer,
@@ -204,5 +205,33 @@ describe('commandDefinitions', () => {
       'search',
     ])
       expect(names).toContain(n);
+  });
+
+  it('sets max_length on free-text options', () => {
+    type Opt = { name: string; max_length?: number; options?: Opt[] };
+    const find = (cmd: string, sub: string, opt: string) => {
+      const c = commandDefinitions.find((x) => x.name === cmd) as unknown as {
+        options: Opt[];
+      };
+      return c.options
+        .find((o) => o.name === sub)
+        ?.options?.find((o) => o.name === opt)?.max_length;
+    };
+    expect(find('subject', 'add', 'code')).toBe(20);
+    expect(find('subject', 'add', 'name')).toBe(200);
+    expect(find('subject', 'add', 'description')).toBe(1000);
+    expect(find('subject', 'edit', 'name')).toBe(200);
+    expect(find('subject', 'edit', 'description')).toBe(1000);
+    expect(find('lecturer', 'add', 'name')).toBe(200);
+    expect(find('lecturer', 'add', 'title')).toBe(50);
+    expect(find('lecturer', 'add', 'email')).toBe(200);
+  });
+
+  it('restricts admin commands by default permissions only', () => {
+    const perms = (n: string) =>
+      commandDefinitions.find((c) => c.name === n)?.default_member_permissions;
+    for (const n of ['subject', 'lecturer', 'ban', 'unban', 'resync'])
+      expect(perms(n)).toBe(String(PermissionFlagsBits.ManageGuild));
+    for (const n of ['link', 'search']) expect(perms(n)).toBeFalsy();
   });
 });
