@@ -36,14 +36,24 @@ describe('convertToPdf', () => {
     ).rejects.toThrow();
   }, 60_000);
 
-  it('kills and rejects on timeout', async () => {
+  it('kills the whole process tree and rejects on timeout', async () => {
+    const pidFile = join(dir, 'grandchild.pid');
+    process.env.FAKE_PIDFILE = pidFile;
     const t = Date.now();
-    await expect(
-      convertToPdf(fx('sample.docx'), join(dir, 'd.pdf'), {
-        bin: fx('fake-soffice.sh'),
-        timeoutMs: 200,
-      }),
-    ).rejects.toThrow();
+    try {
+      await expect(
+        convertToPdf(fx('sample.docx'), join(dir, 'd.pdf'), {
+          bin: fx('fake-soffice.sh'),
+          timeoutMs: 200,
+        }),
+      ).rejects.toThrow(/timed out/);
+    } finally {
+      delete process.env.FAKE_PIDFILE;
+    }
     expect(Date.now() - t).toBeLessThan(1000);
+    const childPid = Number((await readFile(pidFile, 'utf8')).trim());
+    expect(childPid).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 200));
+    expect(() => process.kill(childPid, 0)).toThrow(/ESRCH/);
   });
 });
