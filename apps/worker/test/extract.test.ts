@@ -1,3 +1,6 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import { extractPdfText, readTextFile, truncateUtf8 } from '../src/extract.js';
@@ -14,6 +17,19 @@ describe('extract', () => {
 
   it('readTextFile does not throw on cp1250', async () => {
     expect(typeof (await readTextFile(fx('cp1250.txt')))).toBe('string');
+  });
+
+  it('readTextFile reads at most 4 MiB', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rt-'));
+    try {
+      const f = join(dir, 'big.txt');
+      await writeFile(f, 'a'.repeat(6 * 1024 * 1024));
+      const t = await readTextFile(f);
+      expect(Buffer.byteLength(t)).toBeLessThanOrEqual(4 * 1024 * 1024);
+      expect(t.length).toBeGreaterThan(0);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 
   it('truncateUtf8 respects char boundaries', () => {

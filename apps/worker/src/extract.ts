@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises';
+import { open } from 'node:fs/promises';
 import { run } from './exec.js';
 
 export const MAX_TEXT_BYTES = 1_048_576;
@@ -15,9 +15,29 @@ export async function extractPdfText(
   return stdout;
 }
 
+export const MAX_READ_BYTES = 4 * 1024 * 1024;
+
 export async function readTextFile(path: string): Promise<string> {
-  const bytes = await readFile(path);
-  return new TextDecoder('utf-8', { fatal: false }).decode(bytes);
+  const fh = await open(path, 'r');
+  try {
+    const buf = Buffer.alloc(MAX_READ_BYTES);
+    let total = 0;
+    while (total < MAX_READ_BYTES) {
+      const { bytesRead } = await fh.read(
+        buf,
+        total,
+        MAX_READ_BYTES - total,
+        total,
+      );
+      if (bytesRead === 0) break;
+      total += bytesRead;
+    }
+    return new TextDecoder('utf-8', { fatal: false }).decode(
+      buf.subarray(0, total),
+    );
+  } finally {
+    await fh.close();
+  }
 }
 
 export function truncateUtf8(s: string, maxBytes: number): string {

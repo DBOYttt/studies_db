@@ -50,8 +50,13 @@ export async function convertToPdf(
       await rename(produced, staged);
     } catch (e) {
       if ((e as NodeJS.ErrnoException).code !== 'EXDEV') throw e;
-      await copyFile(produced, staged);
-      await unlink(produced);
+      try {
+        await copyFile(produced, staged);
+        await unlink(produced);
+      } catch (e2) {
+        await rm(staged, { force: true });
+        throw e2;
+      }
     }
     try {
       await rename(staged, outputPath);
