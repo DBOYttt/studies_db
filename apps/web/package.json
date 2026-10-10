@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@studies/db": "workspace:*",
+    "drizzle-orm": "^0.45.4",
     "mysql2": "^3.24.0",
     "next": "^16.0.0",
     "react": "^19.0.0",

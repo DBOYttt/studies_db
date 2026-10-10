@@ -203,6 +203,9 @@ importers:
       '@studies/db':
         specifier: workspace:*
         version: link:../../packages/db
+      drizzle-orm:
+        specifier: ^0.45.4
+        version: 0.45.4(mysql2@3.24.5(@types/node@26.6.4))
       mysql2:
         specifier: ^3.24.0
         version: 3.24.5(@types/node@26.6.4)
