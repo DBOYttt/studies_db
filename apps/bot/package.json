@@ -9,6 +9,7 @@
   },
   "dependencies": {
     "@studies/db": "workspace:*",
+    "discord.js": "^14.27.0",
     "drizzle-orm": "^0.45.0"
   },
   "devDependencies": {
