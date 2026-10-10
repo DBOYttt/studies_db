@@ -1,3 +1,5 @@
+// generate + migrate only — never `drizzle-kit push` (it would drop the
+// hand-written FULLTEXT indexes and views).
 import { defineConfig } from 'drizzle-kit';
 
 export default defineConfig({

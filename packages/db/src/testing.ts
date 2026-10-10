@@ -22,6 +22,11 @@ export function testRoUrl(): string {
 export async function resetTestDb(): Promise<Db> {
   const url = testUrl();
   const dbName = decodeURIComponent(new URL(url).pathname.slice(1));
+  if (!dbName.endsWith('_test')) {
+    throw new Error(
+      `Refusing to reset database '${dbName}': name must end with '_test'`,
+    );
+  }
   const server = new URL(url);
   server.pathname = '/';
   const admin = await mysql.createConnection({

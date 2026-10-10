@@ -17,12 +17,16 @@ export async function ensureReadonlyUser(
       roPassword,
     ]);
     await conn.query(`ALTER USER ${user} IDENTIFIED BY ?`, [roPassword]);
+    // Reset to a known state so manually added grants don't survive.
+    await conn.query(`REVOKE ALL PRIVILEGES, GRANT OPTION FROM ${user}`);
+    await conn.query(
+      `ALTER USER ${user} WITH MAX_USER_CONNECTIONS 10 MAX_STATEMENT_TIME 5`,
+    );
     for (const view of PUBLIC_VIEWS) {
       await conn.query(
         `GRANT SELECT ON ${mysql.escapeId(dbName)}.${mysql.escapeId(view)} TO ${user}`,
       );
     }
-    await conn.query('FLUSH PRIVILEGES');
   } finally {
     await conn.end();
   }
