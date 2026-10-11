@@ -112,6 +112,20 @@ describe('ensure helpers', () => {
   });
 });
 
+describe('ensure helpers with a missing parent', () => {
+  // INSERT IGNORE swallows the FK error, so the follow-up SELECT finds nothing.
+  it('ensureClass throws a descriptive error', async () => {
+    await expect(ensureClass(db, 999_999, 'wyklad')).rejects.toThrow(
+      'ensureClass: no wyklad class for subject 999999',
+    );
+  });
+  it('ensureGroup throws a descriptive error', async () => {
+    await expect(ensureGroup(db, 999_999, 2)).rejects.toThrow(
+      'ensureGroup: no group 2 for class 999999',
+    );
+  });
+});
+
 describe('assignTopicHierarchy', () => {
   it('sets ids, ignores group without class, and moves on re-run', async () => {
     const id = await mkTopic([]);

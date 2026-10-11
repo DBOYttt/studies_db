@@ -11,6 +11,7 @@ if (!adminUrl || !roPassword) {
 }
 await runMigrations(adminUrl);
 await ensureReadonlyUser(adminUrl, roPassword);
+console.log('migrations applied, read-only user ensured');
 const { db, pool } = createDb(adminUrl);
 try {
   const n = await backfillTopicHierarchy(db);
@@ -18,4 +19,3 @@ try {
 } finally {
   await pool.end();
 }
-console.log('migrations applied, read-only user ensured');

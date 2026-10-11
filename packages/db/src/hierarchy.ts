@@ -61,6 +61,10 @@ export async function ensureClass(
     .select({ id: classes.id })
     .from(classes)
     .where(and(eq(classes.subjectId, subjectId), eq(classes.kind, kind)));
+  if (!row)
+    throw new Error(
+      `ensureClass: no ${kind} class for subject ${subjectId} (does the subject exist?)`,
+    );
   return row.id;
 }
 
@@ -78,6 +82,10 @@ export async function ensureGroup(
     .from(classGroups)
     .where(
       and(eq(classGroups.classId, classId), eq(classGroups.number, number)),
+    );
+  if (!row)
+    throw new Error(
+      `ensureGroup: no group ${number} for class ${classId} (does the class exist?)`,
     );
   return row.id;
 }
