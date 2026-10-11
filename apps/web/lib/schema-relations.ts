@@ -37,38 +37,52 @@ export const SCHEMA_RELATIONS: SchemaRelation[] = [
 
 export type SelectionNames = {
   subject?: string;
+  subjectId?: number;
   className?: string;
+  classId?: number | null;
   groupName?: string;
-  topicTitle?: string;
-  filename?: string;
+  groupId?: number;
 };
+
+const withId = (text: string, id: number | null | undefined) =>
+  id == null ? text : `${text} (id ${id})`;
 
 /**
  * Views the current Explorer selection lives in, plus a caption for the
- * deepest level. Topic and file captions are generic on purpose: user text
- * (titles, filenames) is never put into the caption.
+ * deepest level, suffixed with that row's id. Topic and file captions are
+ * generic on purpose: user text (titles, filenames) is never put into the
+ * caption, only ids.
  */
 export function selectionPath(
   sel: ExplorerParams,
   names: SelectionNames,
 ): { views: PublicView[]; caption: string | null } {
   const views: PublicView[] = ['v_subjects'];
-  let caption = `${names.subject ?? 'Przedmiot'} jest w v_subjects`;
+  let caption = withId(
+    `${names.subject ?? 'Przedmiot'} jest w v_subjects`,
+    names.subjectId,
+  );
   if (sel.classKind && sel.classKind !== 'none') {
     views.push('v_classes');
-    caption = `${names.className ?? 'Zajęcia'} jest w v_classes`;
+    caption = withId(
+      `${names.className ?? 'Zajęcia'} jest w v_classes`,
+      names.classId,
+    );
   }
   if (sel.group != null) {
     views.push('v_class_groups');
-    caption = `${names.groupName ?? 'Grupa'} jest w v_class_groups`;
+    caption = withId(
+      `${names.groupName ?? 'Grupa'} jest w v_class_groups`,
+      names.groupId,
+    );
   }
   if (sel.topic != null) {
     views.push('v_topics');
-    caption = 'Temat jest w v_topics';
+    caption = withId('Temat jest w v_topics', sel.topic);
   }
   if (sel.file != null) {
     views.push('v_materials', 'v_files');
-    caption = 'Plik jest w v_materials i v_files';
+    caption = withId('Plik jest w v_materials i v_files', sel.file);
   }
   return { views, caption };
 }

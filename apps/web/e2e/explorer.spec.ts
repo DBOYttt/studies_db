@@ -64,7 +64,15 @@ test('drill down class > group > file, map and schema follow the selection', asy
 
   // Schema: the caption names the deepest selected level.
   await page.goto('/subjects/MECH?class=laboratorium&group=3&tab=schema');
-  await expect(page.getByText('Gr. 3 jest w v_class_groups')).toBeVisible();
+  await expect(
+    page.getByText(/^Gr\. 3 jest w v_class_groups \(id \d+\)$/),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /^Tabela v_class_groups,/ }),
+  ).toHaveAttribute('aria-current', 'true');
+  await expect(
+    page.getByRole('button', { name: /^Tabela v_files,/ }),
+  ).not.toHaveAttribute('aria-current', 'true');
 });
 
 test('stale URL params render the tree without error', async ({ page }) => {

@@ -20,7 +20,7 @@ import {
   listSubjectTags,
   resolveSelection,
 } from '@/lib/queries';
-import { SCHEMA_RELATIONS, selectionPath } from '@/lib/schema-relations';
+import { selectionPath } from '@/lib/schema-relations';
 import { requireUser } from '@/lib/session';
 import { buildExplorerSql } from '@/lib/sql-prefill';
 import { listViewColumns } from '@/lib/tables';
@@ -91,9 +91,11 @@ export default async function SubjectPage({
         );
   const path = selectionPath(sel, {
     subject: subject.name,
+    subjectId: subject.id,
     className: cls?.name,
+    classId: cls?.id,
     groupName: grp?.name,
-    topicTitle: topic?.title,
+    groupId: grp?.id,
   });
   const node = (p: Parameters<typeof explorerHref>[1]) =>
     explorerHref(code, p, filters);
@@ -153,7 +155,6 @@ export default async function SubjectPage({
         schemaColumns ? (
           <SchemaDiagram
             columns={schemaColumns}
-            relations={SCHEMA_RELATIONS}
             highlight={path.views}
             caption={path.caption}
           />

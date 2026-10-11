@@ -20,7 +20,6 @@ import {
   SCHEMA_HEADER_HEIGHT,
   SCHEMA_ROW_HEIGHT,
 } from '@/lib/graph-layout';
-import type { SchemaRelation } from '@/lib/schema-relations';
 
 type TableData = {
   view: PublicView;
@@ -107,7 +106,6 @@ export function SchemaDiagram({
   caption,
 }: {
   columns: Record<PublicView, string[]>;
-  relations: SchemaRelation[];
   highlight: PublicView[];
   caption: string | null;
 }) {

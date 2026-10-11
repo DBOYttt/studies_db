@@ -1,7 +1,6 @@
 import { SchemaDiagram } from '@/components/SchemaDiagram';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
-import { SCHEMA_RELATIONS } from '@/lib/schema-relations';
 import { requireUser } from '@/lib/session';
 import { listViewColumns } from '@/lib/tables';
 
@@ -26,12 +25,7 @@ export default async function SchemaPage() {
         </p>
       </header>
       {columns ? (
-        <SchemaDiagram
-          columns={columns}
-          relations={SCHEMA_RELATIONS}
-          highlight={[]}
-          caption={null}
-        />
+        <SchemaDiagram columns={columns} highlight={[]} caption={null} />
       ) : (
         <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {error}
