@@ -197,6 +197,60 @@ describe('hierarchy schema', () => {
       expect(Object.keys(rows[0])).toContain(k);
   });
 
+  it('v_files ends with subject_id, class_id, group_id, uploader_id', async () => {
+    const [cols] = await pool.query<Rows>(
+      "SELECT COLUMN_NAME AS n FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'v_files' ORDER BY ORDINAL_POSITION",
+    );
+    const names = cols.map((c) => c.n as string);
+    expect(names.slice(0, 14)).toEqual([
+      'material_id',
+      'subject_code',
+      'subject_name',
+      'class_name',
+      'group_name',
+      'topic_id',
+      'topic_title',
+      'filename',
+      'mime_type',
+      'size_bytes',
+      'preview_kind',
+      'status',
+      'uploader',
+      'created_at',
+    ]);
+    expect(names.slice(-4)).toEqual([
+      'subject_id',
+      'class_id',
+      'group_id',
+      'uploader_id',
+    ]);
+    const [classWide] = await db
+      .insert(topics)
+      .values({
+        subjectId,
+        title: 'Cała klasa',
+        discordThreadId: 'h-t3',
+        classId,
+      })
+      .$returningId();
+    await db.insert(materials).values(material(classWide.id, 'f-classwide'));
+    const [rows] = await pool.query<Rows>(
+      "SELECT * FROM v_files WHERE filename IN ('f-live.pdf', 'f-classwide.pdf') ORDER BY filename DESC",
+    );
+    expect(rows[0]).toMatchObject({
+      subject_id: subjectId,
+      class_id: classId,
+      group_id: groupId,
+      uploader_id: uploaderId,
+    });
+    expect(rows[1]).toMatchObject({
+      subject_id: subjectId,
+      class_id: classId,
+      group_id: null,
+      uploader_id: uploaderId,
+    });
+  });
+
   it('studies_ro can select new views but not classes', async () => {
     const ro = await mysql.createConnection(testRoUrl());
     try {
