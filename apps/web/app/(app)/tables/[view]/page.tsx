@@ -134,6 +134,8 @@ export default async function TablePage({
           view={view}
           filters={filters}
           perPage={perPage === DEFAULT_PER_PAGE ? undefined : perPage}
+          sort={sort}
+          dir={dir}
         />
       )}
     </>
@@ -346,10 +348,14 @@ async function SearchTab({
   view,
   filters,
   perPage,
+  sort,
+  dir,
 }: {
   view: PublicView;
   filters: Record<string, string>;
   perPage?: number;
+  sort?: string;
+  dir?: string;
 }) {
   let columns: ViewColumn[] = [];
   let error: string | null = null;
@@ -372,6 +378,8 @@ async function SearchTab({
       columns={columns.map((c) => ({ name: c.name, type: c.type }))}
       values={filters}
       perPage={perPage}
+      sort={sort}
+      dir={sort ? dir : undefined}
     />
   );
 }

@@ -79,7 +79,9 @@ describe('buildExplorerGridSql', () => {
     expect(sql).toContain(
       'AND topic_id IN (SELECT topic_id FROM v_topic_tags WHERE tag_id = 7)',
     );
-    expect(sql).toContain("AND filename LIKE '%50\\\\%\\\\_o''k%'");
+    expect(sql).toContain(
+      "AND LOWER(filename) LIKE LOWER('%50\\\\%\\\\_o''k%')",
+    );
     expect(sql).toContain('ORDER BY uploader ASC, material_id ASC');
     expect(sql).toMatch(/LIMIT 100, 50$/);
   });

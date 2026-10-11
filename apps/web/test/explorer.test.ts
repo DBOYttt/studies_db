@@ -5,6 +5,7 @@ import {
   parseExplorerPaging,
   parseExplorerParams,
   subjectTabHref,
+  withResolvedSelection,
 } from '../lib/explorer';
 
 describe('parseExplorerParams', () => {
@@ -208,5 +209,34 @@ describe('subjectTabHref', () => {
         'sql',
       ),
     ).toBe('/subjects/FIZ?class=none&topic=5&tab=sql');
+  });
+});
+
+describe('withResolvedSelection', () => {
+  const sel = { classKind: 'cwiczenia' as const, group: 3, topic: 7 };
+  it('adds the resolved class/group and keeps other params', () => {
+    const q = withResolvedSelection({ topic: '7', tag: '2', file: '9' }, sel);
+    expect(q?.get('class')).toBe('cwiczenia');
+    expect(q?.get('group')).toBe('3');
+    expect(q?.get('topic')).toBe('7');
+    expect(q?.get('tag')).toBe('2');
+    expect(q?.get('file')).toBe('9');
+  });
+  it('is null when nothing to add', () => {
+    expect(
+      withResolvedSelection(
+        { topic: '7', class: 'cwiczenia', group: '3' },
+        sel,
+      ),
+    ).toBeNull();
+    expect(withResolvedSelection({}, { ...sel, topic: null })).toBeNull();
+  });
+  it('drops a stale group', () => {
+    const q = withResolvedSelection(
+      { topic: '7', class: 'wyklad', group: '2' },
+      { classKind: 'wyklad', group: null, topic: 7 },
+    );
+    expect(q?.get('class')).toBe('wyklad');
+    expect(q?.has('group')).toBe(false);
   });
 });

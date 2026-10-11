@@ -384,8 +384,6 @@ export type PreviewFile = Omit<ExplorerFile, 'createdAt'> & {
   createdAt: Date | string;
 };
 
-const MAX_FILES = 500;
-
 function explorerFileSelect(db: Db) {
   return db
     .select({
@@ -483,7 +481,7 @@ function explorerFileOrder(opts: ExplorerFileOpts) {
   return [ord(col), ord(materials.id)] as const;
 }
 
-/** Files of the selection (first 500), as in the CSV export. */
+/** All files of the selection (CSV export; no row cap). */
 export async function listExplorerFiles(
   db: Db,
   subjectId: number,
@@ -492,8 +490,7 @@ export async function listExplorerFiles(
 ): Promise<ExplorerFile[]> {
   const rows = await explorerFileSelect(db)
     .where(explorerFileWhere(subjectId, sel, opts))
-    .orderBy(...explorerFileOrder(opts))
-    .limit(MAX_FILES);
+    .orderBy(...explorerFileOrder(opts));
   return rows.map(toExplorerFile);
 }
 

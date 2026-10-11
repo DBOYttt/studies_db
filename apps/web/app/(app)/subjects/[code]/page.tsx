@@ -9,7 +9,7 @@ import {
   TreeStructure,
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
-import { notFound } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { DataMap } from '@/components/explorer/DataMap';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
@@ -33,6 +33,7 @@ import {
   parseExplorerPaging,
   parseExplorerParams,
   subjectTabHref,
+  withResolvedSelection,
 } from '@/lib/explorer';
 import { formatDate } from '@/lib/format';
 import {
@@ -92,6 +93,11 @@ export default async function SubjectPage({
     listSubjectClasses(db, subject.id),
   ]);
   const sel = resolveSubjectSelection(classList, tree, parseExplorerParams(sp));
+  // Topic links without class/group: add them so the nav tree highlights the topic.
+  const resolved = withResolvedSelection(sp, sel);
+  if (resolved) {
+    redirect(`/subjects/${encodeURIComponent(code)}?${resolved}`);
+  }
   const tab = sel.tab;
   const parsed = parseExplorerFilters(sp);
   // On the SQL tab `q` is the editor prefill, not the filename filter.
@@ -205,6 +211,7 @@ export default async function SubjectPage({
           subject={subject}
           tag={filters.tag == null ? '' : String(filters.tag)}
           tagOptions={tagOptions}
+          showTag={tab === 'explorer'}
         />
         {tab === 'explorer' && (
           <FilesTab
@@ -247,10 +254,13 @@ function SubjectHeader({
   subject,
   tag,
   tagOptions,
+  showTag,
 }: {
   subject: SubjectInfo;
   tag: string;
   tagOptions: { value: string; label: string; href: string }[];
+  /** The tag only filters Pliki. */
+  showTag: boolean;
 }) {
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
@@ -267,7 +277,7 @@ function SubjectHeader({
           </p>
         )}
       </div>
-      <TagSelect value={tag} options={tagOptions} />
+      {showTag && <TagSelect value={tag} options={tagOptions} />}
     </div>
   );
 }

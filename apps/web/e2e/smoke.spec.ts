@@ -39,12 +39,14 @@ test('browse, preview, search and sql console', async ({ page }) => {
     .getByRole('link', { name: 'Kolokwium 1 — tarcie' })
     .first()
     .click();
-  await expect(page).toHaveURL(/\/subjects\/FIZ\?topic=(\d+)$/);
+  await expect(page).toHaveURL(/\/subjects\/FIZ\?class=none&topic=(\d+)$/);
   const topicId = /topic=(\d+)/.exec(page.url())?.[1];
 
   // The old topic URL lands in the explorer.
   await page.goto(`/topics/${topicId}`);
-  await expect(page).toHaveURL(new RegExp(`/subjects/FIZ\\?topic=${topicId}$`));
+  await expect(page).toHaveURL(
+    new RegExp(`/subjects/FIZ\\?class=none&topic=${topicId}$`),
+  );
 
   // Projektant: a table box links to the view browser.
   await page.goto('/schema');

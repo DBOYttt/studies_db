@@ -295,15 +295,22 @@ export function ResultGrid({
   // Offset of the first row of this page within the result.
   const rowOffset = (page - 1) * perPage;
   // Server mode: the query result; client mode: the filtered rows (as the footer).
-  const message = server
-    ? resultMessage({ start: rowOffset, count: rows.length, total, elapsedMs })
-    : resultMessage({
-        start: rowOffset,
-        count: shown.length,
-        total: filtered.length,
-        elapsedMs,
-        unfiltered: rows.length,
-      });
+  // "Filtruj wiersze" hides rows of the page in both modes; then count what is visible.
+  const message =
+    server && filtered.length === rows.length
+      ? resultMessage({
+          start: rowOffset,
+          count: rows.length,
+          total,
+          elapsedMs,
+        })
+      : resultMessage({
+          start: rowOffset,
+          count: shown.length,
+          total: filtered.length,
+          elapsedMs,
+          unfiltered: rows.length,
+        });
 
   const pageParam = paging?.pageParam ?? 'page';
   const perParam = paging?.perPageParam ?? 'per';
@@ -403,7 +410,7 @@ export function ResultGrid({
 
   const renderCell = (c: Cell, ci: number, r: Cell[], ri: number) => {
     if (c === null || c === undefined) {
-      return <i className="text-subtle">NULL</i>;
+      return <i className="text-faint">NULL</i>;
     }
     const id = fileIdOf(r);
     const objPreview =

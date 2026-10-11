@@ -69,7 +69,7 @@ export function buildExplorerGridSql(
   const q = g.q?.trim();
   if (q) {
     where.push(
-      `filename LIKE ${lit(`%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)}`,
+      `LOWER(filename) LIKE LOWER(${lit(`%${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`)})`,
     );
   }
   const col = g.sort ? SORT_COLUMN[g.sort] : 'created_at';

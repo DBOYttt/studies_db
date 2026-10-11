@@ -128,3 +128,25 @@ export function subjectTabHref(
   };
   return tab === 'sql' ? explorerHref(code, p) : explorerHref(code, p, filters);
 }
+
+/**
+ * `?topic=` links (search hits, /topics/[id]) carry no class/group, so the nav
+ * tree cannot highlight the topic's place. Returns the same query with the
+ * server-resolved `class`/`group` filled in, or null when it already matches.
+ */
+export function withResolvedSelection(
+  sp: SearchParams,
+  sel: Pick<ExplorerParams, 'classKind' | 'group' | 'topic'>,
+): URLSearchParams | null {
+  if (sel.topic == null || !sel.classKind) return null;
+  const raw = parseExplorerParams(sp);
+  if (raw.classKind === sel.classKind && raw.group === sel.group) return null;
+  // class/group first, as explorerHref orders them.
+  const out = new URLSearchParams({ class: sel.classKind });
+  if (sel.group != null) out.set('group', String(sel.group));
+  for (const [k, v] of Object.entries(sp)) {
+    if (k === 'class' || k === 'group') continue;
+    if (typeof v === 'string') out.set(k, v);
+  }
+  return out;
+}

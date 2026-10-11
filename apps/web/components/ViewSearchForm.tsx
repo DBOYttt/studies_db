@@ -17,6 +17,8 @@ export function ViewSearchForm({
   columns,
   values,
   perPage,
+  sort,
+  dir,
 }: {
   view: string;
   columns: { name: string; type: string }[];
@@ -24,6 +26,9 @@ export function ViewSearchForm({
   values: Record<string, string>;
   /** Non-default page size to keep (`per`), if any. */
   perPage?: number;
+  /** Current sort to keep. */
+  sort?: string;
+  dir?: string;
 }) {
   const router = useRouter();
   const [state, setState] = useState<Record<string, string>>(values);
@@ -37,6 +42,8 @@ export function ViewSearchForm({
       if (v) p.set(`f_${c.name}`, v);
     }
     if (perPage) p.set('per', String(perPage));
+    if (sort) p.set('sort', sort);
+    if (dir) p.set('dir', dir);
     router.push(p.size ? `${base}?${p}` : base);
   };
 
@@ -105,6 +112,8 @@ export function ViewSearchForm({
           </table>
         </div>
         {perPage ? <input type="hidden" name="per" value={perPage} /> : null}
+        {sort ? <input type="hidden" name="sort" value={sort} /> : null}
+        {dir ? <input type="hidden" name="dir" value={dir} /> : null}
         <div className="flex justify-end gap-2 rounded-b-md border-t border-line bg-bar px-3 py-2.5">
           <button
             type="button"
