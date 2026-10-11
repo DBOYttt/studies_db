@@ -1,58 +1,76 @@
-import Link from 'next/link';
+import { SignOut } from '@phosphor-icons/react/dist/ssr';
+import { PUBLIC_VIEWS } from '@studies/db/constants';
 import type { ReactNode } from 'react';
+import { ConsoleFooter } from '@/components/shell/ConsoleFooter';
+import { NavPanel } from '@/components/shell/NavPanel';
+import { ShellFrame } from '@/components/shell/ShellFrame';
+import { getDb, getRoPool } from '@/lib/db';
+import type { NavView } from '@/lib/nav-tree';
+import { getNavSubjects } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
+import { countViewRows } from '@/lib/tables';
 
-const NAV = [
-  { href: '/', label: 'Przedmioty' },
-  { href: '/search', label: 'Szukaj' },
-  { href: '/tables/v_subjects', label: 'Tabele' },
-  { href: '/schema', label: 'Schemat' },
-  { href: '/sql', label: 'SQL' },
-];
+async function viewCounts() {
+  try {
+    return await countViewRows(getRoPool());
+  } catch {
+    return null; // e.g. DATABASE_RO_URL missing: no counts, layout still renders
+  }
+}
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
+  const [subjects, counts] = await Promise.all([
+    getNavSubjects(getDb()),
+    viewCounts(),
+  ]);
+  const views: NavView[] = PUBLIC_VIEWS.map((v) => ({
+    name: v,
+    rowCount: counts?.[v] ?? null,
+    href: `/tables/${v}`,
+  }));
   return (
-    <>
-      <header className="flex flex-wrap items-center gap-x-6 gap-y-2 border-b border-line bg-panel px-4 py-3 sm:px-6">
-        <Link href="/" className="font-semibold tracking-tight">
-          Studies DB{' '}
-          <span className="font-mono text-xs text-muted">TP 4.0</span>
-        </Link>
-        <nav className="flex flex-1 gap-1 text-sm">
-          {NAV.map((n) => (
-            <Link
-              key={n.href}
-              href={n.href}
-              className="rounded-lg px-2.5 py-1.5 text-muted hover:bg-surface hover:text-fg"
-            >
-              {n.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="flex items-center gap-3 text-sm">
-          {user.avatarUrl && (
+    <ShellFrame
+      nav={<NavPanel subjects={subjects} views={views} />}
+      footer={<ConsoleFooter />}
+      topbarEnd={
+        <>
+          {user.avatarUrl ? (
             // biome-ignore lint/performance/noImgElement: external Discord CDN avatar
             <img
               src={user.avatarUrl}
               alt=""
-              width={28}
-              height={28}
-              className="rounded-full"
+              width={22}
+              height={22}
+              className="size-[22px] rounded-full"
             />
+          ) : (
+            <span
+              aria-hidden
+              className="grid size-[22px] place-items-center rounded-full bg-discord text-[11px] font-semibold text-white"
+            >
+              {([...user.displayName.trim()][0] ?? '?').toLocaleUpperCase('pl')}
+            </span>
           )}
-          <span>{user.displayName}</span>
+          <span className="max-w-[160px] truncate text-fg max-md:sr-only">
+            {user.displayName}
+          </span>
+          <span className="text-subtle max-md:hidden" aria-hidden>
+            |
+          </span>
           <form action="/auth/logout" method="post">
             <button
               type="submit"
-              className="rounded-lg px-2.5 py-1.5 text-muted hover:bg-surface hover:text-fg"
+              className="flex items-center gap-1 text-accent-ink hover:text-accent-hover hover:underline"
             >
-              Wyloguj
+              <SignOut aria-hidden />
+              <span className="max-md:sr-only">Wyloguj</span>
             </button>
           </form>
-        </div>
-      </header>
-      <main className="p-4 sm:p-6">{children}</main>
-    </>
+        </>
+      }
+    >
+      {children}
+    </ShellFrame>
   );
 }

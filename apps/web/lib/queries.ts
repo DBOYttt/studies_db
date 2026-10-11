@@ -25,7 +25,13 @@ import {
   type SQL,
   sql,
 } from 'drizzle-orm';
-import type { ExplorerParams, SortDir, SortKey } from './explorer';
+import {
+  type ExplorerParams,
+  explorerHref,
+  type SortDir,
+  type SortKey,
+} from './explorer';
+import type { NavClass, NavSubject } from './nav-tree';
 
 export interface SubjectInfo {
   id: number;
@@ -557,4 +563,95 @@ export async function getMaterialFile(
     )
     .limit(1);
   return r ? toExplorerFile(r) : null;
+}
+
+// ---------------------------------------------------------------------------
+// Navigation panel
+// ---------------------------------------------------------------------------
+
+/** Live files (file and topic not soft-deleted) of topics matching `cond`. */
+const liveFiles = (cond: SQL) =>
+  sql<number>`(SELECT COUNT(*) FROM materials m JOIN topics t ON t.id = m.topic_id WHERE m.deleted_at IS NULL AND t.deleted_at IS NULL AND ${cond})`.mapWith(
+    Number,
+  );
+
+/**
+ * Subjects -> classes -> groups with live file counts, in one query. Every
+ * class and group is listed (also empty ones); "Bez kategorii" is added only
+ * when the subject has files in topics without a class.
+ */
+export async function getNavSubjects(db: Db): Promise<NavSubject[]> {
+  const rows = await db
+    .select({
+      code: subjects.code,
+      name: subjects.name,
+      subjectFiles: liveFiles(sql`t.subject_id = ${subjects.id}`),
+      noClassFiles: liveFiles(
+        sql`t.subject_id = ${subjects.id} AND t.class_id IS NULL`,
+      ),
+      kind: classes.kind,
+      className: classes.name,
+      classFiles: liveFiles(sql`t.class_id = ${classes.id}`),
+      groupNumber: classGroups.number,
+      groupName: classGroups.name,
+      groupFiles: liveFiles(sql`t.group_id = ${classGroups.id}`),
+    })
+    .from(subjects)
+    .leftJoin(classes, eq(classes.subjectId, subjects.id))
+    .leftJoin(classGroups, eq(classGroups.classId, classes.id))
+    .orderBy(asc(subjects.name), asc(subjects.code), asc(classGroups.number));
+
+  const out: (NavSubject & { none: number })[] = [];
+  const bySubject = new Map<string, NavSubject & { none: number }>();
+  for (const r of rows) {
+    let s = bySubject.get(r.code);
+    if (!s) {
+      s = {
+        code: r.code,
+        name: r.name,
+        fileCount: r.subjectFiles,
+        href: explorerHref(r.code, {}),
+        classes: [],
+        none: r.noClassFiles,
+      };
+      bySubject.set(r.code, s);
+      out.push(s);
+    }
+    if (r.kind == null) continue;
+    const kind = r.kind;
+    let c = s.classes.find((x) => x.kind === kind);
+    if (!c) {
+      c = {
+        kind,
+        name: r.className ?? CLASS_NAMES[kind],
+        fileCount: r.classFiles,
+        href: explorerHref(r.code, { classKind: kind }),
+        groups: [],
+      };
+      s.classes.push(c);
+    }
+    if (r.groupNumber != null) {
+      c.groups.push({
+        number: r.groupNumber,
+        name: r.groupName ?? groupName(r.groupNumber),
+        fileCount: r.groupFiles,
+        href: explorerHref(r.code, { classKind: kind, group: r.groupNumber }),
+      });
+    }
+  }
+  return out.map(({ none, ...s }) => {
+    const classes: NavClass[] = KIND_ORDER.flatMap((k) =>
+      s.classes.filter((c) => c.kind === k),
+    );
+    if (none > 0) {
+      classes.push({
+        kind: 'none',
+        name: NONE_NAME,
+        fileCount: none,
+        href: explorerHref(s.code, { classKind: 'none' }),
+        groups: [],
+      });
+    }
+    return { ...s, classes };
+  });
 }

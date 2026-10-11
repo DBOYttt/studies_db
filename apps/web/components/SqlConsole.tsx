@@ -8,10 +8,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { toCells } from '@/lib/cells';
 import { toCsv } from '@/lib/csv';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
+import { pushSqlHistory, readSqlHistory } from '@/lib/sql-history';
 import { DataGrid } from './DataGrid';
-
-const HISTORY_KEY = 'studiesdb.sqlHistory';
-const HISTORY_MAX = 50;
 
 type Result =
   | {
@@ -22,15 +20,6 @@ type Result =
       durationMs: number;
     }
   | { ok: false; error: string };
-
-function loadHistory(): string[] {
-  try {
-    const v = JSON.parse(localStorage.getItem(HISTORY_KEY) ?? '[]');
-    return Array.isArray(v) ? v.filter((x) => typeof x === 'string') : [];
-  } catch {
-    return [];
-  }
-}
 
 /** requireUser()/proxy send an expired session to /login-info (fetch follows). */
 function isSessionExpired(res: Response): boolean {
@@ -56,7 +45,7 @@ export function SqlConsole({
   const runRef = useRef<() => void>(() => {});
 
   useEffect(() => {
-    setHistory(loadHistory());
+    setHistory(readSqlHistory());
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     setDark(mq.matches);
     const on = (e: MediaQueryListEvent) => setDark(e.matches);
@@ -95,12 +84,7 @@ export function SqlConsole({
       }
       const data = (await res.json()) as Result;
       setResult(data);
-      const next = [query, ...loadHistory().filter((h) => h !== query)].slice(
-        0,
-        HISTORY_MAX,
-      );
-      localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-      setHistory(next);
+      setHistory(pushSqlHistory(query));
     } catch {
       setResult({ ok: false, error: 'Nie udało się połączyć z serwerem.' });
     } finally {

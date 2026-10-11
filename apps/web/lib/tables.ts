@@ -180,3 +180,30 @@ export async function browseView(
     pageCount,
   };
 }
+
+/**
+ * Row count of every public view in one `UNION ALL` statement (RO pool).
+ * Null when the RO connection or the query fails: the nav panel then shows no
+ * counts instead of failing the layout.
+ */
+export async function countViewRows(
+  pool: mysql.Pool,
+): Promise<Record<PublicView, number> | null> {
+  const sql = PUBLIC_VIEWS.map(
+    (v) => `SELECT '${v}' AS v, COUNT(*) AS n FROM ${quoteId(v)}`,
+  ).join(' UNION ALL ');
+  try {
+    const [rows] = await pool.query<mysql.RowDataPacket[]>(sql);
+    const out = Object.fromEntries(PUBLIC_VIEWS.map((v) => [v, 0])) as Record<
+      PublicView,
+      number
+    >;
+    for (const r of rows) {
+      const v = String(r.v);
+      if (isPublicView(v)) out[v] = Number(r.n);
+    }
+    return out;
+  } catch {
+    return null;
+  }
+}

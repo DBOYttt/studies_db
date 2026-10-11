@@ -55,7 +55,7 @@ export default async function SqlPage({
         <p className="text-sm text-[var(--muted)]">
           Tylko odczyt (SELECT) na widokach v_*. Limit 1000 wierszy i 5 sekund.
         </p>
-        <SqlConsole initialQuery={initialQuery} />
+        <SqlConsole key={initialQuery ?? ''} initialQuery={initialQuery} />
       </section>
     </div>
   );
