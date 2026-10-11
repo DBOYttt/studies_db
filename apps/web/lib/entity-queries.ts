@@ -91,7 +91,8 @@ export interface GridOpts {
   dir?: string;
 }
 
-const FILE_SORTS = [
+/** Sortable file grid columns (`?sort=`). */
+export const FILE_SORTS = [
   'filename',
   'created_at',
   'topic_title',
@@ -111,6 +112,8 @@ const TOPIC_SORTS: Record<string, string> = {
   created_at: 't.created_at',
   subject_name: 's.name',
 };
+/** Sortable topic grid columns (`?sort=`). */
+export const TOPIC_SORT_KEYS = Object.keys(TOPIC_SORTS);
 function topicSort(sort?: string, dir?: string): string {
   const col = sort ? TOPIC_SORTS[sort] : undefined;
   if (!col) return 't.created_at DESC, t.id DESC';

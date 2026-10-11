@@ -2,10 +2,12 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  classLecturers,
   createLoginToken,
   ensureClass,
   ensureGroup,
   insertMaterial,
+  lecturers,
   subjects,
   tags,
   topics,
@@ -176,8 +178,60 @@ export default async function globalSetup() {
       [],
     );
 
+    // Lab gr 2 with its own topic and file (not visible to gr 3's lecturer).
+    const gr2Id = await ensureGroup(db, labId, 2);
+    const gr2Topic = await mkTopic(
+      'Sprawozdanie gr 2',
+      'e2e-t-lab-gr2',
+      labId,
+      gr2Id,
+    );
+    await insertMaterial(
+      db,
+      {
+        topicId: gr2Topic,
+        uploaderId: userId,
+        sha256: '2'.repeat(64),
+        discordMessageId: 'mm2',
+        discordAttachmentId: 'ma2',
+        originalFilename: 'lab-gr2.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 1,
+        storagePath: 'sample.pdf',
+        previewKind: 'pdf',
+        status: 'ready',
+      },
+      [],
+    );
+
+    // Lecturers for entities.spec.ts.
+    const mkLecturer = async (title: string, name: string, email: string) => {
+      const [{ id }] = await db
+        .insert(lecturers)
+        .values({ title, name, email })
+        .$returningId();
+      return id;
+    };
+    const nowak = await mkLecturer(
+      'dr',
+      'Anna Nowak',
+      'anna.nowak@example.edu',
+    );
+    const kowalski = await mkLecturer(
+      'prof.',
+      'Jan Kowalski',
+      'jan.kowalski@example.edu',
+    );
+    const lis = await mkLecturer('mgr', 'Ewa Lis', 'ewa.lis@example.edu');
+    await db.insert(classLecturers).values([
+      { classId: labId, lecturerId: nowak, groupId: gr3Id },
+      { classId: wykladId, lecturerId: kowalski, groupId: null },
+      { classId: labId, lecturerId: lis, groupId: gr2Id },
+    ]);
+
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_ENTITIES = await createLoginToken(db, userId);
   } finally {
     await closeTestDb(db);
   }
