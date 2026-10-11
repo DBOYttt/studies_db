@@ -26,6 +26,7 @@ export const SCHEMA_RELATIONS: SchemaRelation[] = [
   rel('v_topics', 'subject_id', 'v_subjects', 'id'),
   rel('v_topics', 'class_id', 'v_classes', 'id'),
   rel('v_topics', 'group_id', 'v_class_groups', 'id'),
+  rel('v_topics', 'created_by', 'v_users', 'id'),
   rel('v_topic_tags', 'topic_id', 'v_topics', 'id'),
   rel('v_topic_tags', 'tag_id', 'v_tags', 'id'),
   rel('v_tags', 'subject_id', 'v_subjects', 'id'),

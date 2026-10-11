@@ -36,8 +36,8 @@ const base = {
 } as const;
 
 describe('SCHEMA_RELATIONS drift guard', () => {
-  it('has 15 relations', () => {
-    expect(SCHEMA_RELATIONS).toHaveLength(15);
+  it('has 16 relations', () => {
+    expect(SCHEMA_RELATIONS).toHaveLength(16);
   });
 
   it('every endpoint column exists in the live views', () => {

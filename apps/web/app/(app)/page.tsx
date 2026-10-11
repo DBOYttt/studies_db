@@ -1,71 +1,63 @@
-import Link from 'next/link';
+import type { Cell } from '@/components/DataGrid';
+import { ResultGrid } from '@/components/ResultGrid';
+import { dbTabs } from '@/components/shell/db-tabs';
+import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
-import { formatDate, pluralPl } from '@/lib/format';
+import { formatDate } from '@/lib/format';
 import { listSubjectsOverview } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
 
+const COLUMNS = [
+  'code',
+  'name',
+  'semester',
+  'ects',
+  'zajecia',
+  'pliki',
+  'ostatnio',
+];
+
+/** The design's `sqlBase` for the Przedmioty tab (shown and opened in the console). */
+const SUBJECTS_SQL =
+  'SELECT s.code, s.name, s.semester, s.ects,\n  GROUP_CONCAT(c.name) AS zajecia, COUNT(f.material_id) AS pliki,\n  MAX(f.created_at) AS ostatnio\nFROM `v_subjects` s\nLEFT JOIN `v_classes` c ON c.subject_id = s.id\nLEFT JOIN `v_files` f ON f.subject_code = s.code\nGROUP BY s.id';
+
 export default async function Home() {
   await requireUser();
   const subjects = await listSubjectsOverview(getDb());
-  const semesters = [...new Set(subjects.map((s) => s.semester))].sort();
+  const rows: Cell[][] = subjects.map((s) => {
+    const classes = s.classes.filter((c) => c.kind !== 'none');
+    return [
+      s.code,
+      { text: s.name, href: `/subjects/${encodeURIComponent(s.code)}` },
+      s.semester,
+      s.ects,
+      classes.length ? classes.map((c) => c.name).join(', ') : null,
+      s.materialCount,
+      s.lastUploadAt
+        ? {
+            text: formatDate(s.lastUploadAt),
+            sort: s.lastUploadAt.toISOString(),
+          }
+        : null,
+    ];
+  });
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
-      <h1 className="text-2xl font-semibold">Przedmioty</h1>
+    <>
+      <ScreenHeader tabs={dbTabs('subjects')} />
+      <h1 className="sr-only">Przedmioty</h1>
       {subjects.length === 0 && (
-        <p className="text-[var(--muted)]">
+        <div className="mb-3 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg">
           Brak przedmiotów. Uruchom synchronizację bota.
-        </p>
+        </div>
       )}
-      {semesters.map((sem) => (
-        <section key={sem} className="space-y-3">
-          <h2 className="text-lg font-semibold text-[var(--muted)]">
-            Semestr {sem}
-          </h2>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {subjects
-              .filter((s) => s.semester === sem)
-              .map((s) => (
-                <Link
-                  key={s.code}
-                  href={`/subjects/${encodeURIComponent(s.code)}`}
-                  className="flex flex-col gap-2 rounded-xl border border-line bg-panel p-4 transition-colors hover:border-accent"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <h3 className="font-semibold">{s.name}</h3>
-                    <span className="shrink-0 rounded-full border border-[var(--border)] px-2 py-0.5 text-xs">
-                      {s.ects} ECTS
-                    </span>
-                  </div>
-                  <p className="text-xs text-[var(--muted)]">{s.code}</p>
-                  {s.classes.length > 0 && (
-                    <ul className="flex flex-wrap gap-1.5">
-                      {s.classes.map((c) => (
-                        <li
-                          key={c.kind}
-                          className="rounded-full border border-[var(--border)] px-2 py-0.5 text-xs text-[var(--muted)]"
-                        >
-                          {c.name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  <p className="mt-auto pt-2 text-sm">
-                    {s.materialCount}{' '}
-                    {pluralPl(s.materialCount, 'plik', 'pliki', 'plików')}
-                    {s.lastUploadAt && (
-                      <span className="text-[var(--muted)]">
-                        {' '}
-                        · ostatnio {formatDate(s.lastUploadAt)}
-                      </span>
-                    )}
-                  </p>
-                </Link>
-              ))}
-          </div>
-        </section>
-      ))}
-    </div>
+      <ResultGrid
+        columns={COLUMNS}
+        rows={rows}
+        sql={SUBJECTS_SQL}
+        name="przedmioty"
+      />
+    </>
   );
 }

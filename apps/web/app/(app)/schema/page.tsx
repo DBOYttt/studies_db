@@ -1,4 +1,6 @@
-import { SchemaDiagram } from '@/components/SchemaDiagram';
+import { DesignerDiagram } from '@/components/DesignerDiagram';
+import { dbTabs } from '@/components/shell/db-tabs';
+import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
@@ -16,21 +18,25 @@ export default async function SchemaPage() {
     error = roErrorMessage(err);
   }
   return (
-    <div className="mx-auto max-w-[1600px] space-y-4">
-      <header className="space-y-1">
-        <h1 className="text-2xl font-semibold tracking-tight">Schemat bazy</h1>
-        <p className="max-w-[65ch] text-sm text-muted">
+    <>
+      <ScreenHeader tabs={dbTabs('designer')} />
+      <div className="flex flex-col gap-3">
+        <h1 className="sr-only">Projektant</h1>
+        <p className="m-0 max-w-[75ch] text-muted">
           Widoki dostępne w konsoli SQL i ich kolumny. Linie łączą kolumny, po
           których możesz robić JOIN. Kliknij tabelę, aby zobaczyć jej wiersze.
         </p>
-      </header>
-      {columns ? (
-        <SchemaDiagram columns={columns} highlight={[]} caption={null} />
-      ) : (
-        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-          {error}
-        </p>
-      )}
-    </div>
+        {columns ? (
+          <DesignerDiagram columns={columns} />
+        ) : (
+          <div
+            role="alert"
+            className="rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg"
+          >
+            {error}
+          </div>
+        )}
+      </div>
+    </>
   );
 }
