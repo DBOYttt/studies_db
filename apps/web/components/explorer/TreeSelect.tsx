@@ -23,7 +23,8 @@ export function TreeSelect({
       >
         {options.map((o) => (
           <option key={o.href} value={o.href}>
-            {`${'  '.repeat(o.depth)}${o.label}`}
+            {/* non-breaking spaces: plain ones collapse inside <option> */}
+            {`${'\u00a0\u00a0'.repeat(o.depth)}${o.label}`}
           </option>
         ))}
       </select>
