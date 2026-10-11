@@ -96,7 +96,7 @@ const MapNodeView = memo(function MapNodeView({ data }: NodeProps<FlowNode>) {
           <span
             className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] ${
               data.kind === 'subject'
-                ? 'bg-on-accent/15'
+                ? 'bg-on-accent text-accent-ink'
                 : 'bg-surface text-muted'
             }`}
           >
