@@ -14,6 +14,7 @@ const TAB_LABELS: { tab: ExplorerTab; label: string }[] = [
 export function ExplorerShell({
   title,
   meta,
+  description,
   crumbs,
   tab,
   tabHref,
@@ -21,6 +22,7 @@ export function ExplorerShell({
 }: {
   title: string;
   meta: string;
+  description?: string | null;
   crumbs: Crumb[];
   tab: ExplorerTab;
   tabHref: (t: ExplorerTab) => string;
@@ -56,6 +58,11 @@ export function ExplorerShell({
           <div className="min-w-0">
             <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
             <p className="font-mono text-xs text-muted">{meta}</p>
+            {description && (
+              <p className="mt-1 max-w-[65ch] whitespace-pre-line text-sm text-muted">
+                {description}
+              </p>
+            )}
           </div>
           <nav
             aria-label="Widok"

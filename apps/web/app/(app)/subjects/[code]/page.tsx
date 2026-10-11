@@ -143,6 +143,7 @@ export default async function SubjectPage({
     <ExplorerShell
       title={subject.name}
       meta={`${subject.code}, semestr ${subject.semester}, ${subject.ects} ECTS`}
+      description={subject.description}
       crumbs={crumbs}
       tab={sel.tab}
       tabHref={(tab) =>

@@ -123,6 +123,7 @@ export default async function globalSetup() {
         code: 'MECH',
         semester: 2,
         ects: 4,
+        description: 'Statyka i dynamika <b>brył</b>',
         discordChannelId: 'e2e-ch-mech',
       })
       .$returningId();

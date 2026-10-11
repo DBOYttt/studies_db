@@ -24,6 +24,8 @@ test('drill down class > group > file, map and schema follow the selection', asy
   page,
 }) => {
   await page.goto('/subjects/MECH');
+  // The subject description renders as plain text (no HTML injection).
+  await expect(page.getByText('Statyka i dynamika <b>brył</b>')).toBeVisible();
   const tree = treeNav(page);
   await tree.getByRole('link', { name: /Laboratorium/ }).click();
   await expect(page).toHaveURL(/class=laboratorium/);
