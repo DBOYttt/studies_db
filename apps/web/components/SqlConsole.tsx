@@ -184,7 +184,7 @@ export function SqlConsole({
           type="button"
           onClick={run}
           disabled={running}
-          className="rounded bg-accent-fill px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-50"
+          className="rounded bg-accent-fill px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-50 disabled:hover:bg-accent-fill"
         >
           {running ? 'Wykonywanie…' : 'Uruchom'}
         </button>

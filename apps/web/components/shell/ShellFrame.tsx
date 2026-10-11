@@ -37,10 +37,20 @@ export function ShellFrame({
   const endRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
 
+  const restoreFocusRef = useRef(false);
+
   const close = useCallback((restoreFocus: boolean) => {
+    restoreFocusRef.current = restoreFocus;
     setOpen(false);
-    if (restoreFocus) menuRef.current?.focus();
   }, []);
+
+  // Focus goes back to the menu button only after the close has rendered:
+  // until then the main column (and the button) is still inert.
+  useEffect(() => {
+    if (open || !restoreFocusRef.current) return;
+    restoreFocusRef.current = false;
+    menuRef.current?.focus();
+  }, [open]);
 
   // A new route always starts with the drawer closed.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on route change
@@ -129,10 +139,12 @@ export function ShellFrame({
         aria-label="Panel nawigacji"
         role={open ? 'dialog' : undefined}
         aria-modal={open ? true : undefined}
-        className={`flex min-h-0 flex-col border-r border-line-strong bg-surface max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[264px] max-md:max-w-[85vw] max-md:transition-[translate,visibility] max-md:duration-150 motion-reduce:transition-none ${
+        className={`flex min-h-0 flex-col border-r border-line-strong bg-surface max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[264px] max-md:max-w-[85vw] max-md:duration-150 motion-reduce:transition-none ${
           open
-            ? 'max-md:translate-x-0'
-            : 'max-md:invisible max-md:-translate-x-full'
+            ? // visibility flips at once on open (so focus can move in) ...
+              'max-md:translate-x-0 max-md:transition-[translate]'
+            : // ... and only after the slide on close
+              'max-md:invisible max-md:-translate-x-full max-md:transition-[translate,visibility]'
         }`}
       >
         {nav}
