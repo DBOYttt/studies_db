@@ -3,6 +3,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createLoginToken,
+  ensureClass,
+  ensureGroup,
   insertMaterial,
   subjects,
   tags,
@@ -113,7 +115,68 @@ export default async function globalSetup() {
       .set({ status: 'failed' })
       .where(eq(materials.id, failed.materialId));
 
+    // Second subject with a real hierarchy for explorer.spec.ts.
+    const [{ id: mechId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Mechanika',
+        code: 'MECH',
+        semester: 2,
+        ects: 4,
+        discordChannelId: 'e2e-ch-mech',
+      })
+      .$returningId();
+    const labId = await ensureClass(db, mechId, 'laboratorium');
+    const gr3Id = await ensureGroup(db, labId, 3);
+    const wykladId = await ensureClass(db, mechId, 'wyklad');
+    const mkTopic = async (
+      title: string,
+      thread: string,
+      classId: number | null,
+      groupId: number | null,
+    ) => {
+      const [{ id }] = await db
+        .insert(topics)
+        .values({
+          subjectId: mechId,
+          title,
+          discordThreadId: thread,
+          createdBy: userId,
+          classId,
+          groupId,
+        })
+        .$returningId();
+      return id;
+    };
+    const labTopic = await mkTopic(
+      'Sprawozdanie z ćwiczenia',
+      'e2e-t-lab',
+      labId,
+      gr3Id,
+    );
+    await mkTopic('Wprowadzenie do dynamiki', 'e2e-t-wyklad', wykladId, null);
+    await mkTopic('Luźne notatki', 'e2e-t-none', null, null);
+    await insertMaterial(
+      db,
+      {
+        topicId: labTopic,
+        uploaderId: userId,
+        sha256: '1'.repeat(64),
+        discordMessageId: 'mm1',
+        discordAttachmentId: 'ma1',
+        originalFilename: 'lab-sprawozdanie.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 1,
+        storagePath: 'sample.pdf',
+        previewKind: 'pdf',
+        status: 'ready',
+        extractedText: 'Sprawozdanie z laboratorium.',
+      },
+      [],
+    );
+
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);
   } finally {
     await closeTestDb(db);
   }

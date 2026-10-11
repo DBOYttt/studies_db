@@ -45,6 +45,18 @@ To check locally, temporarily add `ports: ["3000:3000"]` to `web`, then
 
 Register slash commands once (see apps/bot README) if commands changed.
 
+## Tagi forum
+
+The bot builds the class/group hierarchy from the tags of forum posts. In every subject forum
+channel create these tags (exact names):
+
+- class tags: Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium
+- group tags: Gr. 1 … Gr. N (one per group; accepted variants: Gr3, Gr. 3, Grupa 3, G3)
+
+Other tags (Kolokwium, Egzamin, ...) stay plain tags. `pnpm db:migrate` (and the `migrate`
+container on `compose up`) also runs the one-time backfill that assigns existing topics to
+classes and groups from their current tags; re-running it is safe.
+
 ## Dev DB
 
 `pnpm db:up` (plain `podman run`, container `studies-mariadb`) is unchanged. Do not run it
