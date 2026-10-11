@@ -30,9 +30,11 @@ vi.mock('next/headers', () => ({
 const { RO_POOL_OPTIONS } = await import('../lib/db');
 const {
   browseView,
+  describeView,
   listViewColumns,
-  PAGE_SIZE,
+  parsePerPage,
   parseViewParams,
+  splitColumnType,
   viewQueryString,
 } = await import('../lib/tables');
 const { GET: CSV } = await import('../app/(app)/tables/[view]/csv/route');
@@ -99,18 +101,60 @@ describe('browseView', () => {
     expect(await browseView(roPool, 'constructor', {})).toBeNull();
   });
 
-  it('paginates with page size 50', async () => {
-    expect(PAGE_SIZE).toBe(50);
+  it('paginates with the default page size 25', async () => {
     const p1 = await browseView(roPool, 'v_subjects', {});
-    expect(p1).toMatchObject({ total: 120, page: 1, pageCount: 3 });
-    expect(p1?.rows.length).toBe(50);
+    expect(p1).toMatchObject({
+      total: 120,
+      page: 1,
+      pageCount: 5,
+      perPage: 25,
+    });
+    expect(p1?.rows.length).toBe(25);
     expect(p1?.columns[0]).toBe('id');
     const p2 = await browseView(roPool, 'v_subjects', { page: 2 });
-    expect(p2).toMatchObject({ total: 120, page: 2, pageCount: 3 });
-    expect(p2?.rows.length).toBe(50);
     expect(p2?.rows[0][0]).not.toBe(p1?.rows[0][0]);
-    const p3 = await browseView(roPool, 'v_subjects', { page: 3 });
+    expect(p2?.sql).toBe(
+      'SELECT * FROM `v_subjects`\nORDER BY `id` ASC\nLIMIT 25, 25',
+    );
+  });
+
+  it('honours perPage 50/100 and ignores other sizes', async () => {
+    const p1 = await browseView(roPool, 'v_subjects', { perPage: 50 });
+    expect(p1).toMatchObject({
+      total: 120,
+      page: 1,
+      pageCount: 3,
+      perPage: 50,
+    });
+    expect(p1?.rows.length).toBe(50);
+    const p3 = await browseView(roPool, 'v_subjects', { page: 3, perPage: 50 });
     expect(p3?.rows.length).toBe(20);
+    const all = await browseView(roPool, 'v_subjects', { perPage: 100 });
+    expect(all).toMatchObject({ pageCount: 2, perPage: 100 });
+    const odd = await browseView(roPool, 'v_subjects', { perPage: 1000 });
+    expect(odd).toMatchObject({ pageCount: 5, perPage: 25 });
+    expect(odd?.rows.length).toBe(25);
+  });
+
+  it('shows the executed query with values inlined', async () => {
+    const r = await browseView(roPool, 'v_subjects', {
+      sort: 'name',
+      dir: 'desc',
+      filters: { name: '50%_x', code: "a'b\\" },
+      page: 1,
+      perPage: 50,
+    });
+    expect(r?.sql).toBe(
+      'SELECT * FROM `v_subjects`\n' +
+        "WHERE CAST(`name` AS CHAR) LIKE '%50\\\\%\\\\_x%' AND CAST(`code` AS CHAR) LIKE '%a\\'b\\\\\\\\%'\n" +
+        'ORDER BY `name` DESC, `id` ASC\nLIMIT 0, 50',
+    );
+    // the shown text runs and returns the same rows
+    const [rows] = await roPool.query(
+      r?.sql.replace(" AND CAST(`code` AS CHAR) LIKE '%a\\'b\\\\\\\\%'", '') ??
+        '',
+    );
+    expect((rows as unknown[]).length).toBe(1);
   });
 
   it('clamps the page', async () => {
@@ -124,7 +168,7 @@ describe('browseView', () => {
       await browseView(roPool, 'v_subjects', { page: Number.NaN }),
     ).toMatchObject({ page: 1 });
     const last = await browseView(roPool, 'v_subjects', { page: 99 });
-    expect(last).toMatchObject({ page: 3 });
+    expect(last).toMatchObject({ page: 5 });
     expect(last?.rows.length).toBe(20);
   });
 
@@ -218,7 +262,10 @@ describe('parseViewParams / viewQueryString', () => {
       dir: 'desc',
       filters: { name: 'Me' },
       page: 3,
+      perPage: 25,
     });
+    expect(parseViewParams(new URLSearchParams('per=100')).perPage).toBe(100);
+    expect(parseViewParams({ per: '33' }).perPage).toBe(25);
     const fromRecord = parseViewParams({
       sort: ['ects', 'name'],
       dir: 'sideways',
@@ -235,6 +282,47 @@ describe('parseViewParams / viewQueryString', () => {
     );
     expect(viewQueryString(q).toString()).toBe('sort=name&dir=desc&f_name=Me');
     expect(viewQueryString({ filters: {} }).toString()).toBe('');
+    expect(
+      viewQueryString(
+        parseViewParams(new URLSearchParams('per=50&page=2')),
+      ).toString(),
+    ).toBe('per=50');
+    expect(viewQueryString({ perPage: 25 }).toString()).toBe('');
+  });
+  it('parsePerPage accepts 25/50/100 only', () => {
+    expect(
+      [25, 50, 100, '50', 0, 'x', 75, undefined].map(parsePerPage),
+    ).toEqual([25, 50, 100, 50, 25, 25, 25, 25]);
+  });
+});
+
+describe('describeView / splitColumnType', () => {
+  it('splits COLUMN_TYPE attributes', () => {
+    expect(splitColumnType('int(10) unsigned')).toEqual([
+      'int(10)',
+      'UNSIGNED',
+    ]);
+    expect(splitColumnType('bigint(20) unsigned zerofill')).toEqual([
+      'bigint(20)',
+      'UNSIGNED ZEROFILL',
+    ]);
+    expect(splitColumnType("enum('a','b')")).toEqual(["enum('a','b')", '']);
+  });
+  it('reads information_schema columns of one view', async () => {
+    const cols = await describeView(roPool, 'v_subjects');
+    expect(cols.map((c) => c.name)).toEqual(
+      (await listViewColumns(roPool)).v_subjects,
+    );
+    expect(cols[0]).toMatchObject({
+      position: 1,
+      name: 'id',
+      collation: null,
+      nullable: false,
+    });
+    const name = cols.find((c) => c.name === 'name');
+    expect(name?.type).toMatch(/^varchar\(\d+\)$/);
+    expect(name?.collation).toMatch(/^utf8mb4_/);
+    expect(cols.find((c) => c.name === 'description')?.nullable).toBe(true);
   });
 });
 

@@ -16,6 +16,8 @@ export type Tab = {
   icon: Icon;
   href: string;
   active: boolean;
+  /** File download (e.g. CSV export): a plain `<a download>`, never prefetched. */
+  download?: boolean;
 };
 
 const BASE_CRUMBS: Crumb[] = [
@@ -102,16 +104,22 @@ export function ScreenHeader({
         >
           {tabs.map((t) => {
             const I = t.icon;
-            return (
+            const cls = `-mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-md border px-[13px] py-[7px] hover:underline ${
+              t.active
+                ? 'border-line-strong border-b-page bg-page font-semibold text-fg'
+                : 'border-transparent text-accent-ink'
+            }`;
+            return t.download ? (
+              <a key={t.href} href={t.href} download className={cls}>
+                <I size={15} aria-hidden />
+                {t.label}
+              </a>
+            ) : (
               <Link
                 key={t.href}
                 href={t.href}
                 aria-current={t.active ? 'page' : undefined}
-                className={`-mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-md border px-[13px] py-[7px] hover:underline ${
-                  t.active
-                    ? 'border-line-strong border-b-page bg-page font-semibold text-fg'
-                    : 'border-transparent text-accent-ink'
-                }`}
+                className={cls}
               >
                 <I size={15} aria-hidden />
                 {t.label}
