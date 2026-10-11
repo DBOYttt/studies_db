@@ -10,12 +10,21 @@ import {
   DESIGNER_HEADER_HEIGHT,
   DESIGNER_ROW_HEIGHT,
   type DesignerHighlight,
+  type DesignerMarker,
 } from '@/lib/designer-layout';
 import { pluralPl } from '@/lib/format';
 
+/** Crow's foot ("many") or single bar ("one") at an edge end on a box side. */
+function markerPath([x, y, dir]: DesignerMarker, kind: 'many' | 'one') {
+  const o = dir === 'right' ? 1 : -1;
+  if (kind === 'one') return `M${x + o * 6},${y - 5} V${y + 5}`;
+  return `M${x + o * 10},${y} L${x},${y - 5} M${x + o * 10},${y} L${x},${y + 5} M${x + o * 10},${y} L${x},${y}`;
+}
+
 /**
- * phpMyAdmin "Projektant" (design lines 310-328): fixed table boxes with
- * their live columns and bezier edges between related column rows. Hovering
+ * phpMyAdmin "Projektant": table boxes (key and label columns by default)
+ * at the default data-flow positions, orthogonal edges between related
+ * column rows with crow's foot / bar ends. Hovering
  * (or focusing) a box highlights it and its edges; a box links to
  * /tables/<view>. `highlight` marks the current selection in the accent
  * colour and shows its caption above the diagram.
@@ -28,7 +37,7 @@ export function DesignerDiagram({
   highlight?: DesignerHighlight;
 }) {
   const layout = useMemo(
-    () => buildDesignerLayout(columns, highlight),
+    () => buildDesignerLayout(columns, { highlight }),
     [columns, highlight],
   );
   const [hover, setHover] = useState<PublicView | null>(null);
@@ -76,7 +85,7 @@ export function DesignerDiagram({
               return (
                 <path
                   key={e.id}
-                  d={e.d}
+                  d={`${e.d} ${markerPath(e.markers.many, 'many')} ${markerPath(e.markers.one, 'one')}`}
                   fill="none"
                   stroke={on ? 'var(--accent)' : 'var(--edge)'}
                   strokeWidth={on ? 2 : 1.25}
@@ -116,7 +125,7 @@ export function DesignerDiagram({
                       key={c.name}
                       style={{ height: DESIGNER_ROW_HEIGHT }}
                       className={`flex items-center gap-[5px] px-2 font-mono text-[11px] ${
-                        c.key ? 'text-fg' : 'text-faint'
+                        c.key || c.label ? 'text-fg' : 'text-faint'
                       }`}
                     >
                       <span className="flex w-[11px] shrink-0 justify-center">

@@ -1,31 +1,39 @@
 import { PUBLIC_VIEWS, type PublicView } from '@studies/db/constants';
 import { SCHEMA_RELATIONS, type SchemaRelation } from './schema-relations';
 
-/** Box geometry of the Projektant diagram (design `BOX` map and edge maths). */
+/** Box geometry of the Projektant diagram. */
 export const DESIGNER_BOX_WIDTH = 190;
 export const DESIGNER_HEADER_HEIGHT = 28;
 export const DESIGNER_ROW_HEIGHT = 18;
 /** Vertical padding of the column list (`padding:4px 0`). */
 export const DESIGNER_LIST_PAD = 4;
-const MIN_WIDTH = 1200;
+const MIN_WIDTH = 1160;
 const MIN_HEIGHT = 560;
 const MARGIN = 20;
-const AUTO_GAP_X = 50;
-const AUTO_GAP_Y = 40;
+/** Horizontal run of an edge out of the FK box before turning. */
+const EDGE_STUB = 16;
+/** Detour past the right sides when the boxes overlap horizontally. */
+const EDGE_DETOUR = 24;
+const CORNER = 6;
 
-/** Fixed box positions (x, y) from the design. */
-export const DESIGNER_BOX: Partial<Record<PublicView, [number, number]>> = {
-  v_users: [20, 20],
-  v_lecturers: [20, 300],
-  v_materials: [260, 20],
-  v_class_lecturers: [260, 300],
-  v_topics: [500, 20],
-  v_class_groups: [500, 260],
-  v_topic_tags: [500, 420],
-  v_subjects: [740, 20],
-  v_classes: [740, 240],
-  v_tags: [740, 390],
-  v_files: [990, 20],
+/**
+ * Default box positions (x, y), left to right along the data flow (spec §3):
+ * subjects | classes, tags | groups, topic tags, lecturers |
+ * class lecturers, topics, users | materials, files. The y values leave room
+ * for every box with all columns shown, so nothing overlaps in either mode.
+ */
+export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
+  v_subjects: [20, 20],
+  v_classes: [250, 20],
+  v_tags: [250, 200],
+  v_class_groups: [480, 20],
+  v_topic_tags: [480, 180],
+  v_lecturers: [480, 300],
+  v_class_lecturers: [710, 20],
+  v_topics: [710, 160],
+  v_users: [710, 390],
+  v_materials: [940, 20],
+  v_files: [940, 260],
 };
 
 export type DesignerHighlight = {
@@ -35,20 +43,34 @@ export type DesignerHighlight = {
   caption?: string | null;
 };
 
+export type DesignerColumn = { name: string; key: boolean; label: boolean };
+
 export type DesignerBox = {
   view: PublicView;
   x: number;
   y: number;
   height: number;
-  columns: { name: string; key: boolean }[];
+  /** Visible columns (compact or all). */
+  columns: DesignerColumn[];
   highlighted: boolean;
 };
+
+/** Side of the box the marker sits on (the edge leaves/enters that side). */
+export type MarkerDir = 'left' | 'right';
+export type DesignerMarker = [number, number, MarkerDir];
 
 export type DesignerEdge = {
   id: string;
   from: PublicView;
   to: PublicView;
+  /** FK column (row in `from`). */
+  fromRow: string;
+  /** Referenced PK column (row in `to`). */
+  toRow: string;
+  /** Orthogonal path (H/V segments, rounded corners) from FK row to PK row. */
   d: string;
+  /** Crow's foot at the FK end, single bar at the PK end. */
+  markers: { many: DesignerMarker; one: DesignerMarker };
   highlighted: boolean;
 };
 
@@ -59,23 +81,132 @@ export type DesignerLayout = {
   edges: DesignerEdge[];
 };
 
+export type DesignerLayoutOptions = {
+  highlight?: DesignerHighlight;
+  /** Per-view overrides of `DESIGNER_DEFAULT_POS` (e.g. dragged positions). */
+  positions?: Partial<Record<PublicView, [number, number]>>;
+  /** Show every column instead of keys + label. */
+  showAll?: boolean;
+};
+
 export const relationId = (r: SchemaRelation) =>
   `${r.from.view}.${r.from.column}>${r.to.view}.${r.to.column}`;
+
+const LABELS = [
+  'name',
+  'code',
+  'title',
+  'display_name',
+  'original_filename',
+  'filename',
+];
+
+/** `id`, `*_id` (except `discord_*`), `created_by`, `material_id`. */
+const isKeyColumn = (c: string) =>
+  c === 'id' ||
+  c === 'created_by' ||
+  c === 'material_id' ||
+  (c.endsWith('_id') && !c.startsWith('discord_'));
+
+/** Label columns of a view: first present of LABELS (v_subjects: name and code). */
+function labelColumns(view: PublicView, all: readonly string[]): Set<string> {
+  if (view === 'v_subjects') {
+    return new Set(['name', 'code'].filter((c) => all.includes(c)));
+  }
+  const first = LABELS.find((c) => all.includes(c));
+  return new Set(first ? [first] : []);
+}
+
+/** Compact column list: keys plus the label column(s), in original order. */
+export function compactColumns(view: PublicView, all: string[]): string[] {
+  const labels = labelColumns(view, all);
+  return all.filter((c) => isKeyColumn(c) || labels.has(c));
+}
+
+export const clampPosition = ([x, y]: [number, number]): [number, number] => [
+  Math.max(0, x),
+  Math.max(0, y),
+];
+
+const VIEW_SET = new Set<string>(PUBLIC_VIEWS);
+
+/**
+ * Stored layout (`{ [view]: [x, y] }` JSON). Malformed JSON, unknown views
+ * and entries that are not two finite non-negative numbers are dropped;
+ * coordinates are rounded.
+ */
+export function parseStoredPositions(
+  raw: string | null,
+): Partial<Record<PublicView, [number, number]>> {
+  if (!raw) return {};
+  let data: unknown;
+  try {
+    data = JSON.parse(raw);
+  } catch {
+    return {};
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  const out: Partial<Record<PublicView, [number, number]>> = {};
+  for (const [view, p] of Object.entries(data)) {
+    if (!VIEW_SET.has(view) || !Array.isArray(p) || p.length !== 2) continue;
+    const [x, y] = p;
+    const ok = (n: unknown): n is number =>
+      typeof n === 'number' && Number.isFinite(n) && n >= 0;
+    if (!ok(x) || !ok(y)) continue;
+    out[view as PublicView] = [Math.round(x), Math.round(y)];
+  }
+  return out;
+}
 
 const boxHeight = (n: number) =>
   DESIGNER_HEADER_HEIGHT + 2 * DESIGNER_LIST_PAD + n * DESIGNER_ROW_HEIGHT + 2;
 
+const sign = (n: number) => (n > 0 ? 1 : n < 0 ? -1 : 0);
+
 /**
- * Pure layout of the designer: design positions (`positions`, default the
- * design's BOX map), unknown views in rows below, cubic bezier edges between the related column rows. Relations whose
- * column is missing from the live view are dropped.
+ * Orthogonal path (x1,y1) -> horizontal to xm -> vertical to y2 ->
+ * horizontal to x2, with quadratic corners of up to CORNER px.
+ */
+function orthoPath(
+  x1: number,
+  y1: number,
+  xm: number,
+  y2: number,
+  x2: number,
+): string {
+  if (y1 === y2) return `M${x1},${y1} H${x2}`;
+  const sa = sign(xm - x1);
+  const sv = sign(y2 - y1);
+  const sb = sign(x2 - xm);
+  const r = Math.min(
+    CORNER,
+    Math.abs(y2 - y1) / 2,
+    Math.abs(xm - x1),
+    Math.abs(x2 - xm),
+  );
+  return [
+    `M${x1},${y1}`,
+    `H${xm - sa * r}`,
+    `Q${xm},${y1} ${xm},${y1 + sv * r}`,
+    `V${y2 - sv * r}`,
+    `Q${xm},${y2} ${xm + sb * r},${y2}`,
+    `H${x2}`,
+  ].join(' ');
+}
+
+/**
+ * Pure layout of the designer: default positions overridden by `positions`
+ * (clamped to x, y >= 0), compact or full column lists, orthogonal edges
+ * between the related column rows. Relations whose column is missing from
+ * the live view are dropped. The canvas is the max box extent + 20 (min
+ * 1160x560).
  */
 export function buildDesignerLayout(
   columns: Partial<Record<PublicView, string[]>>,
-  highlight?: DesignerHighlight,
+  opts: DesignerLayoutOptions = {},
   relations: readonly SchemaRelation[] = SCHEMA_RELATIONS,
-  positions: Partial<Record<PublicView, [number, number]>> = DESIGNER_BOX,
 ): DesignerLayout {
+  const { highlight, positions = {}, showAll = false } = opts;
   const cols = (v: PublicView) => columns[v] ?? [];
   const live = relations.filter(
     (r) =>
@@ -90,98 +221,95 @@ export function buildDesignerLayout(
     ).map(relationId),
   );
 
-  const keys = new Map<PublicView, Set<string>>();
+  const relCols = new Map<PublicView, Set<string>>();
   for (const r of live) {
     for (const end of [r.from, r.to]) {
-      const s = keys.get(end.view) ?? new Set<string>();
+      const s = relCols.get(end.view) ?? new Set<string>();
       s.add(end.column);
-      keys.set(end.view, s);
+      relCols.set(end.view, s);
     }
   }
 
-  const pos = new Map<PublicView, [number, number]>();
-  let fixedBottom = 0;
-  for (const v of PUBLIC_VIEWS) {
-    const p = positions[v];
-    if (!p) continue;
-    pos.set(v, p);
-    fixedBottom = Math.max(fixedBottom, p[1] + boxHeight(cols(v).length));
-  }
-  // Views without a design position: rows below the fixed boxes, each row as
-  // tall as its tallest box, so tall boxes never overlap the next row.
-  const perRow = Math.max(
-    1,
-    Math.floor((MIN_WIDTH - MARGIN) / (DESIGNER_BOX_WIDTH + AUTO_GAP_X)),
-  );
-  const missing = PUBLIC_VIEWS.filter((v) => !pos.has(v));
-  let autoY = fixedBottom + AUTO_GAP_Y;
-  for (let i = 0; i < missing.length; i += perRow) {
-    const row = missing.slice(i, i + perRow);
-    row.forEach((v, j) => {
-      pos.set(v, [MARGIN + j * (DESIGNER_BOX_WIDTH + AUTO_GAP_X), autoY]);
-    });
-    autoY +=
-      Math.max(...row.map((v) => boxHeight(cols(v).length))) + AUTO_GAP_Y;
-  }
-
+  const byView = new Map<PublicView, DesignerBox>();
   const boxes: DesignerBox[] = PUBLIC_VIEWS.map((v) => {
-    const [x, y] = pos.get(v) as [number, number];
-    const k = keys.get(v);
-    return {
+    const all = cols(v);
+    const visible = showAll ? all : compactColumns(v, all);
+    const labels = labelColumns(v, all);
+    const rc = relCols.get(v);
+    const [x, y] = clampPosition(positions[v] ?? DESIGNER_DEFAULT_POS[v]);
+    const b: DesignerBox = {
       view: v,
       x,
       y,
-      height: boxHeight(cols(v).length),
-      columns: cols(v).map((name) => ({
+      height: boxHeight(visible.length),
+      columns: visible.map((name) => ({
         name,
-        key: name === 'id' || !!k?.has(name),
+        key: isKeyColumn(name) || !!rc?.has(name),
+        label: labels.has(name),
       })),
       highlighted: hiViews.has(v),
     };
+    byView.set(v, b);
+    return b;
   });
 
-  const rowY = (v: PublicView, c: string) =>
-    (pos.get(v) as [number, number])[1] +
-    DESIGNER_HEADER_HEIGHT +
-    DESIGNER_LIST_PAD +
-    cols(v).indexOf(c) * DESIGNER_ROW_HEIGHT +
-    DESIGNER_ROW_HEIGHT / 2;
+  /** Centre y of a visible row; a hidden column anchors to the header. */
+  const rowY = (b: DesignerBox, c: string) => {
+    const i = b.columns.findIndex((col) => col.name === c);
+    if (i < 0) return b.y + DESIGNER_HEADER_HEIGHT / 2;
+    return (
+      b.y +
+      DESIGNER_HEADER_HEIGHT +
+      DESIGNER_LIST_PAD +
+      i * DESIGNER_ROW_HEIGHT +
+      DESIGNER_ROW_HEIGHT / 2
+    );
+  };
 
+  const W = DESIGNER_BOX_WIDTH;
   const edges: DesignerEdge[] = live.map((r) => {
-    const a = r.from.view;
-    const b = r.to.view;
-    const ax = (pos.get(a) as [number, number])[0];
-    const bx = (pos.get(b) as [number, number])[0];
+    const a = byView.get(r.from.view) as DesignerBox;
+    const b = byView.get(r.to.view) as DesignerBox;
     const y1 = rowY(a, r.from.column);
     const y2 = rowY(b, r.to.column);
     let x1: number;
     let x2: number;
-    if (bx > ax) {
-      x1 = ax + DESIGNER_BOX_WIDTH;
-      x2 = bx;
-    } else if (bx < ax) {
-      x1 = ax;
-      x2 = bx + DESIGNER_BOX_WIDTH;
+    let xm: number;
+    let fromDir: MarkerDir;
+    let toDir: MarkerDir;
+    if (a.x < b.x + W && b.x < a.x + W) {
+      // Overlapping horizontally: both right sides, detour to the right.
+      x1 = a.x + W;
+      x2 = b.x + W;
+      xm = Math.max(x1, x2) + EDGE_DETOUR;
+      fromDir = 'right';
+      toDir = 'right';
+    } else if (b.x > a.x) {
+      x1 = a.x + W;
+      x2 = b.x;
+      xm = x1 + EDGE_STUB;
+      fromDir = 'right';
+      toDir = 'left';
     } else {
-      x1 = ax + DESIGNER_BOX_WIDTH;
-      x2 = bx + DESIGNER_BOX_WIDTH;
+      x1 = a.x;
+      x2 = b.x + W;
+      xm = x1 - EDGE_STUB;
+      fromDir = 'left';
+      toDir = 'right';
     }
-    const same = bx === ax;
-    const dx = same ? 40 : (x2 - x1) / 2;
-    const c2 = x2 - (same ? -40 : dx);
     return {
       id: relationId(r),
-      from: a,
-      to: b,
-      d: `M${x1},${y1} C${x1 + dx},${y1} ${c2},${y2} ${x2},${y2}`,
+      from: a.view,
+      to: b.view,
+      fromRow: r.from.column,
+      toRow: r.to.column,
+      d: orthoPath(x1, y1, xm, y2, x2),
+      markers: { many: [x1, y1, fromDir], one: [x2, y2, toDir] },
       highlighted: hiRels.has(relationId(r)),
     };
   });
 
-  const width = Math.max(
-    MIN_WIDTH,
-    ...boxes.map((b) => b.x + DESIGNER_BOX_WIDTH + MARGIN),
-  );
+  const width = Math.max(MIN_WIDTH, ...boxes.map((b) => b.x + W + MARGIN));
   const height = Math.max(
     MIN_HEIGHT,
     ...boxes.map((b) => b.y + b.height + MARGIN),
