@@ -45,6 +45,17 @@ To check locally, temporarily add `ports: ["3000:3000"]` to `web`, then
 
 Register slash commands once (see apps/bot README) if commands changed.
 
+### Upgrading to the class/group hierarchy (migration 0004)
+
+Migration 0004 drops the old `subject_lecturers` table after copying it into classes, so take a
+backup first:
+
+1. `scripts/backup.sh`
+2. `pnpm db:migrate` (or the `migrate` container on `compose up`); this includes the topic
+   backfill into classes/groups
+3. re-register slash commands: `pnpm --filter @studies/bot register` (`/lecturer assign` now
+   takes class/group)
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. In every subject forum
