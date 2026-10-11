@@ -201,6 +201,25 @@ describe('upsertTopic hierarchy', () => {
     expect(await placement(id)).toEqual({ kind: null, group: null });
   });
 
+  it('Discord applied tag order wins over tags.id order', async () => {
+    const ids = new Map(
+      (
+        await db
+          .select({ d: tags.discordTagId, id: tags.id })
+          .from(tags)
+          .where(eq(tags.subjectId, subjectId))
+      ).map((r) => [r.d, r.id]),
+    );
+    // Precondition: Laboratorium has the lower tags.id, Ćwiczenia is applied first.
+    expect(ids.get('tagLab')).toBeLessThan(ids.get('tagCw') as number);
+    const id = (await upsertTopic(
+      db,
+      thread({ threadId: 'h2', tagIds: ['tagCw', 'tagLab'] }),
+      owner,
+    )) as number;
+    expect(await placement(id)).toEqual({ kind: 'cwiczenia', group: null });
+  });
+
   it('concurrent upserts create one class and group row', async () => {
     await db.delete(classes).where(eq(classes.subjectId, subjectId));
     const ids = await Promise.all(
