@@ -71,3 +71,19 @@ export function csvStamp(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
 }
+
+/** Messages /api/sql writes itself (lib/sql-console.ts), not MariaDB's. */
+const APP_MESSAGES = [
+  /^Puste zapytanie\.$/,
+  /^Przekroczono limit czasu \(/,
+  /^Nie udało się połączyć z bazą danych\.$/,
+  /^Serwer jest zajęty\./,
+];
+
+/**
+ * True when an /api/sql error text came from MariaDB: the request reached
+ * the database (HTTP 200) and it is not one of the API's own messages.
+ */
+export function isDbMessage(status: number, error: string): boolean {
+  return status === 200 && !APP_MESSAGES.some((re) => re.test(error));
+}

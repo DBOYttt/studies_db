@@ -26,6 +26,7 @@ import {
   consoleColumns,
   csvStamp,
   historyLabel,
+  isDbMessage,
   sqlFileColumn,
   sqlHref,
 } from '@/lib/sql-editor';
@@ -48,7 +49,7 @@ type Result =
       truncated: boolean;
       durationMs: number;
     }
-  | { ok: false; sql: string; error: string };
+  | { ok: false; sql: string; error: string; fromDb: boolean };
 
 type ApiResult =
   | {
@@ -233,50 +234,59 @@ export function SqlConsole({
     };
   }, [schemaProp]);
 
-  const run = useCallback(async () => {
-    const q = query.trim();
-    if (running || !q) return;
-    setRunning(true);
-    const finish = (r: ApiResult) => {
-      runCount.current += 1;
-      setPreview(null);
-      setResult(
-        r.ok
-          ? {
-              ...r,
-              sql: q,
-              run: runCount.current,
-              stamp: csvStamp(new Date()),
-            }
-          : { ok: false, sql: q, error: r.error },
-      );
-    };
-    try {
-      const res = await fetch('/api/sql', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql: q }),
-      });
-      if (isSessionExpired(res)) {
-        window.location.href = '/login-info';
-        return;
+  /** Runs `sqlText` (default: the editor content). */
+  const run = useCallback(
+    async (sqlText?: string) => {
+      const q = (sqlText ?? query).trim();
+      if (running || !q) return;
+      setRunning(true);
+      const finish = (r: ApiResult, fromDb: boolean) => {
+        runCount.current += 1;
+        setPreview(null);
+        setResult(
+          r.ok
+            ? {
+                ...r,
+                sql: q,
+                run: runCount.current,
+                stamp: csvStamp(new Date()),
+              }
+            : { ok: false, sql: q, error: r.error, fromDb },
+        );
+        // Every executed query goes to history, failed transports included.
+        setHistory(pushSqlHistory(q));
+      };
+      try {
+        const res = await fetch('/api/sql', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sql: q }),
+        });
+        if (isSessionExpired(res)) {
+          window.location.href = '/login-info';
+          return;
+        }
+        const isJson = res.headers
+          .get('content-type')
+          ?.includes('application/json');
+        if (!isJson) {
+          // e.g. a proxy/tunnel error page; keep the query so it can be retried
+          finish({ ok: false, error: `Błąd serwera (${res.status}).` }, false);
+          return;
+        }
+        const data = (await res.json()) as ApiResult;
+        finish(data, !data.ok && isDbMessage(res.status, data.error));
+      } catch {
+        finish(
+          { ok: false, error: 'Nie udało się połączyć z serwerem.' },
+          false,
+        );
+      } finally {
+        setRunning(false);
       }
-      const isJson = res.headers
-        .get('content-type')
-        ?.includes('application/json');
-      if (!isJson) {
-        // e.g. a proxy/tunnel error page; keep the query so it can be retried
-        finish({ ok: false, error: `Błąd serwera (${res.status}).` });
-        return;
-      }
-      finish((await res.json()) as ApiResult);
-      setHistory(pushSqlHistory(q));
-    } catch {
-      finish({ ok: false, error: 'Nie udało się połączyć z serwerem.' });
-    } finally {
-      setRunning(false);
-    }
-  }, [query, running]);
+    },
+    [query, running],
+  );
   runRef.current = run;
 
   const openPreview = useCallback(async (id: number) => {
@@ -498,7 +508,7 @@ export function SqlConsole({
             </kbd>
             <button
               type="button"
-              onClick={run}
+              onClick={() => run()}
               disabled={running}
               aria-busy={running}
               className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-60 disabled:hover:bg-accent-fill"
@@ -523,7 +533,7 @@ export function SqlConsole({
             <SqlText sql={result.sql} />
           </pre>
           <div className="font-semibold text-muted">
-            MariaDB zwrócił komunikat:
+            {result.fromDb ? 'MariaDB zwrócił komunikat:' : 'Komunikat:'}
           </div>
           <code className="break-words font-mono text-err-fg">
             {result.error}
@@ -551,7 +561,7 @@ export function SqlConsole({
               elapsedMs={result.durationMs}
               name={`zapytanie-${result.stamp}`}
               editSqlHref={sqlHref(editPath, result.sql)}
-              onRefresh={run}
+              onRefresh={() => run(result.sql)}
               fileColumn={fileColumn}
               onPreview={fileColumn === undefined ? undefined : openPreview}
               selectedId={preview?.id ?? null}
@@ -585,7 +595,15 @@ function PreviewStatus({
 }) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && !e.defaultPrevented) onClose();
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Escape inside a form field belongs to that field (as in PreviewPanel).
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (t.isContentEditable || t.closest('input, textarea, select'))
+      )
+        return;
+      onClose();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

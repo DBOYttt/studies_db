@@ -4,6 +4,7 @@ import {
   consoleColumns,
   csvStamp,
   historyLabel,
+  isDbMessage,
   sqlFileColumn,
   sqlHref,
 } from '../lib/sql-editor';
@@ -82,5 +83,24 @@ describe('small helpers', () => {
   });
   it('csvStamp pads local time', () => {
     expect(csvStamp(new Date(2026, 0, 2, 3, 4))).toBe('2026-01-02-0304');
+  });
+});
+
+describe('isDbMessage', () => {
+  it('accepts MariaDB errors from a 200 response', () => {
+    expect(isDbMessage(200, "Unknown column 'nope' in 'SELECT'")).toBe(true);
+  });
+  it('rejects API refusals and the API own messages', async () => {
+    const { connectionErrorMessage } = await import('../lib/sql-console');
+    expect(isDbMessage(429, 'Za dużo zapytań. Odczekaj chwilę.')).toBe(false);
+    expect(isDbMessage(400, 'Nieprawidłowe zapytanie.')).toBe(false);
+    expect(isDbMessage(200, 'Puste zapytanie.')).toBe(false);
+    expect(isDbMessage(200, 'Przekroczono limit czasu (5 s).')).toBe(false);
+    expect(isDbMessage(200, connectionErrorMessage(new Error('x')))).toBe(
+      false,
+    );
+    expect(isDbMessage(200, connectionErrorMessage({ errno: 1226 }))).toBe(
+      false,
+    );
   });
 });
