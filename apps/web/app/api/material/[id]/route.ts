@@ -6,6 +6,7 @@ export const dynamic = 'force-dynamic';
 
 const headers = { 'Cache-Control': 'private, no-store' };
 
+// Spec'd JSON API; the explorer UI itself renders the preview panel server-side.
 /** A live file as `ExplorerFile` JSON; 404 for deleted, unknown or malformed ids. */
 export async function GET(
   _req: Request,

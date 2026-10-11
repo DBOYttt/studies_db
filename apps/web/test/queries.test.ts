@@ -16,12 +16,7 @@ import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
 import { EXAMPLE_QUERIES } from '../lib/example-queries';
-import {
-  getSubject,
-  getTopicWithMaterials,
-  listSubjectsOverview,
-  listTopics,
-} from '../lib/queries';
+import { getSubject, listSubjectsOverview, listTopics } from '../lib/queries';
 import { runReadonlyQuery } from '../lib/sql-console';
 
 let db: Db;
@@ -151,27 +146,6 @@ describe('getSubject / listTopics', () => {
   it('filters by tag', async () => {
     const f = await listTopics(db, subjectId, { tagId });
     expect(f.map((t) => t.id)).toEqual([topicA]);
-  });
-});
-
-describe('getTopicWithMaterials', () => {
-  it('builds discordUrl and hides deleted materials', async () => {
-    const r = await getTopicWithMaterials(db, topicA);
-    expect(r?.subject.code).toBe('FIZ');
-    expect(r?.materials).toHaveLength(2);
-    expect(r?.materials[0]).toMatchObject({
-      originalFilename: 'plik1.pdf',
-      status: 'ready',
-      previewKind: 'pdf',
-      uploaderName: 'Ann',
-      discordUrl: 'https://discord.com/channels/guild1/th1/msg1',
-    });
-    expect((await getTopicWithMaterials(db, topicB))?.materials).toHaveLength(
-      0,
-    );
-  });
-  it('null for unknown topic', async () => {
-    expect(await getTopicWithMaterials(db, 99999)).toBeNull();
   });
 });
 

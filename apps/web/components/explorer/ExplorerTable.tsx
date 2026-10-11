@@ -238,7 +238,6 @@ export function ExplorerTable({
                 return (
                   <tr
                     key={f.id}
-                    aria-selected={on}
                     className={on ? 'bg-accent/10' : 'hover:bg-surface'}
                   >
                     <td className="max-w-[16rem] px-3 py-2 text-muted">
