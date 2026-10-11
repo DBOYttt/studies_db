@@ -179,7 +179,8 @@ export function viewQueryString(q: ViewQuery): URLSearchParams {
 const quoteId = (name: string) => `\`${name.replace(/`/g, '``')}\``;
 const escapeLike = (v: string) => v.replace(/[\\%_]/g, (c) => `\\${c}`);
 /** MariaDB string literal (default sql_mode: backslash escapes). Display only. */
-const quoteString = (v: string) => `'${v.replace(/[\\']/g, (c) => `\\${c}`)}'`;
+export const quoteString = (v: string) =>
+  `'${v.replace(/[\\']/g, (c) => `\\${c}`)}'`;
 
 /**
  * `FROM ... WHERE ...` and `ORDER BY ...` for a public view. Unknown

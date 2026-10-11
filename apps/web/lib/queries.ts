@@ -43,7 +43,7 @@ export interface SubjectInfo {
   description: string | null;
 }
 
-const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
+export const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
 const NONE_NAME = 'Bez kategorii';
 
 function toDate(v: unknown): Date {
