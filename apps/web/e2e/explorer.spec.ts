@@ -93,11 +93,20 @@ test('mobile: select navigation and full-screen preview sheet', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 375, height: 800 });
-  await page.goto('/subjects/MECH?class=laboratorium&group=3');
+  await page.goto('/subjects/MECH');
   await expect(treeNav(page)).toBeHidden();
-  await expect(
-    page.getByRole('combobox', { name: 'Lokalizacja' }),
-  ).toBeVisible();
+  const select = page.getByRole('combobox', { name: 'Lokalizacja' });
+  await expect(select).toBeVisible();
+  // Group option: indented with non-breaking spaces; choosing it navigates.
+  const group = select.locator('option', { hasText: 'Gr. 3' });
+  expect(await group.evaluate((o) => o.textContent)).toMatch(
+    /^\u00a0{4}Gr\. 3 \(\d+\)$/,
+  );
+  await select.selectOption({
+    value: (await group.getAttribute('value')) ?? '',
+  });
+  await expect(page).toHaveURL(/class=laboratorium&group=3/);
+  await expect(select).toHaveValue(/class=laboratorium&group=3/);
 
   await page.getByRole('link', { name: 'lab-sprawozdanie.pdf' }).click();
   const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
