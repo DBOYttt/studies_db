@@ -7,6 +7,7 @@ import {
   DESIGNER_BOX_WIDTH,
   DESIGNER_DEFAULT_POS,
   type DesignerLayout,
+  markerPath,
   parseStoredPositions,
   relationId,
 } from '../lib/designer-layout';
@@ -110,6 +111,26 @@ const end = (d: string) => {
   return nums(d).slice(-2);
 };
 
+/** Straight segments of an H/V/Q path (corners as chords). */
+const segments = (d: string) => {
+  const out: [number, number, number, number][] = [];
+  let x = 0;
+  let y = 0;
+  for (const [, cmd, args] of d.matchAll(/([MHVQ])([^MHVQ]*)/g)) {
+    const n = (args.match(/-?\d+(\.\d+)?/g) ?? []).map(Number);
+    let nx = x;
+    let ny = y;
+    if (cmd === 'M') [nx, ny] = n;
+    else if (cmd === 'H') nx = n[0];
+    else if (cmd === 'V') ny = n[0];
+    else [nx, ny] = n.slice(2);
+    if (cmd !== 'M') out.push([x, y, nx, ny]);
+    x = nx;
+    y = ny;
+  }
+  return out;
+};
+
 const expectNoOverlap = (l: DesignerLayout) => {
   for (const a of l.boxes) {
     for (const b of l.boxes) {
@@ -187,6 +208,27 @@ describe('buildDesignerLayout', () => {
     }
   });
 
+  it('default layout: no edge passes through a box (compact and all columns)', () => {
+    for (const showAll of [false, true]) {
+      const l = buildDesignerLayout(columns, { showAll });
+      for (const e of l.edges) {
+        for (const [x1, y1, x2, y2] of segments(e.d)) {
+          for (const b of l.boxes) {
+            // Strict interior: running along or starting on a side is fine.
+            const hit =
+              Math.max(x1, x2) > b.x + 1 &&
+              Math.min(x1, x2) < b.x + DESIGNER_BOX_WIDTH - 1 &&
+              Math.max(y1, y2) > b.y + 1 &&
+              Math.min(y1, y2) < b.y + b.height - 1;
+            expect(hit, `${e.id} through ${b.view} (showAll ${showAll})`).toBe(
+              false,
+            );
+          }
+        }
+      }
+    }
+  });
+
   it('compact by default; showAll restores every column', () => {
     const compact = buildDesignerLayout(columns, {});
     expect(box(compact, 'v_topics').columns.map((c) => c.name)).toEqual([
@@ -255,7 +297,7 @@ describe('buildDesignerLayout', () => {
       /^M[\d.]+,[\d.]+( (H|V)[\d.]+| Q[\d.]+,[\d.]+ [\d.]+,[\d.]+)+$/,
     );
     expect(e.d).toBe(
-      `M${fk.x},79 H${fk.x - 10} Q${fk.x - 16},79 ${fk.x - 16},85 V${pk.y + 35} Q${fk.x - 16},${pk.y + 41} ${fk.x - 22},${pk.y + 41} H${pk.x + DESIGNER_BOX_WIDTH}`,
+      `M${fk.x},${fk.y + 59} H${fk.x - 10} Q${fk.x - 16},${fk.y + 59} ${fk.x - 16},${fk.y + 65} V${pk.y + 35} Q${fk.x - 16},${pk.y + 41} ${fk.x - 22},${pk.y + 41} H${pk.x + DESIGNER_BOX_WIDTH}`,
     );
   });
 
@@ -371,6 +413,22 @@ describe('buildDesignerLayout', () => {
   });
 });
 
+describe('markerPath', () => {
+  it("crow's foot: three prongs from 10px out to the box side", () => {
+    expect(markerPath([100, 50, 'left'], 'many')).toBe(
+      'M90,50 L100,44 M90,50 L100,50 M90,50 L100,56',
+    );
+    expect(markerPath([100, 50, 'right'], 'many')).toBe(
+      'M110,50 L100,44 M110,50 L100,50 M110,50 L100,56',
+    );
+  });
+
+  it('one: a single bar 7px out from the box side', () => {
+    expect(markerPath([100, 50, 'right'], 'one')).toBe('M107,44 V56');
+    expect(markerPath([100, 50, 'left'], 'one')).toBe('M93,44 V56');
+  });
+});
+
 describe('stored positions', () => {
   it('drops bad entries and rounds', () => {
     expect(
@@ -394,5 +452,7 @@ describe('stored positions', () => {
     expect(clampPosition([-12, 40])).toEqual([0, 40]);
     expect(clampPosition([5, -1])).toEqual([5, 0]);
     expect(clampPosition([7, 9])).toEqual([7, 9]);
+    expect(clampPosition([Number.NaN, 9])).toEqual([0, 9]);
+    expect(clampPosition([3, Number.POSITIVE_INFINITY])).toEqual([3, 0]);
   });
 });

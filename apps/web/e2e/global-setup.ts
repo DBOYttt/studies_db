@@ -232,6 +232,7 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_ENTITIES = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_SCHEMA = await createLoginToken(db, userId);
   } finally {
     await closeTestDb(db);
   }

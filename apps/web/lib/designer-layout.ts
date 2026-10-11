@@ -20,20 +20,22 @@ const CORNER = 6;
  * Default box positions (x, y), left to right along the data flow (spec §3):
  * subjects | classes, tags | groups, topic tags, lecturers |
  * class lecturers, topics, users | materials, files. The y values leave room
- * for every box with all columns shown, so nothing overlaps in either mode.
+ * for every box with all columns shown, so nothing overlaps in either mode,
+ * and keep horizontal corridors free so no edge crosses a box: y 61
+ * (v_subjects.id) and y 141 (v_classes.id) are clear in columns 2-3.
  */
 export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_subjects: [20, 20],
-  v_classes: [250, 20],
-  v_tags: [250, 200],
-  v_class_groups: [480, 20],
-  v_topic_tags: [480, 180],
-  v_lecturers: [480, 300],
-  v_class_lecturers: [710, 20],
-  v_topics: [710, 160],
-  v_users: [710, 390],
+  v_classes: [250, 100],
+  v_tags: [250, 260],
+  v_class_groups: [480, 170],
+  v_topic_tags: [480, 310],
+  v_lecturers: [480, 410],
+  v_class_lecturers: [710, 30],
+  v_topics: [710, 150],
+  v_users: [710, 360],
   v_materials: [940, 20],
-  v_files: [940, 260],
+  v_files: [940, 250],
 };
 
 export type DesignerHighlight = {
@@ -123,9 +125,10 @@ export function compactColumns(view: PublicView, all: string[]): string[] {
   return all.filter((c) => isKeyColumn(c) || labels.has(c));
 }
 
+/** Non-finite coordinates (NaN, Infinity) become 0; negatives clamp to 0. */
 export const clampPosition = ([x, y]: [number, number]): [number, number] => [
-  Math.max(0, x),
-  Math.max(0, y),
+  Number.isFinite(x) ? Math.max(0, x) : 0,
+  Number.isFinite(y) ? Math.max(0, y) : 0,
 ];
 
 const VIEW_SET = new Set<string>(PUBLIC_VIEWS);
@@ -315,4 +318,19 @@ export function buildDesignerLayout(
     ...boxes.map((b) => b.y + b.height + MARGIN),
   );
   return { width, height, boxes, edges };
+}
+
+/**
+ * End marker shape at a box side: a crow's foot ("many", three prongs
+ * meeting 10px out, within the straight part of the edge stub) or a single
+ * bar 7px out ("one").
+ */
+export function markerPath(
+  [x, y, dir]: DesignerMarker,
+  kind: 'many' | 'one',
+): string {
+  const o = dir === 'right' ? 1 : -1;
+  if (kind === 'one') return `M${x + o * 7},${y - 6} V${y + 6}`;
+  const t = x + o * 10;
+  return `M${t},${y} L${x},${y - 6} M${t},${y} L${x},${y} M${t},${y} L${x},${y + 6}`;
 }
