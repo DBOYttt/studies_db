@@ -63,11 +63,13 @@ const MapNodeView = memo(function MapNodeView({ data }: NodeProps<FlowNode>) {
       <button
         type="button"
         aria-label={`${data.label}, ${files}`}
-        aria-current={data.selected ? 'true' : undefined}
+        aria-current={
+          data.selected && data.kind !== 'subject' ? 'true' : undefined
+        }
         style={{ width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT }}
         className={`flex items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${
           data.kind === 'subject'
-            ? 'border-accent bg-accent font-medium text-on-accent'
+            ? 'border-accent-ink bg-accent-ink font-medium text-on-accent'
             : data.selected
               ? 'border-accent bg-accent/10 text-fg'
               : data.kind === 'more'
@@ -182,6 +184,7 @@ export function DataMap({
         // Having a click handler also keeps the nodes interactive
         // (React Flow disables pointer events on non-selectable, non-clickable nodes).
         onNodeClick={(_, node) => router.push(node.data.href)}
+        nodesFocusable={false}
         nodesDraggable={false}
         nodesConnectable={false}
         elementsSelectable={false}
