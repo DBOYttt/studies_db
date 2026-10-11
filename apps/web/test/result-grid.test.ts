@@ -2,12 +2,15 @@ import { describe, expect, it } from 'vitest';
 import type { Cell } from '../components/DataGrid';
 import {
   cellCsvValue,
+  checkedInOrder,
   compareCells,
+  defaultResultKey,
   filterRowIndexes,
   footerText,
   formatSeconds,
   materialIdOf,
   pageCountOf,
+  pageOptions,
   resultMessage,
   sortRowIndexes,
   withParams,
@@ -38,6 +41,27 @@ describe('resultMessage', () => {
     ).toBe(
       'MariaDB zwrócił pusty wynik (zero wierszy). (Zapytanie trwało 0,0005 s.)',
     );
+  });
+  it('filter matched nothing (client mode)', () => {
+    expect(
+      resultMessage({ start: 0, count: 0, total: 0, unfiltered: 40 }),
+    ).toBe('Brak wierszy pasujących do filtra (40 łącznie)');
+    expect(
+      resultMessage({
+        start: 0,
+        count: 0,
+        total: 0,
+        unfiltered: 40,
+        elapsedMs: 2,
+      }),
+    ).toBe(
+      'Brak wierszy pasujących do filtra (40 łącznie, zapytanie trwało 0,0020 s.)',
+    );
+  });
+  it('filtered count drives the range (client mode)', () => {
+    expect(
+      resultMessage({ start: 0, count: 7, total: 7, unfiltered: 40 }),
+    ).toBe('Pokazano wiersze 0 – 6 (7 łącznie)');
   });
   it('page past the end', () => {
     expect(resultMessage({ start: 100, count: 0, total: 30 })).toBe(
@@ -124,5 +148,61 @@ describe('withParams', () => {
     );
     expect(withParams('/t', 'page=2', { page: null })).toBe('/t');
     expect(withParams('/t', undefined, { preview: 4 })).toBe('/t?preview=4');
+  });
+});
+
+describe('pageOptions', () => {
+  it('lists every page up to 50', () => {
+    expect(pageOptions(1, 1)).toEqual([1]);
+    expect(pageOptions(3, 0)).toEqual([1]);
+    expect(pageOptions(2, 50)).toHaveLength(50);
+  });
+  it('caps many pages: ends, window around current, ~20 steps', () => {
+    const o = pageOptions(500, 1000);
+    expect(o[0]).toBe(1);
+    expect(o.at(-1)).toBe(1000);
+    for (let p = 490; p <= 510; p++) expect(o).toContain(p);
+    expect(o).toContain(50);
+    expect(o).toContain(950);
+    expect(o.length).toBeLessThanOrEqual(45);
+    expect([...o].sort((a, b) => a - b)).toEqual(o);
+    expect(new Set(o).size).toBe(o.length);
+  });
+  it('always contains the current page, clamped', () => {
+    expect(pageOptions(1000, 1000)).toContain(1000);
+    expect(pageOptions(999, 1000)).toContain(999);
+    expect(pageOptions(5000, 1000)).toContain(990);
+  });
+});
+
+describe('checkedInOrder', () => {
+  it('keeps display order and drops rows outside the order', () => {
+    expect(checkedInOrder([5, 2, 9, 1], new Set([1, 5, 7]))).toEqual([5, 1]);
+    expect(checkedInOrder([], new Set([1]))).toEqual([]);
+  });
+});
+
+describe('defaultResultKey', () => {
+  const base = { sql: 'SELECT 1', columns: ['a'], rowCount: 3 };
+  it('is stable for equal inputs (rows array rebuilt)', () => {
+    expect(defaultResultKey(base)).toBe(defaultResultKey({ ...base }));
+  });
+  it('changes with sql, columns, row count and server state', () => {
+    const k = defaultResultKey(base);
+    for (const over of [
+      { sql: 'SELECT 2' },
+      { columns: ['b'] },
+      { rowCount: 4 },
+      { page: 2 },
+      { query: 'f_a=x' },
+      { sort: 'a', dir: 'desc' },
+      { perPage: 50 },
+      { total: 9 },
+    ]) {
+      expect(
+        defaultResultKey({ ...base, ...over }),
+        JSON.stringify(over),
+      ).not.toBe(k);
+    }
   });
 });

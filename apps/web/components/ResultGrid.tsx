@@ -24,12 +24,15 @@ import { toCsv } from '@/lib/csv';
 import {
   cellCsvValue,
   cellText,
+  checkedInOrder,
   DEFAULT_PER_PAGE,
+  defaultResultKey,
   filterRowIndexes,
   footerText,
   materialIdOf,
   PER_PAGE_OPTIONS,
   pageCountOf,
+  pageOptions,
   resultMessage,
   sortRowIndexes,
   withParams,
@@ -69,12 +72,17 @@ export interface ServerPaging {
 
 /** Server-driven sorting: header links reload the page. */
 export interface ServerSort {
-  /** Current sort column name (as in `columns`). */
+  /** Current sort key (the column name unless `sortKeys` maps it). */
   sort?: string;
   dir?: 'asc' | 'desc';
   /** URL param names (defaults `sort`, `dir`). */
   sortParam?: string;
   dirParam?: string;
+  /**
+   * Sort key per column, parallel to `columns` (the URL `sort` value);
+   * `null` = column not sortable; missing entry = the column name.
+   */
+  sortKeys?: (string | null | undefined)[];
 }
 
 export interface ResultGridProps {
@@ -83,6 +91,13 @@ export interface ResultGridProps {
   rows: Cell[][];
   /** SQL shown highlighted above the grid. */
   sql: string;
+  /**
+   * Identity of the result. When it changes, all view state (checks, client
+   * page, filter, sort) resets; re-renders with a rebuilt `rows` array do not.
+   * Default: derived from sql, columns, row count and the server
+   * paging/sort/query props (see `defaultResultKey`).
+   */
+  resultKey?: string | number;
   /** Rows in the whole result (server paging). Defaults to `rows.length`. */
   total?: number;
   /** Query time; the message omits timing when absent. */
@@ -218,6 +233,7 @@ export function ResultGrid({
   columns,
   rows,
   sql,
+  resultKey,
   total: totalProp,
   elapsedMs,
   nav,
@@ -243,12 +259,28 @@ export function ResultGrid({
   const [clientPer, setClientPer] = useState(DEFAULT_PER_PAGE);
   const [clientPage, setClientPage] = useState(1);
   const [checked, setChecked] = useState<ReadonlySet<number>>(new Set());
-  // New rows (new query or page): drop selection and client paging.
-  const [seenRows, setSeenRows] = useState(rows);
-  if (seenRows !== rows) {
-    setSeenRows(rows);
+  // New result (not a mere re-render): reset every piece of view state.
+  const key = String(
+    resultKey ??
+      defaultResultKey({
+        sql,
+        columns,
+        rowCount: rows.length,
+        total: totalProp,
+        query: nav?.query,
+        page: paging?.page,
+        perPage: paging?.perPage,
+        sort: sorting?.sort,
+        dir: sorting?.dir,
+      }),
+  );
+  const [seenKey, setSeenKey] = useState(key);
+  if (seenKey !== key) {
+    setSeenKey(key);
     setChecked(new Set());
     setClientPage(1);
+    setFilter('');
+    setClientSort(null);
   }
 
   const server = !!paging;
@@ -273,15 +305,16 @@ export function ResultGrid({
     : filtered.slice((page - 1) * perPage, page * perPage);
   // Offset of the first row of this page within the result.
   const rowOffset = (page - 1) * perPage;
-  // The message describes the query result (not the "Filtruj wiersze" view).
-  const message = resultMessage({
-    start: rowOffset,
-    count: server
-      ? rows.length
-      : Math.min(perPage, Math.max(0, total - rowOffset)),
-    total,
-    elapsedMs,
-  });
+  // Server mode: the query result; client mode: the filtered rows (as the footer).
+  const message = server
+    ? resultMessage({ start: rowOffset, count: rows.length, total, elapsedMs })
+    : resultMessage({
+        start: rowOffset,
+        count: shown.length,
+        total: filtered.length,
+        elapsedMs,
+        unfiltered: rows.length,
+      });
 
   const pageParam = paging?.pageParam ?? 'page';
   const perParam = paging?.perPageParam ?? 'per';
@@ -313,8 +346,9 @@ export function ResultGrid({
   const hasActions = fileColumn !== undefined;
   const badgeCol = linkColumn ?? 0;
 
-  const shownChecked = shown.filter((i) => checked.has(i));
-  const allChecked = shown.length > 0 && shownChecked.length === shown.length;
+  // Checked rows of the filtered result, across client pages, in display order.
+  const checkedRows = checkedInOrder(filtered, checked);
+  const allChecked = shown.length > 0 && shown.every((i) => checked.has(i));
   const toggleAll = () =>
     setChecked((prev) => {
       const next = new Set(prev);
@@ -336,11 +370,11 @@ export function ResultGrid({
   const refresh = onRefresh ?? (() => router.refresh());
   const exportAll = () => downloadCsv(`${name}.csv`, columns, rows);
   const exportChecked = () => {
-    if (shownChecked.length === 0) return;
+    if (checkedRows.length === 0) return;
     downloadCsv(
       `${name}-zaznaczone.csv`,
       columns,
-      shownChecked.map((i) => rows[i]),
+      checkedRows.map((i) => rows[i]),
     );
   };
   const csvLink = (icon: ReactNode) =>
@@ -356,8 +390,15 @@ export function ResultGrid({
       </button>
     );
 
+  const serverSortKey = (i: number, col: string): string | null => {
+    const k = sorting?.sortKeys?.[i];
+    return k === undefined ? col : k;
+  };
   const sortState = (i: number, col: string): 'asc' | 'desc' | null => {
-    if (sorting) return sorting.sort === col ? (sorting.dir ?? 'asc') : null;
+    if (sorting) {
+      const k = serverSortKey(i, col);
+      return k !== null && sorting.sort === k ? (sorting.dir ?? 'asc') : null;
+    }
     return clientSort?.col === i ? clientSort.dir : null;
   };
 
@@ -502,7 +543,7 @@ export function ResultGrid({
             onChange={(e) => goPage(Number(e.target.value))}
             className="h-[26px] border border-line-strong bg-page px-1.5 text-fg"
           >
-            {Array.from({ length: pageCount }, (_, i) => i + 1).map((p) => (
+            {pageOptions(page, pageCount).map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
@@ -599,9 +640,10 @@ export function ResultGrid({
                   </span>
                 );
                 const nextDir = st === 'asc' ? 'desc' : 'asc';
-                const sortHref = sorting
+                const sk = sorting ? serverSortKey(i, col) : null;
+                const sortHref = sk
                   ? href({
-                      [sortParam]: col,
+                      [sortParam]: sk,
                       [dirParam]: nextDir,
                       [pageParam]: null,
                     })
@@ -628,7 +670,7 @@ export function ResultGrid({
                         {label}
                       </Link>
                     ) : sorting ? (
-                      <span className="block px-2.5 py-[7px] text-accent-ink">
+                      <span className="block px-2.5 py-[7px] text-fg">
                         {label}
                       </span>
                     ) : (
@@ -748,11 +790,11 @@ export function ResultGrid({
         >
           Zaznacz wszystko
         </button>
-        <span>Z zaznaczonymi ({shownChecked.length}):</span>
+        <span>Z zaznaczonymi ({checkedRows.length}):</span>
         <button
           type="button"
           onClick={exportChecked}
-          disabled={shownChecked.length === 0}
+          disabled={checkedRows.length === 0}
           className="inline-flex items-center gap-1 rounded border border-line-strong bg-page px-2.5 py-[3px] text-accent-ink enabled:cursor-pointer enabled:hover:border-accent disabled:opacity-60"
         >
           <Export aria-hidden="true" />

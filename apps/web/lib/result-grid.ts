@@ -74,16 +74,22 @@ export function resultMessage({
   count,
   total,
   elapsedMs,
+  unfiltered,
 }: {
   start: number;
   count: number;
   total: number;
   elapsedMs?: number | null;
+  /** Rows before "Filtruj wiersze" (client mode); only used when nothing matched. */
+  unfiltered?: number;
 }): string {
   const s =
     elapsedMs === undefined || elapsedMs === null || !Number.isFinite(elapsedMs)
       ? null
       : formatSeconds(elapsedMs);
+  if (total <= 0 && unfiltered !== undefined && unfiltered > 0) {
+    return `Brak wierszy pasujących do filtra (${unfiltered} łącznie${s ? `, zapytanie trwało ${s} s.` : ''})`;
+  }
   if (total <= 0) {
     return `MariaDB zwrócił pusty wynik (zero wierszy).${s ? ` (Zapytanie trwało ${s} s.)` : ''}`;
   }
@@ -138,4 +144,59 @@ export function withParams(
   }
   const s = p.toString();
   return s ? `${basePath}?${s}` : basePath;
+}
+
+/**
+ * Page numbers offered by the page select: every page up to 50 pages,
+ * otherwise first/last, a window of 10 around the current page and about 20
+ * evenly spaced pages (as phpMyAdmin does).
+ */
+export function pageOptions(page: number, pageCount: number): number[] {
+  const n = Math.max(1, pageCount);
+  if (n <= 50) return Array.from({ length: n }, (_, i) => i + 1);
+  const out = new Set<number>([1, n]);
+  const cur = Math.min(Math.max(1, page), n);
+  for (let p = Math.max(1, cur - 10); p <= Math.min(n, cur + 10); p++) {
+    out.add(p);
+  }
+  const step = Math.ceil(n / 20);
+  for (let p = step; p < n; p += step) out.add(p);
+  return [...out].sort((a, b) => a - b);
+}
+
+/** Checked row indexes in display order (`order` = filtered + sorted indexes). */
+export function checkedInOrder(
+  order: readonly number[],
+  checked: ReadonlySet<number>,
+): number[] {
+  return order.filter((i) => checked.has(i));
+}
+
+/**
+ * Identity of a result when the caller passes no `resultKey`: the SQL,
+ * columns, row count and the server paging/sort/query state. Stable across
+ * re-renders that merely rebuild the `rows` array.
+ */
+export function defaultResultKey(parts: {
+  sql: string;
+  columns: readonly string[];
+  rowCount: number;
+  total?: number;
+  query?: string;
+  page?: number;
+  perPage?: number;
+  sort?: string;
+  dir?: string;
+}): string {
+  return JSON.stringify([
+    parts.sql,
+    parts.columns,
+    parts.rowCount,
+    parts.total ?? null,
+    parts.query ?? null,
+    parts.page ?? null,
+    parts.perPage ?? null,
+    parts.sort ?? null,
+    parts.dir ?? null,
+  ]);
 }
