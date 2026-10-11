@@ -37,6 +37,15 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await page.goto(`/topics/${topicId}`);
   await expect(page).toHaveURL(new RegExp(`/subjects/FIZ\\?topic=${topicId}$`));
 
+  // The data map shows the same hierarchy; a node click returns to the explorer.
+  await page.getByRole('link', { name: 'Mapa danych' }).click();
+  await expect(page).toHaveURL(/tab=map/);
+  const mapNode = page.getByRole('button', { name: /Bez kategorii/ });
+  await expect(mapNode).toBeVisible();
+  await mapNode.click();
+  await expect(page).toHaveURL(/\/subjects\/FIZ\?class=none$/);
+  await page.goto(`/subjects/FIZ?topic=${topicId}`);
+
   // Statuses are visible in the table without opening anything.
   await expect(page.getByText('Przetwarzanie…')).toBeVisible();
   await expect(page.getByText('Podgląd niedostępny')).toBeVisible();

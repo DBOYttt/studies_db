@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import { DataMap } from '@/components/explorer/DataMap';
 import { ExplorerShell } from '@/components/explorer/ExplorerShell';
 import { ExplorerTable } from '@/components/explorer/ExplorerTable';
 import { ExplorerTree } from '@/components/explorer/ExplorerTree';
@@ -126,7 +127,9 @@ export default async function SubjectPage({
         explorerHref(code, { ...sel, file: null, tab }, filters)
       }
     >
-      {!isExplorer ? (
+      {sel.tab === 'map' ? (
+        <DataMap subject={{ code, name: subject.name }} tree={tree} sel={sel} />
+      ) : !isExplorer ? (
         <div className="rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
           <p className="font-medium">Ten widok jest w przygotowaniu</p>
           <p className="mt-1 text-sm text-muted">

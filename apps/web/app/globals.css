@@ -92,3 +92,29 @@ a.link:hover {
     animation: none;
   }
 }
+
+/* Data map (React Flow): follow the app tokens in both color schemes. */
+.data-map .react-flow__controls {
+  box-shadow: none;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.data-map .react-flow__controls-button {
+  background: var(--panel);
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+}
+.data-map .react-flow__controls-button:hover {
+  background: var(--surface);
+}
+.data-map .react-flow__controls-button svg {
+  fill: currentColor;
+}
+.data-map .react-flow__attribution {
+  background: transparent;
+  color: var(--muted);
+}
+.data-map .react-flow__attribution a {
+  color: inherit;
+}

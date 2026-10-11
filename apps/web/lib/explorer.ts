@@ -1,4 +1,4 @@
-import { CLASS_KINDS, type ClassKind } from '@studies/db';
+import { CLASS_KINDS, type ClassKind } from '@studies/db/schema';
 
 export type ExplorerTab = 'explorer' | 'map' | 'schema';
 
