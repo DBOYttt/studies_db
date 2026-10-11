@@ -1,5 +1,6 @@
 import {
   classes,
+  classGroups,
   classLecturers,
   type Db,
   insertMaterial,
@@ -16,7 +17,7 @@ import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
 import { EXAMPLE_QUERIES } from '../lib/example-queries';
-import { getSubject, listTopics } from '../lib/queries';
+import { getSubject, listTopics, loadLinkContext } from '../lib/queries';
 import { runReadonlyQuery } from '../lib/sql-console';
 
 let db: Db;
@@ -113,6 +114,24 @@ beforeAll(async () => {
 afterAll(async () => {
   await roPool.end();
   await closeTestDb(db);
+});
+
+describe('loadLinkContext', () => {
+  it('maps subjects, classes and groups', async () => {
+    const [cls] = await db.select().from(classes);
+    const [g] = await db
+      .insert(classGroups)
+      .values({ classId: cls.id, number: 2, name: 'Gr. 2' })
+      .$returningId();
+    const ctx = await loadLinkContext(db);
+    expect(ctx.subjects.get(subjectId)).toBe('FIZ');
+    expect(ctx.classes.get(cls.id)).toEqual({ code: 'FIZ', kind: 'wyklad' });
+    expect(ctx.groups.get(g.id)).toEqual({
+      code: 'FIZ',
+      kind: 'wyklad',
+      number: 2,
+    });
+  });
 });
 
 describe('getSubject / listTopics', () => {

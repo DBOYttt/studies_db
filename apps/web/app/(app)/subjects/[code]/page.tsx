@@ -9,6 +9,7 @@ import {
   TreeStructure,
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { DataMap } from '@/components/explorer/DataMap';
@@ -58,6 +59,7 @@ import {
   SUBJECT_FILE_COLUMNS,
 } from '@/lib/sql-prefill';
 import { listViewColumns } from '@/lib/tables';
+import { lecturerHref } from '@/lib/view-links';
 
 export const dynamic = 'force-dynamic';
 
@@ -418,7 +420,9 @@ async function LecturersTab({ subjectId }: { subjectId: number }) {
                 {l.groupName ?? 'wszystkie'}
               </td>
               <td className={td}>
-                {[l.title, l.name].filter(Boolean).join(' ')}
+                <Link href={lecturerHref(l.id)} className="link">
+                  {[l.title, l.name].filter(Boolean).join(' ')}
+                </Link>
               </td>
               <td className={`${td} font-mono text-xs`}>{l.email || '—'}</td>
             </tr>

@@ -527,7 +527,9 @@ describe('pageExplorerFiles', () => {
 
 describe('listSubjectLecturers', () => {
   it('lists class lecturers with group (null = all groups)', async () => {
-    expect(await listSubjectLecturers(db, sid)).toEqual([
+    const got = await listSubjectLecturers(db, sid);
+    expect(got.every((l) => Number.isInteger(l.id))).toBe(true);
+    expect(got.map(({ id: _id, ...rest }) => rest)).toEqual([
       {
         className: 'Wykład',
         groupName: null,

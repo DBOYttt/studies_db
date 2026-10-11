@@ -17,7 +17,7 @@ import { ViewSearchForm } from '@/components/ViewSearchForm';
 import { parsePreviewId, previewColumn, toCells } from '@/lib/cells';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
-import { getMaterialFile } from '@/lib/queries';
+import { getMaterialFile, loadLinkContext } from '@/lib/queries';
 import { DEFAULT_PER_PAGE } from '@/lib/result-grid';
 import { requireUser } from '@/lib/session';
 import { sqlHref } from '@/lib/sql-editor';
@@ -169,6 +169,13 @@ async function BrowseTab({
     error = roErrorMessage(err);
   }
 
+  let links: Awaited<ReturnType<typeof loadLinkContext>> | undefined;
+  try {
+    links = await loadLinkContext(getDb());
+  } catch {
+    links = undefined; // no reference links, the grid still works
+  }
+
   // Grid links and the preview close link keep sort, filters, per and page.
   const keep = new URLSearchParams(current);
   if (result && result.page > 1) keep.set('page', String(result.page));
@@ -187,7 +194,7 @@ async function BrowseTab({
       <div className="min-w-0 flex-1">
         <ResultGrid
           columns={result.columns}
-          rows={toCells(result.rows, { view, columns: result.columns })}
+          rows={toCells(result.rows, { view, columns: result.columns, links })}
           sql={result.sql}
           total={result.total}
           nav={{ basePath: base, query: keep.toString() }}

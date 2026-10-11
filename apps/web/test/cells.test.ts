@@ -82,4 +82,32 @@ describe('parsePreviewId', () => {
     expect(parsePreviewId(['4', '5'])).toBe(4);
     expect(parsePreviewId('99999999999999999999')).toBeNull();
   });
+  it('keeps preview cells and links other references', () => {
+    const links = {
+      subjects: new Map(),
+      classes: new Map(),
+      groups: new Map(),
+    };
+    const cols = ['material_id', 'filename'];
+    expect(
+      toCells([[3, 'a.pdf']], { view: 'v_files', columns: cols, links }),
+    ).toEqual([
+      [
+        { text: '3', preview: 3 },
+        { text: 'a.pdf', preview: 3 },
+      ],
+    ]);
+    expect(
+      toCells([[4, 'Ann']], {
+        view: 'v_users',
+        columns: ['id', 'display_name'],
+        links,
+      }),
+    ).toEqual([
+      [
+        { text: '4', href: '/users/4' },
+        { text: 'Ann', href: '/users/4' },
+      ],
+    ]);
+  });
 });

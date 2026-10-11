@@ -14,6 +14,9 @@ export type Cell =
       badges?: { id: number; name: string }[];
     };
 
+import type { PublicView } from './tables';
+import { cellHref, type LinkContext } from './view-links';
+
 type RawView = string;
 
 const PREVIEW_COLUMNS: Record<string, { id: string; label: string }> = {
@@ -43,7 +46,7 @@ export function parsePreviewId(
  */
 export function toCells(
   rows: unknown[][],
-  opts?: { view: RawView; columns: string[] },
+  opts?: { view: RawView; columns: string[]; links?: LinkContext },
 ): Cell[][] {
   const spec = opts ? PREVIEW_COLUMNS[opts.view] : undefined;
   const idCol = spec && opts ? opts.columns.indexOf(spec.id) : -1;
@@ -63,6 +66,10 @@ export function toCells(
       if (id !== null && (i === idCol || i === labelCol)) {
         return { text: String(v), preview: id };
       }
+      const href =
+        opts?.links &&
+        cellHref(opts.view as PublicView, opts.columns, r, i, opts.links);
+      if (href) return { text: String(v), href };
       return typeof v === 'object' ? JSON.stringify(v) : (v as Cell);
     });
   });

@@ -32,6 +32,7 @@ import {
   type SortKey,
 } from './explorer';
 import type { NavClass, NavSubject } from './nav-tree';
+import type { LinkContext } from './view-links';
 
 export interface SubjectInfo {
   id: number;
@@ -644,7 +645,36 @@ export function resolveSubjectSelection(
   return out;
 }
 
+/** Id -> label lookups for Widoki reference links (three tiny base-table selects). */
+export async function loadLinkContext(db: Db): Promise<LinkContext> {
+  const [subj, cls, grp] = await Promise.all([
+    db.select({ id: subjects.id, code: subjects.code }).from(subjects),
+    db
+      .select({ id: classes.id, code: subjects.code, kind: classes.kind })
+      .from(classes)
+      .innerJoin(subjects, eq(subjects.id, classes.subjectId)),
+    db
+      .select({
+        id: classGroups.id,
+        code: subjects.code,
+        kind: classes.kind,
+        number: classGroups.number,
+      })
+      .from(classGroups)
+      .innerJoin(classes, eq(classes.id, classGroups.classId))
+      .innerJoin(subjects, eq(subjects.id, classes.subjectId)),
+  ]);
+  return {
+    subjects: new Map(subj.map((s) => [s.id, s.code])),
+    classes: new Map(cls.map((c) => [c.id, { code: c.code, kind: c.kind }])),
+    groups: new Map(
+      grp.map((g) => [g.id, { code: g.code, kind: g.kind, number: g.number }]),
+    ),
+  };
+}
+
 export type SubjectLecturer = {
+  id: number;
   className: string;
   groupName: string | null;
   name: string;
@@ -660,6 +690,7 @@ export async function listSubjectLecturers(
   const rows = await db
     .select({
       kind: classes.kind,
+      lecturerId: lecturers.id,
       className: classes.name,
       groupNumber: classGroups.number,
       groupName: classGroups.name,
@@ -681,6 +712,7 @@ export async function listSubjectLecturers(
         a.i - b.i,
     )
     .map(({ r }) => ({
+      id: r.lecturerId,
       className: r.className,
       groupName:
         r.groupNumber == null
