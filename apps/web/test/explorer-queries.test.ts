@@ -21,8 +21,12 @@ import {
   getMaterialFile,
   getSubjectTree,
   listExplorerFiles,
+  listSubjectClasses,
+  listSubjectLecturers,
   listSubjectsOverview,
+  pageExplorerFiles,
   resolveSelection,
+  resolveSubjectSelection,
   type TreeClass,
 } from '../lib/queries';
 
@@ -430,5 +434,138 @@ describe('listSubjectsOverview classes', () => {
     expect(list.find((s) => s.code === 'CHEM')?.classes).toEqual([
       { kind: 'cwiczenia', name: 'Ćwiczenia' },
     ]);
+  });
+});
+
+describe('listSubjectClasses / resolveSubjectSelection', () => {
+  it('lists every class and group in kind order, also empty ones', async () => {
+    const cl = await listSubjectClasses(db, sid);
+    expect(cl.map((c) => c.kind)).toEqual([
+      'wyklad',
+      'laboratorium',
+      'cwiczenia',
+      'projekt',
+    ]);
+    expect(cl[2].groups.map((g) => g.name)).toEqual([
+      'Gr. 1',
+      'Gr. 2',
+      'Gr. 3',
+    ]);
+  });
+  it('keeps empty classes/groups (empty grid, not the whole subject)', async () => {
+    const cl = await listSubjectClasses(db, sid);
+    expect(
+      resolveSubjectSelection(
+        cl,
+        tree,
+        P({ classKind: 'cwiczenia', group: 3 }),
+      ),
+    ).toEqual(P({ classKind: 'cwiczenia', group: 3 }));
+    expect(
+      resolveSubjectSelection(cl, tree, P({ classKind: 'laboratorium' })),
+    ).toEqual(P({ classKind: 'laboratorium' }));
+    const files = await pageExplorerFiles(
+      db,
+      sid,
+      P({ classKind: 'cwiczenia', group: 3 }),
+      { page: 1, perPage: 25 },
+    );
+    expect(files.total).toBe(0);
+  });
+  it('drops unknown groups and classes of other subjects; topic fixes class/group', async () => {
+    const cl = await listSubjectClasses(db, sid);
+    expect(
+      resolveSubjectSelection(
+        cl,
+        tree,
+        P({ classKind: 'cwiczenia', group: 9 }),
+      ),
+    ).toEqual(P({ classKind: 'cwiczenia' }));
+    expect(
+      resolveSubjectSelection([], tree, P({ classKind: 'wyklad', group: 1 })),
+    ).toEqual(P());
+    expect(
+      resolveSubjectSelection(cl, tree, P({ topic: ids.zad2, file: 4 })),
+    ).toEqual(
+      P({ classKind: 'cwiczenia', group: 2, topic: ids.zad2, file: 4 }),
+    );
+    expect(
+      resolveSubjectSelection(
+        cl,
+        tree,
+        P({ classKind: 'cwiczenia', group: 3, topic: 424242 }),
+      ),
+    ).toEqual(P({ classKind: 'cwiczenia', group: 3 }));
+  });
+});
+
+describe('pageExplorerFiles', () => {
+  it('pages the sorted selection and clamps the page', async () => {
+    const all = await listExplorerFiles(db, sid, P(), { sort: 'filename' });
+    const p1 = await pageExplorerFiles(db, sid, P(), {
+      sort: 'filename',
+      page: 1,
+      perPage: 2,
+    });
+    expect(p1.total).toBe(all.length);
+    expect(p1.pageCount).toBe(Math.ceil(all.length / 2));
+    expect(p1.files.map((f) => f.id)).toEqual(all.slice(0, 2).map((f) => f.id));
+    const last = await pageExplorerFiles(db, sid, P(), {
+      sort: 'filename',
+      page: 99,
+      perPage: 2,
+    });
+    expect(last.page).toBe(p1.pageCount);
+    expect(last.files.map((f) => f.id)).toEqual(
+      all.slice((p1.pageCount - 1) * 2).map((f) => f.id),
+    );
+  });
+  it('counts with tag and filename filters', async () => {
+    const r = await pageExplorerFiles(db, sid, P(), {
+      tagId: tagId,
+      page: 1,
+      perPage: 25,
+    });
+    expect(r.total).toBe(1);
+    expect(r.files[0]).toMatchObject({
+      filename: 'zadania_1.pdf',
+      subjectCode: 'FIZ',
+      mimeType: 'application/pdf',
+    });
+    const q = await pageExplorerFiles(db, sid, P(), {
+      q: '100%',
+      page: 1,
+      perPage: 25,
+    });
+    expect(q.files.map((f) => f.filename)).toEqual(['Notatki_100%.pdf']);
+  });
+});
+
+describe('listSubjectLecturers', () => {
+  it('lists class lecturers with group (null = all groups)', async () => {
+    expect(await listSubjectLecturers(db, sid)).toEqual([
+      {
+        className: 'Wykład',
+        groupName: null,
+        name: 'Jan Kowalski',
+        title: 'dr',
+        email: null,
+      },
+      {
+        className: 'Laboratorium',
+        groupName: null,
+        name: 'Jan Kowalski',
+        title: 'dr',
+        email: null,
+      },
+      {
+        className: 'Ćwiczenia',
+        groupName: 'Gr. 2',
+        name: 'Anna Nowak',
+        title: null,
+        email: null,
+      },
+    ]);
+    expect(await listSubjectLecturers(db, otherSid)).toEqual([]);
   });
 });

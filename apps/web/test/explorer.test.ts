@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   explorerHref,
   parseExplorerFilters,
+  parseExplorerPaging,
   parseExplorerParams,
 } from '../lib/explorer';
 
@@ -145,5 +146,24 @@ describe('explorerHref with filters', () => {
     expect(
       parseExplorerFilters(Object.fromEntries(new URLSearchParams(qs))),
     ).toEqual(f);
+  });
+});
+
+describe('parseExplorerPaging', () => {
+  it('defaults and whitelists per', () => {
+    expect(parseExplorerPaging({})).toEqual({ page: 1, perPage: 25 });
+    expect(parseExplorerPaging({ page: '3', per: '50' })).toEqual({
+      page: 3,
+      perPage: 50,
+    });
+    expect(parseExplorerPaging({ page: '0', per: '7' })).toEqual({
+      page: 1,
+      perPage: 25,
+    });
+  });
+  it('parses subject tabs', () => {
+    expect(parseExplorerParams({ tab: 'lecturers' }).tab).toBe('lecturers');
+    expect(parseExplorerParams({ tab: 'sql' }).tab).toBe('sql');
+    expect(parseExplorerParams({ tab: 'bogus' }).tab).toBe('explorer');
   });
 });

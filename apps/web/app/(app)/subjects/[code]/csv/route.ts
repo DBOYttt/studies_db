@@ -5,8 +5,9 @@ import {
   getSubject,
   getSubjectTree,
   listExplorerFiles,
+  listSubjectClasses,
   listSubjectTags,
-  resolveSelection,
+  resolveSubjectSelection,
 } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -24,11 +25,13 @@ export async function GET(
   if (!subject) return new Response('Not found', { status: 404 });
   const sp = Object.fromEntries(new URL(req.url).searchParams);
   const filters = parseExplorerFilters(sp);
-  const [tree, tags] = await Promise.all([
+  const [tree, tags, classList] = await Promise.all([
     getSubjectTree(db, subject.id),
     listSubjectTags(db, subject.id),
+    listSubjectClasses(db, subject.id),
   ]);
-  const sel = resolveSelection(tree, parseExplorerParams(sp));
+  // Same selection rules as the Pliki grid (an empty group exports no rows).
+  const sel = resolveSubjectSelection(classList, tree, parseExplorerParams(sp));
   const files = await listExplorerFiles(db, subject.id, sel, {
     tagId: tags.some((t) => t.id === filters.tag)
       ? (filters.tag ?? undefined)

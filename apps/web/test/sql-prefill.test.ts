@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildExplorerSql } from '../lib/sql-prefill';
+import { buildExplorerGridSql, buildExplorerSql } from '../lib/sql-prefill';
 
 const HEAD =
   'SELECT filename, topic_title, class_name, group_name, created_at FROM v_files';
@@ -49,5 +49,42 @@ describe('buildExplorerSql', () => {
     expect(buildExplorerSql('M', { topicId: Number.NaN })).not.toContain(
       'topic_id',
     );
+  });
+});
+
+describe('buildExplorerGridSql', () => {
+  it('default: grid columns, newest first, first page', () => {
+    expect(buildExplorerGridSql('MECH', {}, { page: 1, perPage: 25 })).toBe(
+      [
+        'SELECT material_id, topic_title, filename, preview_kind, uploader, created_at',
+        'FROM v_files',
+        "WHERE subject_code = 'MECH'",
+        'ORDER BY created_at DESC, material_id DESC',
+        'LIMIT 0, 25',
+      ].join('\n'),
+    );
+  });
+  it('selection, tag, filename filter, sort and page', () => {
+    const sql = buildExplorerGridSql(
+      'MECH',
+      { className: 'Laboratorium', groupName: 'Gr. 3' },
+      {
+        tagId: 7,
+        q: "50%_o'k",
+        sort: 'uploader',
+        dir: null,
+        page: 3,
+        perPage: 50,
+      },
+    );
+    expect(sql).toContain(
+      "WHERE subject_code = 'MECH'\n  AND class_name = 'Laboratorium'\n  AND group_name = 'Gr. 3'",
+    );
+    expect(sql).toContain(
+      'AND topic_id IN (SELECT topic_id FROM v_topic_tags WHERE tag_id = 7)',
+    );
+    expect(sql).toContain("AND filename LIKE '%50\\\\%\\\\_o''k%'");
+    expect(sql).toContain('ORDER BY uploader ASC, material_id ASC');
+    expect(sql).toMatch(/LIMIT 100, 50$/);
   });
 });

@@ -3,7 +3,9 @@ const dateFmt = new Intl.DateTimeFormat('pl-PL', {
   timeZone: 'Europe/Warsaw',
 });
 
-export const formatDate = (d: Date): string => dateFmt.format(d);
+/** Accepts a Date or an ISO string (JSON APIs carry dates as strings). */
+export const formatDate = (d: Date | string): string =>
+  dateFmt.format(typeof d === 'string' ? new Date(d) : d);
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

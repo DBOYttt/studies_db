@@ -67,11 +67,11 @@ const MapNodeView = memo(function MapNodeView({ data }: NodeProps<FlowNode>) {
           data.selected && data.kind !== 'subject' ? 'true' : undefined
         }
         style={{ width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT }}
-        className={`flex items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${
+        className={`flex items-center gap-2 rounded border px-2.5 text-left text-xs transition-colors ${
           data.kind === 'subject'
             ? 'border-accent-fill bg-accent-fill font-medium text-on-accent'
             : data.selected
-              ? 'border-accent bg-accent/10 text-fg'
+              ? 'border-accent bg-selected text-fg'
               : data.kind === 'more'
                 ? 'border-dashed border-line bg-panel text-muted hover:border-accent'
                 : 'border-line bg-panel text-fg hover:border-accent'
@@ -163,7 +163,7 @@ export function DataMap({
 
   if (tree.length === 0) {
     return (
-      <div className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
+      <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-line-strong bg-panel px-6 py-12 text-center">
         <TreeStructure size={28} aria-hidden="true" className="text-muted" />
         <p className="font-medium">
           Brak tematów. Oznacz posty na forum tagami klasy i grupy.
@@ -174,7 +174,7 @@ export function DataMap({
 
   return (
     <section
-      className="data-map h-[70vh] min-h-[420px] overflow-hidden rounded-xl border border-line bg-panel"
+      className="data-map h-[70vh] min-h-[420px] overflow-hidden rounded-md border border-line-strong bg-panel"
       aria-label="Mapa danych przedmiotu"
     >
       <ReactFlow

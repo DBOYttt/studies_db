@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { pluralPl } from '../lib/format';
+import { formatDate, pluralPl } from '../lib/format';
 
 describe('pluralPl', () => {
   const f = (n: number) => pluralPl(n, 'plik', 'pliki', 'plików');
@@ -17,5 +17,13 @@ describe('pluralPl', () => {
     ]) {
       expect(f(n), String(n)).toBe('plików');
     }
+  });
+});
+
+describe('formatDate', () => {
+  it('formats Date and ISO string alike (JSON API dates)', () => {
+    const iso = '2026-03-01T10:00:00.000Z';
+    expect(formatDate(iso)).toBe(formatDate(new Date(iso)));
+    expect(formatDate(iso)).toMatch(/2026/);
   });
 });

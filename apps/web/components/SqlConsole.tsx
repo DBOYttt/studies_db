@@ -20,7 +20,7 @@ import { ResultGrid } from '@/components/ResultGrid';
 import { SqlText } from '@/components/SqlText';
 import { toCells } from '@/lib/cells';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
-import type { ExplorerFile } from '@/lib/queries';
+import type { PreviewFile } from '@/lib/queries';
 import {
   columnInsertion,
   consoleColumns,
@@ -63,7 +63,7 @@ type ApiResult =
 
 type Preview =
   | { id: number; state: 'loading' }
-  | { id: number; state: 'done'; file: ExplorerFile | null }
+  | { id: number; state: 'done'; file: PreviewFile | null }
   | { id: number; state: 'error' };
 
 /** requireUser()/proxy send an expired session to /login-info (fetch follows). */
@@ -302,16 +302,10 @@ export function SqlConsole({
       if (res.status === 404) {
         setPreview({ id, state: 'done', file: null });
       } else if (res.ok) {
-        // JSON carries createdAt as an ISO string; the panel formats a Date.
-        const json = (await res.json()) as Omit<ExplorerFile, 'createdAt'> & {
-          createdAt: string;
-        };
+        // JSON carries createdAt as an ISO string; PreviewPanel accepts it.
+        const file = (await res.json()) as PreviewFile;
         if (seq !== previewSeq.current) return;
-        setPreview({
-          id,
-          state: 'done',
-          file: { ...json, createdAt: new Date(json.createdAt) },
-        });
+        setPreview({ id, state: 'done', file });
       } else {
         setPreview({ id, state: 'error' });
       }
@@ -612,7 +606,7 @@ function PreviewStatus({
     <aside
       aria-label="Podgląd pliku"
       aria-busy={!error}
-      className="fixed inset-0 z-40 flex flex-col gap-3 bg-panel p-4 lg:static lg:z-auto lg:rounded-xl lg:border lg:border-line"
+      className="fixed inset-0 z-40 flex flex-col gap-3 bg-page p-3 lg:static lg:z-auto lg:rounded-md lg:border lg:border-line-strong"
     >
       <p className={error ? 'text-err-fg' : 'text-muted'}>
         {error ? 'Nie udało się wczytać podglądu.' : 'Wczytywanie podglądu…'}

@@ -1,38 +1,81 @@
+import {
+  BookOpenText,
+  ChalkboardTeacher,
+  ChatsCircle,
+  Files,
+  Graph,
+  Stack,
+  TerminalWindow,
+  TreeStructure,
+  UsersThree,
+} from '@phosphor-icons/react/dist/ssr';
 import { notFound } from 'next/navigation';
+import type { Cell } from '@/components/DataGrid';
+import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { DataMap } from '@/components/explorer/DataMap';
-import { ExplorerShell } from '@/components/explorer/ExplorerShell';
-import { ExplorerTable } from '@/components/explorer/ExplorerTable';
-import { ExplorerTree } from '@/components/explorer/ExplorerTree';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
-import { SchemaDiagram } from '@/components/SchemaDiagram';
+import { TagSelect } from '@/components/explorer/TagSelect';
+import { ResultGrid } from '@/components/ResultGrid';
+import { SqlConsole } from '@/components/SqlConsole';
+import {
+  type Crumb,
+  ScreenHeader,
+  type Tab,
+} from '@/components/shell/ScreenHeader';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
+  type ExplorerFilters,
+  type ExplorerParams,
+  type ExplorerTab,
   explorerHref,
   parseExplorerFilters,
+  parseExplorerPaging,
   parseExplorerParams,
 } from '@/lib/explorer';
+import { formatDate } from '@/lib/format';
 import {
   getExplorerFile,
   getSubject,
   getSubjectTree,
-  listExplorerFiles,
+  listSubjectClasses,
+  listSubjectLecturers,
   listSubjectTags,
-  resolveSelection,
+  pageExplorerFiles,
+  resolveSubjectSelection,
+  type SubjectInfo,
 } from '@/lib/queries';
+import { DEFAULT_PER_PAGE } from '@/lib/result-grid';
 import { selectionPath } from '@/lib/schema-relations';
 import { requireUser } from '@/lib/session';
-import { buildExplorerSql } from '@/lib/sql-prefill';
+import { sqlHref } from '@/lib/sql-editor';
+import {
+  buildExplorerGridSql,
+  type ExplorerSqlSelection,
+  lit,
+  SUBJECT_FILE_COLUMNS,
+} from '@/lib/sql-prefill';
 import { listViewColumns } from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
 
+type SP = Record<string, string | string[] | undefined>;
+
+const MAX_PREFILL = 4000;
+const NONE_NAME = 'Bez kategorii';
+
+const errBox =
+  'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
+const warnBox =
+  'rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg';
+
+/** Subject screen (design 88-104, 330-352, 445-472): Pliki, Prowadzący, SQL, Mapa danych, Schemat. */
 export default async function SubjectPage({
   params,
   searchParams,
 }: {
   params: Promise<{ code: string }>;
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
+  searchParams: Promise<SP>;
 }) {
   await requireUser();
   const { code: rawCode } = await params;
@@ -42,161 +85,406 @@ export default async function SubjectPage({
   if (!subject) notFound();
   const code = subject.code;
 
-  const requested = parseExplorerParams(sp);
-  const parsedFilters = parseExplorerFilters(sp);
-  const [tree, subjectTags] = await Promise.all([
+  const [tree, subjectTags, classList] = await Promise.all([
     getSubjectTree(db, subject.id),
     listSubjectTags(db, subject.id),
+    listSubjectClasses(db, subject.id),
   ]);
-  const sel = resolveSelection(tree, requested);
+  const sel = resolveSubjectSelection(classList, tree, parseExplorerParams(sp));
+  const tab = sel.tab;
+  const parsed = parseExplorerFilters(sp);
+  // On the SQL tab `q` is the editor prefill, not the filename filter.
   // A tag from another subject is ignored rather than emptying the table.
-  const filters = {
-    ...parsedFilters,
-    tag: subjectTags.some((t) => t.id === parsedFilters.tag)
-      ? parsedFilters.tag
-      : null,
+  const filters: ExplorerFilters = {
+    ...parsed,
+    q: tab === 'sql' ? '' : parsed.q,
+    tag: subjectTags.some((t) => t.id === parsed.tag) ? parsed.tag : null,
   };
-  const isExplorer = sel.tab === 'explorer';
-  const [files, openFile] = await Promise.all([
-    isExplorer
-      ? listExplorerFiles(db, subject.id, sel, {
-          tagId: filters.tag ?? undefined,
-          q: filters.q,
-          sort: filters.sort ?? undefined,
-          dir: filters.dir ?? undefined,
-        })
-      : Promise.resolve([]),
-    isExplorer && sel.file != null
-      ? getExplorerFile(db, subject.id, sel.file)
-      : Promise.resolve(null),
-  ]);
 
-  let schemaColumns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
-  let schemaError: string | null = null;
-  if (sel.tab === 'schema') {
-    try {
-      schemaColumns = await listViewColumns(getRoPool());
-    } catch (err) {
-      schemaError = roErrorMessage(err);
-    }
-  }
-
-  const cls = tree.find((c) => c.kind === sel.classKind);
+  const cls =
+    sel.classKind === 'none'
+      ? undefined
+      : classList.find((c) => c.kind === sel.classKind);
   const grp = cls?.groups.find((g) => g.number === sel.group);
+  const treeCls = tree.find((c) => c.kind === sel.classKind);
   const topic =
     sel.topic == null
       ? undefined
-      : [...(grp?.topics ?? []), ...(cls?.topics ?? [])].find(
-          (t) => t.id === sel.topic,
-        );
-  const path = selectionPath(sel, {
-    subject: subject.name,
-    subjectId: subject.id,
-    className: cls?.name,
-    classId: cls?.id,
-    groupName: grp?.name,
-    groupId: grp?.id,
-  });
-  const node = (p: Parameters<typeof explorerHref>[1]) =>
-    explorerHref(code, p, filters);
-  const crumbs = [{ label: subject.name, href: node({}) }];
-  if (cls) {
-    crumbs.push({ label: cls.name, href: node({ classKind: cls.kind }) });
-  }
-  if (cls && grp) {
+      : [
+          ...(treeCls?.topics ?? []),
+          ...(treeCls?.groups.flatMap((g) => g.topics) ?? []),
+        ].find((t) => t.id === sel.topic);
+  const className = sel.classKind === 'none' ? NONE_NAME : cls?.name;
+
+  // Selection without file/tab; filters kept (tag, q, sort, dir).
+  const at = (p: Partial<ExplorerParams>, f: Partial<ExplorerFilters> = {}) =>
+    explorerHref(
+      code,
+      {
+        classKind: sel.classKind,
+        group: sel.group,
+        topic: sel.topic,
+        ...p,
+      },
+      { ...filters, ...f },
+    );
+
+  const crumbs: Crumb[] = [
+    {
+      icon: BookOpenText,
+      kind: 'Przedmiot:',
+      label: subject.name,
+      href: explorerHref(code, {}, filters),
+    },
+  ];
+  if (sel.classKind && className) {
     crumbs.push({
-      label: grp.name,
-      href: node({ classKind: cls.kind, group: grp.number }),
+      icon: Stack,
+      label: className,
+      href: explorerHref(code, { classKind: sel.classKind }, filters),
     });
   }
-  if (cls && topic) {
+  if (sel.classKind && grp) {
     crumbs.push({
+      icon: UsersThree,
+      label: grp.name,
+      href: explorerHref(
+        code,
+        { classKind: sel.classKind, group: grp.number },
+        filters,
+      ),
+    });
+  }
+  if (topic) {
+    crumbs.push({
+      icon: ChatsCircle,
+      kind: 'Temat:',
       label: topic.title,
-      href: node({ classKind: cls.kind, group: grp?.number, topic: topic.id }),
+      href: at({}),
     });
   }
 
-  const scopeLabel = topic
-    ? 'w tym temacie'
-    : grp
-      ? 'w tej grupie'
-      : cls
-        ? 'w tej kategorii'
-        : 'w tym przedmiocie';
-  const sqlHref = `/sql?${new URLSearchParams({
-    q: buildExplorerSql(code, {
-      className: cls && cls.kind !== 'none' ? cls.name : undefined,
-      noClass: cls?.kind === 'none',
-      groupName: grp?.name,
-      topicId: sel.topic ?? undefined,
-    }),
-  })}`;
-  const csvQs = new URLSearchParams(
-    explorerHref(code, { ...sel, file: null, tab: 'explorer' }, filters).split(
-      '?',
-    )[1] ?? '',
-  ).toString();
-  const csvHref = `/subjects/${encodeURIComponent(code)}/csv${csvQs ? `?${csvQs}` : ''}`;
-  const closeHref = explorerHref(code, { ...sel, file: null }, filters);
+  const TAB_DEFS: [ExplorerTab, string, Tab['icon']][] = [
+    ['explorer', 'Pliki', Files],
+    ['lecturers', 'Prowadzący', ChalkboardTeacher],
+    ['sql', 'SQL', TerminalWindow],
+    ['map', 'Mapa danych', Graph],
+    ['schema', 'Schemat', TreeStructure],
+  ];
+  const tabs: Tab[] = TAB_DEFS.map(([key, label, icon]) => ({
+    label,
+    icon,
+    href: at({ tab: key }),
+    active: key === tab,
+  }));
+
+  const tagOptions = [
+    { value: '', label: 'Wszystkie', href: at({ tab }, { tag: null }) },
+    ...subjectTags.map((t) => ({
+      value: String(t.id),
+      label: t.name,
+      href: at({ tab }, { tag: t.id }),
+    })),
+  ];
+
+  // SQL tab keeps the selection (nav highlight, crumbs) but no grid filters.
+  const sqlPath = at(
+    { tab: 'sql' },
+    { tag: null, q: '', sort: null, dir: null },
+  );
+  const sqlSel: ExplorerSqlSelection = {
+    className: cls?.name,
+    noClass: sel.classKind === 'none',
+    groupName: grp?.name,
+    topicId: sel.topic ?? undefined,
+  };
 
   return (
-    <ExplorerShell
-      title={subject.name}
-      meta={`${subject.code}, semestr ${subject.semester}, ${subject.ects} ECTS`}
-      description={subject.description}
-      crumbs={crumbs}
-      tab={sel.tab}
-      tabHref={(tab) =>
-        explorerHref(code, { ...sel, file: null, tab }, filters)
-      }
-    >
-      {sel.tab === 'map' ? (
-        <DataMap subject={{ code, name: subject.name }} tree={tree} sel={sel} />
-      ) : sel.tab === 'schema' ? (
-        schemaColumns ? (
-          <SchemaDiagram
-            columns={schemaColumns}
-            highlight={path.views}
-            caption={path.caption}
-          />
-        ) : (
-          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-            {schemaError}
-          </p>
-        )
-      ) : tree.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
-          <p className="font-medium">Brak tematów w tym przedmiocie</p>
-          <p className="mt-1 text-sm text-muted">
-            Tematy pojawią się po dodaniu wątku w kanale przedmiotu na
-            Discordzie.
-          </p>
-        </div>
-      ) : (
-        <div
-          className={`grid gap-4 md:grid-cols-[220px_minmax(0,1fr)] ${
-            sel.file != null ? 'lg:grid-cols-[220px_minmax(0,1fr)_360px]' : ''
-          }`}
-        >
-          <ExplorerTree code={code} tree={tree} sel={sel} filters={filters} />
-          <ExplorerTable
+    <>
+      <ScreenHeader crumbs={crumbs} tabs={tabs} />
+      <div className="flex flex-col gap-3.5">
+        <SubjectHeader
+          subject={subject}
+          tag={filters.tag == null ? '' : String(filters.tag)}
+          tagOptions={tagOptions}
+        />
+        {tab === 'explorer' && (
+          <FilesTab
+            subjectId={subject.id}
             code={code}
-            files={files}
             sel={sel}
             filters={filters}
-            subjectTags={subjectTags}
-            selectedFileId={openFile?.id ?? null}
-            scopeLabel={scopeLabel}
-            sqlHref={sqlHref}
-            csvHref={csvHref}
+            sp={sp}
+            sqlSel={sqlSel}
+            sqlPath={sqlPath}
           />
-          {sel.file != null && (
-            <div className="lg:sticky lg:top-4 lg:self-start">
-              <PreviewPanel file={openFile} closeHref={closeHref} />
-            </div>
-          )}
+        )}
+        {tab === 'lecturers' && <LecturersTab subjectId={subject.id} />}
+        {tab === 'sql' && <SqlTab code={code} q={sp.q} editPath={sqlPath} />}
+        {tab === 'map' && (
+          <DataMap
+            subject={{ code, name: subject.name }}
+            tree={tree}
+            sel={sel}
+          />
+        )}
+        {tab === 'schema' && (
+          <SchemaTab
+            path={selectionPath(sel, {
+              subject: subject.name,
+              subjectId: subject.id,
+              className,
+              classId: cls?.id ?? null,
+              groupName: grp?.name,
+              groupId: grp?.id,
+            })}
+          />
+        )}
+      </div>
+    </>
+  );
+}
+
+function SubjectHeader({
+  subject,
+  tag,
+  tagOptions,
+}: {
+  subject: SubjectInfo;
+  tag: string;
+  tagOptions: { value: string; label: string; href: string }[];
+}) {
+  return (
+    <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
+      <div className="min-w-0">
+        <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">
+          {subject.name}
+        </h1>
+        <p className="mt-0.5 font-mono text-xs text-muted">
+          {subject.code}, semestr {subject.semester}, {subject.ects} ECTS
+        </p>
+        {subject.description && (
+          <p className="mt-1.5 max-w-[65ch] whitespace-pre-line text-muted">
+            {subject.description}
+          </p>
+        )}
+      </div>
+      <TagSelect value={tag} options={tagOptions} />
+    </div>
+  );
+}
+
+async function FilesTab({
+  subjectId,
+  code,
+  sel,
+  filters,
+  sp,
+  sqlSel,
+  sqlPath,
+}: {
+  subjectId: number;
+  code: string;
+  sel: ExplorerParams;
+  filters: ExplorerFilters;
+  sp: SP;
+  sqlSel: ExplorerSqlSelection;
+  sqlPath: string;
+}) {
+  const db = getDb();
+  const paging = parseExplorerPaging(sp);
+  const [res, openFile] = await Promise.all([
+    pageExplorerFiles(db, subjectId, sel, {
+      tagId: filters.tag ?? undefined,
+      q: filters.q,
+      sort: filters.sort ?? undefined,
+      dir: filters.dir ?? undefined,
+      page: paging.page,
+      perPage: paging.perPage,
+    }),
+    sel.file != null
+      ? getExplorerFile(db, subjectId, sel.file)
+      : Promise.resolve(null),
+  ]);
+
+  // Current grid params (no file): selection, filters, per, page.
+  const listHref = explorerHref(
+    code,
+    { ...sel, file: null, tab: 'explorer' },
+    filters,
+  );
+  const basePath = listHref.split('?')[0];
+  const keep = new URLSearchParams(listHref.split('?')[1] ?? '');
+  const csvHref = `/subjects/${encodeURIComponent(code)}/csv${keep.size ? `?${keep}` : ''}`;
+  if (paging.perPage !== DEFAULT_PER_PAGE) {
+    keep.set('per', String(paging.perPage));
+  }
+  if (res.page > 1) keep.set('page', String(res.page));
+  const closeHref = keep.size ? `${basePath}?${keep}` : basePath;
+
+  const sort = filters.sort ?? 'created';
+  const dir = filters.dir ?? (filters.sort ? 'asc' : 'desc');
+  const gridSql = buildExplorerGridSql(code, sqlSel, {
+    tagId: filters.tag,
+    q: filters.q,
+    sort: filters.sort,
+    dir: filters.dir,
+    page: res.page,
+    perPage: paging.perPage,
+  });
+
+  const rows: Cell[][] = res.files.map((f) => [
+    f.id,
+    {
+      text: f.topicTitle,
+      href: explorerHref(code, { topic: f.topicId }, filters),
+    },
+    f.filename,
+    f.previewKind,
+    f.uploader,
+    formatDate(f.createdAt),
+  ]);
+
+  return (
+    <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
+      <div className="min-w-0 flex-1">
+        <ResultGrid
+          columns={[...SUBJECT_FILE_COLUMNS]}
+          rows={rows}
+          sql={gridSql}
+          total={res.total}
+          nav={{ basePath, query: keep.toString(), previewParam: 'file' }}
+          paging={{
+            page: res.page,
+            pageCount: res.pageCount,
+            perPage: paging.perPage,
+          }}
+          sorting={{
+            sort,
+            dir,
+            sortKeys: [null, 'topic', 'filename', null, 'uploader', 'created'],
+          }}
+          fileColumn={0}
+          linkColumn={2}
+          badges={res.files.map((f) => f.status)}
+          selectedId={sel.file}
+          editSqlHref={sqlHref(sqlPath, gridSql)}
+          csvHref={csvHref}
+          name={`${code}-pliki`}
+        />
+      </div>
+      {sel.file != null && (
+        <div className="lg:sticky lg:top-12 lg:w-[360px] lg:shrink-0">
+          <PreviewPanel file={openFile} closeHref={closeHref} />
         </div>
       )}
-    </ExplorerShell>
+    </div>
+  );
+}
+
+const th = 'border-b border-line-strong px-2.5 py-[7px] font-semibold';
+const td = 'border-b border-line px-2.5 py-1';
+
+async function LecturersTab({ subjectId }: { subjectId: number }) {
+  const rows = await listSubjectLecturers(getDb(), subjectId);
+  return (
+    <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
+      <table className="w-full min-w-[560px] border-collapse">
+        <thead>
+          <tr className="bg-surface text-left">
+            <th className={th}>Zajęcia</th>
+            <th className={th}>Grupa</th>
+            <th className={th}>Prowadzący</th>
+            <th className={th}>E-mail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((l, i) => (
+            <tr
+              // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
+              key={i}
+              className={`hover:bg-list-hover ${i % 2 ? 'bg-zebra' : ''}`}
+            >
+              <td className={td}>{l.className}</td>
+              <td className={`${td} text-muted`}>
+                {l.groupName ?? 'wszystkie'}
+              </td>
+              <td className={td}>
+                {[l.title, l.name].filter(Boolean).join(' ')}
+              </td>
+              <td className={`${td} font-mono text-xs`}>{l.email || '—'}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={4} className="p-6 text-center text-muted">
+                Zapytanie nie zwróciło wierszy.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+async function SqlTab({
+  code,
+  q,
+  editPath,
+}: {
+  code: string;
+  q: string | string[] | undefined;
+  editPath: string;
+}) {
+  // Prefill only: the editor shows it, the user runs it.
+  const initialQuery =
+    typeof q === 'string' && q.trim()
+      ? q.slice(0, MAX_PREFILL)
+      : `SELECT * FROM v_files WHERE subject_code = ${lit(code)}`;
+  let schema: Record<string, string[]> | undefined;
+  let error: string | null = null;
+  try {
+    schema = await listViewColumns(getRoPool());
+  } catch (err) {
+    error = roErrorMessage(err);
+  }
+  return (
+    <div className="flex flex-col gap-3">
+      {error && (
+        <div role="alert" className={warnBox}>
+          Nie udało się wczytać listy kolumn: {error}
+        </div>
+      )}
+      <SqlConsole
+        key={initialQuery}
+        initialQuery={initialQuery}
+        schema={schema ?? {}}
+        editPath={editPath}
+      />
+    </div>
+  );
+}
+
+async function SchemaTab({ path }: { path: ReturnType<typeof selectionPath> }) {
+  let columns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
+  let error: string | null = null;
+  try {
+    columns = await listViewColumns(getRoPool());
+  } catch (err) {
+    error = roErrorMessage(err);
+  }
+  if (!columns) {
+    return (
+      <div role="alert" className={errBox}>
+        {error}
+      </div>
+    );
+  }
+  return (
+    <DesignerDiagram
+      columns={columns}
+      highlight={{ views: path.views, caption: path.caption }}
+    />
   );
 }

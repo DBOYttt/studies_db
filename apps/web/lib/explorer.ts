@@ -1,6 +1,8 @@
 import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
+import { DEFAULT_PER_PAGE, PER_PAGE_OPTIONS } from './result-grid';
 
-export type ExplorerTab = 'explorer' | 'map' | 'schema';
+/** Subject screen tabs: 'explorer' = Pliki (no `tab` param). */
+export type ExplorerTab = 'explorer' | 'lecturers' | 'sql' | 'map' | 'schema';
 
 export type ExplorerParams = {
   classKind: ClassKind | 'none' | null;
@@ -12,7 +14,13 @@ export type ExplorerParams = {
 
 type SearchParams = Record<string, string | string[] | undefined>;
 
-const TABS: readonly ExplorerTab[] = ['explorer', 'map', 'schema'];
+const TABS: readonly ExplorerTab[] = [
+  'explorer',
+  'lecturers',
+  'sql',
+  'map',
+  'schema',
+];
 
 function one(v: string | string[] | undefined): string | undefined {
   return typeof v === 'string' ? v : undefined;
@@ -84,4 +92,18 @@ export function explorerHref(
   if (f.dir) q.set('dir', f.dir);
   const s = q.toString();
   return `/subjects/${encodeURIComponent(code)}${s ? `?${s}` : ''}`;
+}
+
+/** Pliki grid paging: `page` (≥1, clamped by the query) and `per` (25/50/100). */
+export function parseExplorerPaging(sp: SearchParams): {
+  page: number;
+  perPage: number;
+} {
+  const per = Number(one(sp.per));
+  return {
+    page: posInt(one(sp.page)) ?? 1,
+    perPage: (PER_PAGE_OPTIONS as readonly number[]).includes(per)
+      ? per
+      : DEFAULT_PER_PAGE,
+  };
 }

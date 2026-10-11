@@ -423,6 +423,8 @@ export function resolveSelection(
 export type ExplorerFile = {
   id: number;
   filename: string;
+  subjectCode: string;
+  mimeType: string;
   topicId: number;
   topicTitle: string;
   className: string;
@@ -435,6 +437,11 @@ export type ExplorerFile = {
   discordUrl: string | null;
 };
 
+/** ExplorerFile as it arrives over JSON (`/api/material/[id]`): dates are ISO strings. */
+export type PreviewFile = Omit<ExplorerFile, 'createdAt'> & {
+  createdAt: Date | string;
+};
+
 const MAX_FILES = 500;
 
 function explorerFileSelect(db: Db) {
@@ -442,6 +449,8 @@ function explorerFileSelect(db: Db) {
     .select({
       id: materials.id,
       filename: materials.originalFilename,
+      subjectCode: subjects.code,
+      mimeType: materials.mimeType,
       topicId: topics.id,
       topicTitle: topics.title,
       className: classes.name,
@@ -456,6 +465,7 @@ function explorerFileSelect(db: Db) {
     })
     .from(materials)
     .innerJoin(topics, eq(topics.id, materials.topicId))
+    .innerJoin(subjects, eq(subjects.id, topics.subjectId))
     .innerJoin(users, eq(users.id, materials.uploaderId))
     .leftJoin(classes, eq(classes.id, topics.classId))
     .leftJoin(classGroups, eq(classGroups.id, topics.groupId));
@@ -478,17 +488,18 @@ function toExplorerFile(
   };
 }
 
-export async function listExplorerFiles(
-  db: Db,
+export type ExplorerFileOpts = {
+  tagId?: number;
+  q?: string;
+  sort?: SortKey;
+  dir?: SortDir;
+};
+
+function explorerFileWhere(
   subjectId: number,
   sel: ExplorerParams,
-  opts: {
-    tagId?: number;
-    q?: string;
-    sort?: SortKey;
-    dir?: SortDir;
-  },
-): Promise<ExplorerFile[]> {
+  opts: ExplorerFileOpts,
+): SQL | undefined {
   const conds: SQL[] = [
     eq(topics.subjectId, subjectId),
     isNull(topics.deletedAt),
@@ -512,6 +523,10 @@ export async function listExplorerFiles(
       sql`LOWER(${materials.originalFilename}) LIKE LOWER(${`%${esc}%`}) ESCAPE '\\\\'`,
     );
   }
+  return and(...conds);
+}
+
+function explorerFileOrder(opts: ExplorerFileOpts) {
   const sortCols = {
     topic: topics.title,
     filename: materials.originalFilename,
@@ -523,11 +538,55 @@ export async function listExplorerFiles(
     opts.sort && Object.hasOwn(sortCols, opts.sort) ? opts.sort : undefined;
   const col = sortCols[sortKey ?? 'created'];
   const ord = (opts.dir ?? (sortKey ? 'asc' : 'desc')) === 'asc' ? asc : desc;
+  return [ord(col), ord(materials.id)] as const;
+}
+
+/** Files of the selection (first 500), as in the CSV export. */
+export async function listExplorerFiles(
+  db: Db,
+  subjectId: number,
+  sel: ExplorerParams,
+  opts: ExplorerFileOpts,
+): Promise<ExplorerFile[]> {
   const rows = await explorerFileSelect(db)
-    .where(and(...conds))
-    .orderBy(ord(col), ord(materials.id))
+    .where(explorerFileWhere(subjectId, sel, opts))
+    .orderBy(...explorerFileOrder(opts))
     .limit(MAX_FILES);
   return rows.map(toExplorerFile);
+}
+
+/**
+ * One page of the selection's files plus the total count (subject Pliki grid).
+ * `page` is clamped to the last page.
+ */
+export async function pageExplorerFiles(
+  db: Db,
+  subjectId: number,
+  sel: ExplorerParams,
+  opts: ExplorerFileOpts & { page: number; perPage: number },
+): Promise<{
+  files: ExplorerFile[];
+  total: number;
+  page: number;
+  pageCount: number;
+}> {
+  const where = explorerFileWhere(subjectId, sel, opts);
+  const [{ n }] = await db
+    .select({ n: sql<number>`COUNT(*)`.mapWith(Number) })
+    .from(materials)
+    .innerJoin(topics, eq(topics.id, materials.topicId))
+    .innerJoin(users, eq(users.id, materials.uploaderId))
+    .leftJoin(classes, eq(classes.id, topics.classId))
+    .leftJoin(classGroups, eq(classGroups.id, topics.groupId))
+    .where(where);
+  const pageCount = Math.max(1, Math.ceil(n / opts.perPage));
+  const page = Math.min(Math.max(1, Math.floor(opts.page)), pageCount);
+  const rows = await explorerFileSelect(db)
+    .where(where)
+    .orderBy(...explorerFileOrder(opts))
+    .limit(opts.perPage)
+    .offset((page - 1) * opts.perPage);
+  return { files: rows.map(toExplorerFile), total: n, page, pageCount };
 }
 
 export async function getExplorerFile(
@@ -563,6 +622,135 @@ export async function getMaterialFile(
     )
     .limit(1);
   return r ? toExplorerFile(r) : null;
+}
+
+export type SubjectClass = {
+  id: number;
+  kind: ClassKind;
+  name: string;
+  groups: { id: number; number: number; name: string }[];
+};
+
+/** Every class and group of a subject, also those without topics (nav tree links to them). */
+export async function listSubjectClasses(
+  db: Db,
+  subjectId: number,
+): Promise<SubjectClass[]> {
+  const rows = await db
+    .select({
+      id: classes.id,
+      kind: classes.kind,
+      name: classes.name,
+      groupId: classGroups.id,
+      groupNumber: classGroups.number,
+      groupName: classGroups.name,
+    })
+    .from(classes)
+    .leftJoin(classGroups, eq(classGroups.classId, classes.id))
+    .where(eq(classes.subjectId, subjectId))
+    .orderBy(asc(classes.id), asc(classGroups.number));
+  const byId = new Map<number, SubjectClass>();
+  for (const r of rows) {
+    let c = byId.get(r.id);
+    if (!c) {
+      c = { id: r.id, kind: r.kind, name: r.name, groups: [] };
+      byId.set(r.id, c);
+    }
+    if (r.groupId != null && r.groupNumber != null) {
+      c.groups.push({
+        id: r.groupId,
+        number: r.groupNumber,
+        name: r.groupName ?? groupName(r.groupNumber),
+      });
+    }
+  }
+  return [...byId.values()].sort(
+    (a, b) => KIND_ORDER.indexOf(a.kind) - KIND_ORDER.indexOf(b.kind),
+  );
+}
+
+/**
+ * URL selection checked against the subject: class and group must exist (they
+ * may be empty, so the grid shows no rows rather than the whole subject); a
+ * topic must be a live topic of the subject and then fixes class/group itself
+ * (as resolveSelection does). Invalid segments are dropped.
+ */
+export function resolveSubjectSelection(
+  classList: SubjectClass[],
+  tree: TreeClass[],
+  p: ExplorerParams,
+): ExplorerParams {
+  if (p.topic != null) {
+    const byTopic = resolveSelection(tree, p);
+    if (byTopic.topic != null) return byTopic;
+  }
+  const out: ExplorerParams = {
+    ...p,
+    classKind: null,
+    group: null,
+    topic: null,
+  };
+  if (p.classKind === 'none') {
+    out.classKind = 'none';
+    return out;
+  }
+  const cls = p.classKind
+    ? classList.find((c) => c.kind === p.classKind)
+    : undefined;
+  if (!cls) return out;
+  out.classKind = cls.kind;
+  if (p.group != null && cls.groups.some((g) => g.number === p.group)) {
+    out.group = p.group;
+  }
+  return out;
+}
+
+export type SubjectLecturer = {
+  className: string;
+  groupName: string | null;
+  name: string;
+  title: string | null;
+  email: string | null;
+};
+
+/** class_lecturers of a subject (v_class_lecturers joined to names), class order then group. */
+export async function listSubjectLecturers(
+  db: Db,
+  subjectId: number,
+): Promise<SubjectLecturer[]> {
+  const rows = await db
+    .select({
+      kind: classes.kind,
+      className: classes.name,
+      groupNumber: classGroups.number,
+      groupName: classGroups.name,
+      name: lecturers.name,
+      title: lecturers.title,
+      email: lecturers.email,
+    })
+    .from(classLecturers)
+    .innerJoin(classes, eq(classes.id, classLecturers.classId))
+    .innerJoin(lecturers, eq(lecturers.id, classLecturers.lecturerId))
+    .leftJoin(classGroups, eq(classGroups.id, classLecturers.groupId))
+    .where(eq(classes.subjectId, subjectId))
+    .orderBy(asc(classes.id), asc(classGroups.number), asc(lecturers.name));
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort(
+      (a, b) =>
+        KIND_ORDER.indexOf(a.r.kind) - KIND_ORDER.indexOf(b.r.kind) ||
+        a.i - b.i,
+    )
+    .map(({ r }) => ({
+      className: r.className,
+      groupName:
+        r.groupNumber == null
+          ? null
+          : (r.groupName ?? groupName(r.groupNumber)),
+      name: r.name,
+      title: r.title,
+      email: r.email,
+    }));
 }
 
 // ---------------------------------------------------------------------------
