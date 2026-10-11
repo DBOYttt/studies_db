@@ -31,7 +31,15 @@ export function PreviewPanel({
   const router = useRouter();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') router.push(closeHref);
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Escape inside a form field belongs to that field (e.g. clearing search).
+      const t = e.target;
+      if (
+        t instanceof HTMLElement &&
+        (t.isContentEditable || t.closest('input, textarea, select'))
+      )
+        return;
+      router.push(closeHref);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);

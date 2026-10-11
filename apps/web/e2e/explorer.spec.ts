@@ -37,6 +37,17 @@ test('drill down class > group > file, map and schema follow the selection', asy
     timeout: 30_000,
   });
 
+  // Escape while typing in the search box must not close the preview.
+  const search = page.getByRole('searchbox', {
+    name: 'Filtruj po nazwie pliku',
+  });
+  await search.fill('lab');
+  await search.press('Escape');
+  // router.push is async: give a wrongly-handled Escape time to navigate.
+  await page.waitForTimeout(750);
+  await expect(page).toHaveURL(/file=\d+/);
+  await expect(panel).toBeVisible();
+
   // Data map: the group node is highlighted; a topic node returns to the explorer.
   await page.getByRole('link', { name: 'Mapa danych' }).click();
   await expect(page).toHaveURL(/tab=map/);
