@@ -138,7 +138,7 @@ export function SchemaDiagram({
       focusable: false,
       zIndex: e.highlighted ? 1 : 0,
       style: {
-        stroke: e.highlighted ? 'var(--accent)' : 'var(--border)',
+        stroke: e.highlighted ? 'var(--accent)' : 'var(--edge)',
         strokeWidth: e.highlighted ? 2.5 : 1.5,
       },
     }));

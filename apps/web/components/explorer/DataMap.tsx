@@ -149,7 +149,7 @@ export function DataMap({
       type: 'smoothstep',
       focusable: false,
       style: {
-        stroke: e.selected ? 'var(--accent)' : 'var(--border)',
+        stroke: e.selected ? 'var(--accent)' : 'var(--edge)',
         strokeWidth: e.selected ? 2 : 1.5,
       },
     }));

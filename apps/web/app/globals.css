@@ -5,6 +5,9 @@
  * --accent: fills, selection, indicators (emerald-600 light / emerald-500 dark).
  * --accent-ink: accent used as text or under white text (emerald-700 / emerald-400),
  *   chosen for WCAG AA contrast on the panel colors.
+ * --edge: idle diagram edges; zinc-500 in both modes (zinc-400 is only 2.56:1 on
+ *   white). Contrast: light 4.83:1 on --panel / 4.63:1 on --bg, dark 3.90:1 on
+ *   --panel / 4.12:1 on --bg (WCAG 1.4.11 needs 3:1).
  * Radii: controls 8px (rounded-lg), panels 12px (rounded-xl), chips full.
  */
 :root {
@@ -12,6 +15,7 @@
   --fg: #18181b;
   --muted: #52525b;
   --border: #e4e4e7;
+  --edge: #71717a;
   --surface: #f4f4f5;
   --panel: #ffffff;
   --accent: #059669;
@@ -26,6 +30,7 @@
     --fg: #e4e4e7;
     --muted: #a1a1aa;
     --border: #27272a;
+    --edge: #71717a;
     --surface: #18181b;
     --panel: #111113;
     --accent: #10b981;
