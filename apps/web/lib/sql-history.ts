@@ -20,11 +20,10 @@ export function readSqlHistory(): string[] {
   if (!s) return [];
   try {
     const v: unknown = JSON.parse(s.getItem(SQL_HISTORY_KEY) ?? '[]');
-    return Array.isArray(v)
-      ? v
-          .filter((x): x is string => typeof x === 'string')
-          .slice(0, SQL_HISTORY_MAX)
-      : [];
+    if (!Array.isArray(v)) return [];
+    // Unique strings only (older or hand-edited storage may hold duplicates).
+    const unique = new Set(v.filter((x): x is string => typeof x === 'string'));
+    return [...unique].slice(0, SQL_HISTORY_MAX);
   } catch {
     return [];
   }

@@ -5,9 +5,13 @@
  * Zinc neutrals, one phpMyAdmin-blue accent.
  * --bg page, --surface nav panel, --bar top/tab/console bars, --panel boxes.
  * --border light rules, --border-strong control and panel edges.
- * --accent: fills and indicators (white text on it >= 5:1; >= 3:1 against
- *   --bg as a focus ring). --accent-ink: accent used as text (links, tree,
- *   tabs), >= 4.5:1 on --bg, --bar, --surface and --selected in both modes.
+ * Accent roles (never mix them):
+ * --accent: indicators and focus ring (>= 3:1 against --bg in both modes).
+ * --accent-fill / --accent-fill-hover: backgrounds under --on-accent (white)
+ *   text, e.g. primary buttons; white on them >= 5:1 in both modes
+ *   (light 7.37 / 10.07, dark 5.16 / 6.71).
+ * --accent-ink / --accent-ink-hover: accent used as text (links, tree, tabs),
+ *   >= 4.5:1 on --bg, --bar, --surface and --selected in both modes.
  * --edge: idle diagram edges, zinc-500 in both modes (>= 3:1, WCAG 1.4.11).
  * Radii: controls 4px (rounded), panels 6px (rounded-md), tabs 6px 6px 0 0,
  *   chips full.
@@ -26,8 +30,10 @@
   --panel: #ffffff;
   --zebra: #fafafa;
   --accent: #235a81;
-  --accent-hover: #1b4565;
   --accent-ink: #235a81;
+  --accent-ink-hover: #1b4565;
+  --accent-fill: #235a81;
+  --accent-fill-hover: #1b4565;
   --on-accent: #ffffff;
   --selected: #dbe7f3;
   --row-hover: #e8f0fa;
@@ -67,8 +73,10 @@
     --panel: #111113;
     --zebra: #111113;
     --accent: #3371a8;
-    --accent-hover: #a9cfec;
     --accent-ink: #84b9e2;
+    --accent-ink-hover: #a9cfec;
+    --accent-fill: #3371a8;
+    --accent-fill-hover: #2a5f8f;
     --on-accent: #ffffff;
     --selected: #1c3349;
     --row-hover: #16283a;
@@ -109,8 +117,10 @@
   --color-panel: var(--panel);
   --color-zebra: var(--zebra);
   --color-accent: var(--accent);
-  --color-accent-hover: var(--accent-hover);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-ink-hover: var(--accent-ink-hover);
+  --color-accent-fill: var(--accent-fill);
+  --color-accent-fill-hover: var(--accent-fill-hover);
   --color-on-accent: var(--on-accent);
   --color-selected: var(--selected);
   --color-row-hover: var(--row-hover);
@@ -158,7 +168,7 @@ a:not([class]) {
   color: var(--accent-ink);
 }
 a:not([class]):hover {
-  color: var(--accent-hover);
+  color: var(--accent-ink-hover);
   text-decoration: underline;
 }
 
@@ -166,7 +176,7 @@ a.link {
   color: var(--accent-ink);
 }
 a.link:hover {
-  color: var(--accent-hover);
+  color: var(--accent-ink-hover);
   text-decoration: underline;
 }
 

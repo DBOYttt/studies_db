@@ -69,7 +69,7 @@ const MapNodeView = memo(function MapNodeView({ data }: NodeProps<FlowNode>) {
         style={{ width: MAP_NODE_WIDTH, height: MAP_NODE_HEIGHT }}
         className={`flex items-center gap-2 rounded-lg border px-2.5 text-left text-xs transition-colors ${
           data.kind === 'subject'
-            ? 'border-accent-ink bg-accent-ink font-medium text-on-accent'
+            ? 'border-accent-fill bg-accent-fill font-medium text-on-accent'
             : data.selected
               ? 'border-accent bg-accent/10 text-fg'
               : data.kind === 'more'
@@ -96,7 +96,7 @@ const MapNodeView = memo(function MapNodeView({ data }: NodeProps<FlowNode>) {
           <span
             className={`shrink-0 rounded-full px-1.5 py-0.5 font-mono text-[10px] ${
               data.kind === 'subject'
-                ? 'bg-on-accent text-accent-ink'
+                ? 'bg-on-accent text-accent-fill'
                 : 'bg-surface text-muted'
             }`}
           >

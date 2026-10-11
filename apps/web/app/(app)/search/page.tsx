@@ -67,7 +67,7 @@ export default async function SearchPage({
         </select>
         <button
           type="submit"
-          className="rounded bg-[var(--accent)] px-4 py-2 text-sm font-semibold text-white dark:text-black"
+          className="rounded bg-accent-fill px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-fill-hover"
         >
           Szukaj
         </button>

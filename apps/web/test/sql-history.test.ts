@@ -32,7 +32,7 @@ describe('sql history', () => {
     expect(readSqlHistory()).toEqual([]);
     store.set(SQL_HISTORY_KEY, JSON.stringify({ a: 1 }));
     expect(readSqlHistory()).toEqual([]);
-    store.set(SQL_HISTORY_KEY, JSON.stringify(['a', 3, 'b']));
+    store.set(SQL_HISTORY_KEY, JSON.stringify(['a', 3, 'b', 'a']));
     expect(readSqlHistory()).toEqual(['a', 'b']);
   });
 

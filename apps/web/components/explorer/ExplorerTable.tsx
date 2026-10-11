@@ -112,7 +112,7 @@ export function ExplorerTable({
           </label>
           <button
             type="submit"
-            className="rounded-lg bg-accent-ink px-3 py-2 text-sm font-medium text-white dark:bg-accent dark:text-on-accent"
+            className="rounded-lg bg-accent-fill px-3 py-2 text-sm font-medium text-on-accent hover:bg-accent-fill-hover"
           >
             Filtruj
           </button>

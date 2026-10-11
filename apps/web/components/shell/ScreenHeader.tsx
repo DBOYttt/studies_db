@@ -35,8 +35,9 @@ const BASE_CRUMBS: Crumb[] = [
  * are always prepended.
  *
  * Layout contract (components/shell/ShellFrame.tsx): the crumbs are absolutely
- * positioned over the 38px top bar of the main column (the user block sits on
- * top of them at the right edge); the tab strip cancels the content padding
+ * positioned over the 38px top bar of the main column and end before the
+ * user block (ShellFrame measures it into --topbar-end-w); long labels
+ * ellipsize. The tab strip cancels the content padding
  * (--content-px / --content-pt) and sticks to the top of the scroll area.
  */
 export function ScreenHeader({
@@ -51,33 +52,41 @@ export function ScreenHeader({
     <>
       <nav
         aria-label="Ścieżka"
-        className="absolute top-0 right-0 left-12 z-[1] flex h-[38px] items-center overflow-hidden whitespace-nowrap md:left-4"
+        className="absolute top-0 right-[var(--topbar-end-w,220px)] left-12 z-[1] flex h-[38px] items-center overflow-hidden whitespace-nowrap md:left-4"
       >
-        <ol className="flex min-w-0 items-center gap-1.5">
+        <ol className="flex min-w-0 flex-1 items-center gap-1.5">
           {all.map((c, i) => {
             const I = c.icon;
             return (
               <li
                 key={`${c.href}|${c.label}`}
-                // the server crumb is dropped on phones to leave room for the page
-                className={`flex items-center gap-[5px] ${i === 0 ? 'max-md:hidden' : ''}`}
+                // Serwer/Baza stay whole, page crumbs shrink and ellipsize; the
+                // server crumb is dropped on phones to leave room for the page.
+                className={`flex items-center gap-[5px] ${
+                  i < BASE_CRUMBS.length ? 'shrink-0' : 'min-w-0'
+                } ${i === 0 ? 'max-md:hidden' : ''}`}
               >
                 {i > 0 && (
                   <span
-                    className={`text-subtle ${i === 1 ? 'max-md:hidden' : ''}`}
+                    className={`shrink-0 text-subtle ${i === 1 ? 'max-md:hidden' : ''}`}
                     aria-hidden
                   >
                     »
                   </span>
                 )}
-                {I && <I size={14} className="text-muted" aria-hidden />}
+                {I && (
+                  <I size={14} className="shrink-0 text-muted" aria-hidden />
+                )}
                 {c.kind && (
-                  <span className="text-muted max-md:sr-only">{c.kind}</span>
+                  <span className="shrink-0 text-muted max-md:sr-only">
+                    {c.kind}
+                  </span>
                 )}
                 <Link
                   href={c.href}
                   aria-current={i === all.length - 1 ? 'page' : undefined}
-                  className="font-semibold text-accent-ink hover:text-accent-hover hover:underline"
+                  title={c.label}
+                  className="min-w-0 truncate font-semibold text-accent-ink hover:text-accent-ink-hover hover:underline"
                 >
                   {c.label}
                 </Link>
