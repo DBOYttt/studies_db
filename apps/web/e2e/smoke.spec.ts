@@ -142,6 +142,20 @@ test('browse, preview, search and sql console', async ({ page }) => {
   expect(tableCsv.status()).toBe(200);
   expect(await tableCsv.text()).toContain('Fizyka techniczna');
 
+  // File rows in the table browser open the same preview panel.
+  await page.goto(
+    '/tables/v_files?sort=filename&dir=asc&f_filename=prezentacja',
+  );
+  await page.getByRole('link', { name: 'prezentacja.pptx' }).first().click();
+  await expect(page).toHaveURL(/preview=\d+/);
+  const tablePanel = page.getByRole('complementary', { name: 'Podgląd pliku' });
+  await expect(tablePanel.getByRole('link', { name: 'Pobierz' })).toBeVisible();
+  await tablePanel.getByRole('link', { name: 'Zamknij podgląd' }).click();
+  await expect(tablePanel).toHaveCount(0);
+  await expect(page).toHaveURL(
+    /\/tables\/v_files\?sort=filename&dir=asc&f_filename=prezentacja$/,
+  );
+
   await page.goto('/sql');
   const editor = page.locator('.cm-content');
   await editor.click();

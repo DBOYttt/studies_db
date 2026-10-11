@@ -18,6 +18,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { ExplorerParams } from '../lib/explorer';
 import {
   getExplorerFile,
+  getMaterialFile,
   getSubjectTree,
   listExplorerFiles,
   listSubjectsOverview,
@@ -402,6 +403,18 @@ describe('getExplorerFile', () => {
     expect(await getExplorerFile(db, sid, ids.fgone)).toBeNull();
     expect(await getExplorerFile(db, sid, ids.fother)).toBeNull();
     expect(await getExplorerFile(db, sid, 987654)).toBeNull();
+  });
+});
+
+describe('getMaterialFile', () => {
+  it('returns a file from any subject', async () => {
+    expect((await getMaterialFile(db, ids.f1))?.filename).toBe('wstep.pdf');
+    expect((await getMaterialFile(db, ids.fother))?.id).toBe(ids.fother);
+  });
+  it('null for deleted, deleted-topic, unknown', async () => {
+    expect(await getMaterialFile(db, ids.fdel)).toBeNull();
+    expect(await getMaterialFile(db, ids.fgone)).toBeNull();
+    expect(await getMaterialFile(db, 987654)).toBeNull();
   });
 });
 

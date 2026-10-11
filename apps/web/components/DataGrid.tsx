@@ -13,6 +13,8 @@ export type Cell =
   | {
       text: string;
       href?: string;
+      /** Material id: opens the preview drawer (link built from the id only). */
+      preview?: number;
       sort?: string | number;
       badges?: { id: number; name: string }[];
     };
@@ -23,6 +25,8 @@ export interface ServerNav {
   sort?: string;
   dir?: 'asc' | 'desc';
   filters: Record<string, string>;
+  /** Table URL params kept when a preview link is built (sort, filters, page). */
+  previewParams?: string;
 }
 
 function cellText(c: Cell): string {
@@ -44,14 +48,22 @@ function compare(a: Cell, b: Cell): number {
   return String(x).localeCompare(String(y), 'pl', { numeric: true });
 }
 
-function CellView({ c }: { c: Cell }) {
+function CellView({ c, server }: { c: Cell; server?: ServerNav }) {
   if (c === null || c === undefined) {
     return <span className="italic text-[var(--muted)]">NULL</span>;
   }
   if (typeof c === 'object') {
+    const previewHref =
+      c.preview !== undefined && server
+        ? `${server.basePath}?${new URLSearchParams(server.previewParams ?? '')}${server.previewParams ? '&' : ''}preview=${c.preview}`
+        : undefined;
     return (
       <>
-        {c.href ? (
+        {previewHref ? (
+          <Link href={previewHref} className="link font-medium">
+            {c.text}
+          </Link>
+        ) : c.href ? (
           <Link href={c.href} className="link font-medium">
             {c.text}
           </Link>
@@ -226,7 +238,7 @@ export function DataGrid({
                     className="max-w-[28rem] truncate border-b border-[var(--border)] px-3 py-1.5 align-top"
                     title={cellText(c)}
                   >
-                    <CellView c={c} />
+                    <CellView c={c} server={server} />
                   </td>
                 ))}
               </tr>

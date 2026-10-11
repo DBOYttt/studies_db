@@ -612,3 +612,20 @@ export async function getExplorerFile(
     .limit(1);
   return r ? toExplorerFile(r) : null;
 }
+
+/** A live file from any subject (table-browser preview drawer). */
+export async function getMaterialFile(
+  db: Db,
+  materialId: number,
+): Promise<ExplorerFile | null> {
+  const [r] = await explorerFileSelect(db)
+    .where(
+      and(
+        eq(materials.id, materialId),
+        isNull(topics.deletedAt),
+        isNull(materials.deletedAt),
+      ),
+    )
+    .limit(1);
+  return r ? toExplorerFile(r) : null;
+}

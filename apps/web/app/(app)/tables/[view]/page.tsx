@@ -2,9 +2,11 @@ import { PUBLIC_VIEWS } from '@studies/db';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { DataGrid } from '@/components/DataGrid';
-import { toCells } from '@/lib/cells';
-import { getRoPool } from '@/lib/db';
+import { PreviewPanel } from '@/components/explorer/PreviewPanel';
+import { parsePreviewId, toCells } from '@/lib/cells';
+import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
+import { getMaterialFile } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 import {
   browseView,
@@ -28,7 +30,14 @@ export default async function TablePage({
   await requireUser();
   const { view } = await params;
   if (!isPublicView(view)) notFound();
-  const { sort, dir, filters, page } = parseViewParams(await searchParams);
+  const sp = await searchParams;
+  const { sort, dir, filters, page } = parseViewParams(sp);
+  const previewId =
+    view === 'v_materials' || view === 'v_files'
+      ? parsePreviewId(sp.preview)
+      : null;
+  const previewFile =
+    previewId === null ? null : await getMaterialFile(getDb(), previewId);
 
   let result: Awaited<ReturnType<typeof browseView>> = null;
   let error: string | null = null;
@@ -50,6 +59,10 @@ export default async function TablePage({
     for (const [k, v] of Object.entries(over)) p.set(k, String(v));
     return `${base}?${p}`;
   };
+  // Preview links and the close link keep sort, filters and page; close drops `preview`.
+  const keep = new URLSearchParams(current);
+  if (page > 1) keep.set('page', String(page));
+  const closeHref = keep.size ? `${base}?${keep}` : base;
   const csvHref = `${base}/csv${current.size ? `?${current}` : ''}`;
 
   return (
@@ -93,9 +106,15 @@ export default async function TablePage({
           <>
             <DataGrid
               columns={result.columns}
-              rows={toCells(result.rows)}
+              rows={toCells(result.rows, { view, columns: result.columns })}
               mono
-              server={{ basePath: base, sort, dir, filters }}
+              server={{
+                basePath: base,
+                sort,
+                dir,
+                filters,
+                previewParams: keep.toString(),
+              }}
             />
             <div className="flex flex-wrap items-center gap-3 text-sm">
               <span className="text-[var(--muted)]">
@@ -116,6 +135,11 @@ export default async function TablePage({
           </>
         )}
       </section>
+      {previewId !== null && (
+        <div className="lg:sticky lg:top-4 lg:w-[360px] lg:shrink-0 lg:self-start">
+          <PreviewPanel file={previewFile} closeHref={closeHref} />
+        </div>
+      )}
     </div>
   );
 }
