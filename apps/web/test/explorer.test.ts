@@ -4,6 +4,7 @@ import {
   parseExplorerFilters,
   parseExplorerPaging,
   parseExplorerParams,
+  subjectTabHref,
 } from '../lib/explorer';
 
 describe('parseExplorerParams', () => {
@@ -165,5 +166,47 @@ describe('parseExplorerPaging', () => {
     expect(parseExplorerParams({ tab: 'lecturers' }).tab).toBe('lecturers');
     expect(parseExplorerParams({ tab: 'sql' }).tab).toBe('sql');
     expect(parseExplorerParams({ tab: 'bogus' }).tab).toBe('explorer');
+  });
+});
+
+describe('subjectTabHref', () => {
+  const sel = { classKind: 'laboratorium' as const, group: 3, topic: null };
+  const filters = {
+    tag: 7,
+    q: 'lab',
+    sort: 'filename' as const,
+    dir: 'asc' as const,
+  };
+
+  it('keeps the selection and the Pliki filters on the other tabs', () => {
+    expect(subjectTabHref('MECH', sel, filters, 'explorer')).toBe(
+      '/subjects/MECH?class=laboratorium&group=3&tag=7&q=lab&sort=filename&dir=asc',
+    );
+    expect(subjectTabHref('MECH', sel, filters, 'map')).toBe(
+      '/subjects/MECH?class=laboratorium&group=3&tab=map&tag=7&q=lab&sort=filename&dir=asc',
+    );
+    expect(subjectTabHref('MECH', sel, filters, 'lecturers')).toContain(
+      'tab=lecturers',
+    );
+    expect(subjectTabHref('MECH', sel, filters, 'schema')).toContain(
+      'tab=schema',
+    );
+  });
+
+  it('never carries the filename filter q (or other filters) to the SQL tab', () => {
+    const href = subjectTabHref('MECH', sel, filters, 'sql');
+    expect(href).toBe('/subjects/MECH?class=laboratorium&group=3&tab=sql');
+    expect(new URL(href, 'http://x').searchParams.has('q')).toBe(false);
+  });
+
+  it('keeps the topic and drops a selected file', () => {
+    expect(
+      subjectTabHref(
+        'FIZ',
+        { classKind: 'none', group: null, topic: 5 },
+        { tag: null, q: '', sort: null, dir: null },
+        'sql',
+      ),
+    ).toBe('/subjects/FIZ?class=none&topic=5&tab=sql');
   });
 });

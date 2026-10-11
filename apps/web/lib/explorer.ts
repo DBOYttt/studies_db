@@ -107,3 +107,24 @@ export function parseExplorerPaging(sp: SearchParams): {
       : DEFAULT_PER_PAGE,
   };
 }
+
+/**
+ * Href of a subject screen tab for the current selection (no file). The
+ * Pliki filters (tag, q, sort, dir) follow the other tabs, but not the SQL
+ * tab: there `q` is the editor prefill, so the filename filter would open as
+ * the query.
+ */
+export function subjectTabHref(
+  code: string,
+  sel: Pick<ExplorerParams, 'classKind' | 'group' | 'topic'>,
+  filters: ExplorerFilters,
+  tab: ExplorerTab,
+): string {
+  const p = {
+    classKind: sel.classKind,
+    group: sel.group,
+    topic: sel.topic,
+    tab,
+  };
+  return tab === 'sql' ? explorerHref(code, p) : explorerHref(code, p, filters);
+}

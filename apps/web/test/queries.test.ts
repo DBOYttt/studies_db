@@ -16,7 +16,7 @@ import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
 import { EXAMPLE_QUERIES } from '../lib/example-queries';
-import { getSubject, listSubjectsOverview, listTopics } from '../lib/queries';
+import { getSubject, listTopics } from '../lib/queries';
 import { runReadonlyQuery } from '../lib/sql-console';
 
 let db: Db;
@@ -113,18 +113,6 @@ beforeAll(async () => {
 afterAll(async () => {
   await roPool.end();
   await closeTestDb(db);
-});
-
-describe('listSubjectsOverview', () => {
-  it('counts materials excluding soft-deleted', async () => {
-    const list = await listSubjectsOverview(db);
-    const fiz = list.find((s) => s.code === 'FIZ');
-    expect(fiz?.materialCount).toBe(2);
-    expect(fiz?.lastUploadAt).toBeInstanceOf(Date);
-    const chem = list.find((s) => s.code === 'CHEM');
-    expect(chem).toMatchObject({ materialCount: 0, lastUploadAt: null });
-    expect(chem?.classes).toEqual([]);
-  });
 });
 
 describe('getSubject / listTopics', () => {

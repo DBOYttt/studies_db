@@ -1,8 +1,7 @@
-import { type Db, PUBLIC_VIEWS } from '@studies/db';
+import type { Db } from '@studies/db';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildSchemaGraph } from '../lib/graph-layout';
 import { SCHEMA_RELATIONS, selectionPath } from '../lib/schema-relations';
 
 const { RO_POOL_OPTIONS } = await import('../lib/db');
@@ -131,44 +130,5 @@ describe('selectionPath', () => {
 
   it('omits the id suffix when the id is unknown', () => {
     expect(selectionPath(base, {}).caption).toBe('Przedmiot jest w v_subjects');
-  });
-});
-
-describe('buildSchemaGraph', () => {
-  it('has a node for every public view and an edge per relation', () => {
-    const g = buildSchemaGraph(columns, []);
-    expect(g.nodes.map((n) => n.id).sort()).toEqual([...PUBLIC_VIEWS].sort());
-    expect(g.edges).toHaveLength(SCHEMA_RELATIONS.length);
-    expect(g.edges.every((e) => !e.highlighted)).toBe(true);
-    expect(g.nodes.every((n) => !n.highlighted)).toBe(true);
-  });
-
-  it('node height grows with column count', () => {
-    const g = buildSchemaGraph(columns, []);
-    const a = g.nodes.find((n) => n.id === 'v_files');
-    const b = g.nodes.find((n) => n.id === 'v_tags');
-    expect(a?.height).toBeGreaterThan(b?.height ?? Infinity);
-    expect(a?.height).toBeGreaterThan(columns.v_files.length * 16);
-  });
-
-  it('marks relation columns', () => {
-    const g = buildSchemaGraph(columns, []);
-    const n = g.nodes.find((x) => x.id === 'v_classes');
-    expect(n?.keyColumns).toContain('subject_id');
-    expect(n?.keyColumns).toContain('id');
-  });
-
-  it('highlights edges whose both ends are highlighted', () => {
-    const g = buildSchemaGraph(columns, ['v_subjects', 'v_classes']);
-    const hi = g.edges.filter((e) => e.highlighted);
-    expect(hi).toHaveLength(1);
-    expect(hi[0].source).toBe('v_classes');
-    expect(hi[0].target).toBe('v_subjects');
-    expect(
-      g.nodes
-        .filter((n) => n.highlighted)
-        .map((n) => n.id)
-        .sort(),
-    ).toEqual(['v_classes', 'v_subjects']);
   });
 });

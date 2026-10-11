@@ -20,6 +20,7 @@ import {
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { type ReactNode, useMemo, useState } from 'react';
+import type { Cell } from '@/lib/cells';
 import { toCsv } from '@/lib/csv';
 import {
   cellCsvValue,
@@ -37,7 +38,6 @@ import {
   sortRowIndexes,
   withParams,
 } from '@/lib/result-grid';
-import type { Cell } from './DataGrid';
 import { SqlText } from './SqlText';
 import { TagBadge } from './TagBadge';
 

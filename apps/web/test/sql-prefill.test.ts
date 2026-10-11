@@ -1,54 +1,50 @@
 import { describe, expect, it } from 'vitest';
-import { buildExplorerGridSql, buildExplorerSql } from '../lib/sql-prefill';
+import {
+  buildExplorerGridSql,
+  type ExplorerSqlSelection,
+} from '../lib/sql-prefill';
 
-const HEAD =
-  'SELECT filename, topic_title, class_name, group_name, created_at FROM v_files';
+/** WHERE clause of the grid query for a selection (first page, defaults). */
+const where = (code: string, sel: ExplorerSqlSelection) => {
+  const sql = buildExplorerGridSql(code, sel, { page: 1, perPage: 25 });
+  return /WHERE (.*)\nORDER BY/s.exec(sql)?.[1].replace(/\n\s*/g, ' ');
+};
 
-describe('buildExplorerSql', () => {
+describe('buildExplorerGridSql selection', () => {
   it('minimal selection filters by subject only', () => {
-    expect(buildExplorerSql('MECH', {})).toBe(
-      `${HEAD} WHERE subject_code = 'MECH' ORDER BY created_at DESC`,
-    );
+    expect(where('MECH', {})).toBe("subject_code = 'MECH'");
   });
   it('full selection', () => {
     expect(
-      buildExplorerSql('MECH', {
+      where('MECH', {
         className: 'Laboratorium',
         groupName: 'Gr. 3',
         topicId: 12,
       }),
     ).toBe(
-      `${HEAD} WHERE subject_code = 'MECH' AND class_name = 'Laboratorium' AND group_name = 'Gr. 3' AND topic_id = 12 ORDER BY created_at DESC`,
+      "subject_code = 'MECH' AND class_name = 'Laboratorium' AND group_name = 'Gr. 3' AND topic_id = 12",
     );
   });
   it('class and group only', () => {
     expect(
-      buildExplorerSql('MECH', {
-        className: 'Laboratorium',
-        groupName: 'Gr. 3',
-      }),
+      where('MECH', { className: 'Laboratorium', groupName: 'Gr. 3' }),
     ).toBe(
-      `${HEAD} WHERE subject_code = 'MECH' AND class_name = 'Laboratorium' AND group_name = 'Gr. 3' ORDER BY created_at DESC`,
+      "subject_code = 'MECH' AND class_name = 'Laboratorium' AND group_name = 'Gr. 3'",
     );
   });
   it('doubles single quotes and escapes backslashes', () => {
-    const sql = buildExplorerSql("O'Brien", {
-      className: "a'b",
-      groupName: 'x\\',
-    });
+    const sql = where("O'Brien", { className: "a'b", groupName: 'x\\' });
     expect(sql).toContain("subject_code = 'O''Brien'");
     expect(sql).toContain("class_name = 'a''b'");
     expect(sql).toContain("group_name = 'x\\\\'");
   });
   it('uncategorized class selects NULL class_name', () => {
-    expect(buildExplorerSql('M', { noClass: true })).toBe(
-      `${HEAD} WHERE subject_code = 'M' AND class_name IS NULL ORDER BY created_at DESC`,
+    expect(where('M', { noClass: true })).toBe(
+      "subject_code = 'M' AND class_name IS NULL",
     );
   });
   it('ignores a non-integer topic id', () => {
-    expect(buildExplorerSql('M', { topicId: Number.NaN })).not.toContain(
-      'topic_id',
-    );
+    expect(where('M', { topicId: Number.NaN })).not.toContain('topic_id');
   });
 });
 

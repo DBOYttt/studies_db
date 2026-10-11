@@ -2,6 +2,12 @@ import type { Connection as CoreConnection, FieldPacket } from 'mysql2';
 import mysql from 'mysql2/promise';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
 import type { SessionUser } from './session';
+import {
+  BUSY_ERROR,
+  CONNECT_ERROR,
+  EMPTY_QUERY_ERROR,
+  timeoutMessage,
+} from './sql-messages';
 
 export type QueryResult =
   | {
@@ -26,9 +32,6 @@ const ER_STATEMENT_TIMEOUT = 1969;
 const ER_QUERY_INTERRUPTED = 1317;
 const ER_TOO_MANY_USER_CONNECTIONS = 1226;
 const KILL_RETRY_MS = 250;
-
-const BUSY_ERROR = 'Serwer jest zajęty. Spróbuj za chwilę.';
-const CONNECT_ERROR = 'Nie udało się połączyć z bazą danych.';
 
 type DbError = Error & { errno?: number };
 
@@ -93,11 +96,11 @@ export async function runReadonlyQuery(
   // Interpolated into SQL below, so force a positive integer.
   const timeoutSec = Math.max(1, Math.floor(opts.timeoutSec ?? 5) || 5);
   const maxBytes = opts.maxBytes ?? 20_000_000;
-  const timeoutError = `Przekroczono limit czasu (${timeoutSec} s).`;
+  const timeoutError = timeoutMessage(timeoutSec);
 
   let text = sql.trim();
   if (text.endsWith(';')) text = text.slice(0, -1).trim();
-  if (!text) return { ok: false, error: 'Puste zapytanie.' };
+  if (!text) return { ok: false, error: EMPTY_QUERY_ERROR };
 
   const started = performance.now();
   let conn: mysql.PoolConnection;

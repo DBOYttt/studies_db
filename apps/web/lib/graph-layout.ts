@@ -1,9 +1,7 @@
 import dagre from '@dagrejs/dagre';
-import { PUBLIC_VIEWS, type PublicView } from '@studies/db/constants';
 import { type ExplorerParams, explorerHref } from './explorer';
 import { pluralPl } from './format';
 import type { TreeClass, TreeTopic } from './queries';
-import { SCHEMA_RELATIONS } from './schema-relations';
 
 export type MapNodeKind = 'subject' | 'class' | 'group' | 'topic' | 'more';
 
@@ -149,92 +147,6 @@ export function buildDataMapGraph(
       position: {
         x: p.x - MAP_NODE_WIDTH / 2,
         y: p.y - MAP_NODE_HEIGHT / 2,
-      },
-    };
-  });
-  return { nodes, edges };
-}
-
-export type SchemaNode = {
-  id: PublicView;
-  columns: string[];
-  keyColumns: string[];
-  highlighted: boolean;
-  width: number;
-  height: number;
-  position: { x: number; y: number };
-};
-
-export type SchemaEdge = {
-  id: string;
-  source: PublicView;
-  target: PublicView;
-  fromColumn: string;
-  toColumn: string;
-  highlighted: boolean;
-};
-
-export const SCHEMA_NODE_WIDTH = 230;
-export const SCHEMA_HEADER_HEIGHT = 36;
-export const SCHEMA_ROW_HEIGHT = 20;
-const SCHEMA_PAD = 12;
-
-/** Pure graph builder for the schema diagram: one node per view, dagre LR. */
-export function buildSchemaGraph(
-  columns: Record<PublicView, string[]>,
-  highlight: PublicView[],
-): { nodes: SchemaNode[]; edges: SchemaEdge[] } {
-  const hi = new Set<PublicView>(highlight);
-  const keys = new Map<PublicView, Set<string>>();
-  const mark = (v: PublicView, c: string) => {
-    const s = keys.get(v) ?? new Set<string>();
-    s.add(c);
-    keys.set(v, s);
-  };
-  for (const r of SCHEMA_RELATIONS) {
-    mark(r.from.view, r.from.column);
-    mark(r.to.view, r.to.column);
-  }
-
-  const edges: SchemaEdge[] = SCHEMA_RELATIONS.map((r) => ({
-    id: `${r.from.view}.${r.from.column}>${r.to.view}.${r.to.column}`,
-    source: r.from.view,
-    target: r.to.view,
-    fromColumn: r.from.column,
-    toColumn: r.to.column,
-    highlighted: hi.has(r.from.view) && hi.has(r.to.view),
-  }));
-
-  const sizes = PUBLIC_VIEWS.map((v) => ({
-    id: v,
-    height:
-      SCHEMA_HEADER_HEIGHT +
-      (columns[v]?.length ?? 0) * SCHEMA_ROW_HEIGHT +
-      SCHEMA_PAD,
-  }));
-
-  const g = new dagre.graphlib.Graph();
-  g.setGraph({ rankdir: 'LR', nodesep: 32, ranksep: 100 });
-  g.setDefaultEdgeLabel(() => ({}));
-  for (const s of sizes) {
-    g.setNode(s.id, { width: SCHEMA_NODE_WIDTH, height: s.height });
-  }
-  for (const e of edges) g.setEdge(e.source, e.target);
-  dagre.layout(g);
-
-  const nodes: SchemaNode[] = sizes.map((s) => {
-    const p = g.node(s.id);
-    const cols = columns[s.id] ?? [];
-    return {
-      id: s.id,
-      columns: cols,
-      keyColumns: cols.filter((c) => keys.get(s.id)?.has(c)),
-      highlighted: hi.has(s.id),
-      width: SCHEMA_NODE_WIDTH,
-      height: s.height,
-      position: {
-        x: p.x - SCHEMA_NODE_WIDTH / 2,
-        y: p.y - s.height / 2,
       },
     };
   });

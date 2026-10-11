@@ -23,7 +23,6 @@ import {
   listExplorerFiles,
   listSubjectClasses,
   listSubjectLecturers,
-  listSubjectsOverview,
   pageExplorerFiles,
   resolveSelection,
   resolveSubjectSelection,
@@ -419,21 +418,6 @@ describe('getMaterialFile', () => {
     expect(await getMaterialFile(db, ids.fdel)).toBeNull();
     expect(await getMaterialFile(db, ids.fgone)).toBeNull();
     expect(await getMaterialFile(db, 987654)).toBeNull();
-  });
-});
-
-describe('listSubjectsOverview classes', () => {
-  it('returns class chips in fixed order for classes with live topics', async () => {
-    const list = await listSubjectsOverview(db);
-    const fiz = list.find((s) => s.code === 'FIZ');
-    expect(fiz?.classes).toEqual([
-      { kind: 'wyklad', name: 'Wykład' },
-      { kind: 'cwiczenia', name: 'Ćwiczenia' },
-      { kind: 'none', name: 'Bez kategorii' },
-    ]);
-    expect(list.find((s) => s.code === 'CHEM')?.classes).toEqual([
-      { kind: 'cwiczenia', name: 'Ćwiczenia' },
-    ]);
   });
 });
 

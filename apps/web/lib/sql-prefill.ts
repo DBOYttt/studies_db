@@ -10,7 +10,7 @@ export type ExplorerSqlSelection = {
 export const lit = (v: string) =>
   `'${v.replace(/\\/g, '\\\\').replace(/'/g, "''")}'`;
 
-/** Read-only SELECT over v_files matching the explorer selection (shown in /sql, never auto-run). */
+/** WHERE conditions over v_files for the explorer selection (subject, class, group, topic). */
 function selectionWhere(code: string, sel: ExplorerSqlSelection): string[] {
   const where = [`subject_code = ${lit(code)}`];
   if (sel.noClass) where.push('class_name IS NULL');
@@ -22,14 +22,6 @@ function selectionWhere(code: string, sel: ExplorerSqlSelection): string[] {
     where.push(`topic_id = ${sel.topicId}`);
   }
   return where;
-}
-
-export function buildExplorerSql(
-  code: string,
-  sel: ExplorerSqlSelection,
-): string {
-  const where = selectionWhere(code, sel);
-  return `SELECT filename, topic_title, class_name, group_name, created_at FROM v_files WHERE ${where.join(' AND ')} ORDER BY created_at DESC`;
 }
 
 /** Columns of the subject Pliki grid, in order. */
@@ -59,8 +51,8 @@ export type ExplorerGridQuery = {
 };
 
 /**
- * The query the subject Pliki grid shows: same selection as buildExplorerSql
- * plus tag, filename filter, sort and the page's LIMIT, over the grid columns.
+ * The query the subject Pliki grid shows (read-only, prefilled in /sql, never
+ * auto-run): the explorer selection plus tag, filename filter, sort and the page's LIMIT, over the grid columns.
  * It reproduces the grid when run in the SQL console.
  */
 export function buildExplorerGridSql(

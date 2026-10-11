@@ -1,4 +1,18 @@
-import type { Cell } from '@/components/DataGrid';
+/** One grid cell: a plain value or text with a link, preview id, sort key or tag badges. */
+export type Cell =
+  | string
+  | number
+  | boolean
+  | null
+  | undefined
+  | {
+      text: string;
+      href?: string;
+      /** Material id: opens the preview drawer (link built from the id only). */
+      preview?: number;
+      sort?: string | number;
+      badges?: { id: number; name: string }[];
+    };
 
 type RawView = string;
 

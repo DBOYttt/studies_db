@@ -1,7 +1,7 @@
-import type { Cell } from '@/components/DataGrid';
 import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
+import type { Cell } from '@/lib/cells';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { formatDate } from '@/lib/format';

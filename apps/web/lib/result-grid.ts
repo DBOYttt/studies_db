@@ -1,4 +1,4 @@
-import type { Cell } from '@/components/DataGrid';
+import type { Cell } from './cells';
 import { pluralPl } from './format';
 
 /** Row counts offered by "Liczba wierszy". */

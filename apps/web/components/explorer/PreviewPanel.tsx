@@ -196,9 +196,11 @@ export function PreviewPanel({
             <div className="flex aspect-[3/4] flex-col items-center justify-center gap-1.5 rounded-md border border-dashed border-line-strong bg-zebra text-faint">
               <Icon size={32} aria-hidden="true" />
               <span>
-                {file.status !== 'ready'
-                  ? 'Podgląd niedostępny'
-                  : 'Brak podglądu dla tego typu pliku'}
+                {file.status === 'pending'
+                  ? 'Podgląd pojawi się po przetworzeniu pliku'
+                  : file.status === 'failed'
+                    ? 'Podgląd niedostępny'
+                    : 'Brak podglądu dla tego typu pliku'}
               </span>
             </div>
           )}

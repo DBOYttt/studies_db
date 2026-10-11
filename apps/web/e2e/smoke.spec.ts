@@ -21,37 +21,47 @@ test('browse, preview, search and sql console', async ({ page }) => {
   ).toBeVisible();
   await page.getByRole('button', { name: 'Zaloguj się' }).click();
   await expect(page).toHaveURL(/\/$/);
+  const main = page.getByRole('main');
+  // Home is the Przedmioty grid; the subject name links to the subject.
+  await expect(
+    page.getByRole('heading', { name: 'Przedmioty' }),
+  ).toBeAttached();
+  await main.getByRole('link', { name: 'Fizyka techniczna' }).click();
+  await expect(page).toHaveURL(/\/subjects\/FIZ$/);
   await expect(
     page.getByRole('heading', { name: 'Fizyka techniczna' }),
   ).toBeVisible();
-
-  await page.getByRole('link', { name: /Fizyka techniczna/ }).click();
-  await expect(page).toHaveURL(/\/subjects\/FIZ$/);
-  const tree = page.getByRole('navigation', { name: 'Drzewo przedmiotu' });
+  // The active subject is open in the nav tree; a class link filters the grid.
+  const tree = page.getByRole('navigation', { name: 'Drzewo bazy danych' });
   await tree.getByRole('link', { name: /Bez kategorii/ }).click();
-  await tree.getByRole('link', { name: /Kolokwium 1/ }).click();
-  await expect(page).toHaveURL(/class=none&topic=(\d+)$/);
+  await expect(page).toHaveURL(/\/subjects\/FIZ\?class=none$/);
+  await main
+    .getByRole('link', { name: 'Kolokwium 1 — tarcie' })
+    .first()
+    .click();
+  await expect(page).toHaveURL(/\/subjects\/FIZ\?topic=(\d+)$/);
   const topicId = /topic=(\d+)/.exec(page.url())?.[1];
 
   // The old topic URL lands in the explorer.
   await page.goto(`/topics/${topicId}`);
   await expect(page).toHaveURL(new RegExp(`/subjects/FIZ\\?topic=${topicId}$`));
 
+  // Projektant: a table box links to the view browser.
   await page.goto('/schema');
   await expect(
-    page.getByRole('heading', { name: 'Schemat bazy' }),
-  ).toBeVisible();
-  const filesNode = page.getByRole('button', { name: /Tabela v_files/ });
+    page.getByRole('heading', { name: 'Projektant' }),
+  ).toBeAttached();
+  const filesNode = page.getByRole('link', { name: /^Tabela v_files,/ });
   await expect(filesNode).toBeVisible();
   await filesNode.click();
   await expect(page).toHaveURL(/\/tables\/v_files$/);
   await page.goto(`/subjects/FIZ?topic=${topicId}`);
 
-  // Statuses are visible in the table without opening anything.
-  await expect(page.getByText('Przetwarzanie…')).toBeVisible();
-  await expect(page.getByText('Podgląd niedostępny')).toBeVisible();
+  // Statuses are visible in the grid without opening anything.
+  await expect(main.getByText('Przetwarzanie…')).toBeVisible();
+  await expect(main.getByText('Podgląd niedostępny')).toBeVisible();
 
-  await page.getByRole('link', { name: 'sample.pdf' }).click();
+  await main.getByRole('link', { name: 'sample.pdf' }).click();
   const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
   const canvas = panel.locator('canvas').first();
   await expect(canvas).toBeVisible({ timeout: 30_000 });
@@ -72,46 +82,60 @@ test('browse, preview, search and sql console', async ({ page }) => {
     .poll(async () => (await canvas.boundingBox())?.width ?? 0)
     .toBeLessThanOrEqual(360);
 
-  // A file without a preview: no "Pelny ekran", download works, Discord link set.
-  await page.getByRole('link', { name: 'prezentacja.pptx' }).click();
-  const failedPanel = page.getByRole('complementary', {
-    name: 'Podgląd pliku',
-  });
+  // A file still being processed: a processing placeholder, not "unavailable".
+  await main.getByRole('link', { name: 'notatki.docx' }).click();
+  await expect(panel.getByText('notatki.docx', { exact: true })).toBeVisible();
+  await expect(panel.getByText('Przetwarzanie…')).toBeVisible();
   await expect(
-    failedPanel.getByRole('heading', { name: 'prezentacja.pptx' }),
+    panel.getByText('Podgląd pojawi się po przetworzeniu pliku'),
   ).toBeVisible();
+  await expect(panel.getByText('Podgląd niedostępny')).toHaveCount(0);
+
+  // A file without a preview: no "Pełny ekran", download works, Discord link set.
+  await main.getByRole('link', { name: 'prezentacja.pptx' }).click();
   await expect(
-    failedPanel.getByRole('link', { name: 'Pełny ekran' }),
-  ).toHaveCount(0);
-  const href = await failedPanel
+    panel.getByText('prezentacja.pptx', { exact: true }),
+  ).toBeVisible();
+  await expect(panel.getByText('Podgląd niedostępny').first()).toBeVisible();
+  await expect(panel.getByRole('link', { name: 'Pełny ekran' })).toHaveCount(0);
+  const href = await panel
     .getByRole('link', { name: 'Pobierz' })
     .getAttribute('href');
   const res = await page.request.get(href as string);
   expect(res.status()).toBe(200);
   await expect(
-    failedPanel.getByRole('link', { name: 'Otwórz w Discordzie' }),
+    panel.getByRole('link', { name: 'Otwórz w Discordzie' }),
   ).toHaveAttribute(
     'href',
     'https://discord.com/channels/e2eguild/e2e-thread/m3',
   );
   // Closing the panel drops only `file`.
-  await failedPanel.getByRole('link', { name: 'Zamknij podgląd' }).click();
-  await expect(page).toHaveURL(new RegExp(`class=none&topic=${topicId}$`));
-  await expect(failedPanel).toHaveCount(0);
+  await panel.getByRole('link', { name: 'Zamknij podgląd' }).click();
+  await expect(page).toHaveURL(new RegExp(`\\?class=none&topic=${topicId}$`));
+  await expect(panel).toHaveCount(0);
 
-  // "Otwórz w SQL" prefills the editor without running it.
-  await page.getByRole('link', { name: 'Otwórz w SQL' }).click();
-  await expect(page).toHaveURL(/\/sql\?q=/);
+  // "Otwórz w SQL" prefills the subject's SQL tab without running it.
+  await main.getByRole('link', { name: 'Otwórz w SQL' }).click();
+  await expect(page).toHaveURL(/tab=sql&q=/);
   await expect(page.locator('.cm-content')).toContainText(
     "subject_code = 'FIZ'",
   );
+  await expect(main.getByRole('cell', { name: 'sample.pdf' })).toHaveCount(0);
+  // The Pliki filename filter never becomes the SQL tab's query.
+  await page.goto('/subjects/FIZ?q=sample');
+  const sqlTab = page
+    .getByRole('navigation', { name: 'Zakładki' })
+    .getByRole('link', { name: 'SQL' });
+  await expect(sqlTab).toHaveAttribute('href', '/subjects/FIZ?tab=sql');
 
   await page.goto('/search?q=tarcie');
   await expect(page.locator('mark').first()).toBeVisible();
 
-  // Table CSV export keeps the active filters and sort.
+  // The Eksport tab keeps the active filters and sort.
   await page.goto('/tables/v_subjects?sort=name&dir=desc&f_name=Fizyka');
-  const csvLink = page.getByRole('link', { name: 'Eksport CSV' });
+  const csvLink = page
+    .getByRole('navigation', { name: 'Zakładki' })
+    .getByRole('link', { name: 'Eksport' });
   await expect(csvLink).toHaveAttribute(
     'href',
     '/tables/v_subjects/csv?sort=name&dir=desc&f_name=Fizyka',
@@ -126,7 +150,7 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await page.goto(
     '/tables/v_files?sort=filename&dir=asc&f_filename=prezentacja',
   );
-  await page.getByRole('link', { name: 'prezentacja.pptx' }).first().click();
+  await main.getByRole('link', { name: 'prezentacja.pptx' }).first().click();
   await expect(page).toHaveURL(/preview=\d+/);
   const tablePanel = page.getByRole('complementary', { name: 'Podgląd pliku' });
   await expect(tablePanel.getByRole('link', { name: 'Pobierz' })).toBeVisible();
@@ -141,14 +165,21 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await editor.click();
   await page.keyboard.press('ControlOrMeta+a');
   await page.keyboard.type('SELECT 1 AS x');
-  await page.getByRole('button', { name: 'Uruchom' }).click();
+  await page.getByRole('button', { name: 'Wykonaj' }).click();
   await expect(
     page.getByRole('cell', { name: '1', exact: true }),
+  ).toBeVisible();
+  // The run lands in the console footer's query history.
+  await page.getByRole('button', { name: /Historia zapytań \(1\)/ }).click();
+  await expect(
+    page
+      .locator('#console-history')
+      .getByRole('link', { name: /SELECT 1 AS x/ }),
   ).toBeVisible();
 
   const [download] = await Promise.all([
     page.waitForEvent('download'),
-    page.getByRole('button', { name: /Eksport CSV/ }).click(),
+    page.getByRole('button', { name: 'Eksport CSV' }).first().click(),
   ]);
   expect(download.suggestedFilename()).toMatch(
     /^zapytanie-\d{4}-\d{2}-\d{2}-\d{4}\.csv$/,
@@ -165,7 +196,7 @@ test('browse, preview, search and sql console', async ({ page }) => {
       body: '<html>Bad gateway</html>',
     }),
   );
-  await page.getByRole('button', { name: 'Uruchom' }).click();
+  await page.getByRole('button', { name: 'Wykonaj' }).click();
   await expect(
     page.getByRole('alert').filter({ hasText: 'Błąd serwera (502).' }),
   ).toBeVisible();

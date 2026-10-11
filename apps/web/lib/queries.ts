@@ -42,66 +42,8 @@ export interface SubjectInfo {
   description: string | null;
 }
 
-export interface SubjectOverview extends SubjectInfo {
-  classes: { kind: ClassKind | 'none'; name: string }[];
-  materialCount: number;
-  lastUploadAt: Date | null;
-}
-
 const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
 const NONE_NAME = 'Bez kategorii';
-const kindName = (k: ClassKind | 'none') =>
-  k === 'none' ? NONE_NAME : CLASS_NAMES[k];
-
-/** Subjects with class chips and live-material stats (soft-deleted files and topics excluded). */
-export async function listSubjectsOverview(db: Db): Promise<SubjectOverview[]> {
-  const subs = await db
-    .select()
-    .from(subjects)
-    .orderBy(asc(subjects.semester), asc(subjects.name));
-  const stats = await db
-    .select({
-      subjectId: topics.subjectId,
-      n: sql<number>`COUNT(${materials.id})`.mapWith(Number),
-      last: sql<string | null>`MAX(${materials.createdAt})`,
-    })
-    .from(materials)
-    .innerJoin(topics, eq(topics.id, materials.topicId))
-    .where(and(isNull(materials.deletedAt), isNull(topics.deletedAt)))
-    .groupBy(topics.subjectId);
-  const statBy = new Map(stats.map((s) => [s.subjectId, s]));
-  const withTopics = await db
-    .selectDistinct({
-      subjectId: topics.subjectId,
-      kind: classes.kind,
-    })
-    .from(topics)
-    .leftJoin(classes, eq(classes.id, topics.classId))
-    .where(isNull(topics.deletedAt));
-  const kindsBy = new Map<number, Set<ClassKind | 'none'>>();
-  for (const r of withTopics) {
-    const set = kindsBy.get(r.subjectId) ?? new Set();
-    set.add(r.kind ?? 'none');
-    kindsBy.set(r.subjectId, set);
-  }
-  return subs.map((s) => {
-    const st = statBy.get(s.id);
-    return {
-      id: s.id,
-      code: s.code,
-      name: s.name,
-      semester: s.semester,
-      ects: s.ects,
-      description: s.description,
-      classes: KIND_ORDER.filter((k) => kindsBy.get(s.id)?.has(k)).map((k) => ({
-        kind: k,
-        name: kindName(k),
-      })),
-      materialCount: st?.n ?? 0,
-      lastUploadAt: st?.last ? toDate(st.last) : null,
-    };
-  });
-}
 
 function toDate(v: unknown): Date {
   return v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);

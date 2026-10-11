@@ -133,10 +133,13 @@ function NavTree({
   active,
 }: TreeProps & { active: string | null }) {
   const [overrides, setOverrides] = useState<Record<string, boolean>>({});
-  const ancestors = navAncestors(active);
+  // The active node opens too, so its children (a subject's classes, a
+  // class's groups) are the next step of the drill-down.
+  const ancestors = active ? [...navAncestors(active), active] : [];
   const ancestorsKey = ancestors.join('\n');
 
-  // Navigating to a node re-opens its ancestors even if the user closed them.
+  // Navigating to a node re-opens it and its ancestors even if the user
+  // closed them.
   useEffect(() => {
     if (!ancestorsKey) return;
     setOverrides((o) => {

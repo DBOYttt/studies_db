@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { Cell } from '../components/DataGrid';
+import type { Cell } from '../lib/cells';
 import {
   cellCsvValue,
   checkedInOrder,

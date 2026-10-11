@@ -10,7 +10,6 @@ import {
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
 import { notFound } from 'next/navigation';
-import type { Cell } from '@/components/DataGrid';
 import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { DataMap } from '@/components/explorer/DataMap';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
@@ -22,6 +21,7 @@ import {
   ScreenHeader,
   type Tab,
 } from '@/components/shell/ScreenHeader';
+import type { Cell } from '@/lib/cells';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
@@ -32,6 +32,7 @@ import {
   parseExplorerFilters,
   parseExplorerPaging,
   parseExplorerParams,
+  subjectTabHref,
 } from '@/lib/explorer';
 import { formatDate } from '@/lib/format';
 import {
@@ -174,7 +175,7 @@ export default async function SubjectPage({
   const tabs: Tab[] = TAB_DEFS.map(([key, label, icon]) => ({
     label,
     icon,
-    href: at({ tab: key }),
+    href: subjectTabHref(code, sel, filters, key),
     active: key === tab,
   }));
 
@@ -188,10 +189,7 @@ export default async function SubjectPage({
   ];
 
   // SQL tab keeps the selection (nav highlight, crumbs) but no grid filters.
-  const sqlPath = at(
-    { tab: 'sql' },
-    { tag: null, q: '', sort: null, dir: null },
-  );
+  const sqlPath = subjectTabHref(code, sel, filters, 'sql');
   const sqlSel: ExplorerSqlSelection = {
     className: cls?.name,
     noClass: sel.classKind === 'none',

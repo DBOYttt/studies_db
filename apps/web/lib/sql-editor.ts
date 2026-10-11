@@ -1,5 +1,12 @@
 /** Pure helpers for the SQL console screen (components/SqlConsole.tsx). */
 
+import {
+  BUSY_ERROR,
+  CONNECT_ERROR,
+  EMPTY_QUERY_ERROR,
+  timeoutMessage,
+} from './sql-messages';
+
 export interface ConsoleColumn {
   /** Text in the "Kolumny" list. */
   label: string;
@@ -73,17 +80,17 @@ export function csvStamp(d: Date): string {
 }
 
 /** Messages /api/sql writes itself (lib/sql-console.ts), not MariaDB's. */
-const APP_MESSAGES = [
-  /^Puste zapytanie\.$/,
-  /^Przekroczono limit czasu \(/,
-  /^Nie udało się połączyć z bazą danych\.$/,
-  /^Serwer jest zajęty\./,
-];
+const TIMEOUT_PREFIX = timeoutMessage(0).split('(')[0];
+const isAppMessage = (error: string) =>
+  error === EMPTY_QUERY_ERROR ||
+  error === CONNECT_ERROR ||
+  error === BUSY_ERROR ||
+  error.startsWith(TIMEOUT_PREFIX);
 
 /**
  * True when an /api/sql error text came from MariaDB: the request reached
  * the database (HTTP 200) and it is not one of the API's own messages.
  */
 export function isDbMessage(status: number, error: string): boolean {
-  return status === 200 && !APP_MESSAGES.some((re) => re.test(error));
+  return status === 200 && !isAppMessage(error);
 }
