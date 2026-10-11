@@ -12,7 +12,7 @@ import {
 } from '@xyflow/react';
 import '@xyflow/react/dist/style.css';
 import { Key, Table } from '@phosphor-icons/react';
-import type { PublicView } from '@studies/db/schema';
+import type { PublicView } from '@studies/db/constants';
 import { useRouter } from 'next/navigation';
 import { memo, useMemo } from 'react';
 import {

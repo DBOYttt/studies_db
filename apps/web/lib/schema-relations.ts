@@ -1,4 +1,4 @@
-import type { PublicView } from '@studies/db/schema';
+import type { PublicView } from '@studies/db/constants';
 import type { ExplorerParams } from './explorer';
 
 export type SchemaRelation = {

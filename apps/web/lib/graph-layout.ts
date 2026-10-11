@@ -1,5 +1,5 @@
 import dagre from '@dagrejs/dagre';
-import { PUBLIC_VIEWS, type PublicView } from '@studies/db/schema';
+import { PUBLIC_VIEWS, type PublicView } from '@studies/db/constants';
 import { type ExplorerParams, explorerHref } from './explorer';
 import { pluralPl } from './format';
 import type { TreeClass, TreeTopic } from './queries';

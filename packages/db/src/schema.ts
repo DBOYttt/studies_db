@@ -16,7 +16,16 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
+import { CLASS_KINDS } from './constants.js';
 import type { JobType, PreviewKind } from './files.js';
+
+export {
+  CLASS_KINDS,
+  CLASS_NAMES,
+  type ClassKind,
+  PUBLIC_VIEWS,
+  type PublicView,
+} from './constants.js';
 
 const JOB_TYPES = [
   'convert',
@@ -51,22 +60,6 @@ export const lecturers = mysqlTable('lecturers', {
   title: varchar('title', { length: 50 }),
   email: varchar('email', { length: 200 }),
 });
-
-export const CLASS_KINDS = [
-  'wyklad',
-  'laboratorium',
-  'cwiczenia',
-  'projekt',
-  'seminarium',
-] as const;
-export type ClassKind = (typeof CLASS_KINDS)[number];
-export const CLASS_NAMES: Record<ClassKind, string> = {
-  wyklad: 'Wykład',
-  laboratorium: 'Laboratorium',
-  cwiczenia: 'Ćwiczenia',
-  projekt: 'Projekt',
-  seminarium: 'Seminarium',
-};
 
 export const classes = mysqlTable(
   'classes',
@@ -252,19 +245,3 @@ export const botState = mysqlTable('bot_state', {
     .references(() => subjects.id),
   lastSyncedAt: datetime('last_synced_at'),
 });
-
-export const PUBLIC_VIEWS = [
-  'v_subjects',
-  'v_lecturers',
-  'v_classes',
-  'v_class_groups',
-  'v_class_lecturers',
-  'v_topics',
-  'v_tags',
-  'v_topic_tags',
-  'v_materials',
-  'v_files',
-  'v_users',
-] as const;
-
-export type PublicView = (typeof PUBLIC_VIEWS)[number];
