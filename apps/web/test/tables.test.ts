@@ -202,8 +202,9 @@ describe('GET /api/schema', () => {
     const res = await GET();
     expect(res.status).toBe(200);
     const body = await res.json();
-    expect(body.v_users).toEqual(['id', 'display_name', 'created_at']);
-    expect(Object.keys(body).length).toBe(PUBLIC_VIEWS.length);
+    expect(body.columns.v_users).toEqual(['id', 'display_name', 'created_at']);
+    expect(Object.keys(body.columns).length).toBe(PUBLIC_VIEWS.length);
+    expect(body.relations).toHaveLength(15);
   });
 });
 

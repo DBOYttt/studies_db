@@ -6,6 +6,7 @@ const NAV = [
   { href: '/', label: 'Przedmioty' },
   { href: '/search', label: 'Szukaj' },
   { href: '/tables/v_subjects', label: 'Tabele' },
+  { href: '/schema', label: 'Schemat' },
   { href: '/sql', label: 'SQL' },
 ];
 

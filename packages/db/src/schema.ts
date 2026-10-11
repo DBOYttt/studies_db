@@ -266,3 +266,5 @@ export const PUBLIC_VIEWS = [
   'v_files',
   'v_users',
 ] as const;
+
+export type PublicView = (typeof PUBLIC_VIEWS)[number];

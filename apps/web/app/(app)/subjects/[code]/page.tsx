@@ -4,7 +4,9 @@ import { ExplorerShell } from '@/components/explorer/ExplorerShell';
 import { ExplorerTable } from '@/components/explorer/ExplorerTable';
 import { ExplorerTree } from '@/components/explorer/ExplorerTree';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
-import { getDb } from '@/lib/db';
+import { SchemaDiagram } from '@/components/SchemaDiagram';
+import { getDb, getRoPool } from '@/lib/db';
+import { roErrorMessage } from '@/lib/db-errors';
 import {
   explorerHref,
   parseExplorerFilters,
@@ -18,8 +20,10 @@ import {
   listSubjectTags,
   resolveSelection,
 } from '@/lib/queries';
+import { SCHEMA_RELATIONS, selectionPath } from '@/lib/schema-relations';
 import { requireUser } from '@/lib/session';
 import { buildExplorerSql } from '@/lib/sql-prefill';
+import { listViewColumns } from '@/lib/tables';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,6 +71,16 @@ export default async function SubjectPage({
       : Promise.resolve(null),
   ]);
 
+  let schemaColumns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
+  let schemaError: string | null = null;
+  if (sel.tab === 'schema') {
+    try {
+      schemaColumns = await listViewColumns(getRoPool());
+    } catch (err) {
+      schemaError = roErrorMessage(err);
+    }
+  }
+
   const cls = tree.find((c) => c.kind === sel.classKind);
   const grp = cls?.groups.find((g) => g.number === sel.group);
   const topic =
@@ -75,6 +89,12 @@ export default async function SubjectPage({
       : [...(grp?.topics ?? []), ...(cls?.topics ?? [])].find(
           (t) => t.id === sel.topic,
         );
+  const path = selectionPath(sel, {
+    subject: subject.name,
+    className: cls?.name,
+    groupName: grp?.name,
+    topicTitle: topic?.title,
+  });
   const node = (p: Parameters<typeof explorerHref>[1]) =>
     explorerHref(code, p, filters);
   const crumbs = [{ label: subject.name, href: node({}) }];
@@ -129,13 +149,19 @@ export default async function SubjectPage({
     >
       {sel.tab === 'map' ? (
         <DataMap subject={{ code, name: subject.name }} tree={tree} sel={sel} />
-      ) : !isExplorer ? (
-        <div className="rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
-          <p className="font-medium">Ten widok jest w przygotowaniu</p>
-          <p className="mt-1 text-sm text-muted">
-            Wróć do karty Explorer, aby przeglądać pliki.
+      ) : sel.tab === 'schema' ? (
+        schemaColumns ? (
+          <SchemaDiagram
+            columns={schemaColumns}
+            relations={SCHEMA_RELATIONS}
+            highlight={path.views}
+            caption={path.caption}
+          />
+        ) : (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+            {schemaError}
           </p>
-        </div>
+        )
       ) : tree.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-panel px-6 py-12 text-center">
           <p className="font-medium">Brak tematów w tym przedmiocie</p>

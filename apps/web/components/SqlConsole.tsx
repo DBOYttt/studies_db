@@ -62,8 +62,12 @@ export function SqlConsole({
     const on = (e: MediaQueryListEvent) => setDark(e.matches);
     mq.addEventListener('change', on);
     fetch('/api/schema')
-      .then((r) => (r.ok && !r.redirected ? r.json() : {}))
-      .then(setSchema)
+      .then((r) =>
+        r.ok && !r.redirected
+          ? (r.json() as Promise<{ columns?: Record<string, string[]> }>)
+          : ({} as { columns?: Record<string, string[]> }),
+      )
+      .then((b) => setSchema(b.columns ?? {}))
       .catch(() => {});
     return () => mq.removeEventListener('change', on);
   }, []);

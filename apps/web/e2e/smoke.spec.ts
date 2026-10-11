@@ -46,6 +46,27 @@ test('browse, preview, search and sql console', async ({ page }) => {
   await expect(page).toHaveURL(/\/subjects\/FIZ\?class=none$/);
   await page.goto(`/subjects/FIZ?topic=${topicId}`);
 
+  // The schema tab highlights the path of the current selection (the fixture
+  // has no groups, so the deepest level is the topic).
+  await page.getByRole('link', { name: 'Schemat bazy' }).click();
+  await expect(page).toHaveURL(/tab=schema/);
+  await expect(page.getByText('Temat jest w v_topics')).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: /Tabela v_topics/ }),
+  ).toHaveAttribute('aria-current', 'true');
+  await expect(
+    page.getByRole('button', { name: /Tabela v_files/ }),
+  ).not.toHaveAttribute('aria-current', 'true');
+  await page.goto('/schema');
+  await expect(
+    page.getByRole('heading', { name: 'Schemat bazy' }),
+  ).toBeVisible();
+  const filesNode = page.getByRole('button', { name: /Tabela v_files/ });
+  await expect(filesNode).toBeVisible();
+  await filesNode.click();
+  await expect(page).toHaveURL(/\/tables\/v_files$/);
+  await page.goto(`/subjects/FIZ?topic=${topicId}`);
+
   // Statuses are visible in the table without opening anything.
   await expect(page.getByText('Przetwarzanie…')).toBeVisible();
   await expect(page.getByText('Podgląd niedostępny')).toBeVisible();

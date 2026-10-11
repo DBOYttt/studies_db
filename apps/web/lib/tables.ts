@@ -1,8 +1,8 @@
-import { PUBLIC_VIEWS } from '@studies/db';
+import { PUBLIC_VIEWS, type PublicView } from '@studies/db';
 import type mysql from 'mysql2/promise';
 import { toJsonValue } from './sql-console';
 
-export type PublicView = (typeof PUBLIC_VIEWS)[number];
+export type { PublicView };
 
 export const PAGE_SIZE = 50;
 const COLUMNS_TTL_MS = 60_000;
