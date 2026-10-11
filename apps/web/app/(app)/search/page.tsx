@@ -41,6 +41,8 @@ export default async function SearchPage({
       ? searchAll(db, { q, subjectId, tagId, limit: SEARCH_LIMIT })
       : Promise.resolve([]),
   ]);
+  // searchAll caps at SEARCH_LIMIT (its maximum): a full page means "maybe more".
+  const capped = hits.length >= SEARCH_LIMIT;
 
   return (
     <>
@@ -115,8 +117,10 @@ export default async function SearchPage({
             >
               <CheckCircle size={16} weight="fill" aria-hidden />
               <span>
-                Wyniki wyszukiwania „<b>{q}</b>”: {hits.length}{' '}
-                {pluralPl(hits.length, 'trafienie', 'trafienia', 'trafień')}
+                Wyniki wyszukiwania „<b>{q}</b>”:{' '}
+                {capped
+                  ? `${SEARCH_LIMIT}+ trafień (pokazano pierwsze ${SEARCH_LIMIT})`
+                  : `${hits.length} ${pluralPl(hits.length, 'trafienie', 'trafienia', 'trafień')}`}
               </span>
             </div>
             <div className="shrink-0 overflow-auto rounded-md border border-line-strong">

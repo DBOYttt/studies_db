@@ -132,4 +132,36 @@ describe('buildDesignerLayout', () => {
     const files = l.boxes.find((b) => b.view === 'v_files');
     expect(l.height).toBe((files?.y ?? 0) + (files?.height ?? 0) + 20);
   });
+  it('stacks views without a design position in rows by box height', () => {
+    const many = Array.from({ length: 40 }, (_, i) => `c${i}`);
+    const cols = { ...columns, v_subjects: ['id', ...many] };
+    // Only v_users keeps a fixed position; the other 10 views are placed.
+    const l = buildDesignerLayout(cols, undefined, SCHEMA_RELATIONS, {
+      v_users: [20, 20],
+    });
+    const users = l.boxes.find((b) => b.view === 'v_users');
+    const placed = l.boxes.filter((b) => b.view !== 'v_users');
+    const rows = [...new Set(placed.map((b) => b.y))].sort((a, b) => a - b);
+    expect(rows).toHaveLength(3); // 4 + 4 + 2 per row
+    expect(rows[0]).toBe((users?.y ?? 0) + (users?.height ?? 0) + 40);
+    const first = placed.filter((b) => b.y === rows[0]);
+    expect(rows[1]).toBe(
+      rows[0] + Math.max(...first.map((b) => b.height)) + 40,
+    );
+    // No two boxes overlap.
+    for (const a of l.boxes) {
+      for (const b of l.boxes) {
+        if (a === b) continue;
+        const apart =
+          a.x + 190 <= b.x ||
+          b.x + 190 <= a.x ||
+          a.y + a.height <= b.y ||
+          b.y + b.height <= a.y;
+        expect(apart, `${a.view} vs ${b.view}`).toBe(true);
+      }
+    }
+    expect(l.height).toBeGreaterThanOrEqual(
+      Math.max(...l.boxes.map((b) => b.y + b.height)),
+    );
+  });
 });

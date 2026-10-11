@@ -11,6 +11,7 @@ import {
   DESIGNER_ROW_HEIGHT,
   type DesignerHighlight,
 } from '@/lib/designer-layout';
+import { pluralPl } from '@/lib/format';
 
 /**
  * phpMyAdmin "Projektant" (design lines 310-328): fixed table boxes with
@@ -89,7 +90,7 @@ export function DesignerDiagram({
               <Link
                 key={b.view}
                 href={`/tables/${b.view}`}
-                aria-label={`Tabela ${b.view}, ${b.columns.length} kolumn`}
+                aria-label={`Tabela ${b.view}, ${b.columns.length} ${pluralPl(b.columns.length, 'kolumna', 'kolumny', 'kolumn')}`}
                 aria-current={b.highlighted ? 'true' : undefined}
                 onMouseEnter={() => setHover(b.view)}
                 onMouseLeave={() => setHover(null)}

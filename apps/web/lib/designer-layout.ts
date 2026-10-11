@@ -66,14 +66,15 @@ const boxHeight = (n: number) =>
   DESIGNER_HEADER_HEIGHT + 2 * DESIGNER_LIST_PAD + n * DESIGNER_ROW_HEIGHT + 2;
 
 /**
- * Pure layout of the designer: design positions, unknown views in a row
- * below, cubic bezier edges between the related column rows. Relations whose
+ * Pure layout of the designer: design positions (`positions`, default the
+ * design's BOX map), unknown views in rows below, cubic bezier edges between the related column rows. Relations whose
  * column is missing from the live view are dropped.
  */
 export function buildDesignerLayout(
   columns: Partial<Record<PublicView, string[]>>,
   highlight?: DesignerHighlight,
   relations: readonly SchemaRelation[] = SCHEMA_RELATIONS,
+  positions: Partial<Record<PublicView, [number, number]>> = DESIGNER_BOX,
 ): DesignerLayout {
   const cols = (v: PublicView) => columns[v] ?? [];
   const live = relations.filter(
@@ -101,23 +102,27 @@ export function buildDesignerLayout(
   const pos = new Map<PublicView, [number, number]>();
   let fixedBottom = 0;
   for (const v of PUBLIC_VIEWS) {
-    const p = DESIGNER_BOX[v];
+    const p = positions[v];
     if (!p) continue;
     pos.set(v, p);
     fixedBottom = Math.max(fixedBottom, p[1] + boxHeight(cols(v).length));
   }
+  // Views without a design position: rows below the fixed boxes, each row as
+  // tall as its tallest box, so tall boxes never overlap the next row.
+  const perRow = Math.max(
+    1,
+    Math.floor((MIN_WIDTH - MARGIN) / (DESIGNER_BOX_WIDTH + AUTO_GAP_X)),
+  );
   const missing = PUBLIC_VIEWS.filter((v) => !pos.has(v));
-  missing.forEach((v, i) => {
-    const perRow = Math.floor(
-      (MIN_WIDTH - MARGIN) / (DESIGNER_BOX_WIDTH + AUTO_GAP_X),
-    );
-    pos.set(v, [
-      MARGIN + (i % perRow) * (DESIGNER_BOX_WIDTH + AUTO_GAP_X),
-      fixedBottom +
-        AUTO_GAP_Y +
-        Math.floor(i / perRow) * (MIN_HEIGHT / 2 + AUTO_GAP_Y),
-    ]);
-  });
+  let autoY = fixedBottom + AUTO_GAP_Y;
+  for (let i = 0; i < missing.length; i += perRow) {
+    const row = missing.slice(i, i + perRow);
+    row.forEach((v, j) => {
+      pos.set(v, [MARGIN + j * (DESIGNER_BOX_WIDTH + AUTO_GAP_X), autoY]);
+    });
+    autoY +=
+      Math.max(...row.map((v) => boxHeight(cols(v).length))) + AUTO_GAP_Y;
+  }
 
   const boxes: DesignerBox[] = PUBLIC_VIEWS.map((v) => {
     const [x, y] = pos.get(v) as [number, number];
