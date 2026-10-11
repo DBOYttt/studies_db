@@ -26,8 +26,11 @@ import {
   DESIGNER_ROW_HEIGHT,
   type DesignerEdge,
   type DesignerHighlight,
+  type DesignerHover,
+  hoverAfterDrag,
   markerPath,
   parseStoredPositions,
+  rowHover,
 } from '@/lib/designer-layout';
 import { pluralPl } from '@/lib/format';
 
@@ -42,7 +45,7 @@ const KEY_STEP = 16;
 const KEY_STEP_BIG = 64;
 
 type Positions = Partial<Record<PublicView, [number, number]>>;
-type Hover = { view: PublicView; row?: string } | null;
+type Hover = DesignerHover;
 type Drag = {
   view: PublicView;
   pointerId: number;
@@ -211,6 +214,8 @@ export function DesignerDiagram({
       suppressClick.current = true;
       setDragging(null);
       savePositions(posRef.current);
+      const box = e.currentTarget.closest('[role="group"]');
+      setHover(hoverAfterDrag(d.view, e.pointerType, !!box?.matches(':hover')));
     }
   };
 
@@ -430,7 +435,7 @@ export function DesignerDiagram({
                         <li
                           key={c.name}
                           onMouseEnter={() =>
-                            setHover({ view: b.view, row: c.name })
+                            setHover(rowHover(layout.edges, b.view, c.name))
                           }
                           onMouseLeave={() => {
                             if (!drag.current) setHover({ view: b.view });

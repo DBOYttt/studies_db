@@ -7,9 +7,11 @@ import {
   DESIGNER_BOX_WIDTH,
   DESIGNER_DEFAULT_POS,
   type DesignerLayout,
+  hoverAfterDrag,
   markerPath,
   parseStoredPositions,
   relationId,
+  rowHover,
 } from '../lib/designer-layout';
 import { SCHEMA_RELATIONS, type SchemaRelation } from '../lib/schema-relations';
 
@@ -454,5 +456,36 @@ describe('stored positions', () => {
     expect(clampPosition([7, 9])).toEqual([7, 9]);
     expect(clampPosition([Number.NaN, 9])).toEqual([0, 9]);
     expect(clampPosition([3, Number.POSITIVE_INFINITY])).toEqual([3, 0]);
+  });
+});
+
+describe('hover helpers', () => {
+  const l = buildDesignerLayout(columns);
+
+  it('rowHover: a relation row lights just that row', () => {
+    expect(rowHover(l.edges, 'v_files', 'topic_id')).toEqual({
+      view: 'v_files',
+      row: 'topic_id',
+    });
+    // PK end of a relation too.
+    expect(rowHover(l.edges, 'v_subjects', 'id')).toEqual({
+      view: 'v_subjects',
+      row: 'id',
+    });
+  });
+
+  it('rowHover: a row without relations keeps the whole box lit', () => {
+    expect(rowHover(l.edges, 'v_subjects', 'name')).toEqual({
+      view: 'v_subjects',
+    });
+  });
+
+  it('hoverAfterDrag: keeps the box lit only for a mouse still over it', () => {
+    expect(hoverAfterDrag('v_files', 'mouse', true)).toEqual({
+      view: 'v_files',
+    });
+    expect(hoverAfterDrag('v_files', 'mouse', false)).toBeNull();
+    expect(hoverAfterDrag('v_files', 'touch', true)).toBeNull();
+    expect(hoverAfterDrag('v_files', 'pen', false)).toBeNull();
   });
 });

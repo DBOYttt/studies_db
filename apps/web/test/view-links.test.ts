@@ -57,6 +57,12 @@ describe('cellHref', () => {
     expect(at('v_topics', cols, [9, 'T', 4], 'id')).toBe('/topics/9');
     expect(at('v_topics', cols, [9, 'T', 4], 'title')).toBe('/topics/9');
   });
+  it('v_topics subject_name (entity topic grids) -> subject', () => {
+    const cols = ['id', 'title', 'subject_name', 'subject_id'];
+    const row = [9, 'T', 'Mechanika', 2];
+    expect(at('v_topics', cols, row, 'subject_name')).toBe('/subjects/MECH');
+    expect(at('v_topics', cols, row, 'subject_id')).toBe('/subjects/MECH');
+  });
   it('v_files same-row lookups', () => {
     const cols = [
       'subject_code',

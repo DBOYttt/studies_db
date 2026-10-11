@@ -65,7 +65,11 @@ const VIEW_LABELS: Partial<Record<PublicView, Record<string, Label>>> = {
   v_lecturers: own(LECTURER, ['id', 'name']),
   v_users: own(USER, ['id', 'display_name']),
   v_tags: own(TAG, ['id', 'name']),
-  v_topics: own(TOPIC, ['id', 'title']),
+  // subject_name only exists in the entity pages' topic grids.
+  v_topics: {
+    ...own(TOPIC, ['id', 'title']),
+    subject_name: { idCol: 'subject_id', resolve: SUBJECT },
+  },
   v_files: {
     subject_code: { idCol: 'subject_id', resolve: SUBJECT },
     subject_name: { idCol: 'subject_id', resolve: SUBJECT },

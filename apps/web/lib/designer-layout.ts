@@ -76,6 +76,40 @@ export type DesignerEdge = {
   highlighted: boolean;
 };
 
+/** What the pointer/focus is on: a whole box, or one of its rows. */
+export type DesignerHover = { view: PublicView; row?: string } | null;
+
+/**
+ * Hover state for a row: the row itself when it is an end of some relation,
+ * otherwise the whole box (a relation-less row would light nothing and dim
+ * the entire diagram).
+ */
+export function rowHover(
+  edges: DesignerEdge[],
+  view: PublicView,
+  row: string,
+): DesignerHover {
+  const related = edges.some(
+    (e) =>
+      (e.from === view && e.fromRow === row) ||
+      (e.to === view && e.toRow === row),
+  );
+  return related ? { view, row } : { view };
+}
+
+/**
+ * Hover state once a drag ends: keep the box lit only for a mouse that is
+ * still over it. Touch never fires `mouseleave`, and a mouse can end the drag
+ * outside the box, so anything else clears the dimming.
+ */
+export function hoverAfterDrag(
+  view: PublicView,
+  pointerType: string,
+  stillOver: boolean,
+): DesignerHover {
+  return pointerType === 'mouse' && stillOver ? { view } : null;
+}
+
 export type DesignerLayout = {
   width: number;
   height: number;
