@@ -1,21 +1,7 @@
-import { type Cookie, expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
+import { loginOnce } from './session';
 
-// Login tokens are single use: log in once, then reuse the session cookies.
-let cookies: Cookie[] = [];
-test.beforeAll(async ({ browser }) => {
-  const context = await browser.newContext({ locale: 'pl-PL' });
-  const page = await context.newPage();
-  await page.goto(
-    `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_ENTITIES}`,
-  );
-  await page.getByRole('button', { name: 'Zaloguj się' }).click();
-  await expect(page).toHaveURL(/\/$/);
-  cookies = await context.cookies();
-  await context.close();
-});
-test.beforeEach(async ({ context }) => {
-  await context.addCookies(cookies);
-});
+loginOnce('entities', process.env.E2E_TOKEN_ENTITIES);
 
 const tabsNav = (page: Page) =>
   page.getByRole('navigation', { name: 'Zakładki' });
@@ -62,8 +48,17 @@ test('lecturer page: assignments, materials of own groups, links', async ({
   ).toBeVisible();
 
   await tabsNav(page).getByRole('link', { name: 'Zajęcia' }).click();
-  await table.getByRole('link', { name: 'Gr. 3' }).click();
-  await expect(page).toHaveURL(/\/subjects\/MECH\?class=laboratorium&group=3$/);
+  const gr3 = table.getByRole('link', { name: 'Gr. 3', exact: true });
+  await expect(gr3).toHaveAttribute(
+    'href',
+    '/subjects/MECH?class=laboratorium&group=3',
+  );
+  await gr3.click();
+  // First visit to /subjects/[code] on `next dev` compiles the heaviest route.
+  await expect(page).toHaveURL(
+    /\/subjects\/MECH\?class=laboratorium&group=3$/,
+    { timeout: 30_000 },
+  );
 });
 
 test('whole-class lecturer shows "Wszystkie grupy"', async ({ page }) => {

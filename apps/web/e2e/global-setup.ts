@@ -16,12 +16,15 @@ import {
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { E2E_STORAGE_DIR } from '../playwright.config';
+import { E2E_SESSION_DIR } from './session';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
 export default async function globalSetup() {
   rmSync(E2E_STORAGE_DIR, { recursive: true, force: true });
   mkdirSync(E2E_STORAGE_DIR, { recursive: true });
+  rmSync(E2E_SESSION_DIR, { recursive: true, force: true });
+  mkdirSync(E2E_SESSION_DIR, { recursive: true });
   for (const f of ['sample.pdf', 'sample.docx', 'sample.pptx']) {
     copyFileSync(join(fixtures, f), join(E2E_STORAGE_DIR, f));
   }

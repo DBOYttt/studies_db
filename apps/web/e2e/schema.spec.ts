@@ -1,21 +1,7 @@
-import { type Cookie, expect, type Page, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
+import { loginOnce } from './session';
 
-// Login tokens are single use: log in once, then reuse the session cookies.
-let cookies: Cookie[] = [];
-test.beforeAll(async ({ browser }) => {
-  const context = await browser.newContext({ locale: 'pl-PL' });
-  const page = await context.newPage();
-  await page.goto(
-    `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_SCHEMA}`,
-  );
-  await page.getByRole('button', { name: 'Zaloguj się' }).click();
-  await expect(page).toHaveURL(/\/$/);
-  cookies = await context.cookies();
-  await context.close();
-});
-test.beforeEach(async ({ context }) => {
-  await context.addCookies(cookies);
-});
+loginOnce('schema', process.env.E2E_TOKEN_SCHEMA);
 
 const VIEWS = [
   'v_subjects',

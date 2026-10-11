@@ -18,6 +18,8 @@ export default defineConfig({
   globalSetup: './e2e/global-setup.ts',
   workers: 1,
   timeout: 60_000,
+  // `next dev` compiles each route on its first visit, which can take >5 s.
+  expect: { timeout: 15_000 },
   reporter: 'list',
   use: { baseURL: `http://localhost:${PORT}`, locale: 'pl-PL' },
   webServer: {
