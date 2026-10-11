@@ -37,8 +37,8 @@ import {
   sortRowIndexes,
   withParams,
 } from '@/lib/result-grid';
-import { type SqlTokenKind, tokenizeSql } from '@/lib/sql-highlight';
 import type { Cell } from './DataGrid';
+import { SqlText } from './SqlText';
 import { TagBadge } from './TagBadge';
 
 export type { Cell };
@@ -130,16 +130,6 @@ export interface ResultGridProps {
   /** Client-side preview instead of `nav` links (e.g. inside a client page). */
   onPreview?: (id: number) => void;
 }
-
-const TOKEN_CLASS: Record<SqlTokenKind, string> = {
-  space: '',
-  string: 'text-sql-string',
-  identifier: 'text-accent-ink font-medium',
-  number: 'text-sql-number',
-  keyword: 'text-sql-keyword font-semibold',
-  word: 'text-fg',
-  punct: 'text-faint',
-};
 
 const BADGE: Record<'pending' | 'failed', [string, string]> = {
   pending: ['Przetwarzanie…', 'border-warn-fg text-warn-fg'],
@@ -285,7 +275,6 @@ export function ResultGrid({
 
   const server = !!paging;
   const total = totalProp ?? rows.length;
-  const tokens = useMemo(() => tokenizeSql(sql), [sql]);
 
   const filtered = useMemo(() => {
     const idx = filterRowIndexes(rows, filter);
@@ -501,12 +490,7 @@ export function ResultGrid({
 
       <div className="rounded-md border border-line-strong bg-bar">
         <pre className="m-0 whitespace-pre-wrap break-words px-3 py-2.5 font-mono text-[12.5px] leading-[1.55]">
-          {tokens.map((t, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: tokens have no identity
-            <span key={i} className={TOKEN_CLASS[t.kind]}>
-              {t.text}
-            </span>
-          ))}
+          <SqlText sql={sql} />
         </pre>
         <div className="flex flex-wrap justify-end gap-x-3.5 gap-y-1 border-t border-line px-3 py-1.5 text-xs">
           <Link href={editHref} className={linkCls}>

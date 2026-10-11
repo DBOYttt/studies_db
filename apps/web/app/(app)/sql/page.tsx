@@ -1,4 +1,6 @@
 import { SqlConsole } from '@/components/SqlConsole';
+import { dbTabs } from '@/components/shell/db-tabs';
+import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
@@ -18,7 +20,7 @@ export default async function SqlPage({
   // Prefill only: the editor shows it, the user runs it.
   const initialQuery =
     typeof q === 'string' && q.trim() ? q.slice(0, MAX_PREFILL) : undefined;
-  let schema: Record<string, string[]> = {};
+  let schema: Record<string, string[]> | undefined;
   let error: string | null = null;
   try {
     schema = await listViewColumns(getRoPool());
@@ -26,37 +28,23 @@ export default async function SqlPage({
     error = roErrorMessage(err);
   }
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-6 lg:flex-row">
-      <aside className="shrink-0 lg:w-64">
-        <h2 className="mb-2 text-sm font-semibold text-[var(--muted)]">
-          Schemat
-        </h2>
+    <>
+      <ScreenHeader tabs={dbTabs('sql')} />
+      <div className="flex flex-col gap-3">
         {error && (
-          <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+          <div
+            role="alert"
+            className="rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
+          >
+            Nie udało się wczytać listy kolumn: {error}
+          </div>
         )}
-        <div className="space-y-1">
-          {Object.entries(schema).map(([view, cols]) => (
-            <details
-              key={view}
-              className="rounded border border-[var(--border)] px-2 py-1 text-sm"
-            >
-              <summary className="cursor-pointer font-mono">{view}</summary>
-              <ul className="mt-1 space-y-0.5 pl-3 font-mono text-xs text-[var(--muted)]">
-                {cols.map((c) => (
-                  <li key={c}>{c}</li>
-                ))}
-              </ul>
-            </details>
-          ))}
-        </div>
-      </aside>
-      <section className="min-w-0 flex-1 space-y-3">
-        <h1 className="text-2xl font-semibold">Konsola SQL</h1>
-        <p className="text-sm text-[var(--muted)]">
-          Tylko odczyt (SELECT) na widokach v_*. Limit 1000 wierszy i 5 sekund.
-        </p>
-        <SqlConsole key={initialQuery ?? ''} initialQuery={initialQuery} />
-      </section>
-    </div>
+        <SqlConsole
+          key={initialQuery ?? ''}
+          initialQuery={initialQuery}
+          schema={schema ?? {}}
+        />
+      </div>
+    </>
   );
 }

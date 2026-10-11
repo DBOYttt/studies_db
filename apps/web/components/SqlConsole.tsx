@@ -1,17 +1,56 @@
 'use client';
 
 import { MariaSQL, sql } from '@codemirror/lang-sql';
+import { HighlightStyle, syntaxHighlighting } from '@codemirror/language';
 import { Prec } from '@codemirror/state';
-import { keymap } from '@codemirror/view';
+import { EditorView, keymap } from '@codemirror/view';
+import { tags as t } from '@lezer/highlight';
+import { Warning, XCircle } from '@phosphor-icons/react';
 import CodeMirror from '@uiw/react-codemirror';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  type KeyboardEvent as ReactKeyboardEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
+import { PreviewPanel } from '@/components/explorer/PreviewPanel';
+import { ResultGrid } from '@/components/ResultGrid';
+import { SqlText } from '@/components/SqlText';
 import { toCells } from '@/lib/cells';
-import { toCsv } from '@/lib/csv';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
-import { pushSqlHistory, readSqlHistory } from '@/lib/sql-history';
-import { DataGrid } from './DataGrid';
+import type { ExplorerFile } from '@/lib/queries';
+import {
+  columnInsertion,
+  consoleColumns,
+  csvStamp,
+  historyLabel,
+  sqlFileColumn,
+  sqlHref,
+} from '@/lib/sql-editor';
+import {
+  pushSqlHistory,
+  readSqlHistory,
+  SQL_HISTORY_EVENT,
+} from '@/lib/sql-history';
+
+export const DEFAULT_SQL = 'SELECT * FROM v_subjects LIMIT 10';
 
 type Result =
+  | {
+      ok: true;
+      sql: string;
+      run: number;
+      stamp: string;
+      columns: string[];
+      rows: unknown[][];
+      truncated: boolean;
+      durationMs: number;
+    }
+  | { ok: false; sql: string; error: string };
+
+type ApiResult =
   | {
       ok: true;
       columns: string[];
@@ -20,6 +59,11 @@ type Result =
       durationMs: number;
     }
   | { ok: false; error: string };
+
+type Preview =
+  | { id: number; state: 'loading' }
+  | { id: number; state: 'done'; file: ExplorerFile | null }
+  | { id: number; state: 'error' };
 
 /** requireUser()/proxy send an expired session to /login-info (fetch follows). */
 function isSessionExpired(res: Response): boolean {
@@ -31,44 +75,187 @@ function isSessionExpired(res: Response): boolean {
   }
 }
 
-export function SqlConsole({
-  initialQuery = 'SELECT * FROM v_subjects LIMIT 10',
-}: {
+/** Editor look (design lines 111-116): 13px mono, 20px lines, grey gutter. */
+const editorTheme = EditorView.theme({
+  '&': {
+    minHeight: '176px',
+    fontSize: '13px',
+    backgroundColor: 'var(--bg)',
+    color: 'var(--fg)',
+  },
+  '&.cm-focused': { outline: 'none' },
+  '.cm-scroller': {
+    fontFamily: 'var(--font-mono)',
+    lineHeight: '20px',
+  },
+  '.cm-content': {
+    padding: '8px 0',
+    minHeight: '160px',
+    caretColor: 'var(--fg)',
+  },
+  '.cm-line': { padding: '0 10px' },
+  '.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--fg)' },
+  '&.cm-focused > .cm-scroller > .cm-selectionLayer .cm-selectionBackground, .cm-selectionBackground, .cm-content ::selection':
+    { backgroundColor: 'var(--selected)' },
+  '.cm-gutters': {
+    backgroundColor: 'var(--surface)',
+    borderRight: '1px solid var(--border)',
+    color: 'var(--subtle)',
+  },
+  '.cm-lineNumbers .cm-gutterElement': {
+    minWidth: '36px',
+    padding: '0 8px',
+    textAlign: 'right',
+  },
+  '.cm-matchingBracket': {
+    backgroundColor: 'var(--checked)',
+    outline: 'none',
+  },
+  '.cm-tooltip': {
+    backgroundColor: 'var(--panel)',
+    border: '1px solid var(--border-strong)',
+    borderRadius: '4px',
+    color: 'var(--fg)',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul': {
+    fontFamily: 'var(--font-mono)',
+    fontSize: '12px',
+  },
+  '.cm-tooltip.cm-tooltip-autocomplete > ul > li[aria-selected]': {
+    backgroundColor: 'var(--accent-fill)',
+    color: 'var(--on-accent)',
+  },
+  '.cm-completionDetail': { color: 'inherit', opacity: 0.7 },
+});
+
+/** Same colours as the highlighted SQL boxes (lib/sql-highlight.ts). */
+const sqlHighlight = HighlightStyle.define([
+  { tag: t.keyword, color: 'var(--sql-keyword)', fontWeight: '600' },
+  {
+    tag: [t.typeName, t.standard(t.name), t.bool, t.null],
+    color: 'var(--sql-keyword)',
+  },
+  { tag: t.string, color: 'var(--sql-string)' },
+  { tag: t.special(t.string), color: 'var(--accent-ink)', fontWeight: '500' },
+  { tag: t.number, color: 'var(--sql-number)' },
+  {
+    tag: [t.comment, t.lineComment, t.blockComment],
+    color: 'var(--faint)',
+    fontStyle: 'italic',
+  },
+  {
+    tag: [t.operator, t.punctuation, t.paren, t.bracket],
+    color: 'var(--faint)',
+  },
+]);
+
+const NO_SCHEMA: Record<string, string[]> = {};
+
+const control =
+  'rounded border border-line-strong bg-page px-1.5 py-[5px] text-fg';
+
+export interface SqlConsoleProps {
+  /** Editor content on mount (e.g. the `?q=` prefill); never auto-runs. */
   initialQuery?: string;
-}) {
+  /**
+   * Columns per view (autocomplete and the "Kolumny" list). When absent the
+   * console fetches them from /api/schema.
+   */
+  schema?: Record<string, string[]>;
+  /**
+   * Embedded in a view screen: "Kolumny" lists only this view's columns
+   * (`columns`, else `schema[view]`) as bare names, and autocomplete
+   * completes them unqualified.
+   */
+  embedded?: { view: string; columns?: string[] };
+  /**
+   * Route that hosts this console; "Edytuj w konsoli SQL" opens
+   * `<editPath>?q=<sql>` (or `&q=` when `editPath` has a query). Default `/sql`.
+   */
+  editPath?: string;
+}
+
+/**
+ * SQL console (design lines 106-152): editor + "Kolumny", the action bar,
+ * the error box and the result grid with client-side file previews.
+ * Safety lives in /api/sql (read-only pool, watchdog + KILL, limits).
+ */
+export function SqlConsole({
+  initialQuery = DEFAULT_SQL,
+  schema: schemaProp,
+  embedded,
+  editPath = '/sql',
+}: SqlConsoleProps) {
   const [query, setQuery] = useState(initialQuery);
-  const [schema, setSchema] = useState<Record<string, string[]>>({});
+  const [fetchedSchema, setFetchedSchema] = useState<Record<
+    string,
+    string[]
+  > | null>(null);
   const [result, setResult] = useState<Result | null>(null);
   const [running, setRunning] = useState(false);
   const [history, setHistory] = useState<string[]>([]);
-  const [dark, setDark] = useState(false);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const viewRef = useRef<EditorView | null>(null);
   const runRef = useRef<() => void>(() => {});
+  const runCount = useRef(0);
+  const previewSeq = useRef(0);
+
+  const schema = schemaProp ?? fetchedSchema ?? NO_SCHEMA;
+  const scopeView = embedded?.view;
+  const scopeColumns = embedded?.columns;
 
   useEffect(() => {
     setHistory(readSqlHistory());
-    const mq = window.matchMedia('(prefers-color-scheme: dark)');
-    setDark(mq.matches);
-    const on = (e: MediaQueryListEvent) => setDark(e.matches);
-    mq.addEventListener('change', on);
+    const sync = () => setHistory(readSqlHistory());
+    window.addEventListener(SQL_HISTORY_EVENT, sync);
+    window.addEventListener('storage', sync);
+    return () => {
+      window.removeEventListener(SQL_HISTORY_EVENT, sync);
+      window.removeEventListener('storage', sync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (schemaProp) return;
+    let live = true;
     fetch('/api/schema')
       .then((r) =>
         r.ok && !r.redirected
           ? (r.json() as Promise<{ columns?: Record<string, string[]> }>)
-          : ({} as { columns?: Record<string, string[]> }),
+          : {},
       )
-      .then((b) => setSchema(b.columns ?? {}))
+      .then((b: { columns?: Record<string, string[]> }) => {
+        if (live) setFetchedSchema(b.columns ?? {});
+      })
       .catch(() => {});
-    return () => mq.removeEventListener('change', on);
-  }, []);
+    return () => {
+      live = false;
+    };
+  }, [schemaProp]);
 
   const run = useCallback(async () => {
-    if (running || !query.trim()) return;
+    const q = query.trim();
+    if (running || !q) return;
     setRunning(true);
+    const finish = (r: ApiResult) => {
+      runCount.current += 1;
+      setPreview(null);
+      setResult(
+        r.ok
+          ? {
+              ...r,
+              sql: q,
+              run: runCount.current,
+              stamp: csvStamp(new Date()),
+            }
+          : { ok: false, sql: q, error: r.error },
+      );
+    };
     try {
       const res = await fetch('/api/sql', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sql: query }),
+        body: JSON.stringify({ sql: q }),
       });
       if (isSessionExpired(res)) {
         window.location.href = '/login-info';
@@ -79,42 +266,110 @@ export function SqlConsole({
         ?.includes('application/json');
       if (!isJson) {
         // e.g. a proxy/tunnel error page; keep the query so it can be retried
-        setResult({ ok: false, error: `Błąd serwera (${res.status}).` });
+        finish({ ok: false, error: `Błąd serwera (${res.status}).` });
         return;
       }
-      const data = (await res.json()) as Result;
-      setResult(data);
-      setHistory(pushSqlHistory(query));
+      finish((await res.json()) as ApiResult);
+      setHistory(pushSqlHistory(q));
     } catch {
-      setResult({ ok: false, error: 'Nie udało się połączyć z serwerem.' });
+      finish({ ok: false, error: 'Nie udało się połączyć z serwerem.' });
     } finally {
       setRunning(false);
     }
   }, [query, running]);
   runRef.current = run;
 
-  const exportCsv = () => {
-    if (!result?.ok) return;
-    const d = new Date();
-    const p = (n: number) => String(n).padStart(2, '0');
-    const stamp = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}`;
-    const url = URL.createObjectURL(
-      new Blob([toCsv(result.columns, result.rows)], {
-        type: 'text/csv;charset=utf-8',
-      }),
+  const openPreview = useCallback(async (id: number) => {
+    const seq = ++previewSeq.current;
+    setPreview({ id, state: 'loading' });
+    try {
+      const res = await fetch(`/api/material/${id}`);
+      if (isSessionExpired(res)) {
+        window.location.href = '/login-info';
+        return;
+      }
+      if (seq !== previewSeq.current) return;
+      if (res.status === 404) {
+        setPreview({ id, state: 'done', file: null });
+      } else if (res.ok) {
+        // JSON carries createdAt as an ISO string; the panel formats a Date.
+        const json = (await res.json()) as Omit<ExplorerFile, 'createdAt'> & {
+          createdAt: string;
+        };
+        if (seq !== previewSeq.current) return;
+        setPreview({
+          id,
+          state: 'done',
+          file: { ...json, createdAt: new Date(json.createdAt) },
+        });
+      } else {
+        setPreview({ id, state: 'error' });
+      }
+    } catch {
+      if (seq === previewSeq.current) setPreview({ id, state: 'error' });
+    }
+  }, []);
+  const closePreview = useCallback(() => {
+    previewSeq.current += 1;
+    setPreview(null);
+  }, []);
+
+  const columns = useMemo(
+    () =>
+      consoleColumns(
+        schema,
+        scopeView === undefined
+          ? undefined
+          : { view: scopeView, columns: scopeColumns },
+      ),
+    [schema, scopeView, scopeColumns],
+  );
+
+  const insertColumns = (names: string[]) => {
+    const view = viewRef.current;
+    const text = names.join(', ');
+    if (!text) return;
+    if (!view) {
+      setQuery((q) => `${q}${/\s$/.test(q) || !q ? '' : ' '}${text}`);
+      return;
+    }
+    const sel = view.state.selection.main;
+    const c = columnInsertion(
+      view.state.doc.toString(),
+      sel.from,
+      sel.to,
+      text,
     );
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `zapytanie-${stamp}.csv`;
-    document.body.append(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 0);
+    view.dispatch({
+      changes: { from: c.from, to: c.to, insert: c.insert },
+      selection: { anchor: c.cursor },
+      scrollIntoView: true,
+    });
+    view.focus();
+  };
+
+  const onColumnsKey = (e: ReactKeyboardEvent<HTMLSelectElement>) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    insertColumns(Array.from(e.currentTarget.selectedOptions, (o) => o.value));
+  };
+
+  const clear = () => {
+    setQuery('');
+    viewRef.current?.focus();
   };
 
   const extensions = useMemo(
     () => [
-      sql({ dialect: MariaSQL, schema, upperCaseKeywords: true }),
+      sql({
+        dialect: MariaSQL,
+        schema,
+        defaultTable: scopeView,
+        upperCaseKeywords: true,
+      }),
+      editorTheme,
+      syntaxHighlighting(sqlHighlight),
+      EditorView.contentAttributes.of({ 'aria-label': 'Zapytanie SQL' }),
       Prec.highest(
         keymap.of([
           {
@@ -127,101 +382,230 @@ export function SqlConsole({
         ]),
       ),
     ],
-    [schema],
+    [schema, scopeView],
   );
 
-  const select =
-    'rounded border border-[var(--border)] bg-transparent px-2 py-1.5 text-sm';
+  const fileColumn = result?.ok ? sqlFileColumn(result.columns) : undefined;
+  const rows = useMemo(
+    () => (result?.ok ? toCells(result.rows) : []),
+    [result],
+  );
+
   return (
-    <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <select
-          aria-label="Przykładowe zapytania"
-          className={select}
-          value=""
-          onChange={(e) => {
-            const ex = EXAMPLE_QUERIES.find((q) => q.name === e.target.value);
-            if (ex) setQuery(ex.sql);
-          }}
-        >
-          <option value="">Przykłady…</option>
-          {EXAMPLE_QUERIES.map((q) => (
-            <option key={q.name} value={q.name}>
-              {q.name}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label="Historia zapytań"
-          className={`${select} max-w-xs`}
-          value=""
-          onChange={(e) =>
-            e.target.value && setQuery(history[Number(e.target.value) - 1])
-          }
-        >
-          <option value="">Historia ({history.length})…</option>
-          {history.map((h, i) => (
-            // biome-ignore lint/suspicious/noArrayIndexKey: index is the value
-            <option key={i} value={i + 1}>
-              {h.replace(/\s+/g, ' ').slice(0, 70)}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div className="overflow-hidden rounded border border-[var(--border)] font-mono text-sm">
-        <CodeMirror
-          value={query}
-          onChange={setQuery}
-          extensions={extensions}
-          theme={dark ? 'dark' : 'light'}
-          height="12rem"
-          basicSetup={{ lineNumbers: true, foldGutter: false }}
-          aria-label="Zapytanie SQL"
-        />
-      </div>
-      <div className="flex items-center gap-3">
-        <button
-          type="button"
-          onClick={run}
-          disabled={running}
-          className="rounded bg-accent-fill px-4 py-2 text-sm font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-50 disabled:hover:bg-accent-fill"
-        >
-          {running ? 'Wykonywanie…' : 'Uruchom'}
-        </button>
-        <span className="text-xs text-[var(--muted)]">Ctrl+Enter</span>
-      </div>
+    <div className="flex min-w-0 flex-col gap-3">
+      <fieldset className="m-0 min-w-0 rounded-md border border-line-strong bg-page p-0">
+        <legend className="ml-2.5 px-1.5 font-semibold">
+          Uruchom zapytanie SQL na bazie danych{' '}
+          <span className="font-mono text-accent-ink">studies_db</span>:
+        </legend>
+        <div className="grid grid-cols-1 gap-3 px-3 pt-2 pb-3 md:grid-cols-[minmax(0,1fr)_210px]">
+          <div className="min-w-0 overflow-hidden rounded border border-line-strong focus-within:border-accent">
+            <CodeMirror
+              value={query}
+              onChange={setQuery}
+              onCreateEditor={(v) => {
+                viewRef.current = v;
+              }}
+              extensions={extensions}
+              theme="none"
+              className="h-full"
+              height="100%"
+              maxHeight="60vh"
+              basicSetup={{
+                lineNumbers: true,
+                foldGutter: false,
+                highlightActiveLine: false,
+                highlightActiveLineGutter: false,
+                syntaxHighlighting: false,
+              }}
+            />
+          </div>
+          <div className="flex min-h-0 flex-col gap-1.5">
+            <label htmlFor="sql-columns" className="text-muted">
+              Kolumny
+            </label>
+            <select
+              id="sql-columns"
+              multiple
+              size={9}
+              onKeyDown={onColumnsKey}
+              aria-describedby="sql-columns-hint"
+              className="min-h-[150px] flex-1 rounded border border-line-strong bg-page font-mono text-xs text-fg [&>option]:px-1.5 [&>option]:py-px"
+            >
+              {columns.map((c) => (
+                <option
+                  key={c.label}
+                  value={c.insert}
+                  onDoubleClick={() => insertColumns([c.insert])}
+                >
+                  {c.label}
+                </option>
+              ))}
+            </select>
+            <span id="sql-columns-hint" className="text-[11px] text-faint">
+              Kliknij dwukrotnie, aby wstawić
+            </span>
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-2 rounded-b-md border-t border-line bg-bar px-3 py-2.5">
+          <select
+            aria-label="Przykładowe zapytania"
+            className={control}
+            value=""
+            onChange={(e) => {
+              const ex = EXAMPLE_QUERIES.find((q) => q.name === e.target.value);
+              if (ex) setQuery(ex.sql);
+            }}
+          >
+            <option value="">Przykłady…</option>
+            {EXAMPLE_QUERIES.map((q) => (
+              <option key={q.name} value={q.name}>
+                {q.name}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label="Historia zapytań"
+            className={`${control} max-w-[280px]`}
+            value=""
+            onChange={(e) => {
+              const h = history[Number(e.target.value)];
+              if (e.target.value !== '' && h !== undefined) setQuery(h);
+            }}
+          >
+            <option value="">Historia ({history.length})…</option>
+            {history.map((h, i) => (
+              // biome-ignore lint/suspicious/noArrayIndexKey: index is the value
+              <option key={i} value={i}>
+                {historyLabel(h)}
+              </option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={clear}
+            className="rounded border border-line-strong bg-page px-2.5 py-[5px] hover:border-accent"
+          >
+            Wyczyść
+          </button>
+          <span className="text-xs text-faint">
+            Tylko odczyt (SELECT) na widokach v_*. Limit 1000 wierszy i 5
+            sekund.
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <kbd className="font-mono text-xs text-faint max-md:hidden">
+              Ctrl+Enter
+            </kbd>
+            <button
+              type="button"
+              onClick={run}
+              disabled={running}
+              aria-busy={running}
+              className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-60 disabled:hover:bg-accent-fill"
+            >
+              {running ? 'Wykonywanie…' : 'Wykonaj'}
+            </button>
+          </div>
+        </div>
+      </fieldset>
+
       {result && !result.ok && (
         <div
           role="alert"
-          className="rounded border border-red-500 p-3 font-mono text-sm text-red-700 dark:text-red-300"
+          className="flex flex-col gap-1.5 rounded-md border border-err-line bg-err-bg px-3 py-2.5"
         >
-          {result.error}
+          <div className="flex items-center gap-1.5 font-semibold text-err-fg">
+            <XCircle weight="fill" size={16} aria-hidden="true" />
+            Błąd
+          </div>
+          <div className="font-semibold text-muted">Zapytanie SQL:</div>
+          <pre className="m-0 whitespace-pre-wrap break-words rounded border border-err-line bg-page px-2.5 py-2 font-mono text-[12.5px]">
+            <SqlText sql={result.sql} />
+          </pre>
+          <div className="font-semibold text-muted">
+            MariaDB zwrócił komunikat:
+          </div>
+          <code className="break-words font-mono text-err-fg">
+            {result.error}
+          </code>
         </div>
       )}
+
       {result?.ok && (
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <p className="text-sm text-[var(--muted)]">
-              {result.rows.length} wierszy · {result.durationMs} ms
-              {result.truncated && ' · wynik obcięty (limit wierszy)'}
-            </p>
-            <button
-              type="button"
-              onClick={exportCsv}
-              title={result.truncated ? 'Pierwsze 1000 wierszy' : undefined}
-              className="rounded border border-[var(--border)] px-3 py-1 text-sm hover:border-[var(--accent)]"
-            >
-              Eksport CSV{result.truncated && ' (pierwsze 1000 wierszy)'}
-            </button>
+        <div className="flex min-w-0 flex-col gap-3 lg:flex-row lg:items-start">
+          <div className="flex min-w-0 flex-1 flex-col gap-3">
+            {result.truncated && (
+              <div
+                role="status"
+                className="flex items-center gap-2 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
+              >
+                <Warning weight="fill" size={16} aria-hidden="true" />
+                Wynik obcięty do pierwszych 1000 wierszy (limit konsoli).
+              </div>
+            )}
+            <ResultGrid
+              resultKey={result.run}
+              columns={result.columns}
+              rows={rows}
+              sql={result.sql}
+              elapsedMs={result.durationMs}
+              name={`zapytanie-${result.stamp}`}
+              editSqlHref={sqlHref(editPath, result.sql)}
+              onRefresh={run}
+              fileColumn={fileColumn}
+              onPreview={fileColumn === undefined ? undefined : openPreview}
+              selectedId={preview?.id ?? null}
+            />
           </div>
-          <DataGrid
-            columns={result.columns}
-            rows={toCells(result.rows)}
-            mono
-            empty="Zapytanie nie zwróciło wierszy."
-          />
+          {preview && (
+            <div className="lg:sticky lg:top-12 lg:w-[360px] lg:shrink-0">
+              {preview.state === 'done' ? (
+                <PreviewPanel file={preview.file} onClose={closePreview} />
+              ) : (
+                <PreviewStatus
+                  error={preview.state === 'error'}
+                  onClose={closePreview}
+                />
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
+  );
+}
+
+/** Placeholder panel while /api/material/[id] loads or after it failed. */
+function PreviewStatus({
+  error,
+  onClose,
+}: {
+  error: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !e.defaultPrevented) onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+  return (
+    <aside
+      aria-label="Podgląd pliku"
+      aria-busy={!error}
+      className="fixed inset-0 z-40 flex flex-col gap-3 bg-panel p-4 lg:static lg:z-auto lg:rounded-xl lg:border lg:border-line"
+    >
+      <p className={error ? 'text-err-fg' : 'text-muted'}>
+        {error ? 'Nie udało się wczytać podglądu.' : 'Wczytywanie podglądu…'}
+      </p>
+      <button
+        type="button"
+        onClick={onClose}
+        className="self-start rounded border border-line-strong bg-page px-2.5 py-[5px] hover:border-accent"
+      >
+        Zamknij podgląd
+      </button>
+    </aside>
   );
 }

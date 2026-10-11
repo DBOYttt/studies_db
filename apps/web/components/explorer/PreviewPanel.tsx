@@ -16,18 +16,22 @@ import type { ExplorerFile } from '@/lib/queries';
 
 const btn =
   'inline-flex items-center gap-1.5 rounded-lg border border-line bg-panel px-3 py-1.5 text-sm hover:border-accent';
+const closeCls =
+  'shrink-0 rounded-lg border border-line p-2 text-muted hover:border-accent hover:text-fg';
 
 /**
  * Right-hand preview. Side column from lg, full-screen sheet below.
  * `file === null` means the `file` param points at a missing or deleted file.
+ * Closing (X, Escape) navigates to `closeHref`, or calls `onClose` instead
+ * when given (client-side previews such as the SQL console).
  */
 export function PreviewPanel({
   file,
   closeHref,
-}: {
-  file: ExplorerFile | null;
-  closeHref: string;
-}) {
+  onClose,
+}:
+  | { file: ExplorerFile | null; closeHref: string; onClose?: undefined }
+  | { file: ExplorerFile | null; closeHref?: undefined; onClose: () => void }) {
   const router = useRouter();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -39,11 +43,12 @@ export function PreviewPanel({
         (t.isContentEditable || t.closest('input, textarea, select'))
       )
         return;
-      router.push(closeHref);
+      if (onClose) onClose();
+      else if (closeHref !== undefined) router.push(closeHref);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [router, closeHref]);
+  }, [router, closeHref, onClose]);
 
   const canFullscreen =
     file && file.previewKind !== 'none' && file.status === 'ready';
@@ -65,13 +70,24 @@ export function PreviewPanel({
             <h2 className="font-semibold">Plik został usunięty</h2>
           )}
         </div>
-        <Link
-          href={closeHref}
-          aria-label="Zamknij podgląd"
-          className="shrink-0 rounded-lg border border-line p-2 text-muted hover:border-accent hover:text-fg"
-        >
-          <X size={16} aria-hidden="true" />
-        </Link>
+        {onClose ? (
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Zamknij podgląd"
+            className={closeCls}
+          >
+            <X size={16} aria-hidden="true" />
+          </button>
+        ) : (
+          <Link
+            href={closeHref ?? '#'}
+            aria-label="Zamknij podgląd"
+            className={closeCls}
+          >
+            <X size={16} aria-hidden="true" />
+          </Link>
+        )}
       </div>
       {file ? (
         <div className="space-y-4">
