@@ -1,0 +1,882 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/@phosphor-icons/web@2.1.1"></script>
+<style>
+html,body{margin:0;height:100%}
+body{background:#fff;color:#18181b;font-family:Geist,ui-sans-serif,system-ui,sans-serif;font-size:13px;-webkit-font-smoothing:antialiased}
+a{color:#235a81;text-decoration:none}a:hover{color:#1b4565;text-decoration:underline}
+mark{background:#fde68a;color:inherit;border-radius:2px;padding:0 2px}
+*{box-sizing:border-box}
+</style>
+</helmet>
+<div style="display:grid;grid-template-columns:264px minmax(0,1fr);height:100vh;overflow:hidden">
+
+  <!-- Navigation panel -->
+  <aside style="display:flex;flex-direction:column;min-height:0;background:#f4f4f5;border-right:1px solid #d4d4d8">
+    <div style="padding:14px 14px 10px;display:flex;align-items:baseline;gap:6px;cursor:pointer" onClick="{{ goHome }}">
+      <i class="ph-fill ph-database" style="font-size:20px;color:#235a81;align-self:center"></i>
+      <span style="font-size:17px;font-weight:700;letter-spacing:-0.02em">Studies<span style="color:#235a81">DB</span></span>
+      <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#52525b">TP 4.0</span>
+    </div>
+    <div style="display:flex;gap:2px;padding:0 10px 10px">
+      <span title="Strona główna" onClick="{{ goHome }}" style="width:28px;height:26px;display:grid;place-items:center;border-radius:4px;color:#235a81;cursor:pointer" style-hover="background:#e4e4e7"><i class="ph ph-house" style="font-size:16px"></i></span>
+      <span title="Konsola SQL" onClick="{{ goSql }}" style="width:28px;height:26px;display:grid;place-items:center;border-radius:4px;color:#235a81;cursor:pointer" style-hover="background:#e4e4e7"><i class="ph ph-terminal-window" style="font-size:16px"></i></span>
+      <span title="Szukaj" onClick="{{ goSearch }}" style="width:28px;height:26px;display:grid;place-items:center;border-radius:4px;color:#235a81;cursor:pointer" style-hover="background:#e4e4e7"><i class="ph ph-magnifying-glass" style="font-size:16px"></i></span>
+      <span title="Projektant" onClick="{{ goDesigner }}" style="width:28px;height:26px;display:grid;place-items:center;border-radius:4px;color:#235a81;cursor:pointer" style-hover="background:#e4e4e7"><i class="ph ph-tree-structure" style="font-size:16px"></i></span>
+      <span title="Wyloguj" style="width:28px;height:26px;display:grid;place-items:center;border-radius:4px;color:#235a81;cursor:pointer;margin-left:auto" style-hover="background:#e4e4e7"><i class="ph ph-sign-out" style="font-size:16px"></i></span>
+    </div>
+    <div style="padding:0 10px 8px">
+      <label style="display:flex;align-items:center;gap:6px;background:#fff;border:1px solid #d4d4d8;border-radius:4px;padding:0 8px;height:28px">
+        <i class="ph ph-funnel" style="color:#71717a"></i>
+        <input value="{{ navFilter }}" onChange="{{ onNavFilter }}" placeholder="Filtruj według nazwy" style="border:0;outline:0;background:transparent;font:inherit;flex:1;min-width:0">
+      </label>
+    </div>
+    <div style="flex:1;min-height:0;overflow:auto;padding:4px 0 12px;border-top:1px solid #e4e4e7">
+      <sc-for list="{{ tree }}" as="n" hint-placeholder-count="14">
+        <div onClick="{{ n.onClick }}" style="display:flex;align-items:center;gap:5px;height:24px;padding-left:{{ n.pad }}px;padding-right:10px;cursor:pointer;background:{{ n.bg }};color:{{ n.color }};font-weight:{{ n.fw }};font-family:{{ n.font }}" style-hover="text-decoration:underline">
+          <i class="ph {{ n.caret }}" onClick="{{ n.onToggle }}" style="width:14px;flex-shrink:0;font-size:11px;color:#71717a;text-align:center"></i>
+          <i class="ph {{ n.icon }}" style="font-size:15px;flex-shrink:0;color:{{ n.iconColor }}"></i>
+          <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">{{ n.label }}</span>
+          <span style="font-family:'Geist Mono',monospace;font-size:11px;color:#71717a;font-weight:400">{{ n.count }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <div style="display:flex;flex-direction:column;min-width:0;min-height:0">
+    <div style="display:flex;align-items:center;gap:8px;height:38px;padding:0 16px;background:#fafafa;border-bottom:1px solid #e4e4e7;flex-shrink:0">
+      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:0;white-space:nowrap;overflow:hidden">
+        <sc-for list="{{ crumbs }}" as="c" hint-placeholder-count="3">
+          <span style="display:flex;align-items:center;gap:5px">
+            <span style="color:#a1a1aa">{{ c.sep }}</span>
+            <i class="ph {{ c.icon }}" style="color:#52525b;font-size:14px"></i>
+            <span style="color:#52525b">{{ c.kind }}</span>
+            <span onClick="{{ c.onClick }}" style="color:#235a81;font-weight:600;cursor:pointer" style-hover="text-decoration:underline">{{ c.label }}</span>
+          </span>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;color:#52525b">
+        <span style="width:22px;height:22px;border-radius:999px;background:#5865f2;color:#fff;display:grid;place-items:center;font-size:11px;font-weight:600">K</span>
+        <span style="color:#18181b">kasia.n</span>
+        <span style="color:#a1a1aa">|</span>
+        <span style="color:#235a81;cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ph ph-sign-out"></i>Wyloguj</span>
+      </div>
+    </div>
+
+    <div style="display:flex;align-items:flex-end;gap:2px;padding:8px 16px 0;background:#fafafa;border-bottom:1px solid #d4d4d8;flex-shrink:0;overflow-x:auto">
+      <sc-for list="{{ tabs }}" as="t" hint-placeholder-count="5">
+        <span onClick="{{ t.onClick }}" style="display:flex;align-items:center;gap:6px;padding:7px 13px;margin-bottom:-1px;border:1px solid {{ t.border }};border-bottom-color:{{ t.bottom }};border-radius:6px 6px 0 0;background:{{ t.bg }};color:{{ t.color }};font-weight:{{ t.fw }};cursor:pointer;white-space:nowrap" style-hover="text-decoration:underline">
+          <i class="ph {{ t.icon }}" style="font-size:15px"></i>{{ t.label }}
+        </span>
+      </sc-for>
+    </div>
+
+    <div style="flex:1;min-height:0;display:flex">
+      <div style="flex:1;min-width:0;overflow:auto;padding:16px 18px 28px;display:grid;grid-template-columns:minmax(0,1fr);grid-auto-rows:max-content;align-content:start;gap:14px">
+
+        <!-- Subject header -->
+        <sc-if value="{{ isSubject }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:8px 24px">
+            <div style="min-width:0">
+              <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.01em">{{ subj.name }}</h1>
+              <p style="margin:2px 0 0;font-family:'Geist Mono',monospace;font-size:12px;color:#52525b">{{ subj.meta }}</p>
+              <p style="margin:6px 0 0;max-width:65ch;color:#52525b">{{ subj.description }}</p>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="color:#52525b">Tag:</span>
+              <select value="{{ tag }}" onChange="{{ onTag }}" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:4px 6px;background:#fff">
+                <option value="">Wszystkie</option>
+                <sc-for list="{{ subjTags }}" as="tg"><option value="{{ tg.id }}">{{ tg.name }}</option></sc-for>
+              </select>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- SQL editor -->
+        <sc-if value="{{ isSqlTab }}" hint-placeholder-val="{{ false }}">
+          <fieldset style="margin:0;border:1px solid #d4d4d8;border-radius:6px;padding:0;background:#fff">
+            <legend style="margin-left:10px;padding:0 6px;font-weight:600">Uruchom zapytanie SQL na bazie danych <span style="font-family:'Geist Mono',monospace;color:#235a81">studies_db</span>:</legend>
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) 210px;gap:12px;padding:8px 12px 12px">
+              <div style="display:flex;border:1px solid #d4d4d8;border-radius:4px;overflow:hidden;font-family:'Geist Mono',monospace;font-size:13px;line-height:20px">
+                <div style="padding:8px 8px;background:#f4f4f5;border-right:1px solid #e4e4e7;color:#a1a1aa;text-align:right;user-select:none;min-width:36px">
+                  <sc-for list="{{ lineNos }}" as="ln"><div>{{ ln }}</div></sc-for>
+                </div>
+                <textarea value="{{ sql }}" onChange="{{ onSql }}" onKeyDown="{{ onSqlKey }}" spellcheck="false" style="flex:1;min-width:0;border:0;outline:0;resize:none;padding:8px 10px;font:inherit;line-height:20px;height:{{ editorH }}px;background:#fff;color:#18181b"></textarea>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;min-height:0">
+                <span style="color:#52525b">Kolumny</span>
+                <select multiple="multiple" size="9" style="font-family:'Geist Mono',monospace;font-size:12px;border:1px solid #d4d4d8;border-radius:4px;flex:1;min-height:150px">
+                  <sc-for list="{{ sqlCols }}" as="sc"><option onDoubleClick="{{ sc.onInsert }}">{{ sc.name }}</option></sc-for>
+                </select>
+                <span style="font-size:11px;color:#71717a">Kliknij dwukrotnie, aby wstawić</span>
+              </div>
+            </div>
+            <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid #e4e4e7;background:#fafafa;border-radius:0 0 6px 6px">
+              <select value="" onChange="{{ onExample }}" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:5px 6px;background:#fff">
+                <option value="">Przykłady…</option>
+                <sc-for list="{{ examples }}" as="ex"><option value="{{ ex.name }}">{{ ex.name }}</option></sc-for>
+              </select>
+              <select value="" onChange="{{ onHistory }}" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:5px 6px;background:#fff;max-width:280px">
+                <option value="">Historia ({{ historyCount }})…</option>
+                <sc-for list="{{ historyOpts }}" as="h"><option value="{{ h.i }}">{{ h.label }}</option></sc-for>
+              </select>
+              <span onClick="{{ clearSql }}" style="border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;background:#fff;cursor:pointer" style-hover="border-color:#235a81">Wyczyść</span>
+              <span style="color:#71717a;font-size:12px">Tylko odczyt (SELECT) na widokach v_*. Limit 1000 wierszy i 5 sekund.</span>
+              <span style="flex:1"></span>
+              <span style="color:#71717a;font-size:12px;font-family:'Geist Mono',monospace">Ctrl+Enter</span>
+              <span onClick="{{ runSqlNow }}" style="background:#235a81;color:#fff;border-radius:4px;padding:6px 18px;font-weight:600;cursor:pointer" style-hover="background:#1b4565">Wykonaj</span>
+            </div>
+          </fieldset>
+        </sc-if>
+
+        <!-- SQL error -->
+        <sc-if value="{{ sqlError }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #fca5a5;background:#fef2f2;border-radius:6px;padding:10px 12px;display:flex;flex-direction:column;gap:6px">
+            <div style="display:flex;align-items:center;gap:6px;color:#991b1b;font-weight:600"><i class="ph-fill ph-x-circle" style="font-size:16px"></i>Błąd</div>
+            <div style="color:#52525b;font-weight:600">Zapytanie SQL:</div>
+            <pre style="margin:0;font-family:'Geist Mono',monospace;font-size:12.5px;white-space:pre-wrap;background:#fff;border:1px solid #fecaca;border-radius:4px;padding:8px 10px"><sc-for list="{{ errTokens }}" as="k"><span style="color:{{ k.c }};font-weight:{{ k.w }}">{{ k.t }}</span></sc-for></pre>
+            <div style="color:#52525b;font-weight:600">MariaDB zwrócił komunikat:</div>
+            <code style="font-family:'Geist Mono',monospace;color:#991b1b">{{ sqlError }}</code>
+          </div>
+        </sc-if>
+
+        <!-- DB structure -->
+        <sc-if value="{{ isDbStructure }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #d4d4d8;border-radius:6px;overflow:auto;min-height:min-content;flex-shrink:0">
+            <table style="width:100%;border-collapse:collapse;min-width:720px">
+              <thead><tr style="background:#f4f4f5;text-align:left">
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;width:28px"><input type="checkbox"></th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Widok</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Działanie</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600;text-align:right">Wiersze</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Typ</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Kolumny</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Rozmiar</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ viewList }}" as="v" hint-placeholder-count="11">
+                  <tr style="background:{{ v.bg }}" style-hover="background:#eef4fa">
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7"><input type="checkbox"></td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;font-family:'Geist Mono',monospace"><a onClick="{{ v.browse }}" style="cursor:pointer;font-weight:500">{{ v.name }}</a></td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7">
+                      <div style="display:flex;gap:12px">
+                        <a onClick="{{ v.browse }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-rows"></i>Przeglądaj</a>
+                        <a onClick="{{ v.structure }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-columns"></i>Struktura</a>
+                        <a onClick="{{ v.search }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-magnifying-glass"></i>Szukaj</a>
+                        <a onClick="{{ v.export }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-export"></i>Eksport</a>
+                      </div>
+                    </td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;text-align:right;font-family:'Geist Mono',monospace">{{ v.rows }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#52525b">Widok</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;font-family:'Geist Mono',monospace;color:#52525b">{{ v.cols }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#a1a1aa">—</td>
+                  </tr>
+                </sc-for>
+                <tr style="background:#f4f4f5;font-weight:600">
+                  <td style="padding:7px 10px"></td>
+                  <td style="padding:7px 10px">{{ viewCount }} widoków</td>
+                  <td style="padding:7px 10px">Suma</td>
+                  <td style="padding:7px 10px;text-align:right;font-family:'Geist Mono',monospace">{{ viewRowSum }}</td>
+                  <td style="padding:7px 10px" colspan="3"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;color:#52525b"><i class="ph ph-arrow-bend-left-up" style="font-size:16px;margin-left:6px"></i><span>Zaznacz wszystko</span><span>Z zaznaczonymi:</span><select style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:3px 6px"><option>Eksport CSV</option></select></div>
+        </sc-if>
+
+        <!-- View structure -->
+        <sc-if value="{{ isViewStructure }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #d4d4d8;border-radius:6px;overflow:auto;min-height:min-content;flex-shrink:0">
+            <table style="width:100%;border-collapse:collapse;min-width:720px">
+              <thead><tr style="background:#f4f4f5;text-align:left">
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600;width:36px">#</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Nazwa</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Typ</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Metoda porównywania napisów</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Atrybuty</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Null</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Domyślnie</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ structure }}" as="stc" hint-placeholder-count="8">
+                  <tr style="background:{{ stc.bg }}" style-hover="background:#eef4fa">
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#71717a;font-family:'Geist Mono',monospace">{{ stc.n }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;font-family:'Geist Mono',monospace;font-weight:{{ stc.fw }}"><span style="display:inline-flex;align-items:center;gap:5px">{{ stc.name }}<i class="ph-fill {{ stc.keyIcon }}" style="color:#b45309;font-size:12px"></i></span></td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;font-family:'Geist Mono',monospace;color:#7a1fa2">{{ stc.type }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#52525b">{{ stc.coll }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#52525b;font-family:'Geist Mono',monospace;font-size:12px">{{ stc.attr }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7">{{ stc.nul }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#52525b"><i>{{ stc.def }}</i></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+          <div style="display:flex;gap:16px">
+            <a onClick="{{ goBrowseCurrent }}" style="cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ph ph-rows"></i>Przeglądaj dane</a>
+            <a onClick="{{ goSqlCurrent }}" style="cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ph ph-terminal-window"></i>Zapytanie do tego widoku</a>
+          </div>
+        </sc-if>
+
+        <!-- View search (per column) -->
+        <sc-if value="{{ isViewSearch }}" hint-placeholder-val="{{ false }}">
+          <fieldset style="margin:0;border:1px solid #d4d4d8;border-radius:6px;padding:0;background:#fff">
+            <legend style="margin-left:10px;padding:0 6px;font-weight:600">Szukaj w widoku <span style="font-family:'Geist Mono',monospace;color:#235a81">{{ view }}</span></legend>
+            <table style="width:100%;border-collapse:collapse;margin-top:4px">
+              <thead><tr style="text-align:left;color:#52525b">
+                <th style="padding:6px 12px;font-weight:600;border-bottom:1px solid #e4e4e7">Kolumna</th>
+                <th style="padding:6px 12px;font-weight:600;border-bottom:1px solid #e4e4e7">Typ</th>
+                <th style="padding:6px 12px;font-weight:600;border-bottom:1px solid #e4e4e7">Operator</th>
+                <th style="padding:6px 12px;font-weight:600;border-bottom:1px solid #e4e4e7">Wartość</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ searchCols }}" as="scc" hint-placeholder-count="6">
+                  <tr style="background:{{ scc.bg }}">
+                    <td style="padding:5px 12px;font-family:'Geist Mono',monospace">{{ scc.name }}</td>
+                    <td style="padding:5px 12px;font-family:'Geist Mono',monospace;color:#7a1fa2;font-size:12px">{{ scc.type }}</td>
+                    <td style="padding:5px 12px"><select style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:3px 6px"><option>LIKE %…%</option></select></td>
+                    <td style="padding:5px 12px"><input value="{{ scc.value }}" onChange="{{ scc.onChange }}" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:4px 8px;width:100%;max-width:320px"></td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+            <div style="display:flex;justify-content:flex-end;gap:8px;padding:10px 12px;border-top:1px solid #e4e4e7;background:#fafafa;border-radius:0 0 6px 6px">
+              <span onClick="{{ clearColSearch }}" style="border:1px solid #d4d4d8;border-radius:4px;padding:6px 12px;background:#fff;cursor:pointer">Wyczyść</span>
+              <span onClick="{{ runColSearch }}" style="background:#235a81;color:#fff;border-radius:4px;padding:6px 18px;font-weight:600;cursor:pointer" style-hover="background:#1b4565">Wykonaj</span>
+            </div>
+          </fieldset>
+        </sc-if>
+
+        <!-- DB full-text search -->
+        <sc-if value="{{ isDbSearch }}" hint-placeholder-val="{{ false }}">
+          <fieldset style="margin:0;border:1px solid #d4d4d8;border-radius:6px;padding:0;background:#fff">
+            <legend style="margin-left:10px;padding:0 6px;font-weight:600">Szukaj w materiałach i tematach</legend>
+            <div style="display:grid;grid-template-columns:max-content minmax(0,1fr);gap:10px 14px;align-items:center;padding:8px 14px 14px">
+              <span style="color:#52525b">Słowa do wyszukania:</span>
+              <input value="{{ searchQ }}" onChange="{{ onSearchQ }}" placeholder="Szukaj w materiałach i tematach…" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:6px 8px;max-width:480px">
+              <span style="color:#52525b">Przedmiot:</span>
+              <select value="{{ searchSubject }}" onChange="{{ onSearchSubject }}" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:5px 6px;max-width:300px">
+                <option value="">Wszystkie przedmioty</option>
+                <sc-for list="{{ subjectOpts }}" as="s"><option value="{{ s.id }}">{{ s.name }}</option></sc-for>
+              </select>
+              <span style="color:#52525b">Tag:</span>
+              <select value="{{ searchTag }}" onChange="{{ onSearchTag }}" style="font:inherit;border:1px solid #d4d4d8;border-radius:4px;padding:5px 6px;max-width:300px">
+                <option value="">Wszystkie tagi</option>
+                <sc-for list="{{ tagOpts }}" as="t"><option value="{{ t.name }}">{{ t.label }}</option></sc-for>
+              </select>
+            </div>
+            <div style="display:flex;justify-content:flex-end;padding:10px 12px;border-top:1px solid #e4e4e7;background:#fafafa;border-radius:0 0 6px 6px">
+              <span onClick="{{ runSearch }}" style="background:#235a81;color:#fff;border-radius:4px;padding:6px 18px;font-weight:600;cursor:pointer" style-hover="background:#1b4565">Wykonaj</span>
+            </div>
+          </fieldset>
+          <sc-if value="{{ searchHasHits }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:6px;padding:8px 12px"><i class="ph-fill ph-check-circle" style="font-size:16px"></i>Wyniki wyszukiwania „<b>{{ searchQ }}”</b>: {{ searchHitCount }}</div>
+            <div style="border:1px solid #d4d4d8;border-radius:6px;overflow:auto;min-height:min-content;flex-shrink:0">
+              <table style="width:100%;border-collapse:collapse;min-width:640px">
+                <thead><tr style="background:#f4f4f5;text-align:left">
+                  <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Wynik</th>
+                  <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Przedmiot</th>
+                  <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Fragment</th>
+                </tr></thead>
+                <tbody>
+                  <sc-for list="{{ searchHits }}" as="h" hint-placeholder-count="3">
+                    <tr style="background:{{ h.bg }}" style-hover="background:#eef4fa">
+                      <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;vertical-align:top"><a onClick="{{ h.open }}" style="cursor:pointer;font-weight:600">{{ h.title }}</a><div style="font-size:12px;color:#52525b">{{ h.sub }}</div></td>
+                      <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;vertical-align:top;color:#52525b">{{ h.subject }}</td>
+                      <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;vertical-align:top"><sc-for list="{{ h.parts }}" as="p"><sc-if value="{{ p.hit }}"><mark>{{ p.t }}</mark></sc-if><sc-if value="{{ p.plain }}"><span>{{ p.t }}</span></sc-if></sc-for></td>
+                    </tr>
+                  </sc-for>
+                </tbody>
+              </table>
+            </div>
+          </sc-if>
+          <sc-if value="{{ searchNoHits }}" hint-placeholder-val="{{ false }}">
+            <div style="display:flex;align-items:center;gap:8px;border:1px solid #fcd34d;background:#fffbeb;color:#92400e;border-radius:6px;padding:8px 12px"><i class="ph-fill ph-warning-circle" style="font-size:16px"></i>Brak wyników dla „{{ searchQ }}”.</div>
+          </sc-if>
+        </sc-if>
+
+        <!-- Designer -->
+        <sc-if value="{{ isDesigner }}" hint-placeholder-val="{{ false }}">
+          <p style="margin:0;color:#52525b;max-width:75ch">Widoki dostępne w konsoli SQL i ich kolumny. Linie łączą kolumny, po których możesz robić JOIN. Kliknij tabelę, aby zobaczyć jej wiersze.</p>
+          <div style="border:1px solid #d4d4d8;border-radius:6px;overflow:auto;min-height:min-content;flex-shrink:0;background-color:#fafafa;background-image:radial-gradient(#d4d4d8 1px, transparent 1px);background-size:20px 20px">
+            <div style="position:relative;width:1200px;height:560px">
+              <svg width="1200" height="560" style="position:absolute;inset:0">
+                <sc-for list="{{ edges }}" as="e"><path d="{{ e.d }}" fill="none" stroke="{{ e.stroke }}" stroke-width="{{ e.w }}"></path></sc-for>
+              </svg>
+              <sc-for list="{{ boxes }}" as="b" hint-placeholder-count="11">
+                <div onClick="{{ b.onClick }}" onMouseEnter="{{ b.onEnter }}" onMouseLeave="{{ b.onLeave }}" style="position:absolute;left:{{ b.x }}px;top:{{ b.y }}px;width:190px;background:#fff;border:1px solid {{ b.border }};border-radius:6px;box-shadow:0 1px 2px rgba(0,0,0,.06);cursor:pointer;overflow:hidden">
+                  <div style="height:28px;display:flex;align-items:center;gap:6px;padding:0 8px;background:#e8eef5;border-bottom:1px solid #d4d4d8;font-family:'Geist Mono',monospace;font-size:12px;font-weight:600;color:#235a81"><i class="ph ph-table" style="font-size:14px"></i>{{ b.name }}</div>
+                  <div style="padding:4px 0">
+                    <sc-for list="{{ b.cols }}" as="bc"><div style="height:18px;display:flex;align-items:center;gap:5px;padding:0 8px;font-family:'Geist Mono',monospace;font-size:11px;color:{{ bc.color }}"><i class="ph-fill {{ bc.icon }}" style="width:11px;font-size:10px;color:#b45309"></i>{{ bc.name }}</div></sc-for>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </sc-if>
+
+        <!-- Lecturers -->
+        <sc-if value="{{ isLecturers }}" hint-placeholder-val="{{ false }}">
+          <div style="border:1px solid #d4d4d8;border-radius:6px;overflow:auto;min-height:min-content;flex-shrink:0">
+            <table style="width:100%;border-collapse:collapse;min-width:560px">
+              <thead><tr style="background:#f4f4f5;text-align:left">
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Zajęcia</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Grupa</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">Prowadzący</th>
+                <th style="padding:7px 10px;border-bottom:1px solid #d4d4d8;font-weight:600">E-mail</th>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ lecturers }}" as="l" hint-placeholder-count="3">
+                  <tr style="background:{{ l.bg }}">
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7">{{ l.cls }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;color:#52525b">{{ l.group }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7">{{ l.name }}</td>
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;font-family:'Geist Mono',monospace;font-size:12px">{{ l.email }}</td>
+                  </tr>
+                </sc-for>
+              </tbody>
+            </table>
+          </div>
+        </sc-if>
+
+        <!-- Result grid -->
+        <sc-if value="{{ showGrid }}" hint-placeholder-val="{{ true }}">
+          <div style="display:flex;align-items:center;gap:8px;border:1px solid #a7f3d0;background:#ecfdf5;color:#065f46;border-radius:6px;padding:8px 12px">
+            <i class="ph-fill ph-check-circle" style="font-size:16px"></i>
+            <span>{{ grid.message }}</span>
+          </div>
+          <div style="border:1px solid #d4d4d8;border-radius:6px;background:#fafafa">
+            <pre style="margin:0;padding:10px 12px;font-family:'Geist Mono',monospace;font-size:12.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word"><sc-for list="{{ grid.tokens }}" as="k"><span style="color:{{ k.c }};font-weight:{{ k.w }}">{{ k.t }}</span></sc-for></pre>
+            <div style="display:flex;flex-wrap:wrap;justify-content:flex-end;gap:4px 14px;padding:6px 12px;border-top:1px solid #e4e4e7;font-size:12px">
+              <a onClick="{{ editGridSql }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-pencil-simple"></i>Edytuj w konsoli SQL</a>
+              <a onClick="{{ exportGrid }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-download-simple"></i>Eksport CSV</a>
+              <a onClick="{{ refreshGrid }}" style="cursor:pointer;display:flex;align-items:center;gap:3px"><i class="ph ph-arrow-clockwise"></i>Odśwież</a>
+            </div>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px 16px">
+            <div style="display:flex;align-items:center;gap:2px">
+              <span style="width:28px;height:26px;display:grid;place-items:center;border:1px solid #d4d4d8;border-radius:4px 0 0 4px;color:#a1a1aa;background:#fafafa"><i class="ph ph-caret-double-left"></i></span>
+              <span style="width:28px;height:26px;display:grid;place-items:center;border:1px solid #d4d4d8;color:#a1a1aa;background:#fafafa"><i class="ph ph-caret-left"></i></span>
+              <select style="font:inherit;height:26px;border:1px solid #d4d4d8;padding:0 6px;background:#fff"><option>1</option></select>
+              <span style="width:28px;height:26px;display:grid;place-items:center;border:1px solid #d4d4d8;color:#a1a1aa;background:#fafafa"><i class="ph ph-caret-right"></i></span>
+              <span style="width:28px;height:26px;display:grid;place-items:center;border:1px solid #d4d4d8;border-radius:0 4px 4px 0;color:#a1a1aa;background:#fafafa"><i class="ph ph-caret-double-right"></i></span>
+            </div>
+            <label style="display:flex;align-items:center;gap:6px;color:#52525b">Liczba wierszy:
+              <select value="{{ perPage }}" onChange="{{ onPerPage }}" style="font:inherit;height:26px;border:1px solid #d4d4d8;border-radius:4px;padding:0 6px;background:#fff"><option value="25">25</option><option value="50">50</option><option value="100">100</option></select>
+            </label>
+            <label style="display:flex;align-items:center;gap:6px;color:#52525b">Filtruj wiersze:
+              <input value="{{ filter }}" onChange="{{ onFilter }}" placeholder="Szukaj w tej tabeli" style="font:inherit;height:26px;border:1px solid #d4d4d8;border-radius:4px;padding:0 8px;width:200px">
+            </label>
+            <span style="flex:1"></span>
+            <label style="display:flex;align-items:center;gap:6px;color:#52525b"><input type="checkbox" checked="{{ showFull }}" onChange="{{ toggleFull }}">Pełne teksty</label>
+          </div>
+
+          <div style="border:1px solid #d4d4d8;border-radius:6px;overflow:auto;min-height:min-content;flex-shrink:0">
+            <table style="border-collapse:collapse;width:100%;font-family:'Geist Mono',monospace;font-size:12.5px">
+              <thead><tr>
+                <th style="position:sticky;top:0;background:#f4f4f5;border-bottom:1px solid #d4d4d8;padding:7px 8px;width:28px"><input type="checkbox" checked="{{ grid.allChecked }}" onChange="{{ grid.toggleAll }}"></th>
+                <sc-if value="{{ grid.hasActions }}"><th style="position:sticky;top:0;background:#f4f4f5;border-bottom:1px solid #d4d4d8;padding:7px 8px"></th></sc-if>
+                <sc-for list="{{ grid.cols }}" as="gc" hint-placeholder-count="6">
+                  <th onClick="{{ gc.onSort }}" style="position:sticky;top:0;background:#f4f4f5;border-bottom:1px solid #d4d4d8;border-left:1px solid #e4e4e7;padding:7px 10px;text-align:left;white-space:nowrap;cursor:pointer;color:#235a81;font-weight:600" style-hover="background:#e8eef5">
+                    <span style="display:inline-flex;align-items:center;gap:4px">{{ gc.name }}<i class="ph-bold {{ gc.arrow }}" style="font-size:11px;color:#18181b"></i></span>
+                  </th>
+                </sc-for>
+              </tr></thead>
+              <tbody>
+                <sc-for list="{{ grid.rows }}" as="r" hint-placeholder-count="10">
+                  <tr style="background:{{ r.bg }}" style-hover="background:#e8f0fa">
+                    <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7"><input type="checkbox" checked="{{ r.checked }}" onChange="{{ r.onCheck }}"></td>
+                    <sc-if value="{{ grid.hasActions }}">
+                      <td style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;white-space:nowrap;font-family:Geist,sans-serif">
+                        <span style="display:inline-flex;gap:10px">
+                          <a onClick="{{ r.onPreview }}" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ph ph-eye"></i>Podgląd</a>
+                          <a onClick="{{ r.onDownload }}" style="cursor:pointer;display:inline-flex;align-items:center;gap:3px"><i class="ph ph-download-simple"></i>Pobierz</a>
+                        </span>
+                      </td>
+                    </sc-if>
+                    <sc-for list="{{ r.cells }}" as="cell">
+                      <td title="{{ cell.t }}" data-x="" style="padding:{{ cellPad }};border-bottom:1px solid #e4e4e7;border-left:1px solid #f4f4f5;max-width:{{ cellMax }};overflow:hidden;text-overflow:ellipsis;white-space:{{ cellWrap }};text-align:{{ cell.align }};vertical-align:top">
+                        <sc-if value="{{ cell.isNull }}"><i style="color:#a1a1aa">NULL</i></sc-if>
+                        <sc-if value="{{ cell.isLink }}"><a onClick="{{ cell.onClick }}" style="cursor:pointer;font-family:Geist,sans-serif;font-weight:500">{{ cell.t }}</a></sc-if>
+                        <sc-if value="{{ cell.isPlain }}"><span>{{ cell.t }}</span></sc-if>
+                        <sc-if value="{{ cell.badge }}"><span style="margin-left:6px;border:1px solid {{ cell.badgeColor }};color:{{ cell.badgeColor }};border-radius:999px;padding:0 6px;font-size:11px;font-family:Geist,sans-serif">{{ cell.badge }}</span></sc-if>
+                      </td>
+                    </sc-for>
+                  </tr>
+                </sc-for>
+                <sc-if value="{{ grid.empty }}"><tr><td colspan="99" style="padding:24px;text-align:center;color:#52525b;font-family:Geist,sans-serif">{{ grid.emptyText }}</td></tr></sc-if>
+              </tbody>
+            </table>
+          </div>
+
+          <div style="display:flex;flex-wrap:wrap;align-items:center;gap:10px;color:#52525b">
+            <i class="ph ph-arrow-bend-left-up" style="font-size:16px;margin-left:8px"></i>
+            <a onClick="{{ grid.toggleAll }}" style="cursor:pointer">Zaznacz wszystko</a>
+            <span>Z zaznaczonymi ({{ grid.checkedCount }}):</span>
+            <span onClick="{{ exportChecked }}" style="display:inline-flex;align-items:center;gap:4px;border:1px solid #d4d4d8;border-radius:4px;padding:3px 10px;background:#fff;color:#235a81;cursor:pointer" style-hover="border-color:#235a81"><i class="ph ph-export"></i>Eksport CSV</span>
+            <span style="flex:1"></span>
+            <span style="font-family:'Geist Mono',monospace;font-size:12px">{{ grid.footer }}</span>
+          </div>
+
+          <fieldset style="margin:4px 0 0;border:1px solid #d4d4d8;border-radius:6px;padding:8px 12px 10px">
+            <legend style="padding:0 6px;font-weight:600">Operacje na wynikach zapytania</legend>
+            <div style="display:flex;flex-wrap:wrap;gap:18px">
+              <a onClick="{{ printGrid }}" style="cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ph ph-printer"></i>Drukuj</a>
+              <a onClick="{{ exportGrid }}" style="cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ph ph-export"></i>Eksport CSV</a>
+              <a onClick="{{ editGridSql }}" style="cursor:pointer;display:flex;align-items:center;gap:4px"><i class="ph ph-terminal-window"></i>Otwórz w SQL</a>
+            </div>
+          </fieldset>
+        </sc-if>
+      </div>
+
+      <!-- Preview panel -->
+      <sc-if value="{{ preview }}" hint-placeholder-val="{{ false }}">
+        <aside style="width:360px;flex-shrink:0;border-left:1px solid #d4d4d8;background:#fff;overflow:auto;display:flex;flex-direction:column">
+          <div style="display:flex;align-items:center;justify-content:space-between;height:34px;padding:0 8px 0 12px;background:#f4f4f5;border-bottom:1px solid #d4d4d8">
+            <span style="font-weight:600;display:flex;align-items:center;gap:6px"><i class="ph {{ preview.icon }}" style="font-size:15px;color:#235a81"></i>Podgląd pliku</span>
+            <span onClick="{{ closePreview }}" title="Zamknij podgląd (Esc)" style="width:26px;height:26px;display:grid;place-items:center;border-radius:4px;cursor:pointer;color:#52525b" style-hover="background:#e4e4e7"><i class="ph ph-x"></i></span>
+          </div>
+          <div style="padding:12px;display:flex;flex-direction:column;gap:12px">
+            <div>
+              <div style="font-weight:600;word-break:break-all;font-size:14px">{{ preview.filename }}</div>
+              <div style="color:#52525b">{{ preview.topic }}</div>
+            </div>
+            <table style="border-collapse:collapse;font-size:12px;width:100%">
+              <sc-for list="{{ preview.meta }}" as="m"><tr><td style="padding:3px 0;color:#52525b;width:96px">{{ m.k }}</td><td style="padding:3px 0;font-family:'Geist Mono',monospace">{{ m.v }}</td></tr></sc-for>
+            </table>
+            <div style="display:flex;flex-wrap:wrap;gap:6px">
+              <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;color:#235a81;cursor:pointer" style-hover="border-color:#235a81"><i class="ph ph-download-simple"></i>Pobierz</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;color:#235a81;cursor:pointer" style-hover="border-color:#235a81"><i class="ph ph-arrows-out"></i>Pełny ekran</span>
+              <span style="display:inline-flex;align-items:center;gap:5px;border:1px solid #d4d4d8;border-radius:4px;padding:5px 10px;color:#235a81;cursor:pointer" style-hover="border-color:#235a81"><i class="ph ph-discord-logo"></i>Otwórz w Discordzie</span>
+            </div>
+            <sc-if value="{{ preview.badge }}"><span style="align-self:flex-start;border:1px solid {{ preview.badgeColor }};color:{{ preview.badgeColor }};border-radius:999px;padding:1px 8px;font-size:12px">{{ preview.badge }}</span></sc-if>
+            <div style="aspect-ratio:3/4;border:1px dashed #d4d4d8;border-radius:6px;background:#fafafa;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;color:#71717a">
+              <i class="ph {{ preview.icon }}" style="font-size:32px"></i>
+              <span>{{ preview.placeholder }}</span>
+            </div>
+          </div>
+        </aside>
+      </sc-if>
+    </div>
+
+    <!-- Console -->
+    <sc-if value="{{ showConsole }}" hint-placeholder-val="{{ true }}">
+      <div style="flex-shrink:0;border-top:1px solid #d4d4d8;background:#fafafa">
+        <div onClick="{{ toggleConsole }}" style="display:flex;align-items:center;gap:8px;height:28px;padding:0 14px;cursor:pointer;color:#235a81" style-hover="background:#f4f4f5">
+          <i class="ph ph-terminal" style="font-size:14px"></i><span style="font-weight:600">Konsola</span>
+          <span style="color:#71717a;font-size:12px">Historia zapytań ({{ historyCount }})</span>
+          <span style="flex:1"></span>
+          <i class="ph {{ consoleCaret }}" style="color:#71717a"></i>
+        </div>
+        <sc-if value="{{ consoleOpen }}">
+          <div style="max-height:180px;overflow:auto;border-top:1px solid #e4e4e7;background:#fff;font-family:'Geist Mono',monospace;font-size:12px">
+            <sc-for list="{{ historyOpts }}" as="h">
+              <div onClick="{{ h.load }}" style="display:flex;gap:10px;padding:5px 14px;border-bottom:1px solid #f4f4f5;cursor:pointer" style-hover="background:#eef4fa">
+                <span style="color:#a1a1aa">{{ h.n }}</span><span style="color:#18181b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ h.label }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+      </div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;density&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;compact&quot;,&quot;comfortable&quot;],&quot;default&quot;:&quot;compact&quot;,&quot;tsType&quot;:&quot;'compact'|'comfortable'&quot;},&quot;zebra&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;showConsole&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const MON = ['sty','lut','mar','kwi','maj','cze','lip','sie','wrz','paź','lis','gru'];
+const fmtDate = s => { const [d] = s.split(' '); const [y, m, dd] = d.split('-'); return `${+dd} ${MON[+m - 1]} ${y}`; };
+const fmtSize = b => b < 1024 ? `${b} B` : b < 1048576 ? `${(b / 1024).toFixed(1)} KB` : `${(b / 1048576).toFixed(1)} MB`;
+const plural = (n, a, b, c) => { const x = Math.abs(n); if (x === 1) return a; const d = x % 10, dd = x % 100; return d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? b : c; };
+const CLASS_NAMES = { wyklad: 'Wykład', laboratorium: 'Laboratorium', cwiczenia: 'Ćwiczenia', projekt: 'Projekt', seminarium: 'Seminarium' };
+
+const SUBJ = [
+  [1, 'Bazy danych', 'BD', 3, 5, 'Projektowanie relacyjnych baz danych, język SQL i normalizacja.', '2026-02-20 09:12:04', ['wyklad', 'laboratorium']],
+  [2, 'Programowanie obiektowe', 'PO', 2, 6, 'Klasy, dziedziczenie i wzorce projektowe w Javie.', '2026-02-20 09:14:51', ['wyklad', 'laboratorium', 'projekt']],
+  [3, 'Sieci komputerowe', 'SK', 3, 4, null, '2026-02-21 11:02:33', ['wyklad', 'laboratorium']],
+  [4, 'Systemy operacyjne', 'SO', 3, 5, 'Procesy, pamięć wirtualna i systemy plików.', '2026-02-21 11:05:10', ['wyklad', 'laboratorium']],
+  [5, 'Analiza matematyczna', 'AM', 1, 6, null, '2026-02-22 08:40:00', ['wyklad', 'cwiczenia']],
+];
+const USERS = [[1, 'kasia.n', '2026-02-19 20:11:02'], [2, 'mtomczak', '2026-02-19 20:30:45'], [3, 'Bartek W.', '2026-02-20 07:58:12'], [4, 'ola_p', '2026-02-24 13:22:09'], [5, 'jan.k', '2026-03-01 18:04:40']];
+const LECT = [[1, 'Anna Nowak', 'dr inż.', 'anna.nowak@tp.edu.pl'], [2, 'Piotr Zieliński', 'mgr inż.', null], [3, 'Marek Wiśniewski', 'prof. dr hab.', 'm.wisniewski@tp.edu.pl'], [4, 'Ewa Kowalczyk', 'dr', 'ewa.kowalczyk@tp.edu.pl']];
+const CLASSES = [], GROUPS = [];
+SUBJ.forEach(s => s[7].forEach(k => {
+  const c = { id: CLASSES.length + 1, subject_id: s[0], kind: k, name: CLASS_NAMES[k] };
+  CLASSES.push(c);
+  if (k === 'laboratorium' || k === 'cwiczenia') [1, 2].forEach(n => GROUPS.push({ id: GROUPS.length + 1, class_id: c.id, number: n, name: `Gr. ${n}` }));
+}));
+const cls = (sid, kind) => CLASSES.find(c => c.subject_id === sid && c.kind === kind);
+const grp = (cid, n) => GROUPS.find(g => g.class_id === cid && g.number === n);
+const CL = [[1, 'wyklad', null, 1], [1, 'laboratorium', 1, 2], [1, 'laboratorium', 2, 1], [2, 'wyklad', null, 3], [2, 'laboratorium', null, 2], [3, 'wyklad', null, 4], [4, 'wyklad', null, 3], [5, 'wyklad', null, 4], [5, 'cwiczenia', null, 4]]
+  .map(([s, k, g, l]) => { const c = cls(s, k); return { class_id: c.id, lecturer_id: l, group_id: g ? grp(c.id, g).id : null }; });
+const TOP = [
+  [1, 1, 'wyklad', null, 'Wykład 1 – model relacyjny', 2, '2026-03-02 10:14:20'],
+  [2, 1, 'wyklad', null, 'Wykład 4 – normalizacja', 2, '2026-03-23 10:05:41'],
+  [3, 1, 'laboratorium', 1, 'Lab 2 – zapytania SELECT', 1, '2026-03-10 14:31:07'],
+  [4, 1, 'laboratorium', 2, 'Lab 2 – zapytania SELECT (gr. 2)', 4, '2026-03-11 16:12:55'],
+  [5, 1, 'laboratorium', 1, 'Kolokwium 1 – przykładowe zadania', 3, '2026-09-28 19:40:02'],
+  [6, 2, 'wyklad', null, 'Wzorce projektowe – slajdy', 5, '2026-04-14 09:01:16'],
+  [7, 2, 'laboratorium', null, 'Lab 5 – dziedziczenie', 1, '2026-04-21 12:44:30'],
+  [8, 2, 'projekt', null, 'Wymagania projektu', 2, '2026-05-05 08:20:00'],
+  [9, 3, 'wyklad', null, 'Model OSI i TCP/IP', 3, '2026-10-01 10:10:10'],
+  [10, 3, 'laboratorium', 2, 'Packet Tracer – VLAN', 4, '2026-10-06 15:35:48'],
+  [11, 4, 'wyklad', null, 'Szeregowanie procesów', 5, '2026-10-07 11:22:03'],
+  [12, 5, 'cwiczenia', 1, 'Granice ciągów – zadania', 1, '2026-10-08 17:50:29'],
+  [13, 5, 'wyklad', null, 'Egzamin 2025 – arkusz', 3, '2026-10-09 21:03:44'],
+].map(([id, s, k, g, title, by, at]) => { const c = cls(s, k); return { id, subject_id: s, class_id: c.id, group_id: g ? grp(c.id, g).id : null, title, created_by: by, created_at: at, discord_thread_id: String(1294000000000000000n + BigInt(id * 7919)) }; });
+const MAT = [
+  [1, 1, 2, 'W01_model_relacyjny.pdf', 'application/pdf', 2412544, 'pdf', 'ready', '2026-03-02 10:14:22'],
+  [2, 2, 2, 'W04_normalizacja.pdf', 'application/pdf', 1873920, 'pdf', 'ready', '2026-03-23 10:05:44'],
+  [3, 3, 1, 'lab2_zadania.sql', 'text/plain', 4812, 'text', 'ready', '2026-03-10 14:31:09'],
+  [4, 3, 1, 'schemat_bazy.png', 'image/png', 284113, 'image', 'ready', '2026-03-10 14:31:09'],
+  [5, 4, 4, 'lab2_rozwiazania.sql', 'text/plain', 6230, 'text', 'ready', '2026-03-11 16:12:58'],
+  [6, 5, 3, 'kolokwium1_przyklad.pdf', 'application/pdf', 512000, 'pdf', 'ready', '2026-09-28 19:40:05'],
+  [7, 5, 3, 'kolokwium1_odpowiedzi.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 88412, 'pdf', 'pending', '2026-09-28 19:41:30'],
+  [8, 6, 5, 'wzorce_projektowe.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation', 5320192, 'pdf', 'ready', '2026-04-14 09:01:20'],
+  [9, 7, 1, 'Zwierze.java', 'text/x-java', 2210, 'text', 'ready', '2026-04-21 12:44:33'],
+  [10, 8, 2, 'wymagania_projekt.pdf', 'application/pdf', 330221, 'pdf', 'ready', '2026-05-05 08:20:04'],
+  [11, 9, 3, 'osi_tcpip.pdf', 'application/pdf', 1290455, 'pdf', 'ready', '2026-10-01 10:10:14'],
+  [12, 10, 4, 'vlan_lab.pkt', 'application/octet-stream', 120334, 'none', 'ready', '2026-10-06 15:35:50'],
+  [13, 11, 5, 'szeregowanie.pdf', 'application/pdf', 980112, 'pdf', 'failed', '2026-10-07 11:22:07'],
+  [14, 12, 1, 'granice_zadania.jpg', 'image/jpeg', 1530221, 'image', 'ready', '2026-10-08 17:50:33'],
+  [15, 13, 3, 'egzamin_2025.pdf', 'application/pdf', 742003, 'pdf', 'ready', '2026-10-09 21:03:47'],
+  [16, 2, 4, 'notatki_normalizacja.md', 'text/markdown', 9120, 'text', 'ready', '2026-10-09 22:15:02'],
+].map(([id, topic_id, uploader_id, filename, mime, size, kind, status, at]) => ({ id, topic_id, uploader_id, filename, mime, size, kind, status, created_at: at }));
+const TAGS = [];
+SUBJ.forEach(s => ['Kolokwium', 'Egzamin', 'Notatki'].forEach(n => TAGS.push({ id: TAGS.length + 1, subject_id: s[0], name: n, discord_tag_id: String(1295000000000000000n + BigInt(TAGS.length * 131)) })));
+const tagId = (sid, n) => TAGS.find(t => t.subject_id === sid && t.name === n).id;
+const TT = [[5, tagId(1, 'Kolokwium')], [13, tagId(5, 'Egzamin')], [2, tagId(1, 'Notatki')], [3, tagId(1, 'Kolokwium')]];
+
+const FILES = MAT.map(m => {
+  const t = TOP.find(x => x.id === m.topic_id), s = SUBJ.find(x => x[0] === t.subject_id);
+  const c = CLASSES.find(x => x.id === t.class_id), g = GROUPS.find(x => x.id === t.group_id);
+  return { material_id: m.id, subject_id: s[0], subject_code: s[2], subject_name: s[1], class_kind: c ? c.kind : null, class_name: c ? c.name : null, group_number: g ? g.number : null, group_name: g ? g.name : null, topic_id: t.id, topic_title: t.title, filename: m.filename, mime_type: m.mime, size_bytes: m.size, preview_kind: m.kind, status: m.status, uploader: USERS.find(u => u[0] === m.uploader_id)[1], created_at: m.created_at };
+});
+
+const V = {
+  v_subjects: { cols: ['id', 'name', 'code', 'semester', 'ects', 'description', 'discord_channel_id', 'created_at'], rows: SUBJ.map(s => [s[0], s[1], s[2], s[3], s[4], s[5], String(1293800000000000000n + BigInt(s[0] * 104729)), s[6]]) },
+  v_lecturers: { cols: ['id', 'name', 'title', 'email'], rows: LECT.map(l => [...l]) },
+  v_classes: { cols: ['id', 'subject_id', 'kind', 'name'], rows: CLASSES.map(c => [c.id, c.subject_id, c.kind, c.name]) },
+  v_class_groups: { cols: ['id', 'class_id', 'number', 'name'], rows: GROUPS.map(g => [g.id, g.class_id, g.number, g.name]) },
+  v_class_lecturers: { cols: ['class_id', 'lecturer_id', 'group_id'], rows: CL.map(c => [c.class_id, c.lecturer_id, c.group_id]) },
+  v_topics: { cols: ['id', 'subject_id', 'class_id', 'group_id', 'title', 'discord_thread_id', 'created_by', 'created_at'], rows: TOP.map(t => [t.id, t.subject_id, t.class_id, t.group_id, t.title, t.discord_thread_id, t.created_by, t.created_at]) },
+  v_tags: { cols: ['id', 'subject_id', 'name', 'discord_tag_id'], rows: TAGS.map(t => [t.id, t.subject_id, t.name, t.discord_tag_id]) },
+  v_topic_tags: { cols: ['topic_id', 'tag_id'], rows: TT.map(x => [...x]) },
+  v_materials: { cols: ['id', 'topic_id', 'uploader_id', 'original_filename', 'mime_type', 'size_bytes', 'preview_kind', 'status', 'created_at'], rows: MAT.map(m => [m.id, m.topic_id, m.uploader_id, m.filename, m.mime, m.size, m.kind, m.status, m.created_at]) },
+  v_files: { cols: ['material_id', 'subject_code', 'subject_name', 'class_name', 'group_name', 'topic_id', 'topic_title', 'filename', 'mime_type', 'size_bytes', 'preview_kind', 'status', 'uploader', 'created_at'], rows: FILES.map(f => [f.material_id, f.subject_code, f.subject_name, f.class_name, f.group_name, f.topic_id, f.topic_title, f.filename, f.mime_type, f.size_bytes, f.preview_kind, f.status, f.uploader, f.created_at]) },
+  v_users: { cols: ['id', 'display_name', 'created_at'], rows: USERS.map(u => [...u]) },
+};
+const VIEW_NAMES = Object.keys(V);
+
+const EXAMPLES = [
+  { name: 'Materiały na przedmiot', sql: "SELECT s.code, s.name, COUNT(m.id) AS materialy\nFROM v_subjects s\nLEFT JOIN v_topics t ON t.subject_id = s.id\nLEFT JOIN v_materials m ON m.topic_id = t.id\nGROUP BY s.id, s.code, s.name\nORDER BY materialy DESC",
+    run: () => ({ columns: ['code', 'name', 'materialy'], rows: SUBJ.map(s => [s[2], s[1], FILES.filter(f => f.subject_id === s[0]).length]).sort((a, b) => b[2] - a[2]) }) },
+  { name: 'Najaktywniejsi uploaderzy', sql: "SELECT u.display_name, COUNT(*) AS liczba_plikow\nFROM v_materials m\nJOIN v_users u ON u.id = m.uploader_id\nGROUP BY u.id, u.display_name\nORDER BY liczba_plikow DESC\nLIMIT 10",
+    run: () => ({ columns: ['display_name', 'liczba_plikow'], rows: USERS.map(u => [u[1], MAT.filter(m => m.uploader_id === u[0]).length]).sort((a, b) => b[1] - a[1]) }) },
+  { name: 'Kolokwia z ostatnich 30 dni', sql: "SELECT t.id, t.title, t.created_at\nFROM v_topics t\nJOIN v_topic_tags tt ON tt.topic_id = t.id\nJOIN v_tags g ON g.id = tt.tag_id\nWHERE g.name = 'Kolokwium'\n  AND t.created_at >= NOW() - INTERVAL 30 DAY\nORDER BY t.created_at DESC",
+    run: () => ({ columns: ['id', 'title', 'created_at'], rows: TOP.filter(t => t.created_at >= '2026-09-11' && TT.some(([tid, g]) => tid === t.id && TAGS.find(x => x.id === g).name === 'Kolokwium')).map(t => [t.id, t.title, t.created_at]) }) },
+];
+
+const KW = new Set('SELECT FROM WHERE AND OR NOT LEFT RIGHT INNER JOIN ON GROUP BY ORDER ASC DESC LIMIT OFFSET AS COUNT IS NULL LIKE IN NOW INTERVAL DAY DISTINCT HAVING SUM AVG MIN MAX CAST CHAR'.split(' '));
+const tokenize = sql => (sql.match(/'[^']*'?|`[^`]*`?|\s+|\w+|[^\s\w]/g) || []).map(t => {
+  if (/^\s+$/.test(t)) return { t, c: 'inherit', w: 400 };
+  if (t[0] === "'") return { t, c: '#047857', w: 400 };
+  if (t[0] === '`' || /^v_\w+$/.test(t)) return { t, c: '#235a81', w: 500 };
+  if (/^\d+$/.test(t)) return { t, c: '#b45309', w: 400 };
+  if (KW.has(t.toUpperCase())) return { t, c: '#7a1fa2', w: 600 };
+  if (/^\w+$/.test(t)) return { t, c: '#18181b', w: 400 };
+  return { t, c: '#71717a', w: 400 };
+});
+const colType = (v, c) => {
+  if (c === 'id' || c === 'material_id' || /_id$/.test(c) && !/discord/.test(c) || c === 'created_by') return ['int(10)', 'UNSIGNED'];
+  if (/discord/.test(c)) return ['varchar(32)', ''];
+  if (c === 'size_bytes') return ['bigint(20)', 'UNSIGNED'];
+  if (c === 'semester' || c === 'ects' || c === 'number') return ['tinyint(3)', 'UNSIGNED'];
+  if (c === 'created_at') return ['datetime', ''];
+  if (c === 'description') return ['text', ''];
+  if (c === 'status') return ["enum('pending','ready','failed')", ''];
+  if (c === 'preview_kind') return ["enum('pdf','image','text','none')", ''];
+  if (c === 'kind') return ["enum('wyklad','laboratorium',…)", ''];
+  if (c === 'code' || c === 'subject_code') return ['varchar(32)', ''];
+  return ['varchar(255)', ''];
+};
+const NULLABLE = /^(description|title|email|class_id|group_id|class_name|group_name|created_by|discord_channel_id|uploader)$/;
+const csv = (cols, rows) => [cols, ...rows].map(r => r.map(v => v == null ? '' : /[",\n;]/.test(String(v)) ? `"${String(v).replace(/"/g, '""')}"` : String(v)).join(',')).join('\n');
+
+const BOX = { v_users: [20, 20], v_lecturers: [20, 300], v_materials: [260, 20], v_class_lecturers: [260, 300], v_topics: [500, 20], v_class_groups: [500, 260], v_topic_tags: [500, 420], v_subjects: [740, 20], v_classes: [740, 240], v_tags: [740, 390], v_files: [990, 20] };
+const REL = [['v_topics', 'subject_id', 'v_subjects', 'id'], ['v_classes', 'subject_id', 'v_subjects', 'id'], ['v_tags', 'subject_id', 'v_subjects', 'id'], ['v_class_groups', 'class_id', 'v_classes', 'id'], ['v_topics', 'class_id', 'v_classes', 'id'], ['v_topics', 'group_id', 'v_class_groups', 'id'], ['v_class_lecturers', 'class_id', 'v_classes', 'id'], ['v_class_lecturers', 'group_id', 'v_class_groups', 'id'], ['v_class_lecturers', 'lecturer_id', 'v_lecturers', 'id'], ['v_topic_tags', 'topic_id', 'v_topics', 'id'], ['v_topic_tags', 'tag_id', 'v_tags', 'id'], ['v_materials', 'topic_id', 'v_topics', 'id'], ['v_materials', 'uploader_id', 'v_users', 'id'], ['v_topics', 'created_by', 'v_users', 'id'], ['v_files', 'material_id', 'v_materials', 'id'], ['v_files', 'topic_id', 'v_topics', 'id']];
+const HKEY = 'studiesdb.sqlHistory';
+
+class Component extends DCLogic {
+  state = { screen: 'db', dbTab: 'subjects', view: 'v_files', viewTab: 'browse', subjectId: 1, subjectTab: 'files', classKind: null, groupNo: null, tag: '',
+    sort: null, filter: '', checked: {}, previewId: null, perPage: '25', showFull: false, colSearch: {}, colSearchApplied: {},
+    open: { subjects: true, views: true, s1: true }, navFilter: '', sql: 'SELECT * FROM v_subjects LIMIT 10', sqlResult: null, history: [], consoleOpen: false,
+    searchQ: 'normalizacja', searchSubject: '', searchTag: '', searchRan: 'normalizacja', hoverBox: null };
+
+  componentDidMount() {
+    let h = [];
+    try { h = JSON.parse(localStorage.getItem(HKEY) || '[]'); } catch (e) {}
+    if (!Array.isArray(h) || !h.length) h = ['SELECT * FROM v_files WHERE subject_code = \'BD\'', EXAMPLES[0].sql, 'SELECT * FROM v_subjects LIMIT 10'];
+    this.setState({ history: h.filter(x => typeof x === 'string') });
+    this._key = e => { if (e.key === 'Escape' && this.state.previewId != null && !e.target.closest('input,textarea,select')) this.setState({ previewId: null }); };
+    window.addEventListener('keydown', this._key);
+  }
+  componentWillUnmount() { window.removeEventListener('keydown', this._key); }
+
+  reset(extra) { this.setState({ sort: null, filter: '', checked: {}, previewId: null, ...extra }); }
+  goDb(tab) { this.reset({ screen: 'db', dbTab: tab }); }
+  goView(view, tab = 'browse') { this.reset({ screen: 'view', view, viewTab: tab, colSearchApplied: {}, colSearch: {} }); }
+  goSubject(id, classKind = null, groupNo = null) { this.setState(s => ({ open: { ...s.open, ['s' + id]: true, ...(classKind ? { [`s${id}${classKind}`]: true } : {}) } })); this.reset({ screen: 'subject', subjectId: id, classKind, groupNo, subjectTab: 'files', tag: '' }); }
+  toggle(k) { this.setState(s => ({ open: { ...s.open, [k]: !s.open[k] } })); }
+  openSql(q) { this.setState({ sql: q, sqlResult: null }); if (this.state.screen === 'view') this.reset({ viewTab: 'sql' }); else if (this.state.screen === 'subject') this.reset({ subjectTab: 'sql' }); else this.reset({ screen: 'db', dbTab: 'sql' }); }
+
+  runSql(q) {
+    q = (q || '').trim(); if (!q) return;
+    let res; const norm = s => s.replace(/\s+/g, ' ').trim().toLowerCase();
+    if (!/^select\b/i.test(q)) res = { ok: false, error: '#1142 - Dozwolone są tylko zapytania SELECT na widokach v_*.' };
+    else {
+      const ex = EXAMPLES.find(e => norm(e.sql) === norm(q));
+      if (ex) res = { ok: true, ...ex.run() };
+      else {
+        const m = q.match(/from\s+`?(\w+)`?/i);
+        if (!m || !V[m[1]]) res = { ok: false, error: `#1146 - Table 'studies_db.${m ? m[1] : '?'}' doesn't exist` };
+        else {
+          let rows = V[m[1]].rows; const cols = V[m[1]].cols;
+          const w = q.match(/where\s+`?(\w+)`?\s*=\s*'([^']*)'/i);
+          if (w && cols.includes(w[1])) rows = rows.filter(r => String(r[cols.indexOf(w[1])]) === w[2]);
+          const lim = q.match(/limit\s+(\d+)/i); if (lim) rows = rows.slice(0, +lim[1]);
+          res = { ok: true, columns: cols, rows };
+        }
+      }
+    }
+    res.sql = q; res.ms = (0.0004 + (res.rows ? res.rows.length : 0) * 0.00007 + q.length * 0.000002).toFixed(4);
+    const history = [q, ...this.state.history.filter(h => h !== q)].slice(0, 50);
+    try { localStorage.setItem(HKEY, JSON.stringify(history)); } catch (e) {}
+    this.setState({ sqlResult: res, history, sort: null, filter: '', checked: {}, previewId: null });
+  }
+
+  download(name, cols, rows) {
+    const url = URL.createObjectURL(new Blob([csv(cols, rows)], { type: 'text/csv;charset=utf-8' }));
+    const a = document.createElement('a'); a.href = url; a.download = `${name}.csv`; document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 0);
+  }
+
+  buildSource() {
+    const s = this.state;
+    if (s.screen === 'view' && s.viewTab === 'browse') {
+      const v = V[s.view]; let rows = v.rows; const where = [];
+      Object.entries(s.colSearchApplied).forEach(([c, val]) => { if (!val) return; const i = v.cols.indexOf(c); rows = rows.filter(r => String(r[i] ?? '').toLowerCase().includes(val.toLowerCase())); where.push(`CAST(\`${c}\` AS CHAR) LIKE '%${val}%'`); });
+      const fileIdx = s.view === 'v_files' ? 0 : s.view === 'v_materials' ? 0 : -1;
+      return { name: s.view, cols: v.cols, rows, fileIdx, sqlBase: `SELECT * FROM \`${s.view}\`${where.length ? '\nWHERE ' + where.join(' AND ') : ''}` };
+    }
+    if (s.screen === 'subject' && s.subjectTab === 'files') {
+      const subj = SUBJ.find(x => x[0] === s.subjectId);
+      let f = FILES.filter(x => x.subject_id === s.subjectId);
+      const where = [`subject_code = '${subj[2]}'`];
+      if (s.classKind) { f = f.filter(x => x.class_kind === s.classKind); where.push(`class_name = '${CLASS_NAMES[s.classKind]}'`); }
+      if (s.groupNo) { f = f.filter(x => x.group_number === s.groupNo); where.push(`group_name = 'Gr. ${s.groupNo}'`); }
+      if (s.tag) { const tid = +s.tag; f = f.filter(x => TT.some(([t, g]) => t === x.topic_id && g === tid)); where.push(`topic_id IN (SELECT topic_id FROM v_topic_tags WHERE tag_id = ${tid})`); }
+      return { name: `${subj[2]}-pliki`, cols: ['material_id', 'topic_title', 'filename', 'preview_kind', 'uploader', 'created_at'], rows: f.map(x => [x.material_id, x.topic_title, x.filename, x.preview_kind, x.uploader, x.created_at]),
+        fileIdx: 0, linkCol: 2, badgeOf: r => FILES.find(x => x.material_id === r[0]).status, dateCol: 5,
+        sqlBase: `SELECT material_id, topic_title, filename, preview_kind, uploader, created_at\nFROM \`v_files\`\nWHERE ${where.join('\n  AND ')}` };
+    }
+    if (s.screen === 'db' && s.dbTab === 'subjects') {
+      return { name: 'przedmioty', cols: ['code', 'name', 'semester', 'ects', 'zajecia', 'pliki', 'ostatnio'], linkCol: 1, fileIdx: -1,
+        rows: SUBJ.map(x => { const f = FILES.filter(y => y.subject_id === x[0]); const last = f.map(y => y.created_at).sort().pop(); return [x[2], x[1], x[3], x[4], x[7].map(k => CLASS_NAMES[k]).join(', '), f.length, last ? fmtDate(last) : null]; }),
+        onLink: r => this.goSubject(SUBJ.find(x => x[2] === r[0])[0]),
+        sqlBase: 'SELECT s.code, s.name, s.semester, s.ects,\n  GROUP_CONCAT(c.name) AS zajecia, COUNT(f.material_id) AS pliki,\n  MAX(f.created_at) AS ostatnio\nFROM `v_subjects` s\nLEFT JOIN `v_classes` c ON c.subject_id = s.id\nLEFT JOIN `v_files` f ON f.subject_code = s.code\nGROUP BY s.id' };
+    }
+    const isSql = (s.screen === 'db' && s.dbTab === 'sql') || (s.screen === 'view' && s.viewTab === 'sql') || (s.screen === 'subject' && s.subjectTab === 'sql');
+    if (isSql && s.sqlResult && s.sqlResult.ok) {
+      const r = s.sqlResult; const fi = r.columns[0] === 'material_id' || (r.columns[0] === 'id' && r.columns.includes('original_filename')) ? 0 : -1;
+      return { name: 'zapytanie', cols: r.columns, rows: r.rows, fileIdx: fi, sqlRaw: r.sql, ms: r.ms };
+    }
+    return null;
+  }
+
+  renderVals() {
+    const s = this.state, p = this.props;
+    const compact = (p.density ?? 'compact') === 'compact';
+    const zebra = p.zebra ?? true;
+    const stripe = i => zebra && i % 2 ? '#fafafa' : '#fff';
+    const subj = SUBJ.find(x => x[0] === s.subjectId);
+
+    // tree
+    const tree = []; const nf = s.navFilter.trim().toLowerCase();
+    const node = (o) => tree.push({ pad: 8 + o.depth * 14, caret: o.hasKids ? (o.open ? 'ph-caret-down' : 'ph-caret-right') : '', icon: o.icon, iconColor: o.iconColor || '#52525b', label: o.label, count: o.count ?? '', bg: o.active ? '#dbe7f3' : 'transparent', color: o.active ? '#18181b' : (o.color || '#235a81'), fw: o.active || o.bold ? 600 : 400, font: o.mono ? "'Geist Mono',monospace" : 'inherit', onClick: o.onClick, onToggle: o.hasKids ? (e => { e.stopPropagation(); this.toggle(o.key); }) : undefined });
+    node({ depth: 0, icon: 'ph-hard-drives', label: 'mariadb:3306', color: '#18181b', bold: true, onClick: () => this.goDb('subjects') });
+    node({ depth: 1, icon: 'ph-database', iconColor: '#235a81', label: 'studies_db', bold: true, active: s.screen === 'db', onClick: () => this.goDb(s.screen === 'db' ? s.dbTab : 'structure') });
+    node({ depth: 2, key: 'subjects', hasKids: true, open: s.open.subjects, icon: s.open.subjects ? 'ph-folder-open' : 'ph-folder', iconColor: '#b45309', label: 'Przedmioty', count: SUBJ.length, color: '#18181b', onClick: () => this.toggle('subjects') });
+    if (s.open.subjects) SUBJ.filter(x => !nf || x[1].toLowerCase().includes(nf) || x[2].toLowerCase().includes(nf)).forEach(x => {
+      const k = 's' + x[0], on = s.screen === 'subject' && s.subjectId === x[0];
+      node({ depth: 3, key: k, hasKids: true, open: s.open[k], icon: 'ph-book-open-text', label: x[1], count: FILES.filter(f => f.subject_id === x[0]).length, active: on && !s.classKind, onClick: () => this.goSubject(x[0]) });
+      if (s.open[k]) x[7].forEach(kind => {
+        const ck = k + kind, c = cls(x[0], kind), gs = GROUPS.filter(g => g.class_id === c.id);
+        node({ depth: 4, key: ck, hasKids: gs.length > 0, open: s.open[ck], icon: 'ph-stack', label: CLASS_NAMES[kind], count: FILES.filter(f => f.subject_id === x[0] && f.class_kind === kind).length, active: on && s.classKind === kind && !s.groupNo, onClick: () => this.goSubject(x[0], kind) });
+        if (s.open[ck]) gs.forEach(g => node({ depth: 5, icon: 'ph-users-three', label: g.name, count: FILES.filter(f => f.subject_id === x[0] && f.class_kind === kind && f.group_number === g.number).length, active: on && s.classKind === kind && s.groupNo === g.number, onClick: () => this.goSubject(x[0], kind, g.number) }));
+      });
+    });
+    node({ depth: 2, key: 'views', hasKids: true, open: s.open.views, icon: s.open.views ? 'ph-folder-open' : 'ph-folder', iconColor: '#b45309', label: 'Widoki', count: VIEW_NAMES.length, color: '#18181b', onClick: () => this.toggle('views') });
+    if (s.open.views) VIEW_NAMES.filter(v => !nf || v.includes(nf)).forEach(v => node({ depth: 3, icon: 'ph-table', label: v, mono: true, count: V[v].rows.length, active: s.screen === 'view' && s.view === v, onClick: () => this.goView(v) }));
+
+    // crumbs
+    const crumbs = [{ sep: '', icon: 'ph-hard-drives', kind: 'Serwer:', label: 'mariadb:3306', onClick: () => this.goDb('subjects') }, { sep: '»', icon: 'ph-database', kind: 'Baza danych:', label: 'studies_db', onClick: () => this.goDb('structure') }];
+    if (s.screen === 'view') crumbs.push({ sep: '»', icon: 'ph-table', kind: 'Widok:', label: s.view, onClick: () => this.goView(s.view) });
+    if (s.screen === 'subject') {
+      crumbs.push({ sep: '»', icon: 'ph-book-open-text', kind: 'Przedmiot:', label: subj[1], onClick: () => this.goSubject(subj[0]) });
+      if (s.classKind) crumbs.push({ sep: '»', icon: 'ph-stack', kind: '', label: CLASS_NAMES[s.classKind], onClick: () => this.goSubject(subj[0], s.classKind) });
+      if (s.groupNo) crumbs.push({ sep: '»', icon: 'ph-users-three', kind: '', label: `Gr. ${s.groupNo}`, onClick: () => this.goSubject(subj[0], s.classKind, s.groupNo) });
+    }
+
+    // tabs
+    const T = (label, icon, on, fn) => ({ label, icon, onClick: fn, bg: on ? '#fff' : 'transparent', color: on ? '#18181b' : '#235a81', fw: on ? 600 : 400, border: on ? '#d4d4d8' : 'transparent', bottom: on ? '#fff' : 'transparent' });
+    let tabs;
+    if (s.screen === 'db') tabs = [['subjects', 'Przedmioty', 'ph-books'], ['structure', 'Struktura', 'ph-table'], ['sql', 'SQL', 'ph-terminal-window'], ['search', 'Szukaj', 'ph-magnifying-glass'], ['designer', 'Projektant', 'ph-tree-structure']].map(([k, l, i]) => T(l, i, s.dbTab === k, () => this.goDb(k)));
+    else if (s.screen === 'view') tabs = [['browse', 'Przeglądaj', 'ph-rows'], ['structure', 'Struktura', 'ph-columns'], ['sql', 'SQL', 'ph-terminal-window'], ['search', 'Szukaj', 'ph-magnifying-glass']].map(([k, l, i]) => T(l, i, s.viewTab === k, () => k === 'sql' ? this.openSql(`SELECT * FROM \`${s.view}\` WHERE 1`) : this.reset({ viewTab: k }))).concat([T('Eksport', 'ph-export', false, () => this.download(s.view, V[s.view].cols, V[s.view].rows))]);
+    else tabs = [['files', 'Pliki', 'ph-files'], ['lecturers', 'Prowadzący', 'ph-chalkboard-teacher'], ['sql', 'SQL', 'ph-terminal-window']].map(([k, l, i]) => T(l, i, s.subjectTab === k, () => k === 'sql' ? this.openSql(`SELECT * FROM v_files WHERE subject_code = '${subj[2]}'`) : this.reset({ subjectTab: k })));
+
+    const isSqlTab = (s.screen === 'db' && s.dbTab === 'sql') || (s.screen === 'view' && s.viewTab === 'sql') || (s.screen === 'subject' && s.subjectTab === 'sql');
+
+    // grid
+    const src = this.buildSource(); let grid = null;
+    if (src) {
+      let idx = src.rows.map((r, i) => i);
+      const needle = s.filter.trim().toLowerCase();
+      if (needle) idx = idx.filter(i => src.rows[i].some(c => String(c ?? '').toLowerCase().includes(needle)));
+      if (s.sort) { const ci = src.cols.indexOf(s.sort.col); if (ci >= 0) idx.sort((a, b) => { const x = src.rows[a][ci], y = src.rows[b][ci]; const d = typeof x === 'number' && typeof y === 'number' ? x - y : String(x ?? '').localeCompare(String(y ?? ''), 'pl', { numeric: true }); return d * (s.sort.dir === 'asc' ? 1 : -1); }); }
+      const per = +s.perPage; const shown = idx.slice(0, per);
+      const key = i => src.name + ':' + (src.rows[i][0] ?? i);
+      const checkedCount = shown.filter(i => s.checked[key(i)]).length;
+      const allChecked = shown.length > 0 && checkedCount === shown.length;
+      const sqlText = src.sqlRaw || `${src.sqlBase}${s.sort ? `\nORDER BY \`${s.sort.col}\` ${s.sort.dir.toUpperCase()}` : ''}\nLIMIT 0, ${per}`;
+      const ms = src.ms || (0.0004 + src.rows.length * 0.00006).toFixed(4);
+      const total = idx.length;
+      grid = {
+        tokens: tokenize(sqlText),
+        message: total ? `Pokazano wiersze 0 – ${shown.length - 1} (${total} łącznie, zapytanie trwało ${String(ms).replace('.', ',')} s.)` : `MariaDB zwrócił pusty wynik (zero wierszy). (Zapytanie trwało ${String(ms).replace('.', ',')} s.)`,
+        hasActions: src.fileIdx >= 0,
+        cols: src.cols.map(c => ({ name: c, arrow: s.sort && s.sort.col === c ? (s.sort.dir === 'asc' ? 'ph-caret-up' : 'ph-caret-down') : '', onSort: () => this.setState(st => ({ sort: st.sort && st.sort.col === c ? { col: c, dir: st.sort.dir === 'asc' ? 'desc' : 'asc' } : { col: c, dir: 'asc' } })) })),
+        rows: shown.map((i, n) => {
+          const r = src.rows[i], k = key(i), on = !!s.checked[k];
+          const fid = src.fileIdx >= 0 ? r[src.fileIdx] : null;
+          const sel = fid != null && s.previewId === fid;
+          return {
+            bg: sel ? '#dbe7f3' : on ? '#fef3c7' : stripe(n), checked: on,
+            onCheck: () => this.setState(st => ({ checked: { ...st.checked, [k]: !st.checked[k] } })),
+            onPreview: () => this.setState({ previewId: fid }), onDownload: () => {},
+            cells: r.map((c, ci) => {
+              const isNull = c === null || c === undefined; const isLink = !isNull && ci === src.linkCol;
+              const st = src.badgeOf && ci === src.linkCol ? src.badgeOf(r) : 'ready';
+              const t = isNull ? '' : ci === src.dateCol ? fmtDate(c) : String(c);
+              return { t, isNull, isLink, isPlain: !isNull && !isLink, align: typeof c === 'number' ? 'right' : 'left',
+                onClick: isLink ? () => (src.onLink ? src.onLink(r) : this.setState({ previewId: fid })) : undefined,
+                badge: st === 'pending' ? 'Przetwarzanie…' : st === 'failed' ? 'Podgląd niedostępny' : '', badgeColor: st === 'pending' ? '#b45309' : '#b91c1c' };
+            }),
+          };
+        }),
+        empty: shown.length === 0, emptyText: needle ? 'Brak wierszy pasujących do filtra.' : 'Zapytanie nie zwróciło wierszy.',
+        allChecked, checkedCount,
+        toggleAll: () => this.setState(st => { const c = { ...st.checked }; shown.forEach(i => { c[key(i)] = !allChecked; }); return { checked: c }; }),
+        footer: `${total} ${plural(total, 'wiersz', 'wiersze', 'wierszy')} · strona 1 / ${Math.max(1, Math.ceil(total / per))}`,
+      };
+      this._grid = { src, shown, key };
+    }
+
+    // preview
+    let preview = null;
+    if (s.previewId != null) {
+      const f = FILES.find(x => x.material_id === s.previewId);
+      if (f) preview = { filename: f.filename, topic: f.topic_title, icon: { pdf: 'ph-file-pdf', image: 'ph-file-image', text: 'ph-file-text', none: 'ph-file' }[f.preview_kind],
+        meta: [{ k: 'Przedmiot', v: f.subject_code }, { k: 'Zajęcia', v: [f.class_name, f.group_name].filter(Boolean).join(', ') || '—' }, { k: 'Rozmiar', v: fmtSize(f.size_bytes) }, { k: 'Autor', v: f.uploader }, { k: 'Dodano', v: fmtDate(f.created_at) }, { k: 'MIME', v: f.mime_type.length > 30 ? f.mime_type.slice(0, 30) + '…' : f.mime_type }],
+        badge: f.status === 'pending' ? 'Przetwarzanie…' : f.status === 'failed' ? 'Podgląd niedostępny' : '', badgeColor: f.status === 'pending' ? '#b45309' : '#b91c1c',
+        placeholder: f.status !== 'ready' ? 'Podgląd niedostępny' : f.preview_kind === 'none' ? 'Brak podglądu dla tego typu pliku' : `Podgląd: ${({ pdf: 'PDF', image: 'obraz', text: 'tekst' })[f.preview_kind]}` };
+    }
+
+    // search
+    let hits = [];
+    if (s.searchRan) {
+      const q = s.searchRan.toLowerCase();
+      hits = FILES.filter(f => (!s.searchSubject || f.subject_id === +s.searchSubject) && (!s.searchTag || TT.some(([t, g]) => t === f.topic_id && TAGS.find(x => x.id === g).name === s.searchTag)) && (f.filename.toLowerCase().includes(q) || f.topic_title.toLowerCase().includes(q)))
+        .map((f, n) => {
+          const text = `${f.topic_title} — ${f.filename}`; const parts = []; let rest = text;
+          while (rest) { const j = rest.toLowerCase().indexOf(q); if (j < 0) { parts.push({ t: rest, plain: true }); break; } if (j) parts.push({ t: rest.slice(0, j), plain: true }); parts.push({ t: rest.slice(j, j + q.length), hit: true }); rest = rest.slice(j + q.length); }
+          return { title: f.filename, sub: `temat: ${f.topic_title}`, subject: `${f.subject_name} (${f.subject_code})`, parts, bg: stripe(n), open: () => this.goSubject(f.subject_id, f.class_kind, f.group_number) || this.setState({ previewId: f.material_id }) };
+        });
+    }
+
+    // designer
+    const hb = s.hoverBox;
+    const boxes = VIEW_NAMES.map(v => ({ name: v, x: BOX[v][0], y: BOX[v][1], border: hb === v ? '#235a81' : '#d4d4d8', onClick: () => this.goView(v), onEnter: () => this.setState({ hoverBox: v }), onLeave: () => this.setState({ hoverBox: null }),
+      cols: V[v].cols.map(c => { const key = c === 'id' || REL.some(r => (r[0] === v && r[1] === c) || (r[2] === v && r[3] === c)); return { name: c, icon: key ? 'ph-key' : '', color: key ? '#18181b' : '#71717a' }; }) }));
+    const rowY = (v, c) => BOX[v][1] + 28 + 4 + V[v].cols.indexOf(c) * 18 + 9;
+    const edges = REL.map(([a, ac, b, bc]) => {
+      const ax = BOX[a][0], bx = BOX[b][0]; const y1 = rowY(a, ac), y2 = rowY(b, bc); let x1, x2;
+      if (bx > ax) { x1 = ax + 190; x2 = bx; } else if (bx < ax) { x1 = ax; x2 = bx + 190; } else { x1 = ax + 190; x2 = bx + 190; }
+      const dx = bx === ax ? 40 : (x2 - x1) / 2;
+      const on = hb === a || hb === b;
+      return { d: `M${x1},${y1} C${x1 + dx},${y1} ${x2 - (bx === ax ? -40 : dx)},${y2} ${x2},${y2}`, stroke: on ? '#235a81' : '#a1a1aa', w: on ? 2 : 1.25 };
+    });
+
+    const sqlCols = (s.screen === 'view' ? V[s.view].cols.map(c => ({ name: c, ins: c })) : VIEW_NAMES.flatMap(v => V[v].cols.map(c => ({ name: `${v}.${c}`, ins: `${v}.${c}` })))).map(c => ({ name: c.name, onInsert: () => this.setState(st => ({ sql: st.sql + (/\s$/.test(st.sql) ? '' : ' ') + c.ins })) }));
+    const lines = s.sql.split('\n').length;
+
+    const subjLect = subj ? CL.filter(c => CLASSES.find(x => x.id === c.class_id).subject_id === subj[0]).map((c, n) => { const l = LECT.find(x => x[0] === c.lecturer_id); const g = GROUPS.find(x => x.id === c.group_id); return { cls: CLASS_NAMES[CLASSES.find(x => x.id === c.class_id).kind], group: g ? g.name : 'wszystkie', name: [l[2], l[1]].filter(Boolean).join(' '), email: l[3] || '—', bg: stripe(n) }; }) : [];
+
+    const exportRows = (onlyChecked) => { if (!this._grid) return; const { src, shown, key } = this._grid; const rows = (onlyChecked ? shown.filter(i => s.checked[key(i)]) : shown).map(i => src.rows[i]); this.download(src.name, src.cols, rows); };
+
+    return {
+      tree, crumbs, tabs, navFilter: s.navFilter, onNavFilter: e => this.setState({ navFilter: e.target.value }),
+      goHome: () => this.goDb('subjects'), goSql: () => this.goDb('sql'), goSearch: () => this.goDb('search'), goDesigner: () => this.goDb('designer'),
+      isSubject: s.screen === 'subject',
+      subj: subj ? { name: subj[1], meta: `${subj[2]}, semestr ${subj[3]}, ${subj[4]} ECTS`, description: subj[5] || '' } : {},
+      subjTags: subj ? TAGS.filter(t => t.subject_id === subj[0]).map(t => ({ id: String(t.id), name: t.name })) : [], tag: s.tag, onTag: e => this.setState({ tag: e.target.value, checked: {} }),
+      isSqlTab, sql: s.sql, onSql: e => this.setState({ sql: e.target.value }), onSqlKey: e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); this.runSql(this.state.sql); } },
+      lineNos: Array.from({ length: Math.max(8, lines) }, (_, i) => i + 1), editorH: Math.max(8, lines) * 20 + 16,
+      sqlCols, examples: EXAMPLES.map(e => ({ name: e.name })), onExample: e => { const ex = EXAMPLES.find(x => x.name === e.target.value); if (ex) this.setState({ sql: ex.sql }); },
+      historyCount: s.history.length, historyOpts: s.history.map((h, i) => ({ i: String(i), n: String(i + 1).padStart(2, '0'), label: h.replace(/\s+/g, ' ').slice(0, 90), load: () => this.openSql(h) })),
+      onHistory: e => { const h = s.history[+e.target.value]; if (e.target.value !== '' && h) this.setState({ sql: h }); },
+      clearSql: () => this.setState({ sql: '' }), runSqlNow: () => this.runSql(s.sql),
+      sqlError: isSqlTab && s.sqlResult && !s.sqlResult.ok ? s.sqlResult.error : '', errTokens: s.sqlResult && !s.sqlResult.ok ? tokenize(s.sqlResult.sql) : [],
+      isDbStructure: s.screen === 'db' && s.dbTab === 'structure',
+      viewList: VIEW_NAMES.map((v, n) => ({ name: v, rows: V[v].rows.length, cols: V[v].cols.length, bg: stripe(n), browse: () => this.goView(v), structure: () => this.goView(v, 'structure'), search: () => this.goView(v, 'search'), export: () => this.download(v, V[v].cols, V[v].rows) })),
+      viewCount: VIEW_NAMES.length, viewRowSum: VIEW_NAMES.reduce((a, v) => a + V[v].rows.length, 0),
+      isViewStructure: s.screen === 'view' && s.viewTab === 'structure', view: s.view,
+      structure: s.screen === 'view' ? V[s.view].cols.map((c, i) => { const [type, attr] = colType(s.view, c); const nul = NULLABLE.test(c); return { n: i + 1, name: c, keyIcon: i === 0 && /id$/.test(c) ? 'ph-key' : '', fw: i === 0 ? 600 : 400, type, attr, coll: /varchar|text|enum/.test(type) ? 'utf8mb4_unicode_ci' : '', nul: nul ? 'Tak' : 'Nie', def: nul ? 'NULL' : 'Brak', bg: stripe(i) }; }) : [],
+      goBrowseCurrent: () => this.reset({ viewTab: 'browse' }), goSqlCurrent: () => this.openSql(`SELECT * FROM \`${s.view}\` WHERE 1`),
+      isViewSearch: s.screen === 'view' && s.viewTab === 'search',
+      searchCols: s.screen === 'view' ? V[s.view].cols.map((c, i) => ({ name: c, type: colType(s.view, c)[0], value: s.colSearch[c] || '', bg: stripe(i), onChange: e => { const val = e.target.value; this.setState(st => ({ colSearch: { ...st.colSearch, [c]: val } })); } })) : [],
+      runColSearch: () => this.setState(st => ({ colSearchApplied: { ...st.colSearch }, viewTab: 'browse', sort: null, filter: '', checked: {} })),
+      clearColSearch: () => this.setState({ colSearch: {}, colSearchApplied: {} }),
+      isDbSearch: s.screen === 'db' && s.dbTab === 'search',
+      searchQ: s.searchQ, onSearchQ: e => this.setState({ searchQ: e.target.value }), searchSubject: s.searchSubject, onSearchSubject: e => this.setState({ searchSubject: e.target.value }),
+      searchTag: s.searchTag, onSearchTag: e => this.setState({ searchTag: e.target.value }),
+      subjectOpts: SUBJ.map(x => ({ id: String(x[0]), name: x[1] })), tagOpts: ['Kolokwium', 'Egzamin', 'Notatki'].map(n => ({ name: n, label: n })),
+      runSearch: () => this.setState({ searchRan: s.searchQ.trim() }),
+      searchHits: hits, searchHitCount: `${hits.length} ${plural(hits.length, 'trafienie', 'trafienia', 'trafień')}`, searchHasHits: !!s.searchRan && hits.length > 0, searchNoHits: !!s.searchRan && hits.length === 0,
+      isDesigner: s.screen === 'db' && s.dbTab === 'designer', boxes, edges,
+      isLecturers: s.screen === 'subject' && s.subjectTab === 'lecturers', lecturers: subjLect,
+      showGrid: !!grid, grid: grid || {}, filter: s.filter, onFilter: e => this.setState({ filter: e.target.value }), perPage: s.perPage, onPerPage: e => this.setState({ perPage: e.target.value }),
+      showFull: s.showFull, toggleFull: () => this.setState({ showFull: !s.showFull }), cellMax: s.showFull ? 'none' : '22rem', cellWrap: s.showFull ? 'normal' : 'nowrap',
+      cellPad: compact ? '4px 10px' : '8px 12px',
+      editGridSql: () => { const src = this._grid && this._grid.src; if (src) this.openSql(src.sqlRaw || src.sqlBase); },
+      exportGrid: () => exportRows(false), exportChecked: () => exportRows(true), refreshGrid: () => this.setState({ checked: {} }), printGrid: () => window.print(),
+      preview, closePreview: () => this.setState({ previewId: null }),
+      showConsole: p.showConsole ?? true, consoleOpen: s.consoleOpen, consoleCaret: s.consoleOpen ? 'ph-caret-down' : 'ph-caret-up', toggleConsole: () => this.setState({ consoleOpen: !s.consoleOpen }),
+    };
+  }
+}
+</script>
+</body>
+</html>
