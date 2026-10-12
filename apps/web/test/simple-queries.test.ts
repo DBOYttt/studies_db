@@ -256,7 +256,8 @@ describe('listSimpleFiles', () => {
     expect(await f({ ...cw, group: id.g1 })).toEqual([]);
     // a group number without a kind is ignored
     expect(await f({ group: 1, limit: 9 })).toHaveLength(6);
-    expect(await f({ kind: 'cwiczenia', group: 1, limit: 9 })).toHaveLength(2);
+    // group 2 matches no file, so applying it would give 0 rows
+    expect(await f({ kind: 'cwiczenia', group: 2, limit: 9 })).toHaveLength(2);
     // another subject's cwiczenia also has group number 1: scoped by subject
     expect(
       await f({ subjectId: id.alg, kind: 'cwiczenia', group: 1, limit: 9 }),
