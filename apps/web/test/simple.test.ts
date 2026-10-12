@@ -62,43 +62,44 @@ describe('static maps', () => {
 
 describe('parseSimpleFilters', () => {
   const kinds = ['wyklad', 'cwiczenia'] as const;
-  const groups = { wyklad: [], cwiczenia: [5, 6] };
+  // group numbers per kind (not ids)
+  const groups = { wyklad: [], cwiczenia: [1, 2] };
   const k = [...kinds];
   it('accepts valid values', () => {
     expect(
       parseSimpleFilters(
-        { class: 'cwiczenia', group: '5', tag: '9' },
+        { class: 'cwiczenia', group: '1', tag: '9' },
         k,
         groups,
         [9],
       ),
-    ).toEqual({ kind: 'cwiczenia', group: 5, tag: 9 });
+    ).toEqual({ kind: 'cwiczenia', group: 1, tag: 9 });
   });
   it('drops unknown kind, foreign group and foreign tag', () => {
     expect(
       parseSimpleFilters(
-        { class: 'lab', group: '5', tag: '3' },
+        { class: 'lab', group: '1', tag: '3' },
         k,
         groups,
         [9],
       ),
     ).toEqual({ kind: null, group: null, tag: null });
     expect(
-      parseSimpleFilters({ class: 'wyklad', group: '5' }, k, groups, []),
+      parseSimpleFilters({ class: 'wyklad', group: '1' }, k, groups, []),
     ).toEqual({ kind: 'wyklad', group: null, tag: null });
-    expect(parseSimpleFilters({ group: '5' }, k, groups, []).group).toBeNull();
+    expect(parseSimpleFilters({ group: '1' }, k, groups, []).group).toBeNull();
   });
   it('ignores junk and arrays', () => {
     expect(
       parseSimpleFilters(
-        { class: ['cwiczenia', 'x'], group: ['6'], tag: 'abc' },
+        { class: ['cwiczenia', 'x'], group: ['2'], tag: 'abc' },
         k,
         groups,
         [9],
       ),
-    ).toEqual({ kind: 'cwiczenia', group: 6, tag: null });
+    ).toEqual({ kind: 'cwiczenia', group: 2, tag: null });
     expect(
-      parseSimpleFilters({ class: 'cwiczenia', group: '5.5' }, k, groups, [])
+      parseSimpleFilters({ class: 'cwiczenia', group: '1.5' }, k, groups, [])
         .group,
     ).toBeNull();
   });

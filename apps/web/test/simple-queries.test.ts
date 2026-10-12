@@ -94,6 +94,10 @@ beforeAll(async () => {
   id.fizCw = await mkClass(id.fiz, 'cwiczenia');
   id.fizWy = await mkClass(id.fiz, 'wyklad');
   id.algWy = await mkClass(id.alg, 'wyklad');
+  // makes group ids differ from group numbers
+  await db
+    .insert(classGroups)
+    .values({ classId: id.algWy, number: 1, name: 'Alg 1' });
   [{ id: id.g1 }] = await db
     .insert(classGroups)
     .values({ classId: id.fizCw, number: 1, name: 'Gr. 1' })
@@ -233,8 +237,14 @@ describe('listSimpleFiles', () => {
     expect(await f({ subjectId: id.fiz, kind: 'cwiczenia', limit: 9 })).toEqual(
       ['100%_done.pdf'],
     );
-    expect(await f({ group: id.g1, limit: 9 })).toEqual(['100%_done.pdf']);
-    expect(await f({ group: id.g2, limit: 9 })).toEqual([]);
+    expect(id.g1).not.toBe(1);
+    const cw = { subjectId: id.fiz, kind: 'cwiczenia' as const, limit: 9 };
+    expect(await f({ ...cw, group: 1 })).toEqual(['100%_done.pdf']);
+    // 2 is g1's id but the number of the (empty) second group
+    expect(await f({ ...cw, group: 2 })).toEqual([]);
+    expect(await f({ ...cw, group: id.g1 })).toEqual([]);
+    // a group number without a kind is ignored
+    expect(await f({ group: 1, limit: 9 })).toHaveLength(5);
     expect(await f({ tagId: id.tag, limit: 9 })).toEqual(['100%_done.pdf']);
     expect(await f({ subjectId: id.pus, limit: 9 })).toEqual([]);
     const empty = await listSimpleFiles(db, { subjectId: id.pus, limit: 9 });

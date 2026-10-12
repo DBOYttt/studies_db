@@ -131,6 +131,7 @@ const toSimpleFile = (r: SimpleRow): SimpleFile => ({
 
 const live = () => [isNull(materials.deletedAt), isNull(topics.deletedAt)];
 
+/** `group` is the group NUMBER (as in the advanced view); ignored without `kind`. */
 export async function listSimpleFiles(
   db: Db,
   f: {
@@ -145,7 +146,10 @@ export async function listSimpleFiles(
   const conds: SQL[] = live() as SQL[];
   if (f.subjectId !== undefined) conds.push(eq(topics.subjectId, f.subjectId));
   if (f.kind) conds.push(eq(classes.kind, f.kind));
-  if (f.group !== undefined) conds.push(eq(topics.groupId, f.group));
+  // group is a class_groups.number and only means something within a kind
+  if (f.kind && f.group !== undefined) {
+    conds.push(eq(classGroups.number, f.group));
+  }
   if (f.tagId !== undefined) {
     conds.push(
       sql`EXISTS (SELECT 1 FROM topic_tags tt WHERE tt.topic_id = ${topics.id} AND tt.tag_id = ${f.tagId})`,
@@ -162,6 +166,7 @@ export async function listSimpleFiles(
     .from(materials)
     .innerJoin(topics, eq(topics.id, materials.topicId))
     .leftJoin(classes, eq(classes.id, topics.classId))
+    .leftJoin(classGroups, eq(classGroups.id, topics.groupId))
     .where(where);
   return { rows: rows.map(toSimpleFile), total: n };
 }

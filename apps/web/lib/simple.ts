@@ -90,7 +90,7 @@ function intParam(sp: Sp, key: string): number | null {
   return v !== undefined && /^[1-9]\d{0,9}$/.test(v) ? Number(v) : null;
 }
 
-/** `?class=<kind>&group=<id>&tag=<id>`; anything unknown or foreign becomes null. */
+/** `?class=<kind>&group=<number>&tag=<id>` (`groupsByKind` holds group numbers per kind); anything unknown or foreign becomes null. */
 export function parseSimpleFilters(
   sp: Sp,
   kinds: ClassKind[],
