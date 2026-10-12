@@ -7,7 +7,8 @@
     ".": "./src/index.ts",
     "./admin": "./src/admin.ts",
     "./constants": "./src/constants.ts",
-    "./testing": "./src/testing.ts"
+    "./testing": "./src/testing.ts",
+    "./unitime": "./src/unitime/index.ts"
   },
   "scripts": {
     "test": "vitest run",
