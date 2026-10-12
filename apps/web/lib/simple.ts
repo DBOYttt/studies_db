@@ -119,3 +119,36 @@ export function parsePageParam(sp: Sp, max: number): number {
 export function withParam(base: string, key: string, value: string | number) {
   return `${base}${base.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(String(value))}`;
 }
+
+export type SubjectFilters = {
+  kind: ClassKind | null;
+  group: number | null;
+  tag: number | null;
+};
+
+/**
+ * Subject page URL with `change` applied to the current chip filters
+ * (`null` = "Wszystkie", param removed). Choosing a different kind drops
+ * the group, since group numbers belong to one class kind.
+ */
+export function chipHref(
+  code: string,
+  cur: SubjectFilters,
+  change: Partial<SubjectFilters>,
+): string {
+  const next = { ...cur, ...change };
+  if ('kind' in change && change.kind !== cur.kind && !('group' in change))
+    next.group = null;
+  const q = new URLSearchParams();
+  if (next.kind) q.set('class', next.kind);
+  if (next.kind && next.group !== null) q.set('group', String(next.group));
+  if (next.tag !== null) q.set('tag', String(next.tag));
+  const s = q.toString();
+  return `/s/subjects/${encodeURIComponent(code)}${s ? `?${s}` : ''}`;
+}
+
+/** `?q=` trimmed and capped at 200 characters ('' when missing). */
+export function parseSearchQuery(sp: Sp): string {
+  const raw = Array.isArray(sp.q) ? sp.q[0] : sp.q;
+  return (raw ?? '').trim().slice(0, 200).trim();
+}

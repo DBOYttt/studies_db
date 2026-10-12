@@ -1,9 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import {
+  chipHref,
   fileIcon,
   highlightParts,
   parseFileParam,
   parsePageParam,
+  parseSearchQuery,
   parseSimpleFilters,
   REPORT_LABELS,
   REPORT_META,
@@ -127,5 +129,54 @@ describe('simple page params', () => {
     expect(withParam('/s/recent?page=2', 'file', 3)).toBe(
       '/s/recent?page=2&file=3',
     );
+  });
+});
+
+describe('chipHref', () => {
+  const cur = { kind: 'cwiczenia', group: 2, tag: 5 } as const;
+  it('builds the subject URL with class, group and tag in that order', () => {
+    expect(chipHref('PJP', cur, {})).toBe(
+      '/s/subjects/PJP?class=cwiczenia&group=2&tag=5',
+    );
+    expect(chipHref('PJP', { kind: null, group: null, tag: null }, {})).toBe(
+      '/s/subjects/PJP',
+    );
+  });
+  it('drops the group when the kind changes', () => {
+    expect(chipHref('PJP', cur, { kind: 'wyklad' })).toBe(
+      '/s/subjects/PJP?class=wyklad&tag=5',
+    );
+    expect(chipHref('PJP', cur, { kind: null })).toBe('/s/subjects/PJP?tag=5');
+  });
+  it('keeps the group when the same kind is chosen again', () => {
+    expect(chipHref('PJP', cur, { kind: 'cwiczenia' })).toBe(
+      '/s/subjects/PJP?class=cwiczenia&group=2&tag=5',
+    );
+  });
+  it('"Wszystkie" (null) removes the param, others replace it', () => {
+    expect(chipHref('PJP', cur, { group: null })).toBe(
+      '/s/subjects/PJP?class=cwiczenia&tag=5',
+    );
+    expect(chipHref('PJP', cur, { tag: null })).toBe(
+      '/s/subjects/PJP?class=cwiczenia&group=2',
+    );
+    expect(chipHref('PJP', cur, { group: 3, tag: 9 })).toBe(
+      '/s/subjects/PJP?class=cwiczenia&group=3&tag=9',
+    );
+  });
+  it('encodes the subject code', () => {
+    expect(chipHref('A B/ż', { kind: null, group: null, tag: null }, {})).toBe(
+      '/s/subjects/A%20B%2F%C5%BC',
+    );
+  });
+});
+
+describe('parseSearchQuery', () => {
+  it('trims, takes the first value and caps at 200 chars', () => {
+    expect(parseSearchQuery({ q: '  sieci ' })).toBe('sieci');
+    expect(parseSearchQuery({ q: ['a', 'b'] })).toBe('a');
+    expect(parseSearchQuery({ q: '   ' })).toBe('');
+    expect(parseSearchQuery({})).toBe('');
+    expect(parseSearchQuery({ q: 'x'.repeat(250) })).toHaveLength(200);
   });
 });
