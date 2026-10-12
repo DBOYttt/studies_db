@@ -56,6 +56,21 @@
   --err-bg: #fef2f2;
   --err-fg: #991b1b;
   --mark: #fde68a;
+  /* Plan zajęć blocks: one muted bg + ink pair per class kind (ink >= 4.5:1 on bg). */
+  --kind-wyklad-bg: #e3eef8;
+  --kind-wyklad-fg: #1d4f78;
+  --kind-laboratorium-bg: #e4f1e6;
+  --kind-laboratorium-fg: #275c32;
+  --kind-cwiczenia-bg: #faf0d4;
+  --kind-cwiczenia-fg: #7a4f00;
+  --kind-projekt-bg: #eee8f7;
+  --kind-projekt-fg: #533788;
+  --kind-seminarium-bg: #ddf1ef;
+  --kind-seminarium-fg: #175a55;
+  --kind-praktyczne-bg: #f9e7e8;
+  --kind-praktyczne-fg: #8c2e32;
+  --kind-wf-bg: #f6e8dc;
+  --kind-wf-fg: #7f4119;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -99,6 +114,20 @@
     --err-bg: #2a0f0f;
     --err-fg: #fca5a5;
     --mark: #854d0e;
+    --kind-wyklad-bg: #142536;
+    --kind-wyklad-fg: #9cc6ea;
+    --kind-laboratorium-bg: #13271a;
+    --kind-laboratorium-fg: #9dd3a7;
+    --kind-cwiczenia-bg: #2a2109;
+    --kind-cwiczenia-fg: #ecca78;
+    --kind-projekt-bg: #211a33;
+    --kind-projekt-fg: #c6b2ec;
+    --kind-seminarium-bg: #0f2725;
+    --kind-seminarium-fg: #8dd3cc;
+    --kind-praktyczne-bg: #2f1619;
+    --kind-praktyczne-fg: #eea6aa;
+    --kind-wf-bg: #2c1c10;
+    --kind-wf-fg: #eab68a;
   }
 }
 

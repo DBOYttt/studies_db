@@ -41,6 +41,7 @@ const SEP = '\u001f';
 
 export const navKey = {
   db: 'db',
+  plan: 'plan',
   subjects: 'subjects',
   views: 'views',
   subject: (code: string) => `s${SEP}${code}`,
@@ -72,6 +73,8 @@ export function activeNavKey(
   views: NavView[],
 ): string | null {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
+  // The Plan zajęć screen has its own node (it is also a db tab).
+  if (path === '/plan') return navKey.plan;
   if (DB_SCREENS.includes(path)) return navKey.db;
   const view = segment(path, '/tables/');
   if (view !== null) {

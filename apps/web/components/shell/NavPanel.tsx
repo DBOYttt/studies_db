@@ -2,6 +2,7 @@
 
 import {
   BookOpenText,
+  CalendarBlank,
   CaretDown,
   CaretRight,
   Database,
@@ -171,6 +172,14 @@ function NavTree({
         href="/structure"
         strong
         active={active === navKey.db}
+      />
+      <Row
+        depth={2}
+        icon={CalendarBlank}
+        iconClass="text-accent-ink"
+        label="Plan zajęć"
+        href="/plan"
+        active={active === navKey.plan}
       />
       <Row
         depth={2}

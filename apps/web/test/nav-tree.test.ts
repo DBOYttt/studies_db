@@ -51,17 +51,15 @@ const at = (url: string) => {
 
 describe('activeNavKey', () => {
   it('maps database screens to the studies_db node', () => {
-    for (const p of [
-      '/',
-      '/plan',
-      '/plan?week=2026-W42',
-      '/structure',
-      '/sql?q=1',
-      '/search',
-      '/schema',
-    ]) {
+    for (const p of ['/', '/structure', '/sql?q=1', '/search', '/schema']) {
       expect(at(p)).toBe(navKey.db);
     }
+  });
+  it('maps /plan (any query) to the Plan zajęć node', () => {
+    expect(at('/plan')).toBe(navKey.plan);
+    expect(at('/plan?week=2026-W42')).toBe(navKey.plan);
+    expect(at('/plan/?tab=groups')).toBe(navKey.plan);
+    expect(navAncestors(navKey.plan)).toEqual([]);
   });
   it('maps subject, class and group URLs to the most specific node', () => {
     expect(at('/subjects/BD')).toBe(navKey.subject('BD'));
