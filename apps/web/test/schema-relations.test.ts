@@ -35,8 +35,21 @@ const base = {
 } as const;
 
 describe('SCHEMA_RELATIONS drift guard', () => {
-  it('has 16 relations', () => {
-    expect(SCHEMA_RELATIONS).toHaveLength(16);
+  it('has 20 relations', () => {
+    expect(SCHEMA_RELATIONS).toHaveLength(20);
+  });
+
+  it('v_class_sessions links to subject, class, group and lecturer', () => {
+    expect(
+      SCHEMA_RELATIONS.filter((r) => r.from.view === 'v_class_sessions').map(
+        (r) => `${r.from.column}>${r.to.view}.${r.to.column}`,
+      ),
+    ).toEqual([
+      'subject_id>v_subjects.id',
+      'class_id>v_classes.id',
+      'group_id>v_class_groups.id',
+      'lecturer_id>v_lecturers.id',
+    ]);
   });
 
   it('every endpoint column exists in the live views', () => {

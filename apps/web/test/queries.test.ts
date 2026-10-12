@@ -57,6 +57,7 @@ beforeAll(async () => {
       semester: 1,
       ects: 5,
       discordChannelId: 'c1',
+      platformUrl: 'https://upel.example.edu/fiz',
     })
     .$returningId();
   await db.insert(subjects).values({
@@ -137,7 +138,11 @@ describe('loadLinkContext', () => {
 describe('getSubject / listTopics', () => {
   it('getSubject returns null for unknown code', async () => {
     expect(await getSubject(db, 'NOPE')).toBeNull();
-    expect((await getSubject(db, 'FIZ'))?.name).toBe('Fizyka');
+    expect(await getSubject(db, 'FIZ')).toMatchObject({
+      name: 'Fizyka',
+      platformUrl: 'https://upel.example.edu/fiz',
+    });
+    expect((await getSubject(db, 'CHEM'))?.platformUrl).toBeNull();
   });
   it('lists topics with tags and file counts', async () => {
     const all = await listTopics(db, subjectId, {});

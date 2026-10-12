@@ -15,6 +15,7 @@ import {
   topicTags,
   users,
 } from '@studies/db';
+import type { Assessment } from '@studies/db/constants';
 import {
   and,
   asc,
@@ -41,6 +42,7 @@ export interface SubjectInfo {
   semester: number;
   ects: number;
   description: string | null;
+  platformUrl: string | null;
 }
 
 export const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
@@ -63,6 +65,7 @@ export async function getSubject(
     semester: s.semester,
     ects: s.ects,
     description: s.description,
+    platformUrl: s.platformUrl,
   };
 }
 
@@ -568,6 +571,9 @@ export type SubjectClass = {
   id: number;
   kind: ClassKind;
   name: string;
+  assessment: Assessment | null;
+  assessmentNote: string | null;
+  platformUrl: string | null;
   groups: { id: number; number: number; name: string }[];
 };
 
@@ -581,6 +587,9 @@ export async function listSubjectClasses(
       id: classes.id,
       kind: classes.kind,
       name: classes.name,
+      assessment: classes.assessment,
+      assessmentNote: classes.assessmentNote,
+      platformUrl: classes.platformUrl,
       groupId: classGroups.id,
       groupNumber: classGroups.number,
       groupName: classGroups.name,
@@ -593,7 +602,15 @@ export async function listSubjectClasses(
   for (const r of rows) {
     let c = byId.get(r.id);
     if (!c) {
-      c = { id: r.id, kind: r.kind, name: r.name, groups: [] };
+      c = {
+        id: r.id,
+        kind: r.kind,
+        name: r.name,
+        assessment: r.assessment,
+        assessmentNote: r.assessmentNote,
+        platformUrl: r.platformUrl,
+        groups: [],
+      };
       byId.set(r.id, c);
     }
     if (r.groupId != null && r.groupNumber != null) {
@@ -680,6 +697,8 @@ export type SubjectLecturer = {
   name: string;
   title: string | null;
   email: string | null;
+  officeHours: string | null;
+  room: string | null;
 };
 
 /** class_lecturers of a subject (v_class_lecturers joined to names), class order then group. */
@@ -697,6 +716,8 @@ export async function listSubjectLecturers(
       name: lecturers.name,
       title: lecturers.title,
       email: lecturers.email,
+      officeHours: lecturers.officeHours,
+      room: lecturers.room,
     })
     .from(classLecturers)
     .innerJoin(classes, eq(classes.id, classLecturers.classId))
@@ -721,6 +742,8 @@ export async function listSubjectLecturers(
       name: r.name,
       title: r.title,
       email: r.email,
+      officeHours: r.officeHours,
+      room: r.room,
     }));
 }
 

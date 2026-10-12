@@ -78,6 +78,12 @@ const VIEW_LABELS: Partial<Record<PublicView, Record<string, Label>>> = {
     topic_title: { idCol: 'topic_id', resolve: TOPIC },
     uploader: { idCol: 'uploader_id', resolve: USER },
   },
+  v_class_sessions: {
+    subject_name: { idCol: 'subject_id', resolve: SUBJECT },
+    class_name: { idCol: 'class_id', resolve: CLASS },
+    group_name: { idCol: 'group_id', resolve: GROUP },
+    lecturer_name: { idCol: 'lecturer_id', resolve: LECTURER },
+  },
 };
 
 function asId(v: unknown): number | null {

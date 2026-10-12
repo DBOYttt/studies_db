@@ -120,6 +120,10 @@ beforeAll(async () => {
   id.B = await mkLect('B');
   id.C = await mkLect('C');
   id.D = await mkLect('D');
+  await db
+    .update(lecturers)
+    .set({ officeHours: 'pn 12-13', room: 'C-2 101' })
+    .where(eq(lecturers.id, id.D));
   await db.insert(classLecturers).values([
     { classId: cw, lecturerId: id.A, groupId: g[2] },
     { classId: cw, lecturerId: id.A, groupId: g[3] },
@@ -291,7 +295,18 @@ describe('tags', () => {
 
 describe('getLecturer / pageSql / fileSort', () => {
   it('getLecturer', async () => {
-    expect(await getLecturer(ro, id.A)).toMatchObject({ name: 'A' });
+    expect(await getLecturer(ro, id.A)).toEqual({
+      id: id.A,
+      name: 'A',
+      title: null,
+      email: null,
+      office_hours: null,
+      room: null,
+    });
+    expect(await getLecturer(ro, id.D)).toMatchObject({
+      office_hours: 'pn 12-13',
+      room: 'C-2 101',
+    });
     expect(await getLecturer(ro, 999)).toBeNull();
   });
   it('pageSql clamps and inlines', async () => {

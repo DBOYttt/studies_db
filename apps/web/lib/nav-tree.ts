@@ -27,7 +27,14 @@ export type NavSubject = {
 };
 export type NavView = { name: string; rowCount: number | null; href: string };
 
-export const DB_SCREENS = ['/', '/structure', '/sql', '/search', '/schema'];
+export const DB_SCREENS = [
+  '/',
+  '/plan',
+  '/structure',
+  '/sql',
+  '/search',
+  '/schema',
+];
 
 // Unit separator: cannot appear in subject codes or class kinds.
 const SEP = '\u001f';

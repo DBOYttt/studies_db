@@ -19,10 +19,12 @@ const CORNER = 6;
 /**
  * Default box positions (x, y), left to right along the data flow (spec §3):
  * subjects | classes, tags | groups, topic tags, lecturers |
- * class lecturers, topics, users | materials, files. The y values leave room
- * for every box with all columns shown, so nothing overlaps in either mode,
- * and keep horizontal corridors free so no edge crosses a box: y 61
- * (v_subjects.id) and y 141 (v_classes.id) are clear in columns 2-3.
+ * class lecturers, users, topics | materials, files, class sessions. The y
+ * values leave room for every box with all columns shown, so nothing
+ * overlaps in either mode, and keep horizontal corridors free so no edge
+ * crosses a box: the id rows y 61 (v_subjects), 141 (v_classes), 211
+ * (v_class_groups) and 451 (v_lecturers) stay clear in every column
+ * between their box and column 5, where v_class_sessions links to all four.
  */
 export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_subjects: [20, 20],
@@ -31,12 +33,12 @@ export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_class_groups: [480, 170],
   v_topic_tags: [480, 310],
   v_lecturers: [480, 410],
-  v_class_lecturers: [710, 30],
-  v_topics: [710, 150],
-  v_users: [710, 360],
+  v_class_lecturers: [710, 230],
+  v_users: [710, 340],
+  v_topics: [710, 470],
   v_materials: [940, 20],
   v_files: [940, 250],
-  v_class_sessions: [20, 300],
+  v_class_sessions: [940, 640],
 };
 
 export type DesignerHighlight = {

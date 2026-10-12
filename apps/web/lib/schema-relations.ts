@@ -34,6 +34,10 @@ export const SCHEMA_RELATIONS: SchemaRelation[] = [
   rel('v_materials', 'uploader_id', 'v_users', 'id'),
   rel('v_files', 'topic_id', 'v_topics', 'id'),
   rel('v_files', 'material_id', 'v_materials', 'id'),
+  rel('v_class_sessions', 'subject_id', 'v_subjects', 'id'),
+  rel('v_class_sessions', 'class_id', 'v_classes', 'id'),
+  rel('v_class_sessions', 'group_id', 'v_class_groups', 'id'),
+  rel('v_class_sessions', 'lecturer_id', 'v_lecturers', 'id'),
 ];
 
 export type SelectionNames = {

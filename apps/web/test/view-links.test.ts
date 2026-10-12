@@ -115,6 +115,45 @@ describe('cellHref', () => {
       at('v_users', ['id', 'display_name'], [4, 'A'], 'display_name'),
     ).toBe('/users/4');
   });
+  it('v_class_sessions same-row lookups', () => {
+    const cols = [
+      'id',
+      'subject_id',
+      'subject_name',
+      'class_id',
+      'class_name',
+      'group_id',
+      'group_name',
+      'lecturer_id',
+      'lecturer_name',
+      'room',
+    ];
+    const row: unknown[] = [
+      9,
+      2,
+      'Mechanika',
+      5,
+      'Ćw',
+      7,
+      'Gr. 3',
+      1,
+      'Jan',
+      'D-10',
+    ];
+    const s = (c: string) => at('v_class_sessions', cols, row, c);
+    expect(s('subject_name')).toBe('/subjects/MECH');
+    expect(s('subject_id')).toBe('/subjects/MECH');
+    expect(s('class_name')).toBe('/subjects/MECH?class=cwiczenia');
+    expect(s('class_id')).toBe('/subjects/MECH?class=cwiczenia');
+    expect(s('group_name')).toBe('/subjects/MECH?class=cwiczenia&group=3');
+    expect(s('lecturer_name')).toBe('/lecturers/1');
+    expect(s('lecturer_id')).toBe('/lecturers/1');
+    expect(s('room')).toBeNull();
+    expect(s('id')).toBeNull();
+    const lecture = [...row];
+    lecture[5] = null;
+    expect(at('v_class_sessions', cols, lecture, 'group_name')).toBeNull();
+  });
   it('other columns have no link', () => {
     expect(
       at('v_users', ['id', 'created_at'], [4, 'x'], 'created_at'),

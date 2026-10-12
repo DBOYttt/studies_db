@@ -165,9 +165,16 @@ async function one<T>(
 // ---- lecturers -----------------------------------------------------------
 
 export const getLecturer = (pool: mysql.Pool, id: number) =>
-  one<{ id: number; name: string; title: string | null; email: string | null }>(
+  one<{
+    id: number;
+    name: string;
+    title: string | null;
+    email: string | null;
+    office_hours: string | null;
+    room: string | null;
+  }>(
     pool,
-    'SELECT id, name, title, email FROM v_lecturers WHERE id = ?',
+    'SELECT id, name, title, email, office_hours, room FROM v_lecturers WHERE id = ?',
     id,
   );
 

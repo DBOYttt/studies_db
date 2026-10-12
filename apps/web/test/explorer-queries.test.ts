@@ -136,6 +136,14 @@ beforeAll(async () => {
   const cw = await mkClass(sid, 'cwiczenia', 'Ćwiczenia');
   const lab = await mkClass(sid, 'laboratorium', 'Laboratorium');
   const proj = await mkClass(sid, 'projekt', 'Projekt');
+  await db
+    .update(classes)
+    .set({
+      assessment: 'egzamin',
+      assessmentNote: 'pisemny',
+      platformUrl: 'https://upel.example.edu/wyk',
+    })
+    .where(eq(classes.id, wyk));
   const otherCw = await mkClass(otherSid, 'cwiczenia', 'Ćwiczenia');
   const [{ id: g1 }] = await db
     .insert(classGroups)
@@ -150,7 +158,12 @@ beforeAll(async () => {
     .values({ classId: cw, number: 3, name: 'Gr. 3' }); // empty group
   const [{ id: jan }] = await db
     .insert(lecturers)
-    .values({ name: 'Jan Kowalski', title: 'dr' })
+    .values({
+      name: 'Jan Kowalski',
+      title: 'dr',
+      officeHours: 'wt 10-11',
+      room: 'D-10 205',
+    })
     .$returningId();
   const [{ id: anna }] = await db
     .insert(lecturers)
@@ -424,6 +437,16 @@ describe('getMaterialFile', () => {
 describe('listSubjectClasses / resolveSubjectSelection', () => {
   it('lists every class and group in kind order, also empty ones', async () => {
     const cl = await listSubjectClasses(db, sid);
+    expect(cl[0]).toMatchObject({
+      assessment: 'egzamin',
+      assessmentNote: 'pisemny',
+      platformUrl: 'https://upel.example.edu/wyk',
+    });
+    expect(cl[2]).toMatchObject({
+      assessment: null,
+      assessmentNote: null,
+      platformUrl: null,
+    });
     expect(cl.map((c) => c.kind)).toEqual([
       'wyklad',
       'laboratorium',
@@ -536,6 +559,8 @@ describe('listSubjectLecturers', () => {
         name: 'Jan Kowalski',
         title: 'dr',
         email: null,
+        officeHours: 'wt 10-11',
+        room: 'D-10 205',
       },
       {
         className: 'Laboratorium',
@@ -543,6 +568,8 @@ describe('listSubjectLecturers', () => {
         name: 'Jan Kowalski',
         title: 'dr',
         email: null,
+        officeHours: 'wt 10-11',
+        room: 'D-10 205',
       },
       {
         className: 'Ćwiczenia',
@@ -550,6 +577,8 @@ describe('listSubjectLecturers', () => {
         name: 'Anna Nowak',
         title: null,
         email: null,
+        officeHours: null,
+        room: null,
       },
     ]);
     expect(await listSubjectLecturers(db, otherSid)).toEqual([]);

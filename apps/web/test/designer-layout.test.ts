@@ -237,6 +237,14 @@ describe('buildDesignerLayout', () => {
     }
   });
 
+  it('v_class_sessions sits in column 5 below v_files', () => {
+    const [fx, fy] = DESIGNER_DEFAULT_POS.v_files;
+    const [x, y] = DESIGNER_DEFAULT_POS.v_class_sessions;
+    expect(x).toBe(fx);
+    const all = buildDesignerLayout(columns, { showAll: true });
+    expect(y).toBeGreaterThanOrEqual(fy + box(all, 'v_files').height);
+  });
+
   it('default layout: no edge passes through a box (compact and all columns)', () => {
     for (const showAll of [false, true]) {
       const l = buildDesignerLayout(columns, { showAll });

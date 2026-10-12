@@ -51,7 +51,15 @@ const at = (url: string) => {
 
 describe('activeNavKey', () => {
   it('maps database screens to the studies_db node', () => {
-    for (const p of ['/', '/structure', '/sql?q=1', '/search', '/schema']) {
+    for (const p of [
+      '/',
+      '/plan',
+      '/plan?week=2026-W42',
+      '/structure',
+      '/sql?q=1',
+      '/search',
+      '/schema',
+    ]) {
       expect(at(p)).toBe(navKey.db);
     }
   });
