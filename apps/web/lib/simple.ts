@@ -1,5 +1,5 @@
 /** Pure, client-safe helpers of the simple (Prosty) view. */
-import type { ClassKind } from '@studies/db/constants';
+import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
 
 /**
  * One UTF-16 unit folded like `stripMarks(...).toLowerCase()` of @studies/db
@@ -151,4 +151,81 @@ export function chipHref(
 export function parseSearchQuery(sp: Sp): string {
   const raw = Array.isArray(sp.q) ? sp.q[0] : sp.q;
   return (raw ?? '').trim().slice(0, 200).trim();
+}
+
+/** `Gr. 1–3, 5`: sorted, deduplicated, consecutive runs of 3+ as ranges. */
+export function formatGroupNumbers(nums: number[]): string {
+  const ns = [...new Set(nums)].sort((a, b) => a - b);
+  const parts: string[] = [];
+  for (let i = 0; i < ns.length; ) {
+    let j = i;
+    while (j + 1 < ns.length && ns[j + 1] === ns[j] + 1) j++;
+    if (j - i >= 2) parts.push(`${ns[i]}–${ns[j]}`);
+    else for (let k = i; k <= j; k++) parts.push(String(ns[k]));
+    i = j + 1;
+  }
+  return `Gr. ${parts.join(', ')}`;
+}
+
+export type LecturerRow = {
+  id: number;
+  kind: ClassKind;
+  className: string;
+  groupNumber: number | null;
+  name: string;
+  title: string | null;
+  email: string | null;
+  officeHours: string | null;
+  room: string | null;
+};
+
+export type LecturerCard = {
+  id: number;
+  name: string;
+  email: string | null;
+  officeHours: string | null;
+  room: string | null;
+  classes: { kind: ClassKind; label: string }[];
+};
+
+/**
+ * One card per lecturer (first-appearance order) with one line per class in
+ * kind order: `<class> · wszystkie grupy` when any assignment covers the whole
+ * class, else `<class> · Gr. 1–3, 5`.
+ */
+export function groupLecturers(rows: LecturerRow[]): LecturerCard[] {
+  const by = new Map<
+    number,
+    {
+      row: LecturerRow;
+      classes: Map<ClassKind, { name: string; all: boolean; nums: number[] }>;
+    }
+  >();
+  for (const r of rows) {
+    let l = by.get(r.id);
+    if (!l) {
+      l = { row: r, classes: new Map() };
+      by.set(r.id, l);
+    }
+    let c = l.classes.get(r.kind);
+    if (!c) {
+      c = { name: r.className, all: false, nums: [] };
+      l.classes.set(r.kind, c);
+    }
+    if (r.groupNumber === null) c.all = true;
+    else c.nums.push(r.groupNumber);
+  }
+  return [...by.values()].map(({ row: r, classes }) => ({
+    id: r.id,
+    name: [r.title, r.name].filter(Boolean).join(' '),
+    email: r.email,
+    officeHours: r.officeHours,
+    room: r.room,
+    classes: [...classes.entries()]
+      .sort(([a], [b]) => CLASS_KINDS.indexOf(a) - CLASS_KINDS.indexOf(b))
+      .map(([kind, c]) => ({
+        kind,
+        label: `${c.name} · ${c.all ? 'wszystkie grupy' : formatGroupNumbers(c.nums)}`,
+      })),
+  }));
 }

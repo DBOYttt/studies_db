@@ -5,7 +5,8 @@ import { dayHeader, wallTime } from '@/lib/plan-view';
 
 /**
  * "Najbliższe zajęcia": the subject's next sessions (wall times, UTC getters).
- * Cancelled ones stay in the list, struck through and marked "Odwołane".
+ * The page passes confirmed ones only; a cancelled one would still render
+ * struck through and marked "Odwołane".
  */
 export function NextSessions({ sessions }: { sessions: PlanSession[] }) {
   return (

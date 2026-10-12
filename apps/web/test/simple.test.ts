@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   chipHref,
   fileIcon,
+  formatGroupNumbers,
+  groupLecturers,
   highlightParts,
   parseFileParam,
   parsePageParam,
@@ -178,5 +180,88 @@ describe('parseSearchQuery', () => {
     expect(parseSearchQuery({ q: '   ' })).toBe('');
     expect(parseSearchQuery({})).toBe('');
     expect(parseSearchQuery({ q: 'x'.repeat(250) })).toHaveLength(200);
+  });
+});
+
+describe('formatGroupNumbers', () => {
+  it('compresses consecutive runs into ranges', () => {
+    expect(formatGroupNumbers([1, 2, 3, 4, 5, 6, 7, 8])).toBe('Gr. 1–8');
+    expect(formatGroupNumbers([5, 1, 3, 2])).toBe('Gr. 1–3, 5');
+    expect(formatGroupNumbers([2])).toBe('Gr. 2');
+    expect(formatGroupNumbers([1, 2, 4, 5, 7])).toBe('Gr. 1, 2, 4, 5, 7');
+    expect(formatGroupNumbers([3, 3, 1, 2, 2])).toBe('Gr. 1–3');
+    expect(formatGroupNumbers([1, 3, 4, 5, 9])).toBe('Gr. 1, 3–5, 9');
+  });
+});
+
+describe('groupLecturers', () => {
+  const base = {
+    title: 'dr',
+    email: 'x@agh.edu.pl',
+    officeHours: null,
+    room: null,
+    groupName: null,
+  };
+  const row = (
+    id: number,
+    name: string,
+    kind: 'wyklad' | 'laboratorium' | 'cwiczenia',
+    className: string,
+    groupNumber: number | null,
+  ) => ({ ...base, id, name, kind, className, groupNumber });
+
+  it('merges one card per lecturer with a line per class in kind order', () => {
+    const got = groupLecturers([
+      row(7, 'P. Malinowski', 'laboratorium', 'Laboratorium', 3),
+      row(7, 'P. Malinowski', 'laboratorium', 'Laboratorium', 1),
+      row(7, 'P. Malinowski', 'laboratorium', 'Laboratorium', 2),
+      row(4, 'W. Bauer', 'wyklad', 'Wykład', 1),
+      row(7, 'P. Malinowski', 'wyklad', 'Wykład', null),
+    ]);
+    expect(got.map((l) => l.id)).toEqual([7, 4]);
+    expect(got[0]).toMatchObject({
+      id: 7,
+      name: 'dr P. Malinowski',
+      email: 'x@agh.edu.pl',
+      classes: [
+        { kind: 'wyklad', label: 'Wykład · wszystkie grupy' },
+        { kind: 'laboratorium', label: 'Laboratorium · Gr. 1–3' },
+      ],
+    });
+    expect(got[1].classes).toEqual([
+      { kind: 'wyklad', label: 'Wykład · Gr. 1' },
+    ]);
+  });
+
+  it('a whole-class assignment wins over group rows of that class', () => {
+    const got = groupLecturers([
+      row(1, 'A. Nowak', 'cwiczenia', 'Ćwiczenia', 2),
+      row(1, 'A. Nowak', 'cwiczenia', 'Ćwiczenia', null),
+      row(1, 'A. Nowak', 'cwiczenia', 'Ćwiczenia', 4),
+    ]);
+    expect(got).toHaveLength(1);
+    expect(got[0].classes).toEqual([
+      { kind: 'cwiczenia', label: 'Ćwiczenia · wszystkie grupy' },
+    ]);
+  });
+
+  it('keeps contact fields and drops an empty title', () => {
+    const [l] = groupLecturers([
+      {
+        ...row(2, 'J. Kowal', 'wyklad', 'Wykład', null),
+        title: null,
+        email: null,
+        officeHours: 'wt 10-11',
+        room: 'D-10 205',
+      },
+    ]);
+    expect(l).toEqual({
+      id: 2,
+      name: 'J. Kowal',
+      email: null,
+      officeHours: 'wt 10-11',
+      room: 'D-10 205',
+      classes: [{ kind: 'wyklad', label: 'Wykład · wszystkie grupy' }],
+    });
   });
 });

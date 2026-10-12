@@ -19,7 +19,7 @@ import {
   listSubjectTags,
 } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
-import { chipHref, parseSimpleFilters } from '@/lib/simple';
+import { chipHref, groupLecturers, parseSimpleFilters } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles, listSubjectCards } from '@/lib/simple-queries';
 
@@ -40,15 +40,24 @@ export default async function SimpleSubject({
   const user = await requireUser();
   const [{ code: rawCode }, sp] = await Promise.all([params, searchParams]);
   const db = getDb();
-  const subject = await getSubject(db, decodeURIComponent(rawCode));
+  let code: string;
+  try {
+    code = decodeURIComponent(rawCode);
+  } catch {
+    notFound();
+  }
+  const subject = await getSubject(db, code);
   if (!subject) notFound();
-  const [cards, classes, tags, lecturers, sessions] = await Promise.all([
+  const [cards, classes, tags, lecturerRows, upcoming] = await Promise.all([
     listSubjectCards(db),
     listSubjectClasses(db, subject.id),
     listSubjectTags(db, subject.id),
     listSubjectLecturers(db, subject.id),
-    nextSessions(getRoPool(), subject.id, nowWall(), 3),
+    // cancellations must not crowd out real classes: over-fetch, keep 3 confirmed
+    nextSessions(getRoPool(), subject.id, nowWall(), 10),
   ]);
+  const sessions = upcoming.filter((s) => s.status !== 'cancelled').slice(0, 3);
+  const lecturers = groupLecturers(lecturerRows);
   const cur = parseSimpleFilters(
     sp,
     classes.map((c) => c.kind),

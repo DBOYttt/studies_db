@@ -692,7 +692,10 @@ export async function loadLinkContext(db: Db): Promise<LinkContext> {
 
 export type SubjectLecturer = {
   id: number;
+  kind: ClassKind;
   className: string;
+  /** null = the whole class (all groups). */
+  groupNumber: number | null;
   groupName: string | null;
   name: string;
   title: string | null;
@@ -734,7 +737,9 @@ export async function listSubjectLecturers(
     )
     .map(({ r }) => ({
       id: r.lecturerId,
+      kind: r.kind,
       className: r.className,
+      groupNumber: r.groupNumber ?? null,
       groupName:
         r.groupNumber == null
           ? null

@@ -554,7 +554,9 @@ describe('listSubjectLecturers', () => {
     expect(got.every((l) => Number.isInteger(l.id))).toBe(true);
     expect(got.map(({ id: _id, ...rest }) => rest)).toEqual([
       {
+        kind: 'wyklad',
         className: 'Wykład',
+        groupNumber: null,
         groupName: null,
         name: 'Jan Kowalski',
         title: 'dr',
@@ -563,7 +565,9 @@ describe('listSubjectLecturers', () => {
         room: 'D-10 205',
       },
       {
+        kind: 'laboratorium',
         className: 'Laboratorium',
+        groupNumber: null,
         groupName: null,
         name: 'Jan Kowalski',
         title: 'dr',
@@ -572,7 +576,9 @@ describe('listSubjectLecturers', () => {
         room: 'D-10 205',
       },
       {
+        kind: 'cwiczenia',
         className: 'Ćwiczenia',
+        groupNumber: 2,
         groupName: 'Gr. 2',
         name: 'Anna Nowak',
         title: null,

@@ -1,26 +1,25 @@
 import { ChalkboardTeacher } from '@phosphor-icons/react/dist/ssr';
-import type { SubjectLecturer } from '@/lib/queries';
+import type { LecturerCard } from '@/lib/simple';
 
-/** "Prowadzący" cards: one per class assignment (name is plain text in simple mode). */
-export function LecturerCards({ lecturers }: { lecturers: SubjectLecturer[] }) {
+/** "Prowadzący" cards: one per lecturer, a line per class (name is plain text in simple mode). */
+export function LecturerCards({ lecturers }: { lecturers: LecturerCard[] }) {
   return (
     <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 p-0">
-      {lecturers.map((l, i) => (
+      {lecturers.map((l) => (
         <li
-          // biome-ignore lint/suspicious/noArrayIndexKey: one lecturer can teach several classes
-          key={i}
+          key={l.id}
           className="flex gap-3 rounded-lg border border-line-strong bg-panel px-3.5 py-3"
         >
           <span className="grid size-9 shrink-0 place-items-center rounded-full bg-box-head text-accent-ink">
             <ChalkboardTeacher size={19} aria-hidden />
           </span>
           <div className="flex min-w-0 flex-col gap-0.5">
-            <span className="font-semibold">
-              {[l.title, l.name].filter(Boolean).join(' ')}
-            </span>
-            <span className="text-[13px] text-muted">
-              {l.className} · {l.groupName ?? 'wszystkie grupy'}
-            </span>
+            <span className="font-semibold">{l.name}</span>
+            <ul className="m-0 list-none p-0 text-[13px] text-muted">
+              {l.classes.map((c) => (
+                <li key={c.kind}>{c.label}</li>
+              ))}
+            </ul>
             {l.email ? (
               <a
                 href={`mailto:${l.email}`}
