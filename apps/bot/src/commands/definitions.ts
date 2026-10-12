@@ -1,4 +1,9 @@
-import { CLASS_KINDS, CLASS_NAMES } from '@studies/db';
+import {
+  ASSESSMENT_NAMES,
+  ASSESSMENTS,
+  CLASS_KINDS,
+  CLASS_NAMES,
+} from '@studies/db';
 import {
   ChannelType,
   PermissionFlagsBits,
@@ -83,6 +88,12 @@ const subject = new SlashCommandBuilder()
       )
       .addStringOption((o) =>
         o.setName('description').setDescription('Opis').setMaxLength(1000),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('platform_url')
+          .setDescription('Adres platformy (- usuwa)')
+          .setMaxLength(500),
       ),
   )
   .addSubcommand((s) => s.setName('list').setDescription('Lista przedmiotów'));
@@ -107,6 +118,45 @@ const lecturer = new SlashCommandBuilder()
       )
       .addStringOption((o) =>
         o.setName('email').setDescription('E-mail').setMaxLength(200),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('office_hours')
+          .setDescription('Konsultacje')
+          .setMaxLength(500),
+      )
+      .addStringOption((o) =>
+        o.setName('room').setDescription('Pokój').setMaxLength(100),
+      ),
+  )
+  .addSubcommand((s) =>
+    s
+      .setName('edit')
+      .setDescription('Edytuj prowadzącego (- usuwa pole)')
+      .addStringOption((o) =>
+        o
+          .setName('lecturer')
+          .setDescription('Prowadzący')
+          .setAutocomplete(true)
+          .setRequired(true),
+      )
+      .addStringOption((o) =>
+        o.setName('name').setDescription('Imię i nazwisko').setMaxLength(200),
+      )
+      .addStringOption((o) =>
+        o.setName('title').setDescription('Tytuł').setMaxLength(50),
+      )
+      .addStringOption((o) =>
+        o.setName('email').setDescription('E-mail').setMaxLength(200),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('office_hours')
+          .setDescription('Konsultacje')
+          .setMaxLength(500),
+      )
+      .addStringOption((o) =>
+        o.setName('room').setDescription('Pokój').setMaxLength(100),
       ),
   )
   .addSubcommand((s) =>
@@ -145,6 +195,63 @@ const lecturer = new SlashCommandBuilder()
       ),
   );
 
+const classCmd = new SlashCommandBuilder()
+  .setName('class')
+  .setDescription('Zarządzanie zajęciami')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addSubcommand((s) =>
+    s
+      .setName('edit')
+      .setDescription('Edytuj zajęcia (- usuwa pole)')
+      .addStringOption((o) =>
+        o
+          .setName('subject')
+          .setDescription('Przedmiot')
+          .setAutocomplete(true)
+          .setRequired(true),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('kind')
+          .setDescription('Rodzaj zajęć')
+          .addChoices(
+            ...CLASS_KINDS.map((k) => ({ name: CLASS_NAMES[k], value: k })),
+          )
+          .setRequired(true),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('assessment')
+          .setDescription('Forma zaliczenia')
+          .addChoices(
+            ...ASSESSMENTS.map((a) => ({
+              name: ASSESSMENT_NAMES[a],
+              value: a,
+            })),
+          ),
+      )
+      .addStringOption((o) =>
+        o.setName('note').setDescription('Uwagi').setMaxLength(500),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('platform_url')
+          .setDescription('Adres platformy')
+          .setMaxLength(500),
+      ),
+  );
+
+const planCmd = new SlashCommandBuilder()
+  .setName('plan')
+  .setDescription('Synchronizacja planu zajęć')
+  .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+  .addSubcommand((s) =>
+    s.setName('sync').setDescription('Zleć synchronizację planu'),
+  )
+  .addSubcommand((s) =>
+    s.setName('status').setDescription('Status synchronizacji planu'),
+  );
+
 const userCmd = (name: string, description: string) =>
   new SlashCommandBuilder()
     .setName(name)
@@ -157,6 +264,8 @@ const userCmd = (name: string, description: string) =>
 export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
   subject,
   lecturer,
+  classCmd,
+  planCmd,
   userCmd('ban', 'Zablokuj dostęp użytkownika do strony'),
   userCmd('unban', 'Odblokuj dostęp użytkownika do strony'),
   new SlashCommandBuilder()

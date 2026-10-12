@@ -42,6 +42,21 @@ const mkInteraction = (over: Record<string, unknown>) => ({
 });
 
 describe('router', () => {
+  it('non-admin /plan sync is refused', async () => {
+    const i = mkInteraction({
+      commandName: 'plan',
+      member: { roles: [] },
+      options: { getSubcommand: () => 'sync' },
+    });
+    const handler = createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      config,
+    });
+    await handler(asI(i));
+    expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+  });
+
   it('/ban upserts a never-seen user so the ban takes effect', async () => {
     const i = mkInteraction({
       commandName: 'ban',

@@ -1,4 +1,10 @@
-import { type ClassKind, lecturers, subjects, upsertUser } from '@studies/db';
+import {
+  type Assessment,
+  type ClassKind,
+  lecturers,
+  subjects,
+  upsertUser,
+} from '@studies/db';
 import {
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
@@ -17,9 +23,12 @@ import {
   addSubject,
   assignLecturer,
   banReply,
+  editClass,
+  editLecturer,
   editSubject,
   listSubjects,
 } from './admin.js';
+import { planStatusReply, planSyncReply } from './plan.js';
 import { replyOptions } from './reply.js';
 import { linkFor, searchReply } from './student.js';
 
@@ -32,6 +41,8 @@ export type RouterDeps = {
 const ADMIN_COMMANDS = new Set([
   'subject',
   'lecturer',
+  'class',
+  'plan',
   'ban',
   'unban',
   'resync',
@@ -118,7 +129,7 @@ async function runCommand(
           description: i.options.getString('description') ?? undefined,
         });
         await reply(text);
-        if (text.startsWith('Dodano')) {
+        if (text.startsWith('Dodano') || text.startsWith('Połączono')) {
           try {
             const subject = await findSubjectByChannel(db, channel.id);
             if (subject) {
@@ -143,17 +154,38 @@ async function runCommand(
           semester: semester === null ? undefined : (semester as 1 | 2),
           ects: ects === null ? undefined : ects,
           description: i.options.getString('description') ?? undefined,
+          platformUrl: i.options.getString('platform_url') ?? undefined,
         }),
       );
       return;
     }
     case 'lecturer': {
-      if (i.options.getSubcommand() === 'add') {
+      const lsub = i.options.getSubcommand();
+      if (lsub === 'add') {
         await reply(
           await addLecturer(db, {
             name: i.options.getString('name', true),
             title: i.options.getString('title') ?? undefined,
             email: i.options.getString('email') ?? undefined,
+            officeHours: i.options.getString('office_hours') ?? undefined,
+            room: i.options.getString('room') ?? undefined,
+          }),
+        );
+        return;
+      }
+      if (lsub === 'edit') {
+        const id = Number(i.options.getString('lecturer', true));
+        if (!Number.isInteger(id)) {
+          await reply('Wybierz prowadzącego z listy podpowiedzi.');
+          return;
+        }
+        await reply(
+          await editLecturer(db, id, {
+            name: i.options.getString('name') ?? undefined,
+            title: i.options.getString('title') ?? undefined,
+            email: i.options.getString('email') ?? undefined,
+            officeHours: i.options.getString('office_hours') ?? undefined,
+            room: i.options.getString('room') ?? undefined,
           }),
         );
         return;
@@ -170,6 +202,29 @@ async function runCommand(
           classKind: i.options.getString('class', true) as ClassKind,
           groupNumber: i.options.getInteger('group') ?? undefined,
         }),
+      );
+      return;
+    }
+    case 'class': {
+      await reply(
+        await editClass(db, {
+          subjectCode: i.options.getString('subject', true),
+          kind: i.options.getString('kind', true) as ClassKind,
+          assessment:
+            (i.options.getString('assessment') as Assessment | null) ??
+            undefined,
+          note: i.options.getString('note') ?? undefined,
+          platformUrl: i.options.getString('platform_url') ?? undefined,
+        }),
+      );
+      return;
+    }
+    case 'plan': {
+      const now = new Date();
+      await reply(
+        i.options.getSubcommand() === 'sync'
+          ? await planSyncReply(db, now)
+          : await planStatusReply(db, now),
       );
       return;
     }

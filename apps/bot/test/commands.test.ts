@@ -1,9 +1,11 @@
 import {
+  classes,
   classGroups,
   classLecturers,
   consumeLoginToken,
   type Db,
   insertMaterial,
+  lecturers,
   setBanned,
   subjects,
   topics,
@@ -11,16 +13,20 @@ import {
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { PermissionFlagsBits } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import {
   addLecturer,
   addSubject,
   assignLecturer,
   banReply,
+  editClass,
+  editLecturer,
   editSubject,
   listSubjects,
 } from '../src/commands/admin.js';
 import { commandDefinitions } from '../src/commands/definitions.js';
+import { planStatusText, planSyncReply } from '../src/commands/plan.js';
 import { replyOptions } from '../src/commands/reply.js';
 import { linkFor, searchReply } from '../src/commands/student.js';
 
@@ -108,6 +114,160 @@ describe('lecturers', () => {
     );
     expect(await assignLecturer(db, { ...a, lecturerId: 9999 })).toBe(
       'Nie znaleziono prowadzącego o id 9999.',
+    );
+  });
+});
+
+describe('task 6 commands', () => {
+  const getSubject = async () =>
+    (await db.select().from(subjects).where(eq(subjects.code, 'ALG')))[0];
+
+  it('links a channel-less subject, keeping name/semester/ects', async () => {
+    await db
+      .insert(subjects)
+      .values({ name: 'Algebra', code: 'ALG', semester: 1, ects: 5 });
+    expect(
+      await addSubject(db, {
+        ...base,
+        name: 'Other',
+        ects: 9,
+        semester: 2,
+        description: 'Opis',
+      }),
+    ).toBe('Połączono przedmiot ALG z kanałem.');
+    const s = await getSubject();
+    expect(s).toMatchObject({
+      name: 'Algebra',
+      ects: 5,
+      semester: 1,
+      discordChannelId: 'c1',
+      description: 'Opis',
+    });
+  });
+
+  it('subject platform_url: set, clear, reject', async () => {
+    await addSubject(db, base);
+    expect(
+      await editSubject(db, 'alg', { platformUrl: 'https://p.example/x' }),
+    ).toBe('Zaktualizowano przedmiot ALG.');
+    expect((await getSubject())?.platformUrl).toBe('https://p.example/x');
+    expect(await editSubject(db, 'alg', { platformUrl: 'ftp://x' })).toBe(
+      'Nieprawidłowy adres URL.',
+    );
+    expect((await getSubject())?.platformUrl).toBe('https://p.example/x');
+    await editSubject(db, 'alg', { platformUrl: '-' });
+    expect((await getSubject())?.platformUrl).toBeNull();
+  });
+
+  it('adds and edits lecturers with new fields, clear, duplicate email', async () => {
+    const r = await addLecturer(db, {
+      name: 'Jan',
+      title: 'dr',
+      email: 'Jan@Example.edu',
+      officeHours: 'pn 10',
+      room: '12',
+    });
+    const id = Number(/id (\d+)/.exec(r)?.[1]);
+    let [l] = await db.select().from(lecturers).where(eq(lecturers.id, id));
+    expect(l).toMatchObject({
+      email: 'jan@example.edu',
+      officeHours: 'pn 10',
+      room: '12',
+    });
+    expect(await addLecturer(db, { name: 'X', email: 'JAN@example.edu' })).toBe(
+      'Prowadzący z tym adresem e-mail już istnieje.',
+    );
+    const id2 = Number(
+      /id (\d+)/.exec(await addLecturer(db, { name: 'Ewa' }))?.[1],
+    );
+    expect(await editLecturer(db, id2, { email: 'jan@example.edu' })).toBe(
+      'Prowadzący z tym adresem e-mail już istnieje.',
+    );
+    expect(await editLecturer(db, id, { room: '-', officeHours: 'wt 9' })).toBe(
+      'Zaktualizowano prowadzącego dr Jan.',
+    );
+    [l] = await db.select().from(lecturers).where(eq(lecturers.id, id));
+    expect(l).toMatchObject({ room: null, officeHours: 'wt 9' });
+    expect(await editLecturer(db, 9999, { name: 'Z' })).toBe(
+      'Nie znaleziono prowadzącego o id 9999.',
+    );
+  });
+
+  it('editClass updates, clears, rejects bad url, never creates', async () => {
+    await addSubject(db, base);
+    expect(await editClass(db, { subjectCode: 'alg', kind: 'wyklad' })).toBe(
+      'Przedmiot ALG nie ma zajęć typu Wykład.',
+    );
+    expect(await db.select().from(classes)).toHaveLength(0);
+    await assignLecturer(db, {
+      subjectCode: 'alg',
+      lecturerId: Number(
+        /id (\d+)/.exec(await addLecturer(db, { name: 'A' }))?.[1],
+      ),
+      classKind: 'wyklad',
+    });
+    expect(
+      await editClass(db, {
+        subjectCode: 'alg',
+        kind: 'wyklad',
+        assessment: 'egzamin',
+        note: 'ustny',
+        platformUrl: 'https://p.example/c',
+      }),
+    ).toBe('Zaktualizowano ALG / Wykład.');
+    let [c] = await db.select().from(classes);
+    expect(c).toMatchObject({
+      assessment: 'egzamin',
+      assessmentNote: 'ustny',
+      platformUrl: 'https://p.example/c',
+    });
+    expect(
+      await editClass(db, {
+        subjectCode: 'alg',
+        kind: 'wyklad',
+        note: '-',
+        platformUrl: 'nope',
+      }),
+    ).toBe('Nieprawidłowy adres URL.');
+    await editClass(db, {
+      subjectCode: 'alg',
+      kind: 'wyklad',
+      note: '-',
+      platformUrl: '-',
+    });
+    [c] = await db.select().from(classes);
+    expect(c).toMatchObject({ assessmentNote: null, platformUrl: null });
+  });
+
+  it('planStatusText: never, ok, error', () => {
+    const now = new Date();
+    const none = {
+      requestedAt: null,
+      lastRunAt: null,
+      lastOkAt: null,
+      lastError: null,
+      stats: null,
+    };
+    expect(planStatusText(none, now)).toBe('Nigdy nie synchronizowano.');
+    const ok = {
+      ...none,
+      lastOkAt: new Date('2026-10-12T10:30:00Z'),
+      stats: { created: 3, updated: 2, deleted: 1, unchanged: 9, warnings: [] },
+    };
+    expect(planStatusText(ok, now)).toBe(
+      'Ostatnia synchronizacja: 12.10.2026, 12:30 (+3 ~2 -1)',
+    );
+    expect(planStatusText({ ...ok, lastError: 'boom' }, now)).toBe(
+      'Ostatnia synchronizacja: 12.10.2026, 12:30 (+3 ~2 -1)\nBłąd: boom',
+    );
+    expect(planStatusText({ ...none, lastError: 'boom' }, now)).toBe(
+      'Nigdy nie synchronizowano.\nBłąd: boom',
+    );
+  });
+
+  it('plan sync requests and reports status', async () => {
+    expect(await planSyncReply(db, new Date())).toBe(
+      'Zlecono synchronizację planu (wykona ją worker w ciągu minuty).\nNigdy nie synchronizowano.',
     );
   });
 });
@@ -210,7 +370,7 @@ describe('escaping and mentions', () => {
 });
 
 describe('commandDefinitions', () => {
-  it('has unique top-level names including all 7', () => {
+  it('has unique top-level names including all 9', () => {
     const names = commandDefinitions.map((c) => c.name);
     expect(new Set(names).size).toBe(names.length);
     for (const n of [
@@ -221,6 +381,8 @@ describe('commandDefinitions', () => {
       'resync',
       'link',
       'search',
+      'class',
+      'plan',
     ])
       expect(names).toContain(n);
   });
@@ -278,10 +440,63 @@ describe('commandDefinitions', () => {
     expect(g?.max_value).toBe(99);
   });
 
+  it('defines new subcommands and options', () => {
+    type Opt = {
+      name: string;
+      autocomplete?: boolean;
+      choices?: unknown[];
+      options?: Opt[];
+    };
+    const sub = (cmd: string, s: string) =>
+      (
+        commandDefinitions.find((x) => x.name === cmd) as unknown as {
+          options: Opt[];
+        }
+      ).options.find((o) => o.name === s)?.options ?? [];
+    const names = (o: Opt[]) => o.map((x) => x.name);
+    expect(names(sub('subject', 'edit'))).toContain('platform_url');
+    expect(names(sub('lecturer', 'add'))).toEqual(
+      expect.arrayContaining(['office_hours', 'room']),
+    );
+    expect(names(sub('lecturer', 'edit'))).toEqual([
+      'lecturer',
+      'name',
+      'title',
+      'email',
+      'office_hours',
+      'room',
+    ]);
+    expect(sub('lecturer', 'edit')[0]?.autocomplete).toBe(true);
+    expect(names(sub('class', 'edit'))).toEqual([
+      'subject',
+      'kind',
+      'assessment',
+      'note',
+      'platform_url',
+    ]);
+    expect(sub('class', 'edit')[0]?.autocomplete).toBe(true);
+    expect(sub('class', 'edit')[1]?.choices).toHaveLength(7);
+    expect(sub('class', 'edit')[2]?.choices).toHaveLength(5);
+    const plan = commandDefinitions.find(
+      (x) => x.name === 'plan',
+    ) as unknown as {
+      options: Opt[];
+    };
+    expect(names(plan.options)).toEqual(['sync', 'status']);
+  });
+
   it('restricts admin commands by default permissions only', () => {
     const perms = (n: string) =>
       commandDefinitions.find((c) => c.name === n)?.default_member_permissions;
-    for (const n of ['subject', 'lecturer', 'ban', 'unban', 'resync'])
+    for (const n of [
+      'subject',
+      'lecturer',
+      'class',
+      'plan',
+      'ban',
+      'unban',
+      'resync',
+    ])
       expect(perms(n)).toBe(String(PermissionFlagsBits.ManageGuild));
     for (const n of ['link', 'search']) expect(perms(n)).toBeFalsy();
   });
