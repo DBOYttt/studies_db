@@ -18,6 +18,7 @@ test('week view shows blocks with rooms and the session panel', async ({
   const panel = page.getByRole('complementary', { name: 'Szczegóły zajęć' });
   await expect(panel).toBeVisible();
   await expect(panel.getByText('A-1 101')).toBeVisible();
+  await expect(panel.getByText('Piotr Planista')).toBeVisible();
   const lecturer = panel.getByRole('link', { name: 'Prowadzący' });
   await expect(lecturer).toHaveAttribute('href', /^\/lecturers\/\d+$/);
 });
@@ -42,7 +43,18 @@ test('Moje grupy filters groups, persists, and clears', async ({ page }) => {
 
   await page.goto('/plan?tab=groups');
   await page.getByRole('button', { name: 'Wyczyść' }).click();
+  await expect
+    .poll(() =>
+      page.evaluate(() => localStorage.getItem('studiesdb.myGroups.v1')),
+    )
+    .toBeNull();
   await page.goto(WEEK);
+  // A block click only works once hydrated, so the checks below see the
+  // client-side (stored-choice) state, not the unfiltered server HTML.
+  await blocks.filter({ hasText: 'B-2 201' }).click();
+  await expect(
+    page.getByRole('complementary', { name: 'Szczegóły zajęć' }),
+  ).toBeVisible();
   await expect(page.getByText('Filtr: Moje grupy')).toHaveCount(0);
   await expect(blocks).toHaveCount(4);
 });
