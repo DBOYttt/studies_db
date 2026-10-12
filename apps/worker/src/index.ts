@@ -1,5 +1,6 @@
 import { createDb, resolveStorageDir } from '@studies/db';
 import { startWorker } from './handlers.js';
+import { startPlanSyncLoop } from './plan-sync.js';
 import { checkTools } from './tools.js';
 
 const databaseUrl = process.env.DATABASE_URL;
@@ -31,15 +32,22 @@ for (const sig of ['SIGINT', 'SIGTERM'] as const) {
 
 console.log(`Worker: start (concurrency ${concurrency})`);
 try {
-  await startWorker(
-    {
+  await Promise.all([
+    startWorker(
+      {
+        db,
+        storageDir: resolveStorageDir(storageDirEnv),
+        sofficeBin,
+        pdftotextBin,
+      },
+      { concurrency, pollMs: 3000, signal: ac.signal },
+    ),
+    startPlanSyncLoop({
       db,
-      storageDir: resolveStorageDir(storageDirEnv),
-      sofficeBin,
-      pdftotextBin,
-    },
-    { concurrency, pollMs: 3000, signal: ac.signal },
-  );
+      url: process.env.UNITIME_ICAL_URL || undefined,
+      signal: ac.signal,
+    }),
+  ]);
 } finally {
   await pool.end();
 }

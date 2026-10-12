@@ -68,6 +68,13 @@ Other tags (Kolokwium, Egzamin, ...) stay plain tags. `pnpm db:migrate` (and the
 container on `compose up`) also runs the one-time backfill that assigns existing topics to
 classes and groups from their current tags; re-running it is safe.
 
+## Plan zajęć (UniTime)
+
+Set `UNITIME_ICAL_URL` in `.env` to the UniTime iCalendar export URL to enable the timetable sync; the
+worker imports it on start and then every 6 hours (or sooner when a sync is requested from the web UI).
+The URL is a secret: it is never stored in the database or logged (only its host is), so keep it out of
+version control. Without it the sync is disabled and the worker logs that once at start.
+
 ## Dev DB
 
 `pnpm db:up` (plain `podman run`, container `studies-mariadb`) is unchanged. Do not run it
