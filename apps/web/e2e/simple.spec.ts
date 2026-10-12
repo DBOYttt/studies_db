@@ -6,13 +6,16 @@ loginOnce('simple', process.env.E2E_TOKEN_SIMPLE, { mode: 'simple' });
 
 test('fresh login without a mode cookie lands on /s', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'pl-PL' });
-  const page = await context.newPage();
-  await page.goto(
-    `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_SIMPLE_LANDING}`,
-  );
-  await page.getByRole('button', { name: 'Zaloguj się' }).click();
-  await expect(page).toHaveURL(/localhost:3100\/s$/);
-  await context.close();
+  try {
+    const page = await context.newPage();
+    await page.goto(
+      `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_SIMPLE_LANDING}`,
+    );
+    await page.getByRole('button', { name: 'Zaloguj się' }).click();
+    await expect(page).toHaveURL(/localhost:3100\/s$/);
+  } finally {
+    await context.close();
+  }
 });
 
 test('login lands on Start with subject cards and Ostatnio dodane', async ({
@@ -28,11 +31,12 @@ test('login lands on Start with subject cards and Ostatnio dodane', async ({
       main.getByRole('link', { name: new RegExp(`^${code}\\b`) }),
     ).toBeVisible();
   }
+  const recentHeading = main.getByRole('heading', { name: 'Ostatnio dodane' });
+  await expect(recentHeading).toBeVisible();
   await expect(
-    main.getByRole('heading', { name: 'Ostatnio dodane' }),
-  ).toBeVisible();
-  await expect(
-    main.getByRole('link', { name: 'wyklad-slajdy.pdf', exact: true }),
+    recentHeading
+      .locator('xpath=following-sibling::ul[1]')
+      .getByRole('link', { name: 'wyklad-slajdy.pdf', exact: true }),
   ).toBeVisible();
   await expect(
     main.getByRole('link', { name: /^PLAN\b/ }).getByText('brak plików'),
@@ -56,6 +60,9 @@ test('subject filters, preview panel and download', async ({ page }) => {
     main.getByRole('link', { name: 'lab-gr2.pdf', exact: true }),
   ).toBeVisible();
 
+  await expect(
+    main.getByRole('link', { name: 'wyklad-slajdy.pdf', exact: true }),
+  ).toBeVisible();
   await main.getByRole('link', { name: 'Laboratorium', exact: true }).click();
   await expect(page).toHaveURL(/class=laboratorium/);
   await expect(
