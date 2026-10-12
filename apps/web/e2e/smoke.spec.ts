@@ -7,7 +7,15 @@ test('anonymous visitors are sent to login info', async ({ page }) => {
   await expect(page.getByText('wpisz /link')).toBeVisible();
 });
 
-test('browse, preview, search and sql console', async ({ page }) => {
+test('browse, preview, search and sql console', async ({ page, context }) => {
+  await context.addCookies([
+    {
+      name: 'studiesdb.mode',
+      value: 'advanced',
+      domain: 'localhost',
+      path: '/',
+    },
+  ]);
   const link = `/auth/callback?token=${process.env.E2E_TOKEN}`;
   // A Discord link preview / mail scanner fetching the link must not burn it.
   for (let n = 0; n < 2; n++) {

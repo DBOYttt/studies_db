@@ -2,6 +2,7 @@ import { SignOut } from '@phosphor-icons/react/dist/ssr';
 import { PUBLIC_VIEWS } from '@studies/db/constants';
 import type { ReactNode } from 'react';
 import { ConsoleFooter } from '@/components/shell/ConsoleFooter';
+import { ModeSwitch } from '@/components/shell/ModeSwitch';
 import { NavPanel } from '@/components/shell/NavPanel';
 import { ShellFrame } from '@/components/shell/ShellFrame';
 import { getDb, getRoPool } from '@/lib/db';
@@ -35,6 +36,10 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
       footer={<ConsoleFooter />}
       topbarEnd={
         <>
+          <ModeSwitch mode="advanced" />
+          <span className="text-subtle max-md:hidden" aria-hidden>
+            |
+          </span>
           {user.avatarUrl ? (
             // biome-ignore lint/performance/noImgElement: external Discord CDN avatar
             <img

@@ -24,7 +24,15 @@ export function loginOnce(name: string, token: string | undefined) {
     const page = await context.newPage();
     await page.goto(`http://localhost:3100/auth/callback?token=${token}`);
     await page.getByRole('button', { name: 'Zaloguj się' }).click();
-    await expect(page).toHaveURL(/\/$/);
+    await expect(page).toHaveURL(/\/(s)?$/);
+    await context.addCookies([
+      {
+        name: 'studiesdb.mode',
+        value: 'advanced',
+        domain: 'localhost',
+        path: '/',
+      },
+    ]);
     cookies = await context.cookies();
     await context.close();
     writeFileSync(file, JSON.stringify(cookies));

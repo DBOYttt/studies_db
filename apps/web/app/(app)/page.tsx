@@ -1,3 +1,4 @@
+import { redirect } from 'next/navigation';
 import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -5,6 +6,7 @@ import type { Cell } from '@/lib/cells';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { formatDate } from '@/lib/format';
+import { currentMode } from '@/lib/mode';
 import { requireUser } from '@/lib/session';
 import {
   querySubjectsGrid,
@@ -17,6 +19,7 @@ export const dynamic = 'force-dynamic';
 
 export default async function Home() {
   await requireUser();
+  if ((await currentMode()) === 'simple') redirect('/s');
   let subjects: SubjectGridRow[] = [];
   let error: string | null = null;
   try {
