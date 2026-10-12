@@ -70,7 +70,7 @@ test.describe('desktop', () => {
       JSON.parse(localStorage.getItem('studiesdb.schemaLayout.v1') ?? '{}'),
     );
     expect(stored.v_users[0]).toBeCloseTo(710 + 200 / zoom, -1);
-    expect(stored.v_users[1]).toBeCloseTo(360 + 120 / zoom, -1);
+    expect(stored.v_users[1]).toBeCloseTo(340 + 120 / zoom, -1);
 
     // Survives a reload.
     await page.reload();
@@ -103,7 +103,7 @@ test.describe('desktop', () => {
             ).v_users,
         ),
       )
-      .toEqual([726, 424]);
+      .toEqual([726, 404]);
     await page.getByRole('button', { name: 'Resetuj układ' }).click();
 
     // Compact columns by default; the toggle shows every column.

@@ -2,7 +2,9 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  classes,
   classLecturers,
+  classSessions,
   createLoginToken,
   ensureClass,
   ensureGroup,
@@ -15,6 +17,7 @@ import {
   upsertUser,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import { eq } from 'drizzle-orm';
 import { E2E_STORAGE_DIR } from '../playwright.config';
 import { E2E_SESSION_DIR } from './session';
 
@@ -114,7 +117,6 @@ export default async function globalSetup() {
       ['convert'],
     );
     const { materials } = await import('@studies/db');
-    const { eq } = await import('drizzle-orm');
     await db
       .update(materials)
       .set({ status: 'failed' })
@@ -232,9 +234,116 @@ export default async function globalSetup() {
       { classId: labId, lecturerId: lis, groupId: gr2Id },
     ]);
 
+    // Plan zajęć (plan.spec.ts): subject PLAN with sessions in 2026-W42.
+    const [{ id: planId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Plan testowy',
+        code: 'PLAN',
+        semester: 3,
+        ects: 3,
+        platformUrl: 'https://upel.example.edu/course/plan',
+        discordChannelId: 'e2e-ch-plan',
+      })
+      .$returningId();
+    const planWyklad = await ensureClass(db, planId, 'wyklad');
+    const planCw = await ensureClass(db, planId, 'cwiczenia');
+    await db
+      .update(classes)
+      .set({ platformUrl: 'https://platforma.example.edu/cwiczenia' })
+      .where(eq(classes.id, planCw));
+    const cwGr1 = await ensureGroup(db, planCw, 1);
+    const cwGr2 = await ensureGroup(db, planCw, 2);
+    const [{ id: planLecturer }] = await db
+      .insert(lecturers)
+      .values({
+        title: 'dr',
+        name: 'Piotr Planista',
+        email: 'piotr.planista@example.edu',
+        officeHours: 'wt. 13:00-14:00',
+        room: 'C-3 305',
+      })
+      .$returningId();
+    await db
+      .insert(classLecturers)
+      .values({ classId: planWyklad, lecturerId: planLecturer, groupId: null });
+    const wall = (d: number, h: number, m = 0) =>
+      new Date(Date.UTC(2026, 9, d, h, m));
+    const session = (
+      uid: string,
+      subjectId: number,
+      classId: number | null,
+      groupId: number | null,
+      lecturerId: number | null,
+      label: string,
+      room: string,
+      start: Date,
+      end: Date,
+    ) => ({
+      uid,
+      occurrenceStart: start,
+      subjectId,
+      classId,
+      groupId,
+      lecturerId,
+      label,
+      room,
+      startsAt: start,
+      endsAt: end,
+    });
+    await db
+      .insert(classSessions)
+      .values([
+        session(
+          'e2e-wyklad',
+          planId,
+          planWyklad,
+          null,
+          planLecturer,
+          'Wykład 1',
+          'A-1 101',
+          wall(12, 8),
+          wall(12, 9, 30),
+        ),
+        session(
+          'e2e-cw-g1',
+          planId,
+          planCw,
+          cwGr1,
+          null,
+          'Ćwiczenia gr 1',
+          'B-2 201',
+          wall(13, 10),
+          wall(13, 11, 30),
+        ),
+        session(
+          'e2e-cw-g2',
+          planId,
+          planCw,
+          cwGr2,
+          null,
+          'Ćwiczenia gr 2',
+          'B-2 202',
+          wall(13, 12),
+          wall(13, 13, 30),
+        ),
+        session(
+          'e2e-fiz',
+          subjectId,
+          null,
+          null,
+          null,
+          'Fizyka inna',
+          'D-4 404',
+          wall(14, 14),
+          wall(14, 15, 30),
+        ),
+      ]);
+
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_ENTITIES = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_PLAN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_SCHEMA = await createLoginToken(db, userId);
   } finally {
     await closeTestDb(db);
