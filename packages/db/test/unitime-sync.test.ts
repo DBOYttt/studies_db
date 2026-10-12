@@ -206,6 +206,45 @@ describe('syncTimetable on the fixture', () => {
     await expect(syncTimetable(db, 'not a calendar')).rejects.toThrow();
     expect(await snapshot(db)).toEqual(before);
   });
+
+  it('refuses a calendar without events and deletes nothing', async () => {
+    const sessions = await count(db, classSessions);
+    expect(sessions).toBeGreaterThan(0);
+    await expect(
+      syncTimetable(db, 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'),
+    ).rejects.toThrow(
+      'Plan nie zawiera żadnych zajęć — pomijam synchronizację',
+    );
+    expect(await count(db, classSessions)).toBe(sessions);
+  });
+
+  it('rolls back everything when an insert fails mid-transaction', async () => {
+    const before = await snapshot(db);
+    // New subject and class are inserted first; the organizer e-mail is
+    // longer than lecturers.email (varchar 200), so that insert fails at the DB.
+    const bad = [
+      'BEGIN:VEVENT',
+      'DTSTART;TZID=Europe/Warsaw:20261110T080000',
+      'DTEND;TZID=Europe/Warsaw:20261110T093000',
+      'LOCATION:D-1 101',
+      'STATUS:CONFIRMED',
+      'SEQUENCE:0',
+      'UID:900000099',
+      'SUMMARY:Przedmiot do wycofania',
+      'DESCRIPTION:Wykład 1',
+      `ORGANIZER;CN="dr Nowy, N":mailto:${'x'.repeat(250)}@example.edu`,
+      'END:VEVENT',
+      '',
+    ].join('\r\n');
+    const feed = FIXTURE.replace(/END:VCALENDAR/, `${bad}END:VCALENDAR`);
+    const err = await syncTimetable(db, feed).then(
+      () => null,
+      (e: unknown) => e as Error & { cause?: Error },
+    );
+    expect(err?.message).toMatch(/insert into `lecturers`/);
+    expect(err?.cause?.message).toMatch(/too long/i);
+    expect(await snapshot(db)).toEqual(before);
+  });
 });
 
 describe('syncTimetable with pre-existing rows', () => {

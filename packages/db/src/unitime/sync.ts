@@ -213,6 +213,9 @@ export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
   if (!/^BEGIN:VCALENDAR\s*$/im.test(ics))
     throw new Error('To nie jest plik iCalendar (brak BEGIN:VCALENDAR).');
   const calendar = parseIcs(ics);
+  // An empty feed would delete every session; treat it as an upstream error.
+  if (calendar.events.length === 0)
+    throw new Error('Plan nie zawiera żadnych zajęć — pomijam synchronizację');
 
   const warnings = new Set<string>();
   const warn = (w: string) => {
