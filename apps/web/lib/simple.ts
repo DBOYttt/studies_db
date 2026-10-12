@@ -105,3 +105,17 @@ export function parseSimpleFilters(
   const t = intParam(sp, 'tag');
   return { kind, group, tag: t !== null && tagIds.includes(t) ? t : null };
 }
+
+/** `?file=<material id>` as a positive integer, else null. */
+export const parseFileParam = (sp: Sp): number | null => intParam(sp, 'file');
+
+/** `?page=<n>` clamped to 1..max (junk → 1). */
+export function parsePageParam(sp: Sp, max: number): number {
+  const p = intParam(sp, 'page');
+  return p === null ? 1 : Math.min(p, Math.max(1, max));
+}
+
+/** `base` plus one more query param, with the right separator. */
+export function withParam(base: string, key: string, value: string | number) {
+  return `${base}${base.includes('?') ? '&' : '?'}${key}=${encodeURIComponent(String(value))}`;
+}

@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   fileIcon,
   highlightParts,
+  parseFileParam,
+  parsePageParam,
   parseSimpleFilters,
   REPORT_LABELS,
   REPORT_META,
   statusBadge,
+  withParam,
 } from '../lib/simple';
 
 describe('highlightParts', () => {
@@ -102,5 +105,27 @@ describe('parseSimpleFilters', () => {
       parseSimpleFilters({ class: 'cwiczenia', group: '1.5' }, k, groups, [])
         .group,
     ).toBeNull();
+  });
+});
+
+describe('simple page params', () => {
+  it('parses ?file= as a positive id only', () => {
+    expect(parseFileParam({ file: '42' })).toBe(42);
+    expect(parseFileParam({ file: ['7', '8'] })).toBe(7);
+    for (const v of ['0', '-1', 'abc', '1.5', '', undefined])
+      expect(parseFileParam({ file: v })).toBeNull();
+  });
+  it('clamps ?page= to 1..max', () => {
+    expect(parsePageParam({}, 5)).toBe(1);
+    expect(parsePageParam({ page: 'x' }, 5)).toBe(1);
+    expect(parsePageParam({ page: '3' }, 5)).toBe(3);
+    expect(parsePageParam({ page: '99' }, 5)).toBe(5);
+    expect(parsePageParam({ page: '2' }, 0)).toBe(1);
+  });
+  it('appends a param with the right separator', () => {
+    expect(withParam('/s', 'file', 3)).toBe('/s?file=3');
+    expect(withParam('/s/recent?page=2', 'file', 3)).toBe(
+      '/s/recent?page=2&file=3',
+    );
   });
 });
