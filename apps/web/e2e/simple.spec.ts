@@ -4,6 +4,17 @@ import { loginOnce } from './session';
 // No advanced cookie: this spec exercises the default (Prosty) view.
 loginOnce('simple', process.env.E2E_TOKEN_SIMPLE, { mode: 'simple' });
 
+test('fresh login without a mode cookie lands on /s', async ({ browser }) => {
+  const context = await browser.newContext({ locale: 'pl-PL' });
+  const page = await context.newPage();
+  await page.goto(
+    `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_SIMPLE_LANDING}`,
+  );
+  await page.getByRole('button', { name: 'Zaloguj się' }).click();
+  await expect(page).toHaveURL(/localhost:3100\/s$/);
+  await context.close();
+});
+
 test('login lands on Start with subject cards and Ostatnio dodane', async ({
   page,
 }) => {
@@ -19,6 +30,9 @@ test('login lands on Start with subject cards and Ostatnio dodane', async ({
   }
   await expect(
     main.getByRole('heading', { name: 'Ostatnio dodane' }),
+  ).toBeVisible();
+  await expect(
+    main.getByRole('link', { name: 'wyklad-slajdy.pdf', exact: true }),
   ).toBeVisible();
   await expect(
     main.getByRole('link', { name: /^PLAN\b/ }).getByText('brak plików'),
@@ -44,6 +58,9 @@ test('subject filters, preview panel and download', async ({ page }) => {
 
   await main.getByRole('link', { name: 'Laboratorium', exact: true }).click();
   await expect(page).toHaveURL(/class=laboratorium/);
+  await expect(
+    main.getByRole('link', { name: 'wyklad-slajdy.pdf', exact: true }),
+  ).toHaveCount(0);
   await expect(
     main.getByRole('link', { name: 'Laboratorium', exact: true }),
   ).toHaveAttribute('aria-current', 'true');
@@ -130,7 +147,7 @@ test('mode switch round trip keeps the chosen mode', async ({ page }) => {
   await page.reload();
   await expect(page).toHaveURL(/\/subjects\/MECH/);
   await page.goto('/');
-  await expect(page).not.toHaveURL(/\/s$/);
+  await expect(page).toHaveURL(/localhost:3100\/$/);
 
   await page.goto('/subjects/MECH');
   await page

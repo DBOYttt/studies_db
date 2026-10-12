@@ -29,7 +29,7 @@ export function loginOnce(
     const page = await context.newPage();
     await page.goto(`http://localhost:3100/auth/callback?token=${token}`);
     await page.getByRole('button', { name: 'Zaloguj się' }).click();
-    await expect(page).toHaveURL(/\/(s)?$/);
+    await expect(page).toHaveURL(/localhost:3100\/s$/);
     if (mode === 'advanced') {
       await context.addCookies([
         {

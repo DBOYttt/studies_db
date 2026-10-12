@@ -162,7 +162,12 @@ export default async function globalSetup() {
       labId,
       gr3Id,
     );
-    await mkTopic('Wprowadzenie do dynamiki', 'e2e-t-wyklad', wykladId, null);
+    const wykladTopic = await mkTopic(
+      'Wprowadzenie do dynamiki',
+      'e2e-t-wyklad',
+      wykladId,
+      null,
+    );
     await mkTopic('Luźne notatki', 'e2e-t-none', null, null);
     await insertMaterial(
       db,
@@ -179,6 +184,24 @@ export default async function globalSetup() {
         previewKind: 'pdf',
         status: 'ready',
         extractedText: 'Sprawozdanie z laboratorium.',
+      },
+      [],
+    );
+
+    await insertMaterial(
+      db,
+      {
+        topicId: wykladTopic,
+        uploaderId: userId,
+        sha256: '3'.repeat(64),
+        discordMessageId: 'mm3',
+        discordAttachmentId: 'ma3',
+        originalFilename: 'wyklad-slajdy.pdf',
+        mimeType: 'application/pdf',
+        sizeBytes: 1,
+        storagePath: 'sample.pdf',
+        previewKind: 'pdf',
+        status: 'ready',
       },
       [],
     );
@@ -345,6 +368,7 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_ENTITIES = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_PLAN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_SIMPLE = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_SIMPLE_LANDING = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_SCHEMA = await createLoginToken(db, userId);
   } finally {
     await closeTestDb(db);
