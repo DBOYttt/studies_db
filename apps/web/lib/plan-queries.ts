@@ -45,6 +45,25 @@ const toWall = (v: unknown): Date =>
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 const strOrNull = (v: unknown) => (v == null ? null : String(v));
 
+const toPlanSession = (r: mysql.RowDataPacket): PlanSession => ({
+  id: Number(r.id),
+  startsAt: toWall(r.starts_at),
+  endsAt: toWall(r.ends_at),
+  subjectId: Number(r.subject_id),
+  subjectName: String(r.subject_name),
+  subjectCode: String(r.subject_code),
+  classId: numOrNull(r.class_id),
+  classKind: (r.class_kind ?? null) as ClassKind | null,
+  className: strOrNull(r.class_name),
+  groupId: numOrNull(r.group_id),
+  groupName: strOrNull(r.group_name),
+  lecturerId: numOrNull(r.lecturer_id),
+  lecturerName: strOrNull(r.lecturer_name),
+  room: strOrNull(r.room),
+  label: String(r.label ?? ''),
+  status: r.status === 'cancelled' ? 'cancelled' : 'confirmed',
+});
+
 /** Sessions starting in the week (wall Mon 00:00 <= starts_at < next Mon). */
 export async function listWeekSessions(
   pool: mysql.Pool,
@@ -71,25 +90,30 @@ export async function listWeekSessions(
   const [rows] = await pool.query<mysql.RowDataPacket[]>(sql, params);
   return {
     sql: inline(sql, params),
-    rows: rows.map((r) => ({
-      id: Number(r.id),
-      startsAt: toWall(r.starts_at),
-      endsAt: toWall(r.ends_at),
-      subjectId: Number(r.subject_id),
-      subjectName: String(r.subject_name),
-      subjectCode: String(r.subject_code),
-      classId: numOrNull(r.class_id),
-      classKind: (r.class_kind ?? null) as ClassKind | null,
-      className: strOrNull(r.class_name),
-      groupId: numOrNull(r.group_id),
-      groupName: strOrNull(r.group_name),
-      lecturerId: numOrNull(r.lecturer_id),
-      lecturerName: strOrNull(r.lecturer_name),
-      room: strOrNull(r.room),
-      label: String(r.label ?? ''),
-      status: r.status === 'cancelled' ? 'cancelled' : 'confirmed',
-    })),
+    rows: rows.map(toPlanSession),
   };
+}
+
+/** The next `limit` sessions of a subject starting at or after `nowWall`. */
+export async function nextSessions(
+  pool: mysql.Pool,
+  subjectId: number,
+  nowWall: Date,
+  limit = 3,
+): Promise<PlanSession[]> {
+  const [rows] = await pool.query<mysql.RowDataPacket[]>(
+    `SELECT cs.id, cs.starts_at, cs.ends_at, cs.subject_id, cs.subject_name,
+            s.code AS subject_code, cs.class_id, cs.class_kind, cs.class_name,
+            cs.group_id, cs.group_name, cs.lecturer_id, cs.lecturer_name,
+            cs.room, cs.label, cs.status
+       FROM v_class_sessions cs
+       JOIN v_subjects s ON s.id = cs.subject_id
+      WHERE cs.subject_id = ? AND cs.starts_at >= ?
+      ORDER BY cs.starts_at, cs.ends_at, cs.id
+      LIMIT ?`,
+    [subjectId, wallSql(nowWall), Math.max(1, Math.trunc(limit))],
+  );
+  return rows.map(toPlanSession);
 }
 
 /** First and last session start (wall Dates), or null without sessions. */
