@@ -166,6 +166,7 @@ describe('parseExplorerPaging', () => {
   it('parses subject tabs', () => {
     expect(parseExplorerParams({ tab: 'lecturers' }).tab).toBe('lecturers');
     expect(parseExplorerParams({ tab: 'sql' }).tab).toBe('sql');
+    expect(parseExplorerParams({ tab: 'plan' }).tab).toBe('plan');
     expect(parseExplorerParams({ tab: 'bogus' }).tab).toBe('explorer');
   });
 });
@@ -191,6 +192,9 @@ describe('subjectTabHref', () => {
     );
     expect(subjectTabHref('MECH', sel, filters, 'schema')).toContain(
       'tab=schema',
+    );
+    expect(subjectTabHref('MECH', sel, filters, 'plan')).toBe(
+      '/subjects/MECH?class=laboratorium&group=3&tab=plan&tag=7&q=lab&sort=filename&dir=asc',
     );
   });
 

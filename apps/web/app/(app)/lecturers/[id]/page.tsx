@@ -1,4 +1,5 @@
 import {
+  CalendarBlank,
   ChalkboardTeacher,
   Files,
   Stack,
@@ -6,6 +7,7 @@ import {
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { EntityFilesGrid } from '@/components/EntityFilesGrid';
+import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
@@ -28,7 +30,7 @@ export const dynamic = 'force-dynamic';
 
 type SP = Record<string, string | string[] | undefined>;
 
-const TABS = ['classes', 'files'] as const;
+const TABS = ['classes', 'files', 'plan'] as const;
 
 const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
@@ -37,7 +39,7 @@ const td = 'border-b border-line px-2.5 py-1';
 const link =
   'font-medium text-accent-ink hover:text-accent-ink-hover hover:underline';
 
-/** Lecturer page (spec section 2): Zajęcia, Materiały. */
+/** Lecturer page (spec section 2): Zajęcia, Materiały, Plan. */
 export default async function LecturerPage({
   params,
   searchParams,
@@ -92,6 +94,12 @@ export default async function LecturerPage({
       href: `${base}?tab=files`,
       active: tab === 'files',
     },
+    {
+      label: 'Plan',
+      icon: CalendarBlank,
+      href: `${base}?tab=plan`,
+      active: tab === 'plan',
+    },
   ];
 
   return (
@@ -126,6 +134,24 @@ export default async function LecturerPage({
               </>
             )}
           </p>
+          {(lecturer.office_hours || lecturer.room) && (
+            <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
+              {lecturer.office_hours && (
+                <>
+                  <dt className="text-muted">Konsultacje:</dt>
+                  <dd className="m-0 whitespace-pre-line">
+                    {lecturer.office_hours}
+                  </dd>
+                </>
+              )}
+              {lecturer.room && (
+                <>
+                  <dt className="text-muted">Pokój:</dt>
+                  <dd className="m-0">{lecturer.room}</dd>
+                </>
+              )}
+            </dl>
+          )}
         </div>
         {tab === 'classes' && <ClassesTab id={id} />}
         {tab === 'files' && (
@@ -135,6 +161,15 @@ export default async function LecturerPage({
             grid={grid}
             load={() => lecturerFiles(pool, id, grid)}
             name={`prowadzacy-${id}-materialy`}
+          />
+        )}
+        {tab === 'plan' && (
+          <PlanWeekTab
+            week={sp.week}
+            path={base}
+            extra={{ tab: 'plan' }}
+            filter={{ lecturerId: id }}
+            myGroupsFilter={false}
           />
         )}
       </div>

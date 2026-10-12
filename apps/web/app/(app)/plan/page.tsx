@@ -8,7 +8,7 @@ import {
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
 import { MyGroupsForm } from '@/components/plan/MyGroupsForm';
-import { WeekView } from '@/components/plan/WeekView';
+import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -21,27 +21,8 @@ import {
   parseEntityGrid,
   parseEntityTab,
 } from '@/lib/entity-page';
-import {
-  defaultWeek,
-  isoWeekOf,
-  nowWall,
-  parseIsoWeek,
-  weekDays,
-} from '@/lib/plan';
-import {
-  listMyGroupOptions,
-  listWeekSessions,
-  planListPage,
-  sessionRange,
-} from '@/lib/plan-queries';
-import {
-  formatSyncTime,
-  syncFailed,
-  toWeekSession,
-  wallDateKey,
-  wallSqlText,
-  weekNav,
-} from '@/lib/plan-view';
+import { listMyGroupOptions, planListPage } from '@/lib/plan-queries';
+import { formatSyncTime, syncFailed, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -107,7 +88,9 @@ export default async function PlanPage({
           })}
         </nav>
         {status && syncFailed(status) && <SyncWarning status={status} />}
-        {tab === 'week' && <WeekTab sp={sp} />}
+        {tab === 'week' && (
+          <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
+        )}
         {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
         {tab === 'groups' && <GroupsTab />}
         {status && (
@@ -140,37 +123,6 @@ function SyncWarning({ status }: { status: PlanSyncStatus }) {
       </details>
     </div>
   );
-}
-
-async function WeekTab({ sp }: { sp: SP }) {
-  const pool = getRoPool();
-  const now = nowWall();
-  const raw = typeof sp.week === 'string' ? sp.week : undefined;
-  try {
-    const week =
-      parseIsoWeek(raw) ?? defaultWeek(now, await sessionRange(pool));
-    const [{ rows }, links] = await Promise.all([
-      listWeekSessions(pool, week),
-      // Without the lookups blocks link to the subject only.
-      loadLinkContext(getDb()).catch(() => undefined),
-    ]);
-    return (
-      <WeekView
-        week={week}
-        days={weekDays(rows, week).map((d) => d.toISOString())}
-        sessions={rows.map((s) => toWeekSession(s, links))}
-        nav={weekNav('/plan', week, isoWeekOf(now))}
-        today={wallDateKey(now)}
-        myGroupsFilter
-      />
-    );
-  } catch (err) {
-    return (
-      <div role="alert" className={errBox}>
-        Nie udało się wczytać planu: {roErrorMessage(err)}
-      </div>
-    );
-  }
 }
 
 /** Wall DATETIME columns of v_class_sessions, shown as MariaDB prints them. */

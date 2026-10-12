@@ -29,3 +29,21 @@ export function pluralPl(
   const dd = abs % 100;
   return d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? few : many;
 }
+
+/**
+ * An external link target from user/DB data: the trimmed URL when it is an
+ * absolute http(s) URL, else null (render as plain text). Defence in depth
+ * against `javascript:` and other schemes in stored platform links.
+ */
+export function safeExternalUrl(s: string | null | undefined): string | null {
+  const v = s?.trim();
+  if (!v || !/^https?:\/\//i.test(v)) return null;
+  try {
+    const u = new URL(v);
+    return (u.protocol === 'http:' || u.protocol === 'https:') && u.host
+      ? v
+      : null;
+  } catch {
+    return null;
+  }
+}

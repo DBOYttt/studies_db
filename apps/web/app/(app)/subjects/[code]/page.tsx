@@ -1,5 +1,6 @@
 import {
   BookOpenText,
+  CalendarBlank,
   ChalkboardTeacher,
   ChatsCircle,
   Files,
@@ -9,12 +10,15 @@ import {
   TreeStructure,
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
+import { ASSESSMENT_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import type { ReactNode } from 'react';
 import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { DataMap } from '@/components/explorer/DataMap';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
 import { TagSelect } from '@/components/explorer/TagSelect';
+import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
 import { SqlConsole } from '@/components/SqlConsole';
 import {
@@ -36,7 +40,7 @@ import {
   subjectTabHref,
   withResolvedSelection,
 } from '@/lib/explorer';
-import { formatDate } from '@/lib/format';
+import { formatDate, safeExternalUrl } from '@/lib/format';
 import {
   getExplorerFile,
   getSubject,
@@ -46,6 +50,7 @@ import {
   listSubjectTags,
   pageExplorerFiles,
   resolveSubjectSelection,
+  type SubjectClass,
   type SubjectInfo,
 } from '@/lib/queries';
 import { DEFAULT_PER_PAGE } from '@/lib/result-grid';
@@ -73,7 +78,7 @@ const errBox =
 const warnBox =
   'rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg';
 
-/** Subject screen (design 88-104, 330-352, 445-472): Pliki, Prowadzący, SQL, Mapa danych, Schemat. */
+/** Subject screen (design 88-104, 330-352, 445-472): Pliki, Prowadzący, Plan, SQL, Mapa danych, Schemat. */
 export default async function SubjectPage({
   params,
   searchParams,
@@ -176,6 +181,7 @@ export default async function SubjectPage({
   const TAB_DEFS: [ExplorerTab, string, Tab['icon']][] = [
     ['explorer', 'Pliki', Files],
     ['lecturers', 'Prowadzący', ChalkboardTeacher],
+    ['plan', 'Plan', CalendarBlank],
     ['sql', 'SQL', TerminalWindow],
     ['map', 'Mapa danych', Graph],
     ['schema', 'Schemat', TreeStructure],
@@ -226,7 +232,22 @@ export default async function SubjectPage({
             sqlPath={sqlPath}
           />
         )}
-        {tab === 'lecturers' && <LecturersTab subjectId={subject.id} />}
+        {tab === 'lecturers' && (
+          <LecturersTab subjectId={subject.id} classList={classList} />
+        )}
+        {tab === 'plan' && (
+          <PlanWeekTab
+            week={sp.week}
+            path={`/subjects/${encodeURIComponent(code)}`}
+            extra={Object.fromEntries(
+              new URLSearchParams(
+                subjectTabHref(code, sel, filters, 'plan').split('?')[1],
+              ),
+            )}
+            filter={{ subjectId: subject.id }}
+            myGroupsFilter={false}
+          />
+        )}
         {tab === 'sql' && <SqlTab code={code} q={sp.q} editPath={sqlPath} />}
         {tab === 'map' && (
           <DataMap
@@ -273,6 +294,13 @@ function SubjectHeader({
         <p className="mt-0.5 font-mono text-xs text-muted">
           {subject.code}, semestr {subject.semester}, {subject.ects} ECTS
         </p>
+        {subject.platformUrl && (
+          <p className="mt-1 text-xs">
+            <ExternalLink url={subject.platformUrl}>
+              UPeL / platforma ↗
+            </ExternalLink>
+          </p>
+        )}
         {subject.description && (
           <p className="mt-1.5 max-w-[65ch] whitespace-pre-line text-muted">
             {subject.description}
@@ -395,47 +423,132 @@ async function FilesTab({
 const th = 'border-b border-line-strong px-2.5 py-[7px] font-semibold';
 const td = 'border-b border-line px-2.5 py-1';
 
-async function LecturersTab({ subjectId }: { subjectId: number }) {
+/**
+ * An external link (new tab) when `url` is http(s); anything else is shown as
+ * plain text, never as an href.
+ */
+function ExternalLink({ url, children }: { url: string; children: ReactNode }) {
+  const safe = safeExternalUrl(url);
+  if (!safe) return <span className="break-all text-muted">{url}</span>;
+  return (
+    <a
+      href={safe}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="link"
+      title={safe}
+    >
+      {children}
+    </a>
+  );
+}
+
+function assessmentText(c: SubjectClass): string | null {
+  const name = c.assessment ? ASSESSMENT_NAMES[c.assessment] : null;
+  const note = c.assessmentNote?.trim() || null;
+  if (name && note) return `${name} — ${note}`;
+  return name ?? note;
+}
+
+const empty = <span className="text-faint">—</span>;
+
+async function LecturersTab({
+  subjectId,
+  classList,
+}: {
+  subjectId: number;
+  classList: SubjectClass[];
+}) {
   const rows = await listSubjectLecturers(getDb(), subjectId);
   return (
-    <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
-      <table className="w-full min-w-[560px] border-collapse">
-        <thead>
-          <tr className="bg-surface text-left">
-            <th className={th}>Zajęcia</th>
-            <th className={th}>Grupa</th>
-            <th className={th}>Prowadzący</th>
-            <th className={th}>E-mail</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((l, i) => (
-            <tr
-              // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
-              key={i}
-              className={`hover:bg-list-hover ${i % 2 ? 'bg-zebra' : ''}`}
-            >
-              <td className={td}>{l.className}</td>
-              <td className={`${td} text-muted`}>
-                {l.groupName ?? 'wszystkie'}
-              </td>
-              <td className={td}>
-                <Link href={lecturerHref(l.id)} className="link">
-                  {[l.title, l.name].filter(Boolean).join(' ')}
-                </Link>
-              </td>
-              <td className={`${td} font-mono text-xs`}>{l.email || '—'}</td>
+    <div className="flex flex-col gap-3.5">
+      {classList.length > 0 && (
+        <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
+          <table
+            aria-label="Zajęcia"
+            className="w-full min-w-[560px] border-collapse"
+          >
+            <thead>
+              <tr className="bg-surface text-left">
+                <th className={th}>Zajęcia</th>
+                <th className={th}>Zaliczenie</th>
+                <th className={th}>Platforma</th>
+              </tr>
+            </thead>
+            <tbody>
+              {classList.map((c, i) => {
+                const assessment = assessmentText(c);
+                return (
+                  <tr
+                    key={c.id}
+                    className={`hover:bg-list-hover ${i % 2 ? 'bg-zebra' : ''}`}
+                  >
+                    <td className={td}>{c.name}</td>
+                    <td className={td}>{assessment ?? empty}</td>
+                    <td className={td}>
+                      {c.platformUrl ? (
+                        <ExternalLink url={c.platformUrl}>
+                          Platforma ↗
+                        </ExternalLink>
+                      ) : (
+                        empty
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+      <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
+        <table
+          aria-label="Prowadzący"
+          className="w-full min-w-[760px] border-collapse"
+        >
+          <thead>
+            <tr className="bg-surface text-left">
+              <th className={th}>Zajęcia</th>
+              <th className={th}>Grupa</th>
+              <th className={th}>Prowadzący</th>
+              <th className={th}>E-mail</th>
+              <th className={th}>Konsultacje</th>
+              <th className={th}>Pokój</th>
             </tr>
-          ))}
-          {rows.length === 0 && (
-            <tr>
-              <td colSpan={4} className="p-6 text-center text-muted">
-                Zapytanie nie zwróciło wierszy.
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((l, i) => (
+              <tr
+                // biome-ignore lint/suspicious/noArrayIndexKey: rows have no stable id
+                key={i}
+                className={`hover:bg-list-hover ${i % 2 ? 'bg-zebra' : ''}`}
+              >
+                <td className={td}>{l.className}</td>
+                <td className={`${td} text-muted`}>
+                  {l.groupName ?? 'wszystkie'}
+                </td>
+                <td className={td}>
+                  <Link href={lecturerHref(l.id)} className="link">
+                    {[l.title, l.name].filter(Boolean).join(' ')}
+                  </Link>
+                </td>
+                <td className={`${td} font-mono text-xs`}>{l.email || '—'}</td>
+                <td className={`${td} whitespace-pre-line`}>
+                  {l.officeHours || empty}
+                </td>
+                <td className={td}>{l.room || empty}</td>
+              </tr>
+            ))}
+            {rows.length === 0 && (
+              <tr>
+                <td colSpan={6} className="p-6 text-center text-muted">
+                  Zapytanie nie zwróciło wierszy.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

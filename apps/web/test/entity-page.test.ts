@@ -23,6 +23,11 @@ describe('parseEntityTab', () => {
     expect(parseEntityTab({ tab: 'nope' }, tabs)).toBe('classes');
     expect(parseEntityTab({ tab: ['files', 'x'] }, tabs)).toBe('files');
   });
+  it('parses the lecturer Plan tab', () => {
+    const lecturerTabs = ['classes', 'files', 'plan'] as const;
+    expect(parseEntityTab({ tab: 'plan' }, lecturerTabs)).toBe('plan');
+    expect(parseEntityTab({ tab: 'plan' }, tabs)).toBe('classes');
+  });
 });
 
 describe('parseEntityGrid / entityGridQuery', () => {

@@ -2,7 +2,13 @@ import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
 import { DEFAULT_PER_PAGE, PER_PAGE_OPTIONS } from './result-grid';
 
 /** Subject screen tabs: 'explorer' = Pliki (no `tab` param). */
-export type ExplorerTab = 'explorer' | 'lecturers' | 'sql' | 'map' | 'schema';
+export type ExplorerTab =
+  | 'explorer'
+  | 'lecturers'
+  | 'plan'
+  | 'sql'
+  | 'map'
+  | 'schema';
 
 export type ExplorerParams = {
   classKind: ClassKind | 'none' | null;
@@ -17,6 +23,7 @@ type SearchParams = Record<string, string | string[] | undefined>;
 const TABS: readonly ExplorerTab[] = [
   'explorer',
   'lecturers',
+  'plan',
   'sql',
   'map',
   'schema',

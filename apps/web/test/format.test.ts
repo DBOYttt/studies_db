@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, pluralPl } from '../lib/format';
+import { formatDate, pluralPl, safeExternalUrl } from '../lib/format';
 
 describe('pluralPl', () => {
   const f = (n: number) => pluralPl(n, 'plik', 'pliki', 'plików');
@@ -25,5 +25,35 @@ describe('formatDate', () => {
     const iso = '2026-03-01T10:00:00.000Z';
     expect(formatDate(iso)).toBe(formatDate(new Date(iso)));
     expect(formatDate(iso)).toMatch(/2026/);
+  });
+});
+
+describe('safeExternalUrl', () => {
+  it('keeps http(s) URLs', () => {
+    expect(safeExternalUrl('https://upel.agh.edu.pl/x')).toBe(
+      'https://upel.agh.edu.pl/x',
+    );
+    expect(safeExternalUrl('  http://example.edu/a?b=1  ')).toBe(
+      'http://example.edu/a?b=1',
+    );
+  });
+  it('rejects other schemes, relative and malformed URLs', () => {
+    for (const bad of [
+      'javascript:alert(1)',
+      'JavaScript:alert(1)',
+      ' javascript:alert(1)',
+      'data:text/html,x',
+      'mailto:a@example.edu',
+      'ftp://example.edu/',
+      '//example.edu/x',
+      '/relative',
+      'upel.agh.edu.pl',
+      'https://',
+      '',
+    ]) {
+      expect(safeExternalUrl(bad), bad).toBeNull();
+    }
+    expect(safeExternalUrl(null)).toBeNull();
+    expect(safeExternalUrl(undefined)).toBeNull();
   });
 });
