@@ -41,6 +41,12 @@ export function safeNext(next: string | null | undefined): string | null {
   if (!next?.startsWith('/')) return null;
   if (next.startsWith('//') || next.startsWith('/\\')) return null;
   if (hasControl(next)) return null;
+  try {
+    const d = decodeURIComponent(next);
+    if (d.startsWith('//') || d.startsWith('/\\')) return null;
+  } catch {
+    return null;
+  }
   return next;
 }
 
@@ -67,7 +73,16 @@ function pick(params: URLSearchParams, keys: string[]): string {
   return s ? `?${s}` : '';
 }
 
+/** Does this (already safe) path belong to the simple view (`/s` or `/s/...`)? */
+function isSimplePath(next: string): boolean {
+  const path = next.split(/[?#]/, 1)[0];
+  return path === '/s' || path.startsWith('/s/');
+}
+
 export function modeTarget(to: UiMode, next: string | null): string {
+  // Already in the target mode: stay exactly where the user is.
+  const safe = safeNext(next);
+  if (safe !== null && isSimplePath(safe) === (to === 'simple')) return safe;
   const { path, params } = parse(next);
   const seg = path.split('/').filter(Boolean);
   if (to === 'advanced') {

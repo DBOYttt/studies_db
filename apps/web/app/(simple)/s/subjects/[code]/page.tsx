@@ -80,6 +80,7 @@ export default async function SimpleSubject({
   const href = (change: Parameters<typeof chipHref>[2]) =>
     chipHref(subject.code, cur, change);
   const baseHref = href({});
+  const filtered = cur.kind !== null || cur.group !== null || cur.tag !== null;
   const cls = classes.find((c) => c.kind === cur.kind);
   const group = cls?.groups.find((g) => g.number === cur.group);
 
@@ -190,11 +191,19 @@ export default async function SimpleSubject({
         withSubject={false}
         selectedId={preview?.file.id ?? null}
         baseHref={baseHref}
-        emptyText="Brak plików dla wybranych filtrów."
-        emptyAction={{
-          label: 'Wyczyść filtry',
-          href: `/s/subjects/${encodeURIComponent(subject.code)}`,
-        }}
+        emptyText={
+          filtered
+            ? 'Brak plików dla wybranych filtrów.'
+            : 'Brak plików w tym przedmiocie.'
+        }
+        emptyAction={
+          filtered
+            ? {
+                label: 'Wyczyść filtry',
+                href: `/s/subjects/${encodeURIComponent(subject.code)}`,
+              }
+            : undefined
+        }
       />
       {list.total > list.rows.length && (
         <p className="m-0 text-[13px] text-muted">

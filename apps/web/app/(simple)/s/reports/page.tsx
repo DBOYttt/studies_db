@@ -6,7 +6,7 @@ import { roErrorMessage } from '@/lib/db-errors';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
 import { formatDate, pluralPl } from '@/lib/format';
 import { requireUser } from '@/lib/session';
-import { parseReportIndex, REPORT_LABELS } from '@/lib/simple';
+import { MAX_ROWS, parseReportIndex, REPORT_LABELS } from '@/lib/simple';
 import { navSubjects } from '@/lib/simple-page';
 import { listSubjectCards } from '@/lib/simple-queries';
 import { runReadonlyQuery } from '@/lib/sql-console';
@@ -14,8 +14,6 @@ import { runReadonlyQuery } from '@/lib/sql-console';
 export const dynamic = 'force-dynamic';
 
 type SP = Record<string, string | string[] | undefined>;
-
-const MAX_ROWS = 1000;
 
 /** Counts and ids (the DB driver sends COUNT() as a string, so go by name). */
 const NUMERIC_COLUMNS = new Set(['materialy', 'liczba_plikow', 'id']);
@@ -82,14 +80,16 @@ export default async function SimpleReports({
             <TerminalWindow size={15} aria-hidden />
             Zobacz zapytanie SQL
           </a>
-          <a
-            href={`/s/reports/csv?r=${r}`}
-            download
-            className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-fill px-3.5 font-semibold text-on-accent transition-colors duration-100 hover:bg-accent-fill-hover active:translate-y-px"
-          >
-            <DownloadSimple size={15} aria-hidden />
-            Pobierz CSV
-          </a>
+          {result.ok && (
+            <a
+              href={`/s/reports/csv?r=${r}`}
+              download
+              className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-fill px-3.5 font-semibold text-on-accent transition-colors duration-100 hover:bg-accent-fill-hover active:translate-y-px"
+            >
+              <DownloadSimple size={15} aria-hidden />
+              Pobierz CSV
+            </a>
+          )}
         </div>
         {result.ok ? (
           <ReportTable columns={result.columns} rows={result.rows} />

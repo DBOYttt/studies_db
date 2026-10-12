@@ -5,13 +5,11 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
-import { MyGroupsForm } from '@/components/plan/MyGroupsForm';
+import { GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { SimpleShell } from '@/components/simple/SimpleShell';
-import { getDb, getRoPool } from '@/lib/db';
-import { roErrorMessage } from '@/lib/db-errors';
+import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
-import { listMyGroupOptions } from '@/lib/plan-queries';
 import { formatSyncTime, syncFailed } from '@/lib/plan-view';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
@@ -27,9 +25,6 @@ const SUB_TABS = [
   ['week', 'Tydzień', CalendarBlank, '/s/plan'],
   ['groups', 'Moje grupy', UsersThree, '/s/plan?tab=groups'],
 ] as const;
-
-const errBox =
-  'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
 
 /** Plan zajęć in the simple view: Tydzień and Moje grupy. */
 export default async function SimplePlan({
@@ -102,7 +97,7 @@ export default async function SimplePlan({
       {tab === 'week' ? (
         <PlanWeekTab week={sp.week} path="/s/plan" myGroupsFilter simple />
       ) : (
-        <GroupsTab />
+        <GroupsTab weekHref="/s/plan" />
       )}
       {status && (
         <p className="m-0 text-xs text-muted">
@@ -113,17 +108,4 @@ export default async function SimplePlan({
       )}
     </SimpleShell>
   );
-}
-
-async function GroupsTab() {
-  try {
-    const options = await listMyGroupOptions(getRoPool());
-    return <MyGroupsForm options={options} weekHref="/s/plan" />;
-  } catch (err) {
-    return (
-      <div role="alert" className={errBox}>
-        Nie udało się wczytać zajęć: {roErrorMessage(err)}
-      </div>
-    );
-  }
 }

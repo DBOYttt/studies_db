@@ -26,11 +26,12 @@ export default async function SimpleRecent({
   const sp = await searchParams;
   const db = getDb();
   const page = parsePageParam(sp, MAX_PAGES);
-  const [cards, list] = await Promise.all([
-    listSubjectCards(db),
+  const cardsP = listSubjectCards(db);
+  const [cards, list, preview] = await Promise.all([
+    cardsP,
     listSimpleFiles(db, { limit: page * PER_PAGE }),
+    loadSimplePreview(db, sp, cardsP),
   ]);
-  const preview = await loadSimplePreview(db, sp, cards);
   const baseHref = page > 1 ? `/s/recent?page=${page}` : '/s/recent';
   const shown = list.rows.length;
   const more = shown < list.total && page < MAX_PAGES;

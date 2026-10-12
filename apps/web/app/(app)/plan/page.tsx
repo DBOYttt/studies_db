@@ -7,7 +7,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
-import { MyGroupsForm } from '@/components/plan/MyGroupsForm';
+import { errBox, GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
@@ -21,7 +21,7 @@ import {
   parseEntityGrid,
   parseEntityTab,
 } from '@/lib/entity-page';
-import { listMyGroupOptions, planListPage } from '@/lib/plan-queries';
+import { planListPage } from '@/lib/plan-queries';
 import { formatSyncTime, syncFailed, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
@@ -38,9 +38,6 @@ const SUB_TABS: [PlanTab, string, Icon, string][] = [
   ['list', 'Lista', ListBullets, '/plan?tab=list'],
   ['groups', 'Moje grupy', UsersThree, '/plan?tab=groups'],
 ];
-
-const errBox =
-  'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
 
 /** Plan zajęć (timetable): Tydzień, Lista, Moje grupy. */
 export default async function PlanPage({
@@ -92,7 +89,7 @@ export default async function PlanPage({
           <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
         )}
         {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
-        {tab === 'groups' && <GroupsTab />}
+        {tab === 'groups' && <GroupsTab weekHref="/plan" />}
         {status && (
           <p className="m-0 text-xs text-muted">
             {status.lastOkAt
@@ -180,17 +177,4 @@ async function ListTab({ grid }: { grid: EntityGridParams }) {
       name="plan-zajec"
     />
   );
-}
-
-async function GroupsTab() {
-  try {
-    const options = await listMyGroupOptions(getRoPool());
-    return <MyGroupsForm options={options} weekHref="/plan" />;
-  } catch (err) {
-    return (
-      <div role="alert" className={errBox}>
-        Nie udało się wczytać zajęć: {roErrorMessage(err)}
-      </div>
-    );
-  }
 }

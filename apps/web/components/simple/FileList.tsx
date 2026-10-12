@@ -1,29 +1,19 @@
 import {
   DownloadSimple,
   Eye,
-  File,
-  FileImage,
-  FilePdf,
-  FileText,
   FolderDashed,
 } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 import { formatDate, formatSize } from '@/lib/format';
 import { fileIcon, highlightParts, statusBadge, withParam } from '@/lib/simple';
 import type { SimpleFile } from '@/lib/simple-queries';
+import { FileTypeIcon, TONE } from './FileTypeIcon';
 
 /** A SimpleFile as it crosses into rendering: dates may be ISO strings. */
 export type FileRowData = Omit<SimpleFile, 'createdAt'> & {
   createdAt: Date | string;
 };
 
-const ICONS = { FilePdf, FileImage, FileText, File } as const;
-const TONE = {
-  red: 'text-err-fg',
-  green: 'text-ok-fg',
-  accent: 'text-accent-ink',
-  muted: 'text-faint',
-} as const;
 const BADGE = {
   warn: 'border-warn-fg text-warn-fg',
   err: 'border-err-fg text-err-fg',
@@ -53,8 +43,7 @@ export function FileRow({
   baseHref: string;
   q?: string;
 }) {
-  const { icon, tone } = fileIcon(f.previewKind);
-  const Icon = ICONS[icon];
+  const { tone } = fileIcon(f);
   const badge = statusBadge(f.status);
   const href = withParam(baseHref, 'file', f.id);
   const meta = [
@@ -75,7 +64,7 @@ export function FileRow({
       <span
         className={`grid size-[38px] shrink-0 place-items-center self-start rounded-md bg-surface sm:self-center ${TONE[tone]}`}
       >
-        <Icon size={21} aria-hidden />
+        <FileTypeIcon file={f} size={21} />
       </span>
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
         <div className="flex flex-wrap items-center gap-x-2 gap-y-1">

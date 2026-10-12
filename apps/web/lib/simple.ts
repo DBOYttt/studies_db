@@ -58,20 +58,91 @@ export const REPORT_LABELS: Record<string, string> = {
   created_at: 'Dodano',
 };
 
-export function fileIcon(kind: 'pdf' | 'image' | 'text' | 'none'): {
-  icon: 'FilePdf' | 'FileImage' | 'FileText' | 'File';
-  tone: 'red' | 'green' | 'accent' | 'muted';
-} {
-  switch (kind) {
-    case 'pdf':
-      return { icon: 'FilePdf', tone: 'red' };
-    case 'image':
-      return { icon: 'FileImage', tone: 'green' };
-    case 'text':
-      return { icon: 'FileText', tone: 'accent' };
-    default:
-      return { icon: 'File', tone: 'muted' };
-  }
+export type FileIconName =
+  | 'FilePdf'
+  | 'FileImage'
+  | 'FileDoc'
+  | 'FilePpt'
+  | 'FileXls'
+  | 'FileText'
+  | 'FileCode'
+  | 'File';
+export type FileIconTone = 'red' | 'green' | 'accent' | 'warn' | 'muted';
+
+const EXT = {
+  doc: ['doc', 'docx', 'odt', 'rtf'],
+  ppt: ['ppt', 'pptx', 'odp'],
+  xls: ['xls', 'xlsx', 'ods', 'csv'],
+  text: ['txt', 'md', 'log'],
+  code: [
+    'py',
+    'c',
+    'h',
+    'cpp',
+    'hpp',
+    'cc',
+    'java',
+    'js',
+    'ts',
+    'jsx',
+    'tsx',
+    'cs',
+    'go',
+    'rs',
+    'php',
+    'rb',
+    'sql',
+    'sh',
+    'json',
+    'xml',
+    'html',
+    'css',
+    'yml',
+    'yaml',
+    'tex',
+    'asm',
+    'm',
+    'r',
+  ],
+} as const;
+
+/**
+ * Icon by what the file really is: MIME type and filename extension (the
+ * preview kind only says how it can be previewed, e.g. a .docx rendered to PDF).
+ */
+export function fileIcon(f: {
+  mimeType?: string | null;
+  filename: string;
+  previewKind?: 'pdf' | 'image' | 'text' | 'none';
+}): { icon: FileIconName; tone: FileIconTone } {
+  const mime = (f.mimeType ?? '').toLowerCase();
+  const dot = f.filename.lastIndexOf('.');
+  const ext = dot >= 0 ? f.filename.slice(dot + 1).toLowerCase() : '';
+  const is = (list: readonly string[]) => list.includes(ext);
+  if (mime === 'application/pdf' || ext === 'pdf')
+    return { icon: 'FilePdf', tone: 'red' };
+  if (mime.startsWith('image/')) return { icon: 'FileImage', tone: 'green' };
+  if (
+    is(EXT.doc) ||
+    /msword|wordprocessingml|opendocument\.text|rtf/.test(mime)
+  )
+    return { icon: 'FileDoc', tone: 'accent' };
+  if (
+    is(EXT.ppt) ||
+    /powerpoint|presentationml|opendocument\.presentation/.test(mime)
+  )
+    return { icon: 'FilePpt', tone: 'warn' };
+  if (
+    is(EXT.xls) ||
+    /ms-excel|spreadsheetml|opendocument\.spreadsheet|text\/csv/.test(mime)
+  )
+    return { icon: 'FileXls', tone: 'green' };
+  if (is(EXT.code)) return { icon: 'FileCode', tone: 'accent' };
+  if (is(EXT.text) || mime.startsWith('text/'))
+    return { icon: 'FileText', tone: 'accent' };
+  if (ext === '' && f.previewKind === 'image')
+    return { icon: 'FileImage', tone: 'green' };
+  return { icon: 'File', tone: 'muted' };
 }
 
 export function statusBadge(
@@ -229,6 +300,9 @@ export function groupLecturers(rows: LecturerRow[]): LecturerCard[] {
       })),
   }));
 }
+
+/** Max rows of a ready-made report (page and CSV). */
+export const MAX_ROWS = 1000;
 
 /** CSV file names of the three ready-made reports (same order as EXAMPLE_QUERIES). */
 export const REPORT_SLUGS = [

@@ -108,7 +108,7 @@ test('subject filters, preview panel and download', async ({ page }) => {
 test('empty subject shows the empty state', async ({ page }) => {
   await page.goto('/s/subjects/PLAN');
   await expect(
-    page.getByText('Brak plików dla wybranych filtrów.'),
+    page.getByText('Brak plików w tym przedmiocie.'),
   ).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Pliki (0)' })).toBeVisible();
 });

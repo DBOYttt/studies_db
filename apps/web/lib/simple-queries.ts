@@ -25,6 +25,7 @@ import {
 export interface SimpleFile {
   id: number;
   filename: string;
+  mimeType: string;
   topicId: number;
   topicTitle: string;
   subjectCode: string;
@@ -53,29 +54,31 @@ const toDate = (v: unknown): Date =>
   v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);
 
 export async function listSubjectCards(db: Db): Promise<SubjectCard[]> {
-  const subs = await db
-    .select({
-      id: subjects.id,
-      code: subjects.code,
-      name: subjects.name,
-      semester: subjects.semester,
-      ects: subjects.ects,
-    })
-    .from(subjects)
-    .orderBy(asc(subjects.semester), asc(subjects.name), asc(subjects.id));
-  const kindRows = await db
-    .selectDistinct({ subjectId: classes.subjectId, kind: classes.kind })
-    .from(classes);
-  const stats = await db
-    .select({
-      subjectId: topics.subjectId,
-      n: sql<number>`COUNT(${materials.id})`.mapWith(Number),
-      last: sql<unknown>`MAX(${materials.createdAt})`,
-    })
-    .from(materials)
-    .innerJoin(topics, eq(topics.id, materials.topicId))
-    .where(and(isNull(materials.deletedAt), isNull(topics.deletedAt)))
-    .groupBy(topics.subjectId);
+  const [subs, kindRows, stats] = await Promise.all([
+    db
+      .select({
+        id: subjects.id,
+        code: subjects.code,
+        name: subjects.name,
+        semester: subjects.semester,
+        ects: subjects.ects,
+      })
+      .from(subjects)
+      .orderBy(asc(subjects.semester), asc(subjects.name), asc(subjects.id)),
+    db
+      .selectDistinct({ subjectId: classes.subjectId, kind: classes.kind })
+      .from(classes),
+    db
+      .select({
+        subjectId: topics.subjectId,
+        n: sql<number>`COUNT(${materials.id})`.mapWith(Number),
+        last: sql<unknown>`MAX(${materials.createdAt})`,
+      })
+      .from(materials)
+      .innerJoin(topics, eq(topics.id, materials.topicId))
+      .where(and(isNull(materials.deletedAt), isNull(topics.deletedAt)))
+      .groupBy(topics.subjectId),
+  ]);
   const kindsBy = new Map<number, Set<ClassKind>>();
   for (const r of kindRows) {
     const s = kindsBy.get(r.subjectId) ?? new Set<ClassKind>();
@@ -100,6 +103,7 @@ function simpleFileSelect(db: Db) {
     .select({
       id: materials.id,
       filename: materials.originalFilename,
+      mimeType: materials.mimeType,
       topicId: topics.id,
       topicTitle: topics.title,
       subjectCode: subjects.code,

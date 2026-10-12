@@ -3,12 +3,15 @@ import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
 import { requireUser } from '@/lib/session';
-import { parseReportIndex, REPORT_LABELS, REPORT_SLUGS } from '@/lib/simple';
+import {
+  MAX_ROWS,
+  parseReportIndex,
+  REPORT_LABELS,
+  REPORT_SLUGS,
+} from '@/lib/simple';
 import { runReadonlyQuery } from '@/lib/sql-console';
 
 export const dynamic = 'force-dynamic';
-
-const MAX_ROWS = 1000;
 
 /** CSV of one ready-made report (`?r=0..2`), headed by the Polish labels. */
 export async function GET(req: Request) {

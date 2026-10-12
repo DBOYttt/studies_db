@@ -40,13 +40,13 @@ export function SubjectCards({ cards }: { cards: SubjectCard[] }) {
             <div className="mt-auto flex justify-between gap-2 border-t border-line pt-2.5 text-[13px] text-muted">
               <span className="flex items-center gap-1.5">
                 <Files size={15} aria-hidden />
-                {c.fileCount} {pluralPl(c.fileCount, 'plik', 'pliki', 'plików')}
+                {c.fileCount === 0
+                  ? 'brak plików'
+                  : `${c.fileCount} ${pluralPl(c.fileCount, 'plik', 'pliki', 'plików')}`}
               </span>
-              <span>
-                {c.lastUpload
-                  ? `ostatnio ${formatDate(c.lastUpload)}`
-                  : 'brak plików'}
-              </span>
+              {c.fileCount > 0 && c.lastUpload && (
+                <span>ostatnio {formatDate(c.lastUpload)}</span>
+              )}
             </div>
           </Link>
         </li>

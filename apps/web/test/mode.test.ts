@@ -55,7 +55,15 @@ describe('modeTarget simple -> advanced', () => {
     expect(t('/s/search?q=abc%20d')).toBe('/search?q=abc+d');
     expect(t('/s/search')).toBe('/search');
     expect(t('/s/other')).toBe('/');
-    expect(t('/zzz')).toBe('/');
+  });
+  it('keeps the place when already in advanced mode', () => {
+    expect(t('/zzz')).toBe('/zzz');
+    expect(t('/sql?q=SELECT%201')).toBe('/sql?q=SELECT%201');
+    expect(t('/search?q=abc')).toBe('/search?q=abc');
+  });
+  it('never passes unsafe paths through', () => {
+    expect(t('/%2F%2Fevil.com')).toBe('/');
+    expect(t('//evil.com')).toBe('/');
   });
   it('maps reports to SQL console', () => {
     expect(t('/s/reports?r=1')).toBe(sqlHref('/sql', EXAMPLE_QUERIES[1].sql));
@@ -86,6 +94,19 @@ describe('modeTarget advanced -> simple', () => {
     expect(t('/search?q=abc')).toBe('/s/search?q=abc');
     expect(t('/sql?q=SELECT')).toBe('/s');
     expect(t('/tables/v_tags')).toBe('/s');
+  });
+  it('keeps the place when already in simple mode', () => {
+    expect(t('/s')).toBe('/s');
+    expect(t('/s/subjects/PJP?tag=5&file=9')).toBe(
+      '/s/subjects/PJP?tag=5&file=9',
+    );
+    expect(t('/s/reports?r=2')).toBe('/s/reports?r=2');
+    expect(t('/s?file=3')).toBe('/s?file=3');
+  });
+  it('never passes unsafe paths through', () => {
+    expect(t('/%5Cevil.com')).toBe('/s');
+    expect(t('/s/%2F%2Fx')).toBe('/s/%2F%2Fx');
+    expect(t('//evil.com')).toBe('/s');
   });
   it('encodes unknown code chars', () => {
     expect(t('/subjects/A%20B%2FC')).toBe('/s/subjects/A%20B%2FC');

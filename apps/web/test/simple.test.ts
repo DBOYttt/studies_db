@@ -51,10 +51,43 @@ describe('static maps', () => {
     expect(REPORT_LABELS.created_at).toBe('Dodano');
   });
   it('fileIcon and statusBadge', () => {
-    expect(fileIcon('pdf')).toEqual({ icon: 'FilePdf', tone: 'red' });
-    expect(fileIcon('image').icon).toBe('FileImage');
-    expect(fileIcon('text').tone).toBe('accent');
-    expect(fileIcon('none')).toEqual({ icon: 'File', tone: 'muted' });
+    expect(
+      fileIcon({ mimeType: 'application/pdf', filename: 'a.pdf' }),
+    ).toEqual({ icon: 'FilePdf', tone: 'red' });
+    expect(fileIcon({ mimeType: 'image/png', filename: 'a.png' }).icon).toBe(
+      'FileImage',
+    );
+    expect(fileIcon({ mimeType: 'text/plain', filename: 'a.txt' })).toEqual({
+      icon: 'FileText',
+      tone: 'accent',
+    });
+    expect(fileIcon({ mimeType: 'text/x-python', filename: 'a.py' }).icon).toBe(
+      'FileCode',
+    );
+    expect(
+      fileIcon({
+        mimeType: 'application/octet-stream',
+        filename: 'x.zip',
+        previewKind: 'none',
+      }),
+    ).toEqual({ icon: 'File', tone: 'muted' });
+    // a Word file rendered to PDF for preview is still a Word file
+    expect(
+      fileIcon({
+        mimeType:
+          'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        filename: 'notatki.docx',
+        previewKind: 'pdf',
+      }),
+    ).toEqual({ icon: 'FileDoc', tone: 'accent' });
+    expect(
+      fileIcon({ mimeType: 'application/octet-stream', filename: 'S.PPTX' }),
+    ).toEqual({ icon: 'FilePpt', tone: 'warn' });
+    expect(fileIcon({ filename: 'dane.xlsx', previewKind: 'pdf' })).toEqual({
+      icon: 'FileXls',
+      tone: 'green',
+    });
+    expect(fileIcon({ filename: 'a.odt' }).icon).toBe('FileDoc');
     expect(statusBadge('ready')).toBeNull();
     expect(statusBadge('pending')).toEqual({
       label: 'Przetwarzanie…',

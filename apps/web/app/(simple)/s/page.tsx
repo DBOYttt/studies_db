@@ -19,11 +19,12 @@ export default async function SimpleStart({
   const user = await requireUser();
   const sp = await searchParams;
   const db = getDb();
-  const [cards, recent] = await Promise.all([
-    listSubjectCards(db),
+  const cardsP = listSubjectCards(db);
+  const [cards, recent, preview] = await Promise.all([
+    cardsP,
     listSimpleFiles(db, { limit: 5 }),
+    loadSimplePreview(db, sp, cardsP),
   ]);
-  const preview = await loadSimplePreview(db, sp, cards);
   return (
     <SimpleShell
       subjects={navSubjects(cards)}

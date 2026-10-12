@@ -12,20 +12,21 @@ export const navSubjects = (cards: SubjectCard[]) =>
 /**
  * The file opened by `?file=<id>` with its subject's name, or null when the
  * param is missing/junk or the material is unknown or deleted (no panel).
+ * `cards` may still be loading, so the lookup can run alongside it.
  */
 export async function loadSimplePreview(
   db: Db,
   sp: Sp,
-  cards: SubjectCard[],
+  cards: SubjectCard[] | Promise<SubjectCard[]>,
 ): Promise<{ file: PreviewFile; subjectName: string } | null> {
   const id = parseFileParam(sp);
   if (id === null) return null;
-  const f = await getMaterialFile(db, id);
+  const [f, subjects] = await Promise.all([getMaterialFile(db, id), cards]);
   if (!f) return null;
   return {
     file: { ...f, createdAt: f.createdAt.toISOString() },
     subjectName:
-      cards.find((c) => c.code === f.subjectCode)?.name ?? f.subjectCode,
+      subjects.find((c) => c.code === f.subjectCode)?.name ?? f.subjectCode,
   };
 }
 

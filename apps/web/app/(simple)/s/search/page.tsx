@@ -10,6 +10,9 @@ import { listSubjectCards, searchSimpleFiles } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
+/** Cap of the search (searchSimpleFiles' default limit). */
+const SEARCH_LIMIT = 100;
+
 type SP = Record<string, string | string[] | undefined>;
 
 export default async function SimpleSearch({
@@ -21,11 +24,12 @@ export default async function SimpleSearch({
   const sp = await searchParams;
   const db = getDb();
   const q = parseSearchQuery(sp);
-  const [cards, hits] = await Promise.all([
-    listSubjectCards(db),
-    q ? searchSimpleFiles(db, q) : Promise.resolve([]),
+  const cardsP = listSubjectCards(db);
+  const [cards, hits, preview] = await Promise.all([
+    cardsP,
+    q ? searchSimpleFiles(db, q, SEARCH_LIMIT) : Promise.resolve([]),
+    loadSimplePreview(db, sp, cardsP),
   ]);
-  const preview = await loadSimplePreview(db, sp, cards);
   const baseHref = q ? `/s/search?q=${encodeURIComponent(q)}` : '/s/search';
   return (
     <SimpleShell
@@ -49,7 +53,9 @@ export default async function SimpleSearch({
         </h1>
         <p className="mt-1 mb-0 text-pretty text-muted">
           {q
-            ? `${hits.length} ${pluralPl(hits.length, 'plik', 'pliki', 'plików')}`
+            ? hits.length >= SEARCH_LIMIT
+              ? `${SEARCH_LIMIT}+ plików — pokazuję pierwsze ${SEARCH_LIMIT}`
+              : `${hits.length} ${pluralPl(hits.length, 'plik', 'pliki', 'plików')}`
             : 'Wpisz słowo w polu wyszukiwania i naciśnij Enter.'}
         </p>
       </div>

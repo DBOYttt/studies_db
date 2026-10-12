@@ -18,17 +18,20 @@ function Segments({ mode }: { mode: UiMode }) {
     title?: string,
   ) => {
     const active = mode === to;
+    const cls = `${base} ${
+      active
+        ? 'bg-accent-fill text-on-accent'
+        : 'text-accent-ink hover:bg-list-hover'
+    }`;
+    if (active)
+      return (
+        <span aria-current="true" title={title} className={cls}>
+          {icon}
+          <span className="max-md:sr-only">{label}</span>
+        </span>
+      );
     return (
-      <a
-        href={`/mode?to=${to}&next=${next}`}
-        aria-current={active ? 'true' : undefined}
-        title={title}
-        className={`${base} ${
-          active
-            ? 'bg-accent-fill text-on-accent'
-            : 'text-accent-ink hover:bg-list-hover'
-        }`}
-      >
+      <a href={`/mode?to=${to}&next=${next}`} title={title} className={cls}>
         {icon}
         <span className="max-md:sr-only">{label}</span>
       </a>
