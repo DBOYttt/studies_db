@@ -12,7 +12,12 @@ export const E2E_SESSION_DIR = join(tmpdir(), 'studies-db-e2e-sessions');
  * `beforeAll`) after a failed test, so the cookies are persisted to a file on
  * the first login and later workers read them instead of re-spending the token.
  */
-export function loginOnce(name: string, token: string | undefined) {
+export function loginOnce(
+  name: string,
+  token: string | undefined,
+  opts: { mode?: 'simple' | 'advanced' } = {},
+) {
+  const mode = opts.mode ?? 'advanced';
   const file = join(E2E_SESSION_DIR, `session-${name}.json`);
   let cookies: Cookie[] = [];
   test.beforeAll(async ({ browser }) => {
@@ -25,14 +30,16 @@ export function loginOnce(name: string, token: string | undefined) {
     await page.goto(`http://localhost:3100/auth/callback?token=${token}`);
     await page.getByRole('button', { name: 'Zaloguj się' }).click();
     await expect(page).toHaveURL(/\/(s)?$/);
-    await context.addCookies([
-      {
-        name: 'studiesdb.mode',
-        value: 'advanced',
-        domain: 'localhost',
-        path: '/',
-      },
-    ]);
+    if (mode === 'advanced') {
+      await context.addCookies([
+        {
+          name: 'studiesdb.mode',
+          value: 'advanced',
+          domain: 'localhost',
+          path: '/',
+        },
+      ]);
+    }
     cookies = await context.cookies();
     await context.close();
     writeFileSync(file, JSON.stringify(cookies));
