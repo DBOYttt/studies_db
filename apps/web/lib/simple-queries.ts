@@ -131,7 +131,7 @@ const toSimpleFile = (r: SimpleRow): SimpleFile => ({
 
 const live = () => [isNull(materials.deletedAt), isNull(topics.deletedAt)];
 
-/** `group` is the group NUMBER (as in the advanced view); ignored without `kind`. */
+/** `group` is the group NUMBER (as in the advanced view); applies only together with `subjectId` and `kind`. */
 export async function listSimpleFiles(
   db: Db,
   f: {
@@ -146,8 +146,8 @@ export async function listSimpleFiles(
   const conds: SQL[] = live() as SQL[];
   if (f.subjectId !== undefined) conds.push(eq(topics.subjectId, f.subjectId));
   if (f.kind) conds.push(eq(classes.kind, f.kind));
-  // group is a class_groups.number and only means something within a kind
-  if (f.kind && f.group !== undefined) {
+  // a group number only means something within one subject's kind
+  if (f.subjectId !== undefined && f.kind && f.group !== undefined) {
     conds.push(eq(classGroups.number, f.group));
   }
   if (f.tagId !== undefined) {

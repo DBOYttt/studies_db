@@ -94,6 +94,7 @@ beforeAll(async () => {
   id.fizCw = await mkClass(id.fiz, 'cwiczenia');
   id.fizWy = await mkClass(id.fiz, 'wyklad');
   id.algWy = await mkClass(id.alg, 'wyklad');
+  id.algCw = await mkClass(id.alg, 'cwiczenia');
   // makes group ids differ from group numbers
   await db
     .insert(classGroups)
@@ -105,6 +106,10 @@ beforeAll(async () => {
   [{ id: id.g2 }] = await db
     .insert(classGroups)
     .values({ classId: id.fizCw, number: 2, name: 'Gr. 2' })
+    .$returningId();
+  [{ id: id.ag1 }] = await db
+    .insert(classGroups)
+    .values({ classId: id.algCw, number: 1, name: 'Alg cw 1' })
     .$returningId();
   const uid = await upsertUser(db, {
     discordUserId: 'u1',
@@ -134,6 +139,7 @@ beforeAll(async () => {
   id.t2 = await mkTopic(id.fiz, 'Dynamika', 2, id.fizCw, id.g1);
   id.t3 = await mkTopic(id.alg, 'Macierze', 3, id.algWy);
   id.t4 = await mkTopic(id.fiz, 'Bez zajęć', 4);
+  id.t5 = await mkTopic(id.alg, 'Grupy', 5, id.algCw, id.ag1);
   [{ id: id.tag }] = await db
     .insert(tags)
     .values({ subjectId: id.fiz, name: 'Kolokwium', discordTagId: 'tg1' })
@@ -142,6 +148,7 @@ beforeAll(async () => {
   await mkMat('a', id.t1, uid, 'wykres.pdf', 1);
   await mkMat('b', id.t2, uid, '100%_done.pdf', 3);
   await mkMat('c', id.t3, uid, 'macierze.pdf', 2);
+  await mkMat('alggr', id.t5, uid, 'inne.pdf', 0);
   await mkMat('del', id.t1, uid, 'usuniety.pdf', 4);
   await mkMat(
     'ft',
@@ -188,7 +195,7 @@ describe('listSubjectCards', () => {
     expect(fiz?.fileCount).toBe(4); // wykres, 100%_done, notatki, zebra
     expect(fiz?.lastUpload).toEqual(T(6));
     const alg = cards.find((c) => c.code === 'ALG');
-    expect(alg?.fileCount).toBe(1);
+    expect(alg?.fileCount).toBe(2);
     expect(alg?.lastUpload).toEqual(T(2));
   });
   it('handles a subject with no files, classes or tags', async () => {
@@ -200,13 +207,14 @@ describe('listSubjectCards', () => {
 describe('listSimpleFiles', () => {
   it('lists live files newest first with total', async () => {
     const r = await listSimpleFiles(db, { limit: 50 });
-    expect(r.total).toBe(5);
+    expect(r.total).toBe(6);
     expect(r.rows.map((x) => x.filename)).toEqual([
       'zebra.pdf',
       'notatki.pdf',
       '100%_done.pdf',
       'macierze.pdf',
       'wykres.pdf',
+      'inne.pdf',
     ]);
     const b = r.rows.find((x) => x.filename === '100%_done.pdf');
     expect(b).toMatchObject({
@@ -221,7 +229,7 @@ describe('listSimpleFiles', () => {
   });
   it('paginates but keeps the total', async () => {
     const r = await listSimpleFiles(db, { limit: 2, offset: 2 });
-    expect(r.total).toBe(5);
+    expect(r.total).toBe(6);
     expect(r.rows.map((x) => x.filename)).toEqual([
       '100%_done.pdf',
       'macierze.pdf',
@@ -230,7 +238,10 @@ describe('listSimpleFiles', () => {
   it('filters by subject, kind, group and tag', async () => {
     const f = async (o: Parameters<typeof listSimpleFiles>[1]) =>
       (await listSimpleFiles(db, o)).rows.map((x) => x.filename);
-    expect(await f({ subjectId: id.alg, limit: 9 })).toEqual(['macierze.pdf']);
+    expect(await f({ subjectId: id.alg, limit: 9 })).toEqual([
+      'macierze.pdf',
+      'inne.pdf',
+    ]);
     expect(await f({ subjectId: id.fiz, kind: 'wyklad', limit: 9 })).toEqual([
       'wykres.pdf',
     ]);
@@ -244,7 +255,12 @@ describe('listSimpleFiles', () => {
     expect(await f({ ...cw, group: 2 })).toEqual([]);
     expect(await f({ ...cw, group: id.g1 })).toEqual([]);
     // a group number without a kind is ignored
-    expect(await f({ group: 1, limit: 9 })).toHaveLength(5);
+    expect(await f({ group: 1, limit: 9 })).toHaveLength(6);
+    expect(await f({ kind: 'cwiczenia', group: 1, limit: 9 })).toHaveLength(2);
+    // another subject's cwiczenia also has group number 1: scoped by subject
+    expect(
+      await f({ subjectId: id.alg, kind: 'cwiczenia', group: 1, limit: 9 }),
+    ).toEqual(['inne.pdf']);
     expect(await f({ tagId: id.tag, limit: 9 })).toEqual(['100%_done.pdf']);
     expect(await f({ subjectId: id.pus, limit: 9 })).toEqual([]);
     const empty = await listSimpleFiles(db, { subjectId: id.pus, limit: 9 });
@@ -267,7 +283,7 @@ describe('searchSimpleFiles', () => {
   });
   it('matches filename, topic and subject, ignoring deleted files', async () => {
     expect(await names('dynam')).toEqual(['100%_done.pdf']);
-    expect(await names('algebra')).toEqual(['macierze.pdf']);
+    expect(await names('algebra')).toEqual(['macierze.pdf', 'inne.pdf']);
     expect(await names('usuniety')).toEqual([]);
   });
   it('adds full-text content hits after LIKE hits, without duplicates', async () => {
