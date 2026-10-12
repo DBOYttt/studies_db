@@ -193,6 +193,22 @@ describe('task 6 commands', () => {
     );
   });
 
+  it('lecturer title/name edge cases', async () => {
+    const id = Number(
+      /id (\d+)/.exec(await addLecturer(db, { name: 'Jan', title: '-' }))?.[1],
+    );
+    expect((await db.select().from(lecturers))[0].title).toBeNull();
+    expect(await editLecturer(db, id, { name: '  -  ' })).toBe(
+      'Nazwa nie może być pusta.',
+    );
+    expect(await editLecturer(db, id, { name: '   ' })).toBe(
+      'Nazwa nie może być pusta.',
+    );
+    expect((await db.select().from(lecturers))[0].name).toBe('Jan');
+    await editLecturer(db, id, { name: '  Jan Nowak ' });
+    expect((await db.select().from(lecturers))[0].name).toBe('Jan Nowak');
+  });
+
   it('editClass updates, clears, rejects bad url, never creates', async () => {
     await addSubject(db, base);
     expect(await editClass(db, { subjectCode: 'alg', kind: 'wyklad' })).toBe(
@@ -235,6 +251,13 @@ describe('task 6 commands', () => {
       note: '-',
       platformUrl: '-',
     });
+    await editClass(db, {
+      subjectCode: 'alg',
+      kind: 'wyklad',
+      assessment: 'brak',
+    });
+    [c] = await db.select().from(classes);
+    expect(c.assessment).toBeNull();
     [c] = await db.select().from(classes);
     expect(c).toMatchObject({ assessmentNote: null, platformUrl: null });
   });
@@ -476,7 +499,7 @@ describe('commandDefinitions', () => {
     ]);
     expect(sub('class', 'edit')[0]?.autocomplete).toBe(true);
     expect(sub('class', 'edit')[1]?.choices).toHaveLength(7);
-    expect(sub('class', 'edit')[2]?.choices).toHaveLength(5);
+    expect(sub('class', 'edit')[2]?.choices).toHaveLength(6);
     const plan = commandDefinitions.find(
       (x) => x.name === 'plan',
     ) as unknown as {

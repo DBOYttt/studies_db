@@ -12,6 +12,7 @@ import {
   parseIsoWeek,
   parseMyGroups,
   SLOT_MIN,
+  sanitizeMyGroups,
   shiftWeek,
   slotRange,
   weekDays,
@@ -275,5 +276,26 @@ describe('my groups', () => {
       noClass,
     ]);
     expect(filterMyGroups(all, {})).toEqual(all);
+  });
+  it('ignores stale group ids, keeps valid ones and unknown classes', () => {
+    const a = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
+      classId: 3,
+      groupId: 7,
+    });
+    const b = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
+      classId: 3,
+      groupId: 8,
+    });
+    const u = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
+      classId: 4,
+      groupId: 9,
+    });
+    const valid = { '3': [7, 8] };
+    // stale id 99: class shown
+    expect(filterMyGroups([a, b, u], { '3': 99 }, valid)).toEqual([a, b, u]);
+    // valid id still filters
+    expect(filterMyGroups([a, b, u], { '3': 7 }, valid)).toEqual([a, u]);
+    expect(sanitizeMyGroups({ '3': 99, '4': 5 }, valid)).toEqual({ '4': 5 });
+    expect(sanitizeMyGroups({ '3': 8 }, valid)).toEqual({ '3': 8 });
   });
 });

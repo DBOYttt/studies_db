@@ -93,18 +93,21 @@ export async function runPlanSyncOnce(deps: {
 }): Promise<void> {
   const now = deps.now ?? (() => new Date());
   const host = hostOf(deps.url);
+  // Recorded as the run time: a request made while the sync runs is newer
+  // than this and so still counts as pending.
+  const startedAt = now();
   console.log(`Plan: synchronizacja z ${host}…`);
   try {
     const ics = await fetchTimetable(deps.url, { fetchImpl: deps.fetchImpl });
     const stats = await syncTimetable(deps.db, ics);
-    await recordPlanSync(deps.db, { at: now(), ok: true, stats });
+    await recordPlanSync(deps.db, { at: startedAt, ok: true, stats });
     console.log(`Plan: +${stats.created} ~${stats.updated} -${stats.deleted}`);
   } catch (err) {
     const raw = err instanceof Error ? err.message : String(err);
     const error = scrub(raw, deps.url);
     console.error(`Plan: błąd synchronizacji: ${error}`);
     try {
-      await recordPlanSync(deps.db, { at: now(), ok: false, error });
+      await recordPlanSync(deps.db, { at: startedAt, ok: false, error });
     } catch (e) {
       console.error(
         `Plan: nie zapisano statusu: ${e instanceof Error ? scrub(e.message, deps.url) : 'błąd'}`,

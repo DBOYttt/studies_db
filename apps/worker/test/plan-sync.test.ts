@@ -7,6 +7,7 @@ import {
   type Db,
   getPlanSyncStatus,
   type PlanSyncStatus,
+  requestPlanSync,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -186,5 +187,27 @@ describe('runPlanSyncOnce', () => {
     expect(s.lastError).not.toContain('?x=');
     expect(s.lastError).not.toContain('secret');
     expect((await db.select().from(classSessions)).length).toBe(before);
+  });
+
+  it('keeps a request made during the run pending', async () => {
+    const start = new Date('2026-10-12T10:00:00Z');
+    const end = new Date('2026-10-12T10:00:05Z');
+    const mid = new Date('2026-10-12T10:00:02Z');
+    const times = [start, end];
+    const fetchImpl = (async () => {
+      await requestPlanSync(db, mid);
+      return new Response(ics, {
+        headers: { 'content-type': 'text/calendar' },
+      });
+    }) as typeof fetch;
+    await runPlanSyncOnce({
+      db,
+      url: 'https://unitime.example.edu/ical?x=secret',
+      fetchImpl,
+      now: () => times.shift() ?? end,
+    });
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastRunAt).toEqual(start);
+    expect(planSyncDue(s, end, 6 * 3600_000)).toBe(true);
   });
 });

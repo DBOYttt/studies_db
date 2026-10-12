@@ -211,7 +211,7 @@ async function runCommand(
           subjectCode: i.options.getString('subject', true),
           kind: i.options.getString('kind', true) as ClassKind,
           assessment:
-            (i.options.getString('assessment') as Assessment | null) ??
+            (i.options.getString('assessment') as Assessment | 'brak' | null) ??
             undefined,
           note: i.options.getString('note') ?? undefined,
           platformUrl: i.options.getString('platform_url') ?? undefined,

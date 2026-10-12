@@ -222,16 +222,39 @@ export function parseMyGroups(raw: string | null): MyGroups {
   return out;
 }
 
+/** Valid group ids per class id (as listed by the server). */
+export type ValidGroups = Record<string, number[]>;
+
+/**
+ * Drops entries whose class is listed in `validByClass` but whose group is no
+ * longer one of its groups; classes not listed are kept as-is.
+ */
+export function sanitizeMyGroups(
+  g: MyGroups,
+  validByClass: ValidGroups,
+): MyGroups {
+  const out: MyGroups = {};
+  for (const [k, v] of Object.entries(g)) {
+    const valid = validByClass[k];
+    if (valid === undefined || valid.includes(v)) out[k] = v;
+  }
+  return out;
+}
+
 /**
  * Sessions of my groups: anything without a class or group (lectures),
- * classes with no choice made, and sessions of the chosen group.
+ * classes with no (valid) choice made, and sessions of the chosen group.
+ * With `validByClass`, stale choices are ignored.
  */
-export const filterMyGroups = (
+export function filterMyGroups(
   sessions: PlanSession[],
   g: MyGroups,
-): PlanSession[] =>
-  sessions.filter((s) => {
+  validByClass?: ValidGroups,
+): PlanSession[] {
+  const mineByClass = validByClass ? sanitizeMyGroups(g, validByClass) : g;
+  return sessions.filter((s) => {
     if (s.classId === null || s.groupId === null) return true;
-    const mine = g[String(s.classId)];
+    const mine = mineByClass[String(s.classId)];
     return mine === undefined || mine === s.groupId;
   });
+}

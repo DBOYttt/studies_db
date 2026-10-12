@@ -228,6 +228,7 @@ const classCmd = new SlashCommandBuilder()
               name: ASSESSMENT_NAMES[a],
               value: a,
             })),
+            { name: 'Brak (usuń)', value: 'brak' },
           ),
       )
       .addStringOption((o) =>

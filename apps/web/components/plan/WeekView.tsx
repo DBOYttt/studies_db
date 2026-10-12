@@ -22,7 +22,9 @@ import {
   layoutDay,
   type PlanSession,
   SLOT_MIN,
+  sanitizeMyGroups,
   slotRange,
+  type ValidGroups,
 } from '@/lib/plan';
 import {
   dayHeader,
@@ -65,6 +67,8 @@ export interface WeekViewProps {
   today: string | null;
   /** Apply the stored "Moje grupy" choice (only on /plan). */
   myGroupsFilter: boolean;
+  /** Valid group ids per class id, to ignore stale "Moje grupy" entries. */
+  validGroups?: ValidGroups;
 }
 
 const kindStyle = (k: ClassKind | null): CSSProperties =>
@@ -91,8 +95,13 @@ export function WeekView({
   nav,
   today,
   myGroupsFilter,
+  validGroups,
 }: WeekViewProps) {
-  const myGroups = useMyGroups();
+  const stored = useMyGroups();
+  const myGroups = useMemo(
+    () => (validGroups ? sanitizeMyGroups(stored, validGroups) : stored),
+    [stored, validGroups],
+  );
   const filterOn = myGroupsFilter && Object.keys(myGroups).length > 0;
 
   const all = useMemo(() => raw.map(fromWeekSession), [raw]);

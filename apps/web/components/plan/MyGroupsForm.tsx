@@ -2,8 +2,8 @@
 
 import { FloppyDisk, UsersThree, X } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useState } from 'react';
-import type { MyGroups } from '@/lib/plan';
+import { type FormEvent, useMemo, useState } from 'react';
+import { type MyGroups, sanitizeMyGroups } from '@/lib/plan';
 import type { MyGroupOption } from '@/lib/plan-queries';
 import { saveMyGroups, useMyGroups } from './useMyGroups';
 
@@ -30,7 +30,19 @@ export function MyGroupsForm({
   const stored = useMyGroups();
   // Edits on top of the stored choice; null = untouched (shows `stored`).
   const [draft, setDraft] = useState<MyGroups | null>(null);
-  const current = draft ?? stored;
+  // Stale entries (group no longer in its class) are dropped, so Zapisz
+  // cleans them.
+  const valid = useMemo(
+    () =>
+      Object.fromEntries(
+        options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
+      ),
+    [options],
+  );
+  const current = useMemo(
+    () => sanitizeMyGroups(draft ?? stored, valid),
+    [draft, stored, valid],
+  );
 
   const set = (classId: number, value: string) => {
     const next = { ...current };

@@ -158,7 +158,7 @@ export async function addLecturer(
   try {
     [r] = await db.insert(lecturers).values({
       name: i.name,
-      title: i.title ?? null,
+      title: i.title === undefined ? null : textOrNull(i.title),
       email: i.email === undefined ? null : emailOrNull(i.email),
       officeHours:
         i.officeHours === undefined ? null : textOrNull(i.officeHours),
@@ -183,7 +183,11 @@ export async function editLecturer(
   },
 ): Promise<string> {
   const set: Partial<typeof lecturers.$inferInsert> = {};
-  if (patch.name !== undefined) set.name = patch.name;
+  if (patch.name !== undefined) {
+    const name = patch.name.trim();
+    if (name === '' || name === '-') return 'Nazwa nie może być pusta.';
+    set.name = name;
+  }
   if (patch.title !== undefined) set.title = textOrNull(patch.title);
   if (patch.email !== undefined) set.email = emailOrNull(patch.email);
   if (patch.officeHours !== undefined)
@@ -214,14 +218,16 @@ export async function editClass(
   i: {
     subjectCode: string;
     kind: ClassKind;
-    assessment?: Assessment;
+    /** `brak` clears the assessment (NULL). */
+    assessment?: Assessment | 'brak';
     note?: string;
     platformUrl?: string;
   },
 ): Promise<string> {
   const code = i.subjectCode.trim().toUpperCase();
   const set: Partial<typeof classes.$inferInsert> = {};
-  if (i.assessment !== undefined) set.assessment = i.assessment;
+  if (i.assessment !== undefined)
+    set.assessment = i.assessment === 'brak' ? null : i.assessment;
   if (i.note !== undefined) set.assessmentNote = textOrNull(i.note);
   if (i.platformUrl !== undefined) {
     const url = urlOrNull(i.platformUrl);

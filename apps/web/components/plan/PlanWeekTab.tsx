@@ -9,6 +9,7 @@ import {
   weekDays,
 } from '@/lib/plan';
 import {
+  listMyGroupOptions,
   listWeekSessions,
   type PlanFilter,
   sessionRange,
@@ -43,11 +44,17 @@ export async function PlanWeekTab({
   try {
     const week =
       parseIsoWeek(raw) ?? defaultWeek(now, await sessionRange(pool, filter));
-    const [{ rows }, links] = await Promise.all([
+    const [{ rows }, links, options] = await Promise.all([
       listWeekSessions(pool, week, filter),
       // Without the lookups blocks link to the subject only.
       loadLinkContext(getDb()).catch(() => undefined),
+      myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
     ]);
+    const validGroups = options
+      ? Object.fromEntries(
+          options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
+        )
+      : undefined;
     return (
       <WeekView
         week={week}
@@ -56,6 +63,7 @@ export async function PlanWeekTab({
         nav={weekNav(path, week, isoWeekOf(now), extra)}
         today={wallDateKey(now)}
         myGroupsFilter={myGroupsFilter}
+        validGroups={validGroups}
       />
     );
   } catch (err) {

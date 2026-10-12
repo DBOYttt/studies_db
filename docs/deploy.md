@@ -70,10 +70,25 @@ classes and groups from their current tags; re-running it is safe.
 
 ## Plan zajęć (UniTime)
 
-Set `UNITIME_ICAL_URL` in `.env` to the UniTime iCalendar export URL to enable the timetable sync; the
-worker imports it on start and then every 6 hours (or sooner when a sync is requested from the web UI).
+Set `UNITIME_ICAL_URL` in `.env` to the UniTime iCalendar export URL to enable the timetable sync. The
+worker syncs at start-up only if the last run is older than 6 hours, then every 6 hours, and within a
+minute after an admin runs the bot's `/plan sync` (the only way to request a sync; the web UI has none).
 The URL is a secret: it is never stored in the database or logged (only its host is), so keep it out of
 version control. Without it the sync is disabled and the worker logs that once at start.
+
+**Migrating an existing database to 0006.** Migration 0006 adds `UNIQUE(email)` to `lecturers`; if
+duplicates exist it fails and leaves the migration half-applied. Before migrating, run
+
+```sql
+SELECT LOWER(email), COUNT(*) FROM lecturers WHERE email IS NOT NULL GROUP BY 1 HAVING COUNT(*) > 1;
+```
+
+and fix any duplicates first (edit or clear the e-mail of all but one lecturer).
+
+**Linking imported subjects to Discord.** Subjects created by the import have no forum channel. An admin
+links one with `/subject add channel:<forum> code:<code of the imported subject>`; Discord requires the
+other options too, but the existing name, semester and ECTS are kept. Codes are generated from initials
+(e.g. PJP, P40, AM) and are visible via `/subject list` or the `v_subjects` view.
 
 ## Dev DB
 
