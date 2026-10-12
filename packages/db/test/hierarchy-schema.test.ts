@@ -90,6 +90,8 @@ describe('hierarchy schema', () => {
       'cwiczenia',
       'projekt',
       'seminarium',
+      'praktyczne',
+      'wf',
     ]);
     expect(CLASS_NAMES).toEqual({
       wyklad: 'Wykład',
@@ -97,6 +99,8 @@ describe('hierarchy schema', () => {
       cwiczenia: 'Ćwiczenia',
       projekt: 'Projekt',
       seminarium: 'Seminarium',
+      praktyczne: 'Zajęcia praktyczne',
+      wf: 'WF',
     });
   });
 
@@ -128,6 +132,7 @@ describe('hierarchy schema', () => {
       'v_materials',
       'v_files',
       'v_users',
+      'v_class_sessions',
     ]);
   });
 

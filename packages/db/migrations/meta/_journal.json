@@ -43,6 +43,13 @@
       "when": 1791668726747,
       "tag": "0005_files_ids",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1791806764176,
+      "tag": "0006_timetable",
+      "breakpoints": true
     }
   ]
 }

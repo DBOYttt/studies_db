@@ -27,7 +27,7 @@ const CORNER = 6;
 export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_subjects: [20, 20],
   v_classes: [250, 100],
-  v_tags: [250, 260],
+  v_tags: [250, 290],
   v_class_groups: [480, 170],
   v_topic_tags: [480, 310],
   v_lecturers: [480, 410],
@@ -36,6 +36,7 @@ export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_users: [710, 360],
   v_materials: [940, 20],
   v_files: [940, 250],
+  v_class_sessions: [20, 300],
 };
 
 export type DesignerHighlight = {

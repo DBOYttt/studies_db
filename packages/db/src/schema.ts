@@ -6,6 +6,7 @@ import {
   datetime,
   index,
   int,
+  json,
   mediumtext,
   mysqlEnum,
   mysqlTable,
@@ -16,10 +17,13 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
-import { CLASS_KINDS } from './constants.js';
+import { ASSESSMENTS, CLASS_KINDS } from './constants.js';
 import type { JobType, PreviewKind } from './files.js';
 
 export {
+  ASSESSMENT_NAMES,
+  ASSESSMENTS,
+  type Assessment,
   CLASS_KINDS,
   CLASS_NAMES,
   type ClassKind,
@@ -48,17 +52,20 @@ export const subjects = mysqlTable('subjects', {
   semester: tinyint('semester').notNull(),
   ects: tinyint('ects').notNull(),
   description: text('description'),
-  discordChannelId: varchar('discord_channel_id', { length: 32 })
-    .notNull()
-    .unique(),
+  discordChannelId: varchar('discord_channel_id', { length: 32 }).unique(),
   createdAt: now(),
+  platformUrl: varchar('platform_url', { length: 500 }),
+  // Exact UniTime summary text this subject was matched/created from.
+  unitimeName: varchar('unitime_name', { length: 200 }).unique(),
 });
 
 export const lecturers = mysqlTable('lecturers', {
   id: int('id').autoincrement().primaryKey(),
   name: varchar('name', { length: 200 }).notNull(),
   title: varchar('title', { length: 50 }),
-  email: varchar('email', { length: 200 }),
+  email: varchar('email', { length: 200 }).unique(),
+  officeHours: varchar('office_hours', { length: 500 }),
+  room: varchar('room', { length: 100 }),
 });
 
 export const classes = mysqlTable(
@@ -70,6 +77,9 @@ export const classes = mysqlTable(
       .references(() => subjects.id, { onDelete: 'cascade' }),
     kind: mysqlEnum('kind', CLASS_KINDS).notNull(),
     name: varchar('name', { length: 50 }).notNull(),
+    assessment: mysqlEnum('assessment', ASSESSMENTS),
+    assessmentNote: varchar('assessment_note', { length: 500 }),
+    platformUrl: varchar('platform_url', { length: 500 }),
   },
   (t) => [unique('uq_classes_subject_kind').on(t.subjectId, t.kind)],
 );
@@ -244,4 +254,50 @@ export const botState = mysqlTable('bot_state', {
     .primaryKey()
     .references(() => subjects.id),
   lastSyncedAt: datetime('last_synced_at'),
+});
+
+// One row per timetable occurrence imported from UniTime iCal. Times are
+// Europe/Warsaw wall time ("wall Dates": UTC fields == wall clock).
+export const classSessions = mysqlTable(
+  'class_sessions',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    uid: varchar('uid', { length: 100 }).notNull(),
+    occurrenceStart: datetime('occurrence_start').notNull(),
+    subjectId: int('subject_id')
+      .notNull()
+      .references(() => subjects.id, { onDelete: 'cascade' }),
+    classId: int('class_id').references(() => classes.id, {
+      onDelete: 'set null',
+    }),
+    groupId: int('group_id').references(() => classGroups.id, {
+      onDelete: 'set null',
+    }),
+    lecturerId: int('lecturer_id').references(() => lecturers.id, {
+      onDelete: 'set null',
+    }),
+    label: varchar('label', { length: 100 }),
+    room: varchar('room', { length: 100 }),
+    startsAt: datetime('starts_at').notNull(),
+    endsAt: datetime('ends_at').notNull(),
+    status: mysqlEnum('status', ['confirmed', 'cancelled'])
+      .notNull()
+      .default('confirmed'),
+    sequence: int('sequence').notNull().default(0),
+    updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    unique('uq_class_sessions_occurrence').on(t.uid, t.occurrenceStart),
+    index('idx_class_sessions_starts').on(t.startsAt),
+  ],
+);
+
+// Single-row (id = 1) state of the timetable import. Timestamps are UTC.
+export const planSync = mysqlTable('plan_sync', {
+  id: int('id').primaryKey(),
+  requestedAt: datetime('requested_at'),
+  lastRunAt: datetime('last_run_at'),
+  lastOkAt: datetime('last_ok_at'),
+  lastError: text('last_error'),
+  stats: json('stats'),
 });

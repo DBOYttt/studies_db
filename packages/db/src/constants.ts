@@ -10,6 +10,8 @@ export const CLASS_KINDS = [
   'cwiczenia',
   'projekt',
   'seminarium',
+  'praktyczne',
+  'wf',
 ] as const;
 export type ClassKind = (typeof CLASS_KINDS)[number];
 export const CLASS_NAMES: Record<ClassKind, string> = {
@@ -18,6 +20,24 @@ export const CLASS_NAMES: Record<ClassKind, string> = {
   cwiczenia: 'Ćwiczenia',
   projekt: 'Projekt',
   seminarium: 'Seminarium',
+  praktyczne: 'Zajęcia praktyczne',
+  wf: 'WF',
+};
+
+export const ASSESSMENTS = [
+  'egzamin',
+  'kolokwium',
+  'projekt',
+  'sprawozdania',
+  'zaliczenie',
+] as const;
+export type Assessment = (typeof ASSESSMENTS)[number];
+export const ASSESSMENT_NAMES: Record<Assessment, string> = {
+  egzamin: 'Egzamin',
+  kolokwium: 'Kolokwium',
+  projekt: 'Projekt',
+  sprawozdania: 'Sprawozdania',
+  zaliczenie: 'Zaliczenie',
 };
 
 export const PUBLIC_VIEWS = [
@@ -32,6 +52,7 @@ export const PUBLIC_VIEWS = [
   'v_materials',
   'v_files',
   'v_users',
+  'v_class_sessions',
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];

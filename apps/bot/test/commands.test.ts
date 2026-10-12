@@ -269,6 +269,8 @@ describe('commandDefinitions', () => {
       { name: 'Ćwiczenia', value: 'cwiczenia' },
       { name: 'Projekt', value: 'projekt' },
       { name: 'Seminarium', value: 'seminarium' },
+      { name: 'Zajęcia praktyczne', value: 'praktyczne' },
+      { name: 'WF', value: 'wf' },
     ]);
     const g = opts.find((o) => o.name === 'group');
     expect(g?.required).toBeFalsy();

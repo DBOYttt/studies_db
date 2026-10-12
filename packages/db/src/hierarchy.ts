@@ -20,6 +20,10 @@ const CLASS_ALIASES: Record<string, ClassKind> = {
   cw: 'cwiczenia',
   projekt: 'projekt',
   seminarium: 'seminarium',
+  praktyczne: 'praktyczne',
+  'zajecia praktyczne': 'praktyczne',
+  wf: 'wf',
+  'wychowanie fizyczne': 'wf',
 };
 const GROUP_RE = /^(gr\.?|grupa|g)\s*0*(\d{1,2})$/;
 
@@ -72,11 +76,9 @@ export async function ensureGroup(
   db: DbExecutor,
   classId: number,
   number: number,
+  name: string = groupName(number),
 ): Promise<number> {
-  await db
-    .insert(classGroups)
-    .ignore()
-    .values({ classId, number, name: groupName(number) });
+  await db.insert(classGroups).ignore().values({ classId, number, name });
   const [row] = await db
     .select({ id: classGroups.id })
     .from(classGroups)
