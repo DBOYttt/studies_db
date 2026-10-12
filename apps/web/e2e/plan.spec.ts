@@ -14,9 +14,11 @@ test('week view shows blocks with rooms and the session panel', async ({
   await expect(blocks.filter({ hasText: 'A-1 101' })).toBeVisible();
   await expect(blocks.filter({ hasText: 'B-2 201' })).toBeVisible();
 
-  await blocks.filter({ hasText: 'A-1 101' }).click();
   const panel = page.getByRole('complementary', { name: 'Szczegóły zajęć' });
-  await expect(panel).toBeVisible();
+  await expect(async () => {
+    await blocks.filter({ hasText: 'A-1 101' }).click();
+    await expect(panel).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await expect(panel.getByText('A-1 101')).toBeVisible();
   await expect(panel.getByText('Piotr Planista')).toBeVisible();
   const lecturer = panel.getByRole('link', { name: 'Prowadzący' });
@@ -51,10 +53,13 @@ test('Moje grupy filters groups, persists, and clears', async ({ page }) => {
   await page.goto(WEEK);
   // A block click only works once hydrated, so the checks below see the
   // client-side (stored-choice) state, not the unfiltered server HTML.
-  await blocks.filter({ hasText: 'B-2 201' }).click();
-  await expect(
-    page.getByRole('complementary', { name: 'Szczegóły zajęć' }),
-  ).toBeVisible();
+  const clearedPanel = page.getByRole('complementary', {
+    name: 'Szczegóły zajęć',
+  });
+  await expect(async () => {
+    await blocks.filter({ hasText: 'B-2 201' }).click();
+    await expect(clearedPanel).toBeVisible({ timeout: 1000 });
+  }).toPass();
   await expect(page.getByText('Filtr: Moje grupy')).toHaveCount(0);
   await expect(blocks).toHaveCount(4);
 });
