@@ -69,6 +69,8 @@ export interface WeekViewProps {
   myGroupsFilter: boolean;
   /** Valid group ids per class id, to ignore stale "Moje grupy" entries. */
   validGroups?: ValidGroups;
+  /** Simple view: the session panel hides the SQL link. */
+  simple?: boolean;
 }
 
 const kindStyle = (k: ClassKind | null): CSSProperties =>
@@ -96,6 +98,7 @@ export function WeekView({
   today,
   myGroupsFilter,
   validGroups,
+  simple = false,
 }: WeekViewProps) {
   const stored = useMyGroups();
   const myGroups = useMemo(
@@ -275,7 +278,11 @@ export function WeekView({
           </div>
           {selected && (
             <div className="lg:sticky lg:top-12 lg:w-[340px] lg:shrink-0">
-              <SessionPanel session={selected} onClose={close} />
+              <SessionPanel
+                session={selected}
+                onClose={close}
+                simple={simple}
+              />
             </div>
           )}
         </div>

@@ -61,6 +61,18 @@ describe('sessionLinks', () => {
   });
 });
 
+describe('sessionLinks (simple view)', () => {
+  it('points the subject at /s/subjects with class and group, no lecturer', () => {
+    const l = sessionLinks(session, ctx, true);
+    expect(l.subject).toBe('/s/subjects/BD?class=laboratorium&group=2');
+    expect(l.lecturer).toBeNull();
+    expect(
+      sessionLinks({ ...session, groupId: null, classKind: null }, ctx, true)
+        .subject,
+    ).toBe('/s/subjects/BD');
+  });
+});
+
 describe('WeekSession round trip', () => {
   it('keeps wall dates unchanged through ISO strings', () => {
     const dto = toWeekSession(session, ctx);

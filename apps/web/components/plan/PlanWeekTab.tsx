@@ -31,12 +31,15 @@ export async function PlanWeekTab({
   extra,
   filter = {},
   myGroupsFilter,
+  simple = false,
 }: {
   week: string | string[] | undefined;
   path: string;
   extra?: Record<string, string>;
   filter?: PlanFilter;
   myGroupsFilter: boolean;
+  /** Simple (Prosty) view: session links stay in /s, no SQL link. */
+  simple?: boolean;
 }) {
   const pool = getRoPool();
   const now = nowWall();
@@ -59,11 +62,12 @@ export async function PlanWeekTab({
       <WeekView
         week={week}
         days={weekDays(rows, week).map((d) => d.toISOString())}
-        sessions={rows.map((s) => toWeekSession(s, links))}
+        sessions={rows.map((s) => toWeekSession(s, links, simple))}
         nav={weekNav(path, week, isoWeekOf(now), extra)}
         today={wallDateKey(now)}
         myGroupsFilter={myGroupsFilter}
         validGroups={validGroups}
+        simple={simple}
       />
     );
   } catch (err) {

@@ -38,7 +38,31 @@ export type WeekSession = Omit<PlanSession, 'startsAt' | 'endsAt'> & {
   links: SessionLinks;
 };
 
-export function sessionLinks(s: PlanSession, ctx?: LinkContext): SessionLinks {
+/**
+ * `simple` links the subject to the simple view (`/s/subjects/<code>` with
+ * the session's class kind and group number) and drops the lecturer link
+ * (there is no simple lecturer page).
+ */
+export function sessionLinks(
+  s: PlanSession,
+  ctx?: LinkContext,
+  simple = false,
+): SessionLinks {
+  if (simple) {
+    const q = new URLSearchParams();
+    const number =
+      s.groupId !== null ? ctx?.groups.get(s.groupId)?.number : null;
+    if (s.classKind) {
+      q.set('class', s.classKind);
+      if (number != null) q.set('group', String(number));
+    }
+    const qs = q.toString();
+    return {
+      subject: `/s/subjects/${encodeURIComponent(s.subjectCode)}${qs ? `?${qs}` : ''}`,
+      lecturer: null,
+      sql: sqlHref('/sql', `SELECT * FROM v_class_sessions WHERE id = ${s.id}`),
+    };
+  }
   const subject =
     (ctx &&
       ((s.groupId !== null && groupHref(ctx, s.groupId)) ||
@@ -55,11 +79,12 @@ export function sessionLinks(s: PlanSession, ctx?: LinkContext): SessionLinks {
 export const toWeekSession = (
   s: PlanSession,
   ctx?: LinkContext,
+  simple = false,
 ): WeekSession => ({
   ...s,
   startsAt: s.startsAt.toISOString(),
   endsAt: s.endsAt.toISOString(),
-  links: sessionLinks(s, ctx),
+  links: sessionLinks(s, ctx, simple),
 });
 
 export const fromWeekSession = (

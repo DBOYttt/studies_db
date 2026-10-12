@@ -229,3 +229,16 @@ export function groupLecturers(rows: LecturerRow[]): LecturerCard[] {
       })),
   }));
 }
+
+/** CSV file names of the three ready-made reports (same order as EXAMPLE_QUERIES). */
+export const REPORT_SLUGS = [
+  'materialy-na-przedmiot',
+  'najaktywniejsi-uploaderzy',
+  'kolokwia-30-dni',
+] as const;
+
+/** `?r=0|1|2`; anything else (missing, junk, out of range) is the first report. */
+export function parseReportIndex(raw: string | string[] | undefined): number {
+  const v = Array.isArray(raw) ? raw[0] : raw;
+  return v !== undefined && /^[0-2]$/.test(v) ? Number(v) : 0;
+}

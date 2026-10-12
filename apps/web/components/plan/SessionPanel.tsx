@@ -26,9 +26,12 @@ const closeCls =
 export function SessionPanel({
   session: s,
   onClose,
+  simple = false,
 }: {
   session: PlanSession & { links: SessionLinks };
   onClose: () => void;
+  /** Simple view: no SQL link. */
+  simple?: boolean;
 }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
 
@@ -135,10 +138,12 @@ export function SessionPanel({
               Prowadzący
             </Link>
           )}
-          <Link href={s.links.sql} className={btn}>
-            <TerminalWindow size={14} aria-hidden />
-            Pokaż w SQL
-          </Link>
+          {!simple && (
+            <Link href={s.links.sql} className={btn}>
+              <TerminalWindow size={14} aria-hidden />
+              Pokaż w SQL
+            </Link>
+          )}
         </div>
       </div>
     </aside>
