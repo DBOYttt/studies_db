@@ -192,11 +192,12 @@ async function runSetup(
     );
   }
   // The role was just created/adopted and assigned to the caller: mirror it.
-  const gotRole = first.actions.some((a) => a.type === 'assignRole');
+  // Gate on the assignRole step itself succeeding; unrelated failures don't matter.
+  const gotRole = report.updated.some((u) => u.startsWith('nadano Ci rolę'));
   if (gotRole) {
     try {
       const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
-      if (roleId && report.failures.length === 0) {
+      if (roleId) {
         await syncAdminFlag(db, callerOf(i), [...memberRoleIds(i), roleId]);
       }
     } catch (err) {
