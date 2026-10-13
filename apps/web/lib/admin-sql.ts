@@ -32,7 +32,7 @@ export const PERMISSION_ERROR =
 
 // ---------------------------------------------------------------- tokenizer
 
-type TokType = 'word' | 'bq' | 'str' | 'punct' | 'comment';
+type TokType = 'word' | 'num' | 'bq' | 'str' | 'punct' | 'comment';
 interface Tok {
   t: TokType;
   /** Source range [s, e). */
@@ -50,6 +50,53 @@ const isWordChar = (c: number) =>
   c === 95 || // _
   c === 36 || // $
   c >= 0x80; // MariaDB treats non-ASCII as identifier characters
+
+const isDigitAt = (sql: string, k: number) => {
+  const c = sql.charCodeAt(k);
+  return c >= 48 && c <= 57;
+};
+
+/** End of an exponent `[eE][+-]?\d+` starting at `k`, or `k` if there is none. */
+function exponentEnd(sql: string, k: number): number {
+  if (sql[k] !== 'e' && sql[k] !== 'E') return k;
+  let j = k + 1;
+  if (sql[j] === '+' || sql[j] === '-') j++;
+  if (!isDigitAt(sql, j)) return k;
+  while (isDigitAt(sql, j)) j++;
+  return j;
+}
+
+/**
+ * End of a numeric literal starting at `i`, following the MariaDB lexer
+ * (MY_LEX_NUMBER_IDENT / INT_OR_REAL / REAL / REAL_OR_POINT), or -1 when `i`
+ * starts no number or a digit-led identifier (`1abc`, `0x1F`, `0b1`, `1e`).
+ * Decimal and exponent literals end at the first character that cannot
+ * continue them, so `1e1INTO` / `1.5INTO` / `.5INTO` lex as number + `INTO`.
+ */
+function numberEnd(sql: string, i: number): number {
+  const n = sql.length;
+  if (sql[i] === '.') {
+    if (!isDigitAt(sql, i + 1)) return -1;
+    let j = i + 1;
+    while (isDigitAt(sql, j)) j++;
+    return exponentEnd(sql, j);
+  }
+  if (!isDigitAt(sql, i)) return -1;
+  // 0x… / 0b…: hex/bit literal or identifier — one word either way.
+  if (sql[i] === '0' && (sql[i + 1] === 'x' || sql[i + 1] === 'b')) return -1;
+  let j = i;
+  while (isDigitAt(sql, j)) j++;
+  if (sql[j] === '.') {
+    j++;
+    while (isDigitAt(sql, j)) j++;
+    return exponentEnd(sql, j);
+  }
+  if (j < n && isWordChar(sql.charCodeAt(j))) {
+    const e = exponentEnd(sql, j);
+    return e > j ? e : -1; // `1e1…` float, else digit-led identifier
+  }
+  return j;
+}
 
 /**
  * Splits `sql` into tokens the way the MariaDB lexer delimits them.
@@ -137,6 +184,12 @@ function lex(sql: string, backslash: boolean): LexResult {
           .join(q),
       });
       i = j;
+      continue;
+    }
+    const num = numberEnd(sql, i);
+    if (num > i) {
+      toks.push({ t: 'num', s: i, e: num, v: sql.slice(i, num) });
+      i = num;
       continue;
     }
     if (isWordChar(c)) {

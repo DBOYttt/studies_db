@@ -59,6 +59,11 @@ describe('classifyStatement — allowed', () => {
     ['SELECT 1 - -1', 'select', null],
     ['SELECT sleep FROM t', 'select', null],
     ['SELECT `Średnia` FROM t', 'select', null],
+    // number literals
+    ['SELECT 1.5, 2e3 FROM v_subjects', 'select', null],
+    ['UPDATE subjects SET ects = 1.5 WHERE id = 1', 'update', 'subjects'],
+    ['SELECT .5, 1e-3, 1.e2, 0x1F, 0b101, 3 FROM v_subjects', 'select', null],
+    ['SELECT 1e1x FROM v_subjects', 'select', null],
   ])('%s', (sql, kind, table) => {
     expect(classifyStatement(sql)).toEqual({ ok: true, kind, table });
   });
@@ -116,6 +121,27 @@ describe('classifyStatement — rejected', () => {
     const r = classifyStatement(sql);
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.reason).toMatch(/\S/);
+  });
+});
+
+describe('classifyStatement — number literal glued to a keyword', () => {
+  // MariaDB ends a decimal/float literal at the first character that cannot
+  // continue it, so `1e1INTO` is `1e1` + `INTO` on the server.
+  it.each([
+    ['SELECT 1.5INTO @x', 'INTO'],
+    ['SELECT 1e1INTO @x', 'INTO'],
+    ['SELECT * FROM tags WHERE id=1e0INTO @x', 'INTO'],
+    ['SELECT * FROM tags WHERE id=1.0PROCEDURE ANALYSE()', 'PROCEDURE'],
+    ['SELECT * FROM tags WHERE id=1.0LOCK IN SHARE MODE', 'LOCK'],
+    ['SELECT 1e+1INTO @x', 'INTO'],
+    ['SELECT .5INTO @x', 'INTO'],
+    ['SELECT 1.e1INTO @x', 'INTO'],
+    ['SELECT 1E-1INTO @x', 'INTO'],
+    ['SELECT 1.5SLEEP(5)', 'SLEEP'],
+  ])('%s', (sql, word) => {
+    const r = classifyStatement(sql);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.reason).toContain(word);
   });
 });
 
@@ -204,6 +230,18 @@ describe('previewSelect', () => {
     expect(
       previewSelect('SELECT * FROM tags WHERE id = 1', 'select', null),
     ).toBeNull();
+  });
+  it('ends WHERE at ORDER BY / LIMIT glued to a number literal', () => {
+    expect(
+      previewSelect(
+        'UPDATE tags SET name=1 WHERE id > 1e0ORDER BY id LIMIT 1',
+        'update',
+        'tags',
+      ),
+    ).toBe('SELECT * FROM tags WHERE id > 1e0 LIMIT 50');
+    expect(
+      previewSelect('DELETE FROM tags WHERE id=1.5LIMIT 1', 'delete', 'tags'),
+    ).toBe('SELECT * FROM tags WHERE id=1.5 LIMIT 50');
   });
   it('rejected statement → null', () => {
     expect(
