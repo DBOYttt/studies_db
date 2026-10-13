@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   desiredTags,
   forumSlug,
+  needsSecondPass,
   parseForumName,
   planSetup,
 } from '../src/setup/plan.js';
@@ -596,5 +597,29 @@ describe('planSetup: posts', () => {
     ).toMatchObject({
       existing: { same: true, pinned: false },
     });
+  });
+});
+
+describe('needsSecondPass', () => {
+  it('is true after a forum was created or imported, false otherwise', () => {
+    const forum = planSetup([ASD], withRole(), ROLE, render);
+    expect(needsSecondPass(forum)).toBe(true);
+    expect(
+      needsSecondPass([
+        {
+          type: 'importForum',
+          channelId: 'f',
+          forumName: 'x',
+          code: 'X',
+          name: 'X',
+          semester: 1,
+          tags: [],
+          classKinds: [],
+        },
+      ]),
+    ).toBe(true);
+    expect(needsSecondPass([{ type: 'warn', code: null, message: 'm' }])).toBe(
+      false,
+    );
   });
 });

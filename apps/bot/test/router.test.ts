@@ -199,6 +199,7 @@ describe('/setup', () => {
     });
   const setupGuild = {
     ...guild,
+    client: { user: { id: 'bot' } },
     roles: { ...guild.roles, fetch: async () => guild.roles.cache },
     channels: { fetch: async () => new Collection() },
     members: {
@@ -264,13 +265,35 @@ describe('/setup', () => {
         availableTags: t.map((x, n) => ({ id: x.id ?? `n${n}`, name: x.name })),
       })),
       setTopic: vi.fn().mockResolvedValue(undefined),
+      threads: {
+        fetchActive: async () => ({ threads: new Collection() }),
+        fetchArchived: async () => ({
+          threads: new Collection(),
+          hasMore: false,
+        }),
+        create: vi.fn(async () => ({
+          id: 'th',
+          fetchStarterMessage: async () => ({
+            id: 'th',
+            attachments: new Collection(),
+          }),
+        })),
+      },
+    };
+    const infoThread = {
+      isThread: () => true,
+      pin: vi.fn().mockResolvedValue(undefined),
     };
     const clientFetch = vi.fn().mockRejectedValue(new Error('no client'));
     const g = {
       ...setupGuild,
       channels: {
         fetch: async (id?: string) =>
-          id ? forum : new Collection([[forum.id, forum]]),
+          id === 'th'
+            ? infoThread
+            : id
+              ? forum
+              : new Collection([[forum.id, forum]]),
       },
       members: {
         fetch: async () => ({
@@ -295,6 +318,8 @@ describe('/setup', () => {
     expect(s).toMatchObject({ code: 'FIZ', discordChannelId: 'f-fiz' });
     expect(clientFetch).toHaveBeenCalled(); // catch-up ran
     expect(forum.setTopic).toHaveBeenCalled(); // second pass ran
+    expect(forum.threads.create).toHaveBeenCalled(); // info post created
+    expect(infoThread.pin).toHaveBeenCalled();
     const text = i.editReply.mock.calls[0]?.[0].content;
     expect(text).toContain('FIZ');
     expect(text).toContain('wytyczne');

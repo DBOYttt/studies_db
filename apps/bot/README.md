@@ -31,6 +31,12 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    name from the forum name, `asd-algorytmy` -> ASD / "Algorytmy"; semester from a `Semestr N` category, else 1;
    ECTS 0, fix with `/subject edit`). Class tags on forums (Laboratorium, Seminarium, ...) create missing classes.
    After an import `/setup` pulls the forums' posts (like `/resync`) and then adds their tags and guidelines.
+   Topics that exist only in the DB are posted into their forum by the bot (title, class/group/plain tags, a
+   `Dodane przez … (z bazy Studies DB)` starter message with the files; files over 10 MB are linked to the site
+   instead) and the DB is re-linked to the new thread/messages, so deleting the post hides the files as usual.
+   Each forum also gets a pinned `ℹ️ Informacje o przedmiocie` post (classes, lecturers with contacts, weekly
+   plan for the next 14 days) that `/setup` refreshes on every run. Threads started by the bot are never
+   turned into topics on their own.
 
 A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
 
@@ -60,6 +66,9 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
 15. Post in a created forum tagged Laboratorium + Gr. 1 with a PDF -> it lands under that class/group on the site.
 16. Create a forum `fiz-fizyka` by hand with a tag Seminarium and one post with a PDF, run `/setup` -> subject FIZ
     with class Seminarium, the post and file are in the DB, the forum gets Kolokwium/Egzamin tags and guidelines.
+17. Run `/setup` on a DB with topics/files and no posts -> every topic appears as a bot post with its files and
+    tags, plus a pinned info post; `/setup` again -> no duplicates; delete one bot post -> its files vanish on
+    the site.
 
 Note: if the gateway connection is down while the bot runs, events in that window are missed;
 recover by restarting the bot (startup catch-up) or running `/resync`.

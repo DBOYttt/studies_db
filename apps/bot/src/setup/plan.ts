@@ -173,6 +173,13 @@ function planPosts(
   return out;
 }
 
+/** New forums only get posts/info posts on a second plan over the new state. */
+export function needsSecondPass(actions: Action[]): boolean {
+  return actions.some(
+    (a) => a.type === 'createForum' || a.type === 'importForum',
+  );
+}
+
 export function planSetup(
   subjects: SubjectSpec[],
   g: GuildSnapshot,

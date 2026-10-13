@@ -2,12 +2,14 @@
 // operations. Kept thin; the logic lives in plan.ts / apply.ts.
 import {
   type AnyThreadChannel,
+  ChannelFlags,
   ChannelType,
   type ForumChannel,
   type Guild,
 } from 'discord.js';
 import type { SetupGuild } from './apply.js';
-import type { GuildSnapshot } from './types.js';
+import { INFO_TITLE } from './info.js';
+import type { GuildSnapshot, InfoPostSnapshot } from './types.js';
 
 export async function snapshotGuild(
   guild: Guild,
@@ -18,22 +20,76 @@ export async function snapshotGuild(
   );
   const roles = await guild.roles.fetch();
   const member = await guild.members.fetch(callerId);
+  const forumChannels = channels.filter(
+    (c): c is ForumChannel => c.type === ChannelType.GuildForum,
+  );
+  const threadsOf = new Map<string, AnyThreadChannel[]>();
+  for (const f of forumChannels) threadsOf.set(f.id, await forumThreads(f));
+  const botId = guild.client.user.id;
   return {
     categories: channels
       .filter((c) => c.type === ChannelType.GuildCategory)
       .map((c) => ({ id: c.id, name: c.name })),
-    forums: channels
-      .filter((c): c is ForumChannel => c.type === ChannelType.GuildForum)
-      .map((c) => ({
-        id: c.id,
-        name: c.name,
-        parentId: c.parentId,
-        tags: c.availableTags.map((t) => ({ id: t.id, name: t.name })),
-        topic: c.topic,
-      })),
+    forums: await Promise.all(
+      forumChannels.map(async (c) => {
+        const threads = threadsOf.get(c.id) ?? [];
+        return {
+          id: c.id,
+          name: c.name,
+          parentId: c.parentId,
+          tags: c.availableTags.map((t) => ({ id: t.id, name: t.name })),
+          topic: c.topic,
+          threadIds: threads.map((t) => t.id),
+          infoPost: await infoPostOf(threads, botId),
+        };
+      }),
+    ),
     roles: [...roles.values()].map((r) => ({ id: r.id, name: r.name })),
     callerId,
     callerRoleIds: [...member.roles.cache.keys()],
+  };
+}
+
+/** All threads of a forum: active plus every archived page. */
+async function forumThreads(f: ForumChannel): Promise<AnyThreadChannel[]> {
+  const active = await f.threads.fetchActive();
+  const archived: AnyThreadChannel[] = [];
+  let before: number | undefined;
+  for (;;) {
+    const page = await f.threads.fetchArchived({
+      type: 'public',
+      limit: 100,
+      before,
+    });
+    archived.push(...page.threads.values());
+    const stamps = [...page.threads.values()]
+      .map((t) => t.archiveTimestamp)
+      .filter((x): x is number => x !== null);
+    if (!page.hasMore || stamps.length === 0) break;
+    const next = Math.min(...stamps);
+    if (before !== undefined && next >= before) break;
+    before = next;
+  }
+  const byId = new Map<string, AnyThreadChannel>();
+  for (const t of [...active.threads.values(), ...archived]) {
+    if (t.parentId === f.id) byId.set(t.id, t);
+  }
+  return [...byId.values()];
+}
+
+async function infoPostOf(
+  threads: AnyThreadChannel[],
+  botId: string,
+): Promise<InfoPostSnapshot | null> {
+  const t = threads.find((x) => x.ownerId === botId && x.name === INFO_TITLE);
+  if (!t) return null;
+  const starter = await t.fetchStarterMessage().catch(() => null);
+  if (!starter) return null;
+  return {
+    threadId: t.id,
+    messageId: starter.id,
+    content: starter.content,
+    pinned: t.flags.has(ChannelFlags.Pinned),
   };
 }
 

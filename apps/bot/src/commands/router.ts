@@ -22,7 +22,7 @@ import { applySetup } from '../setup/apply.js';
 import { discordSetupGuild, snapshotGuild } from '../setup/discord.js';
 import { renderGuidelines } from '../setup/guidelines.js';
 import { loadSubjectSpecs } from '../setup/load.js';
-import { planSetup } from '../setup/plan.js';
+import { needsSecondPass, planSetup } from '../setup/plan.js';
 import { formatPlan, formatReport, mergeReports } from '../setup/report.js';
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
 import {
@@ -273,6 +273,7 @@ async function runCommand(
           snapshot,
           deps.config.adminRoleName,
           renderGuidelines,
+          { webBaseUrl: deps.config.webBaseUrl },
         );
         return { snapshot, actions };
       };
@@ -282,24 +283,35 @@ async function runCommand(
         return;
       }
       const setupGuild = discordSetupGuild(guild);
+      const storageDir = deps.ingest.storageDir;
       let report = await applySetup(
         db,
         setupGuild,
         first.actions,
         first.snapshot,
+        storageDir,
       );
       if (first.actions.some((a) => a.type === 'importForum')) {
-        // Pull posts from the imported forums, then give them tags/guidelines.
+        // Pull posts from the imported forums before planning what to add.
         const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
           ignoreWatermark: true,
         });
         report.updated.push(
           `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
         );
+      }
+      if (needsSecondPass(first.actions)) {
+        // New/imported forums: tags, guidelines, topic posts and info post.
         const second = await plan();
         report = mergeReports(
           report,
-          await applySetup(db, setupGuild, second.actions, second.snapshot),
+          await applySetup(
+            db,
+            setupGuild,
+            second.actions,
+            second.snapshot,
+            storageDir,
+          ),
         );
       }
       await i.editReply(replyOptions(formatReport(report)));
