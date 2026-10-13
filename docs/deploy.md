@@ -71,6 +71,13 @@ with the same name no longer grants access. After deploying: run `pnpm db:migrat
 container run on `compose up`), then run `/setup` once as a member with Manage Server. It adopts the existing
 `ADMIN_ROLE_NAME` role and pins its id; until then every admin command except `/setup` answers "Brak uprawnień.".
 
+### Upgrading to the admin panel (migration 0008, `studies_rw`)
+
+Set both `DB_RW_PASSWORD` and `DATABASE_RW_URL` (`mysql://studies_rw:<pw>@mariadb:3306/studies`, URL-safe
+password) in `.env`, run `pnpm db:migrate` (or let the `migrate` container run on `compose up`) to create the
+`studies_rw` user, then run `/setup` once so the bot has the admin role id. Without `DB_RW_PASSWORD` the migrate
+step logs "admin SQL console disabled" and the web console stays off.
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these
