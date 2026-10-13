@@ -15,6 +15,8 @@ import type {
   AdminRole,
   ForumSnapshot,
   GuildSnapshot,
+  MaterialSpec,
+  PostFile,
   PostMessage,
   SubjectSpec,
   TopicSpec,
@@ -95,7 +97,40 @@ const tooManyTags = (code: string, dropped: string[]): Action => ({
 export const MAX_POST_TAGS = 5;
 export const MAX_FILES_PER_MESSAGE = 10;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+/** Request size budget per message (Discord rejects bodies over ~25 MiB). */
+export const MAX_MESSAGE_BYTES = 24 * 1024 * 1024;
+
+/** Splits files into messages of at most 10 files and 24 MiB each. */
+export function chunkFiles(files: PostFile[]): PostFile[][] {
+  const out: PostFile[][] = [];
+  let cur: PostFile[] = [];
+  let bytes = 0;
+  for (const f of files) {
+    if (
+      cur.length > 0 &&
+      (cur.length >= MAX_FILES_PER_MESSAGE ||
+        bytes + f.sizeBytes > MAX_MESSAGE_BYTES)
+    ) {
+      out.push(cur);
+      cur = [];
+      bytes = 0;
+    }
+    cur.push(f);
+    bytes += f.sizeBytes;
+  }
+  if (cur.length > 0) out.push(cur);
+  return out;
+}
 const MAX_THREAD_NAME = 100;
+
+const FILES_CONTINUED = 'Pliki (cd.)';
+
+const postFile = (m: MaterialSpec): PostFile => ({
+  materialId: m.id,
+  name: m.filename,
+  storagePath: m.storagePath,
+  sizeBytes: m.sizeBytes,
+});
 
 /** Starter (+ follow-up) messages for a DB topic posted by the bot. */
 function topicMessages(t: TopicSpec, webBaseUrl: string): PostMessage[] {
@@ -113,19 +148,11 @@ function topicMessages(t: TopicSpec, webBaseUrl: string): PostMessage[] {
           ),
         ]
       : [];
-  const files = upload.map((m) => ({
-    materialId: m.id,
-    name: m.filename,
-    storagePath: m.storagePath,
+  const chunks = chunkFiles(upload.map(postFile));
+  return (chunks.length > 0 ? chunks : [[]]).map((files, i) => ({
+    content: i === 0 ? [header, ...links].join('\n') : FILES_CONTINUED,
+    files,
   }));
-  const messages: PostMessage[] = [];
-  for (let i = 0; i < Math.max(files.length, 1); i += MAX_FILES_PER_MESSAGE) {
-    messages.push({
-      content: i === 0 ? [header, ...links].join('\n') : 'Pliki (cd.)',
-      files: files.slice(i, i + MAX_FILES_PER_MESSAGE),
-    });
-  }
-  return messages;
 }
 
 function topicTagIds(t: TopicSpec, forum: ForumSnapshot): string[] {

@@ -90,6 +90,7 @@ export type PostFile = {
   materialId: number;
   name: string;
   storagePath: string;
+  sizeBytes: number;
 };
 export type PostMessage = { content: string; files: PostFile[] };
 

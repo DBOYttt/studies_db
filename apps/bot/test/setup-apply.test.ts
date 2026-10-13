@@ -507,6 +507,7 @@ describe('applySetup: posts', () => {
     materialId,
     name,
     storagePath: name,
+    sizeBytes: 1,
   });
   const post = (
     topic: number,

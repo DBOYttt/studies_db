@@ -542,10 +542,46 @@ describe('planSetup: posts', () => {
       1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
     ]);
     expect(p.messages[1].files).toEqual([
-      { materialId: 11, name: 'f11.pdf', storagePath: 'originals/11.pdf' },
+      {
+        materialId: 11,
+        name: 'f11.pdf',
+        storagePath: 'originals/11.pdf',
+        sizeBytes: 100,
+      },
     ]);
     expect(p.messages[0].content).toContain(`${W}/files/99/original`);
     expect(p.messages[0].content).toContain('big.pdf');
+  });
+
+  it('keeps each message under 24 MiB of files', () => {
+    const sizes = [9, 9, 9, 10, 1, 1, 5];
+    const files = sizes.map((mb, i) => ({
+      id: i + 1,
+      filename: `f${i + 1}.pdf`,
+      storagePath: `o/${i + 1}`,
+      sizeBytes: Math.round(mb * MiB),
+    }));
+    const [p] = postsOf(
+      planSetup(
+        [subject([topic({ materials: files })])],
+        guildWith(),
+        ROLE,
+        render,
+        { webBaseUrl: W },
+      ),
+    );
+    if (p?.type !== 'postTopic') throw new Error('no post');
+    expect(p.messages.map((m) => m.files.map((f) => f.materialId))).toEqual([
+      [1, 2],
+      [3, 4, 5, 6],
+      [7],
+    ]);
+    for (const m of p.messages) {
+      const total = m.files.reduce((n, f) => n + f.sizeBytes, 0);
+      expect(total).toBeLessThanOrEqual(24 * MiB);
+    }
+    expect(p.messages[0].content).toContain('Dodane przez');
+    expect(p.messages[1].content).toBe('Pliki (cd.)');
   });
 
   it('posts a topic whose only file is too big, as a link', () => {
