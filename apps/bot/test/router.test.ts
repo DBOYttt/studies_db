@@ -1,6 +1,6 @@
 import { subjects, users } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import { Collection, MessageFlags } from 'discord.js';
+import { ChannelType, Collection, MessageFlags } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -249,5 +249,83 @@ describe('/setup', () => {
     });
     await handlerFor()(asI(i));
     expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+  });
+
+  it('imports unlinked forums, pulls their posts and finishes them in a second pass', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const forum = {
+      id: 'f-fiz',
+      type: ChannelType.GuildForum,
+      name: 'fiz-fizyka',
+      parentId: null,
+      topic: null,
+      availableTags: [{ id: 'x1', name: 'Laboratorium' }],
+      setAvailableTags: vi.fn(async (t: { id?: string; name: string }[]) => ({
+        availableTags: t.map((x, n) => ({ id: x.id ?? `n${n}`, name: x.name })),
+      })),
+      setTopic: vi.fn().mockResolvedValue(undefined),
+    };
+    const clientFetch = vi.fn().mockRejectedValue(new Error('no client'));
+    const g = {
+      ...setupGuild,
+      channels: {
+        fetch: async (id?: string) =>
+          id ? forum : new Collection([[forum.id, forum]]),
+      },
+      members: {
+        fetch: async () => ({
+          roles: { cache: new Collection([['r', {}]]) },
+        }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: { id: 'u1' },
+      memberPermissions: none,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => null },
+    });
+    await createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: { channels: { fetch: clientFetch } } as never,
+      config,
+    })(asI(i));
+    const [s] = await db.select().from(subjects);
+    expect(s).toMatchObject({ code: 'FIZ', discordChannelId: 'f-fiz' });
+    expect(clientFetch).toHaveBeenCalled(); // catch-up ran
+    expect(forum.setTopic).toHaveBeenCalled(); // second pass ran
+    const text = i.editReply.mock.calls[0]?.[0].content;
+    expect(text).toContain('FIZ');
+    expect(text).toContain('wytyczne');
+    expect(text).toContain('Pobrano');
+  });
+
+  it('skips catch-up and the second pass when nothing was imported', async () => {
+    const clientFetch = vi.fn();
+    const g = {
+      ...setupGuild,
+      members: {
+        fetch: async () => ({
+          roles: { cache: new Collection([['r', {}]]) },
+        }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: { id: 'u1' },
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => null },
+    });
+    await createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: { channels: { fetch: clientFetch } } as never,
+      config,
+    })(asI(i));
+    expect(clientFetch).not.toHaveBeenCalled();
+    expect(i.editReply.mock.calls[0]?.[0].content).toBe(
+      'Wszystko jest aktualne.',
+    );
   });
 });

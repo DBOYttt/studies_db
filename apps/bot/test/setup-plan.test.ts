@@ -1,6 +1,11 @@
 import { CLASS_KINDS, CLASS_NAMES, classifyTags, groupName } from '@studies/db';
 import { describe, expect, it } from 'vitest';
-import { desiredTags, forumSlug, planSetup } from '../src/setup/plan.js';
+import {
+  desiredTags,
+  forumSlug,
+  parseForumName,
+  planSetup,
+} from '../src/setup/plan.js';
 import type {
   Action,
   ClassSpec,
@@ -241,5 +246,132 @@ describe('planSetup', () => {
       ],
     });
     expect(planSetup([linked], g, ROLE, render)).toEqual([]);
+  });
+});
+
+describe('parseForumName', () => {
+  it('splits code and name at the first dash', () => {
+    expect(parseForumName('asd-algorytmy-i-struktury')).toEqual({
+      code: 'ASD',
+      name: 'Algorytmy i struktury',
+    });
+  });
+  it('uses the whole name as the code when there is no dash', () => {
+    expect(parseForumName('fizyka')).toEqual({
+      code: 'FIZYKA',
+      name: 'Fizyka',
+    });
+  });
+  it('strips diacritics and non-alphanumerics from the code, max 20 chars', () => {
+    expect(parseForumName('ćwiczenia_ogólne-x')?.code).toBe('CWICZENIAOGOLNE');
+    expect(parseForumName('a'.repeat(30))?.code).toBe('A'.repeat(20));
+  });
+  it('returns null when no code can be derived', () => {
+    expect(parseForumName('🔥-ogień')).toBeNull();
+  });
+});
+
+describe('planSetup: Discord → DB', () => {
+  const unlinkedForum = (
+    over: Partial<GuildSnapshot['forums'][number]> = {},
+  ) => ({
+    id: 'f-new',
+    name: 'fiz-fizyka',
+    parentId: null,
+    tags: [],
+    topic: null,
+    ...over,
+  });
+
+  it('imports an unlinked forum as a subject (semester 1 without a category)', () => {
+    const g = withRole({
+      forums: [
+        unlinkedForum({
+          tags: [
+            { id: 't1', name: 'Laboratorium' },
+            { id: 't2', name: 'Gr. 4' },
+            { id: 't3', name: 'lab' },
+            { id: 't4', name: 'Wykład' },
+          ],
+        }),
+      ],
+    });
+    expect(planSetup([], g, ROLE, render)).toEqual([
+      {
+        type: 'importForum',
+        channelId: 'f-new',
+        forumName: 'fiz-fizyka',
+        code: 'FIZ',
+        name: 'Fizyka',
+        semester: 1,
+        tags: [
+          { id: 't1', name: 'Laboratorium' },
+          { id: 't2', name: 'Gr. 4' },
+          { id: 't3', name: 'lab' },
+          { id: 't4', name: 'Wykład' },
+        ],
+        classKinds: ['wyklad', 'laboratorium'],
+      },
+    ]);
+  });
+
+  it('takes the semester from a Semestr N parent category', () => {
+    const g = withRole({ forums: [unlinkedForum({ parentId: 'c3' })] });
+    const [a] = planSetup([], g, ROLE, render);
+    expect(a).toMatchObject({ type: 'importForum', semester: 3 });
+  });
+
+  it('skips with a warning when the code clashes with the DB or another forum', () => {
+    const g = withRole({
+      forums: [
+        unlinkedForum({ id: 'f1', name: 'asd-inne' }),
+        unlinkedForum({ id: 'f2', name: 'nowy-a' }),
+        unlinkedForum({ id: 'f3', name: 'nowy-b' }),
+      ],
+    });
+    const actions = planSetup([ASD], g, ROLE, render).filter(
+      (a) => a.type !== 'createForum' && a.type !== 'createCategory',
+    );
+    expect(actions.map((a) => a.type)).toEqual(['warn', 'importForum', 'warn']);
+    expect(actions[0]).toMatchObject({ code: 'ASD' });
+    expect(actions[2]).toMatchObject({ code: 'NOWY' });
+  });
+
+  it('does not import a forum that is linked to a subject', () => {
+    const linked = { ...ASD, channelId: 'f-asd' };
+    const g = withRole({
+      forums: [
+        {
+          id: 'f-asd',
+          name: 'asd',
+          parentId: 'c3',
+          tags: desiredTags(ASD).map((name, i) => ({ id: `t${i}`, name })),
+          topic: 'G:ASD',
+        },
+      ],
+    });
+    expect(planSetup([linked], g, ROLE, render)).toEqual([]);
+  });
+
+  it('adds classes for class tags on a linked forum that the DB lacks', () => {
+    const linked = { ...BD };
+    const g = withRole({
+      forums: [
+        {
+          id: 'f-bd',
+          name: 'bd',
+          parentId: null,
+          tags: [
+            ...desiredTags(BD).map((name, i) => ({ id: `t${i}`, name })),
+            { id: 'x1', name: 'Seminarium' },
+            { id: 'x2', name: 'Gr. 2' },
+          ],
+          topic: 'G:BD',
+        },
+      ],
+    });
+    expect(planSetup([linked], g, ROLE, render)).toEqual([
+      { type: 'addClasses', subjectId: 2, code: 'BD', kinds: ['seminarium'] },
+    ]);
   });
 });

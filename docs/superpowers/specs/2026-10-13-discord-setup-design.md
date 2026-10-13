@@ -157,3 +157,20 @@ All new code in `apps/bot/src/setup/`:
 Deleting or renaming forums/tags, moving existing forums between categories,
 per-channel permission overwrites, channels other than subject forums,
 unlinking a subject from its channel.
+
+## Addendum (2026-10-13): Discord → DB
+
+Requested after the first round: "if there are things in the database that aren't on Discord add them through
+the bot; if on Discord there are things not in the database add them". Agreed in chat (bounded change):
+
+- Every forum channel no subject points to becomes a subject (all forums, not only those in `Semestr N`
+  categories). `parseForumName`: split at the first `-`; code = head, diacritics stripped, uppercased,
+  `[A-Z0-9]` only, max 20 chars; name = rest with `-`/`_` → spaces, first letter uppercased (no dash → name =
+  head). No derivable code → warning. Semester = N from a `Semestr N` parent category, else 1; ECTS 0. A code
+  already used in the DB or by another forum in the same run → warning, skipped.
+- Forum tags that `classifyTags` reads as a class create missing classes (imported and linked forums). Group tags
+  alone create nothing (a forum-level `Gr. N` does not say which class); groups still come from posts.
+- New actions `importForum` and `addClasses`. After applying a plan that imported anything, `/setup` runs the
+  existing catch-up (all linked forums, ignoring the watermark, like `/resync`), then plans and applies a
+  second time so imported forums get tags and guidelines; the two reports are merged. Dry run shows the first
+  pass plus a note about the follow-up.

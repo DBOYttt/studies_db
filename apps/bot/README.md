@@ -27,6 +27,10 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    missing tags and refreshed guidelines (manual edits to the guidelines are overwritten). Nothing is ever deleted
    or renamed. A linked forum the bot cannot see is reported, never recreated. Re-running is safe; don't run two
    `/setup`s at once (a race can leave an unlinked forum).
+   It also works the other way: every forum on the server that no subject points to becomes a subject (code and
+   name from the forum name, `asd-algorytmy` -> ASD / "Algorytmy"; semester from a `Semestr N` category, else 1;
+   ECTS 0, fix with `/subject edit`). Class tags on forums (Laboratorium, Seminarium, ...) create missing classes.
+   After an import `/setup` pulls the forums' posts (like `/resync`) and then adds their tags and guidelines.
 
 A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
 
@@ -54,6 +58,8 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
     guidelines; `subjects.discord_channel_id` set.
 14. `/setup` again -> "Wszystko jest aktualne."
 15. Post in a created forum tagged Laboratorium + Gr. 1 with a PDF -> it lands under that class/group on the site.
+16. Create a forum `fiz-fizyka` by hand with a tag Seminarium and one post with a PDF, run `/setup` -> subject FIZ
+    with class Seminarium, the post and file are in the DB, the forum gets Kolokwium/Egzamin tags and guidelines.
 
 Note: if the gateway connection is down while the bot runs, events in that window are missed;
 recover by restarting the bot (startup catch-up) or running `/resync`.

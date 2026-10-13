@@ -1,7 +1,7 @@
 // Executes a /setup plan against the guild, one action at a time. A failing
 // action is recorded and later actions for the same subject are skipped; the
 // rest of the plan still runs.
-import { type Db, subjects } from '@studies/db';
+import { CLASS_NAMES, type Db, ensureClass, subjects } from '@studies/db';
 import { eq } from 'drizzle-orm';
 import { syncForumTags } from '../sync.js';
 import type { ForumTag } from '../types.js';
@@ -102,6 +102,30 @@ export async function applySetup(
         case 'setGuidelines':
           await guild.setForumTopic(a.channelId, a.topic);
           report.updated.push(`${a.code}: wytyczne forum`);
+          break;
+        case 'importForum': {
+          const [{ id }] = await db
+            .insert(subjects)
+            .values({
+              code: a.code,
+              name: a.name,
+              semester: a.semester,
+              ects: 0,
+              discordChannelId: a.channelId,
+            })
+            .$returningId();
+          for (const kind of a.classKinds) await ensureClass(db, id, kind);
+          await syncForumTags(db, id, a.tags);
+          report.created.push(
+            `${a.code}: przedmiot „${a.name}” z forum #${a.forumName} (ECTS 0 — popraw przez /subject edit)`,
+          );
+          break;
+        }
+        case 'addClasses':
+          for (const kind of a.kinds) await ensureClass(db, a.subjectId, kind);
+          report.updated.push(
+            `${a.code}: zajęcia ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`,
+          );
           break;
         case 'warn':
           report.warnings.push(a.code ? `${a.code}: ${a.message}` : a.message);

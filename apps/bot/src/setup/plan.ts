@@ -1,6 +1,14 @@
 // Pure planner for /setup: DB subjects + a snapshot of the guild -> the
 // actions that bring the guild in line. No discord.js or DB access here.
-import { CLASS_NAMES, groupName, stripMarks } from '@studies/db';
+import {
+  CLASS_KINDS,
+  CLASS_NAMES,
+  type ClassKind,
+  classifyTags,
+  groupName,
+  stripMarks,
+} from '@studies/db';
+import type { ForumTag } from '../types.js';
 import type { Action, GuildSnapshot, SubjectSpec } from './types.js';
 
 export const MAX_FORUM_TAGS = 20;
@@ -30,6 +38,32 @@ export function desiredTags(s: SubjectSpec): string[] {
 }
 
 const categoryName = (s: SubjectSpec) => `Semestr ${s.semester}`;
+const MAX_CODE = 20;
+const SEMESTER_RE = /^Semestr (\d+)$/;
+
+/** `asd-algorytmy-i-struktury` → ASD / "Algorytmy i struktury"; null if no code. */
+export function parseForumName(
+  forumName: string,
+): { code: string; name: string } | null {
+  const dash = forumName.indexOf('-');
+  const head = dash < 0 ? forumName : forumName.slice(0, dash);
+  const rest = dash < 0 ? '' : forumName.slice(dash + 1);
+  const code = stripMarks(head)
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+    .slice(0, MAX_CODE);
+  if (!code) return null;
+  const words = (rest || head).replace(/[-_]+/g, ' ').trim();
+  return { code, name: words.charAt(0).toUpperCase() + words.slice(1) };
+}
+
+/** Class kinds named by forum tags, in CLASS_KINDS order. */
+function classKindsOf(tags: ForumTag[]): ClassKind[] {
+  const kinds = new Set(
+    tags.map((t) => classifyTags([t.name]).classKind).filter((k) => k !== null),
+  );
+  return CLASS_KINDS.filter((k) => kinds.has(k));
+}
 
 /** Splits `wanted` into what fits next to `existing` tags and what doesn't. */
 function fitTags(existingCount: number, wanted: string[]) {
@@ -98,6 +132,17 @@ export function planSetup(
       continue;
     }
 
+    const known = new Set(s.classes.map((c) => c.kind));
+    const newKinds = classKindsOf(forum.tags).filter((k) => !known.has(k));
+    if (newKinds.length > 0) {
+      actions.push({
+        type: 'addClasses',
+        subjectId: s.id,
+        code: s.code,
+        kinds: newKinds,
+      });
+    }
+
     const have = new Set(forum.tags.map((t) => tagKey(t.name)));
     const missing = wanted.filter((t) => !have.has(tagKey(t)));
     const { fit, dropped } = fitTags(forum.tags.length, missing);
@@ -120,6 +165,43 @@ export function planSetup(
         topic,
       });
     }
+  }
+
+  // Discord → DB: forums no subject points to become subjects.
+  const linked = new Set(subjects.map((s) => s.channelId));
+  const codes = new Set(subjects.map((s) => s.code.toUpperCase()));
+  const categoryById = new Map(g.categories.map((c) => [c.id, c.name]));
+  for (const f of g.forums) {
+    if (linked.has(f.id)) continue;
+    const parsed = parseForumName(f.name);
+    if (!parsed) {
+      actions.push({
+        type: 'warn',
+        code: null,
+        message: `#${f.name}: nie da się ustalić kodu przedmiotu — pominięto`,
+      });
+      continue;
+    }
+    if (codes.has(parsed.code)) {
+      actions.push({
+        type: 'warn',
+        code: parsed.code,
+        message: `kod zajęty, forum #${f.name} pominięto`,
+      });
+      continue;
+    }
+    codes.add(parsed.code);
+    const m = SEMESTER_RE.exec(categoryById.get(f.parentId ?? '') ?? '');
+    actions.push({
+      type: 'importForum',
+      channelId: f.id,
+      forumName: f.name,
+      code: parsed.code,
+      name: parsed.name,
+      semester: m ? Number(m[1]) : 1,
+      tags: f.tags,
+      classKinds: classKindsOf(f.tags),
+    });
   }
   return actions;
 }

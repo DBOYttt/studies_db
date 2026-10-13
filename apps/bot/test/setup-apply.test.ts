@@ -225,12 +225,111 @@ describe('applySetup', () => {
   });
 });
 
+describe('applySetup: Discord → DB', () => {
+  it('imports a forum as a linked subject with classes and tags', async () => {
+    const r = await applySetup(
+      db,
+      fakeGuild(),
+      [
+        {
+          type: 'importForum',
+          channelId: 'f-fiz',
+          forumName: 'fiz-fizyka',
+          code: 'FIZ',
+          name: 'Fizyka',
+          semester: 2,
+          tags: [
+            { id: 'x1', name: 'Laboratorium' },
+            { id: 'x2', name: 'Gr. 1' },
+          ],
+          classKinds: ['laboratorium'],
+        },
+      ],
+      snapshot,
+    );
+    const [s] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'FIZ'));
+    expect(s).toMatchObject({
+      name: 'Fizyka',
+      semester: 2,
+      ects: 0,
+      discordChannelId: 'f-fiz',
+    });
+    const kinds = (await loadSubjectSpecs(db))
+      .find((x) => x.code === 'FIZ')
+      ?.classes.map((c) => c.kind);
+    expect(kinds).toEqual(['laboratorium']);
+    const t = await db.select().from(tags).where(eq(tags.subjectId, s.id));
+    expect(t.map((x) => x.discordTagId).sort()).toEqual(['x1', 'x2']);
+    expect(r.created.join('\n')).toContain('FIZ');
+  });
+
+  it('reports a code clash at insert time as a failure', async () => {
+    const r = await applySetup(
+      db,
+      fakeGuild(),
+      [
+        {
+          type: 'importForum',
+          channelId: 'f-x',
+          forumName: 'asd',
+          code: 'ASD',
+          name: 'Asd',
+          semester: 1,
+          tags: [],
+          classKinds: [],
+        },
+      ],
+      snapshot,
+    );
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('ASD');
+  });
+
+  it('adds missing classes to an existing subject', async () => {
+    const r = await applySetup(
+      db,
+      fakeGuild(),
+      [
+        {
+          type: 'addClasses',
+          subjectId: bdId,
+          code: 'BD',
+          kinds: ['seminarium'],
+        },
+      ],
+      snapshot,
+    );
+    const bd = (await loadSubjectSpecs(db)).find((x) => x.code === 'BD');
+    expect(bd?.classes.map((c) => c.kind)).toEqual(['seminarium']);
+    expect(r.updated.join('\n')).toContain('BD');
+  });
+});
+
 describe('format', () => {
   it('says everything is up to date for an empty plan', () => {
     expect(formatPlan([])).toBe('Wszystko jest aktualne.');
     expect(
       formatReport({ created: [], updated: [], warnings: [], failures: [] }),
     ).toBe('Wszystko jest aktualne.');
+  });
+  it('notes that imported forums get tags and guidelines in the real run', () => {
+    const text = formatPlan([
+      {
+        type: 'importForum',
+        channelId: 'f',
+        forumName: 'fiz',
+        code: 'FIZ',
+        name: 'Fiz',
+        semester: 1,
+        tags: [],
+        classKinds: [],
+      },
+    ]);
+    expect(text).toContain('FIZ');
+    expect(text).toContain('tagi i wytyczne');
   });
   it('keeps long plans within 2000 characters', () => {
     const many = Array.from({ length: 500 }, (_, i) => forum(i, `S${i}`));

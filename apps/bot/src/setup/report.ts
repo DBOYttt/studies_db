@@ -1,3 +1,4 @@
+import { CLASS_NAMES } from '@studies/db/constants';
 import type { SetupReport } from './apply.js';
 import type { Action } from './types.js';
 
@@ -17,6 +18,15 @@ function fitLines(lines: string[]): string {
 
 const section = (title: string, items: string[]) =>
   items.length > 0 ? [`**${title}**`, ...items.map((i) => `- ${i}`)] : [];
+
+export function mergeReports(a: SetupReport, b: SetupReport): SetupReport {
+  return {
+    created: [...a.created, ...b.created],
+    updated: [...a.updated, ...b.updated],
+    warnings: [...a.warnings, ...b.warnings],
+    failures: [...a.failures, ...b.failures],
+  };
+}
 
 export function formatReport(r: SetupReport): string {
   const lines = [
@@ -42,6 +52,10 @@ function describeAction(a: Action): string {
       return `${a.code}: dodaj tagi ${a.tags.join(', ')}`;
     case 'setGuidelines':
       return `${a.code}: zaktualizuj wytyczne forum`;
+    case 'importForum':
+      return `${a.code}: dodaj do bazy przedmiot „${a.name}” (sem. ${a.semester}) z forum #${a.forumName}${a.classKinds.length > 0 ? ` z zajęciami ${a.classKinds.map((k) => CLASS_NAMES[k]).join(', ')}` : ''}`;
+    case 'addClasses':
+      return `${a.code}: dodaj do bazy zajęcia ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`;
     case 'warn':
       return `uwaga — ${a.code ? `${a.code}: ` : ''}${a.message}`;
   }
@@ -49,8 +63,14 @@ function describeAction(a: Action): string {
 
 export function formatPlan(actions: Action[]): string {
   if (actions.length === 0) return UP_TO_DATE;
+  const note = actions.some((a) => a.type === 'importForum')
+    ? [
+        'Po imporcie /setup pobierze posty z tych forów i doda im tagi i wytyczne.',
+      ]
+    : [];
   return fitLines([
     'Plan (bez zmian):',
     ...actions.map((a) => `- ${describeAction(a)}`),
+    ...note,
   ]);
 }

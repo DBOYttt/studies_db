@@ -23,7 +23,7 @@ import { discordSetupGuild, snapshotGuild } from '../setup/discord.js';
 import { renderGuidelines } from '../setup/guidelines.js';
 import { loadSubjectSpecs } from '../setup/load.js';
 import { planSetup } from '../setup/plan.js';
-import { formatPlan, formatReport } from '../setup/report.js';
+import { formatPlan, formatReport, mergeReports } from '../setup/report.js';
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
 import {
   addLecturer,
@@ -265,23 +265,43 @@ async function runCommand(
     case 'setup': {
       await i.deferReply(eph);
       if (!i.guild) throw new Error('/setup outside a guild');
-      const snapshot = await snapshotGuild(i.guild, i.user.id);
-      const actions = planSetup(
-        await loadSubjectSpecs(db),
-        snapshot,
-        deps.config.adminRoleName,
-        renderGuidelines,
-      );
+      const guild = i.guild;
+      const plan = async () => {
+        const snapshot = await snapshotGuild(guild, i.user.id);
+        const actions = planSetup(
+          await loadSubjectSpecs(db),
+          snapshot,
+          deps.config.adminRoleName,
+          renderGuidelines,
+        );
+        return { snapshot, actions };
+      };
+      const first = await plan();
       if (i.options.getBoolean('dry_run')) {
-        await i.editReply(replyOptions(formatPlan(actions)));
+        await i.editReply(replyOptions(formatPlan(first.actions)));
         return;
       }
-      const report = await applySetup(
+      const setupGuild = discordSetupGuild(guild);
+      let report = await applySetup(
         db,
-        discordSetupGuild(i.guild),
-        actions,
-        snapshot,
+        setupGuild,
+        first.actions,
+        first.snapshot,
       );
+      if (first.actions.some((a) => a.type === 'importForum')) {
+        // Pull posts from the imported forums, then give them tags/guidelines.
+        const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
+          ignoreWatermark: true,
+        });
+        report.updated.push(
+          `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
+        );
+        const second = await plan();
+        report = mergeReports(
+          report,
+          await applySetup(db, setupGuild, second.actions, second.snapshot),
+        );
+      }
       await i.editReply(replyOptions(formatReport(report)));
       return;
     }

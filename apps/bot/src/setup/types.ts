@@ -72,4 +72,15 @@ export type Action =
       channelId: string;
       topic: string;
     }
+  | {
+      type: 'importForum';
+      channelId: string;
+      forumName: string;
+      code: string;
+      name: string;
+      semester: number;
+      tags: ForumTag[];
+      classKinds: ClassKind[];
+    }
+  | { type: 'addClasses'; subjectId: number; code: string; kinds: ClassKind[] }
   | { type: 'warn'; code: string | null; message: string };
