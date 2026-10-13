@@ -284,7 +284,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'ASD',
     name: 'Algorytmy i struktury danych',
-    semester: 3,
+    semester: 1,
     ects: 6,
     description:
       'Złożoność obliczeniowa, sortowanie, drzewa, grafy, programowanie dynamiczne.',
@@ -434,7 +434,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'BD',
     name: 'Bazy danych',
-    semester: 3,
+    semester: 1,
     ects: 5,
     description: 'Model relacyjny, SQL, normalizacja, transakcje, indeksy.',
     platformUrl: 'https://upel.example.edu/course/bd',
@@ -537,7 +537,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'SO',
     name: 'Systemy operacyjne',
-    semester: 3,
+    semester: 1,
     ects: 5,
     description:
       'Procesy, wątki, synchronizacja, pamięć wirtualna, systemy plików.',
@@ -612,7 +612,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'AM2',
     name: 'Analiza matematyczna 2',
-    semester: 3,
+    semester: 1,
     ects: 6,
     description: 'Funkcje wielu zmiennych, całki wielokrotne, szeregi.',
     tags: ['Kolokwium', 'Egzamin', 'Zadania'],
@@ -679,7 +679,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'SK',
     name: 'Sieci komputerowe',
-    semester: 3,
+    semester: 1,
     ects: 4,
     description:
       'Model OSI/TCP-IP, adresacja, routing, protokoły warstwy aplikacji.',
@@ -741,7 +741,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'JA',
     name: 'Język angielski B2',
-    semester: 3,
+    semester: 1,
     ects: 2,
     description: 'Angielski techniczny, prezentacje, pisanie dokumentacji.',
     tags: [],
