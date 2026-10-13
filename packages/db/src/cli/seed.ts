@@ -824,7 +824,6 @@ try {
         ects: s.ects,
         description: s.description,
         platformUrl: s.platformUrl,
-        discordChannelId: `seed-ch-${s.code.toLowerCase()}`,
       })
       .$returningId();
 
