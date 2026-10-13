@@ -2,19 +2,31 @@
 
 Discord bot that mirrors forum channels (one per subject) into the Studies DB:
 topics, attachments (deduplicated by hash), slash commands and one-time web login links.
+`/setup` builds the Discord side (categories, forums, tags, admin role) from the DB.
 
 ## Setup
 
 1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications).
 2. In **Bot**, copy the token (`DISCORD_TOKEN`) and enable the **Message Content** privileged intent.
-3. Copy the Application ID (`DISCORD_CLIENT_ID`); copy your server ID (`DISCORD_GUILD_ID`) and the admin role ID (`ADMIN_ROLE_ID`) with Developer Mode on.
-4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History, Add Reactions, Send Messages in Threads:
-   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=274877973568`
-   (= View Channels + Read Message History + Add Reactions + Send Messages in Threads).
-5. Create forum channels with the tags Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium and Gr. 1 … Gr. N (one per group). A post tagged e.g. Laboratorium + Gr. 3 lands under that class/group; other tags (Kolokwium, Egzamin, ...) stay plain tags.
+3. Copy the Application ID (`DISCORD_CLIENT_ID`) and your server ID (`DISCORD_GUILD_ID`, Developer Mode on).
+   Admin commands are allowed for the role named `ADMIN_ROLE_NAME` (default `Studies Admin`); `/setup`
+   creates it if it does not exist.
+4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
+   Add Reactions, Send Messages in Threads, Manage Channels, Manage Roles:
+   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=275146409040`
+   In Server Settings → Roles, keep the bot's role above the admin role (Discord only lets a bot assign roles below its own).
+5. Forum channels and their tags are created by `/setup` (step 9). Created by hand instead, each subject forum needs
+   the tags Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium and Gr. 1 … Gr. N (one per group). A post tagged
+   e.g. Laboratorium + Gr. 3 lands under that class/group; other tags (Kolokwium, Egzamin, ...) stay plain tags.
 6. Fill the bot variables in `.env` (see `.env.example`), start the DB (`pnpm db:up && pnpm db:migrate`).
 7. Register slash commands: `pnpm --filter @studies/bot register`.
 8. Run: `pnpm dev:bot` (watch mode) or `pnpm --filter @studies/bot start`.
+9. In Discord, run `/setup dry_run:true` to preview, then `/setup`. Anyone with Manage Server (or the admin role)
+   may run it. For every subject without a forum it creates a `Semestr N` category and a forum
+   `<code>-<name>` with class/group tags and guidelines generated from the DB, and links it. Linked forums only get
+   missing tags and refreshed guidelines (manual edits to the guidelines are overwritten). Nothing is ever deleted
+   or renamed. A linked forum the bot cannot see is reported, never recreated. Re-running is safe; don't run two
+   `/setup`s at once (a race can leave an unlinked forum).
 
 A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
 
@@ -36,6 +48,12 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
 9. `/subject add` on a forum the bot cannot see -> ephemeral warning about View Channel / Read Message History.
 10. `/lecturer assign` with `class` (and optionally `group`) -> reply "Przypisano prowadzącego do <KOD> / <Rodzaj>[, Gr. N].".
 11. Tag a post Laboratorium + Gr. 3, then re-tag it Ćwiczenia -> it moves to Ćwiczenia with no group.
+12. On a server without the admin role, `/setup dry_run:true` as the owner -> plan lists the role, categories and
+    forums; nothing changes.
+13. `/setup` -> role created and assigned to you, `Semestr N` categories, one forum per subject with tags and
+    guidelines; `subjects.discord_channel_id` set.
+14. `/setup` again -> "Wszystko jest aktualne."
+15. Post in a created forum tagged Laboratorium + Gr. 1 with a PDF -> it lands under that class/group on the site.
 
 Note: if the gateway connection is down while the bot runs, events in that window are missed;
 recover by restarting the bot (startup catch-up) or running `/resync`.

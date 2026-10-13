@@ -56,10 +56,17 @@ backup first:
 3. re-register slash commands: `pnpm --filter @studies/bot register` (`/lecturer assign` now
    takes class/group)
 
+### Upgrading to `/setup` (admin role by name)
+
+`ADMIN_ROLE_ID` is gone: the admin role is now looked up by name, `ADMIN_ROLE_NAME` (default `Studies Admin`).
+Either set `ADMIN_ROLE_NAME` to your existing admin role's name or rename that role to `Studies Admin`. Re-invite
+the bot with the new permission integer from the bot README (adds Manage Channels + Manage Roles) and re-register
+slash commands (`pnpm --filter @studies/bot register`).
+
 ## Tagi forum
 
-The bot builds the class/group hierarchy from the tags of forum posts. In every subject forum
-channel create these tags (exact names):
+The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these
+tags from the DB; for forums made by hand create them yourself (exact names):
 
 - class tags: Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium
 - group tags: Gr. 1 … Gr. N (one per group; accepted variants: Gr3, Gr. 3, Grupa 3, G3)

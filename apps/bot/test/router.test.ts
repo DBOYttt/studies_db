@@ -189,3 +189,65 @@ describe('router', () => {
     );
   });
 });
+
+describe('/setup', () => {
+  const handlerFor = () =>
+    createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      config,
+    });
+  const setupGuild = {
+    ...guild,
+    roles: { ...guild.roles, fetch: async () => guild.roles.cache },
+    channels: { fetch: async () => new Collection() },
+    members: {
+      fetch: async () => ({ roles: { cache: new Collection() } }),
+    },
+  };
+  const manage = { has: () => true };
+  const none = { has: () => false };
+
+  it('runs a dry run for a Manage Server member without the role', async () => {
+    const deferReply = vi.fn().mockResolvedValue(undefined);
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: setupGuild,
+      user: { id: 'u1' },
+      member: { roles: [] },
+      memberPermissions: manage,
+      deferReply,
+      options: { getBoolean: () => true },
+    });
+    await handlerFor()(asI(i));
+    expect(i.reply).not.toHaveBeenCalled();
+    expect(deferReply).toHaveBeenCalledWith({
+      flags: MessageFlags.Ephemeral,
+    });
+    const text = i.editReply.mock.calls[0]?.[0].content;
+    expect(text).toContain('Plan (bez zmian):');
+    expect(text).toContain('nadaj Ci rolę Studies Admin');
+  });
+
+  it('refuses members with neither the role nor Manage Server', async () => {
+    const i = mkInteraction({
+      commandName: 'setup',
+      member: { roles: [] },
+      memberPermissions: none,
+      options: { getBoolean: () => true },
+    });
+    await handlerFor()(asI(i));
+    expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+  });
+
+  it('keeps other admin commands role-only', async () => {
+    const i = mkInteraction({
+      commandName: 'subject',
+      member: { roles: [] },
+      memberPermissions: manage,
+      options: { getSubcommand: () => 'list' },
+    });
+    await handlerFor()(asI(i));
+    expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+  });
+});

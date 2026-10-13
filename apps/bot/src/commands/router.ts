@@ -18,6 +18,12 @@ import { catchUp, discordForumSource } from '../catchup.js';
 import type { BotConfig } from '../config.js';
 import { toDiscordUser } from '../discord/map.js';
 import type { IngestDeps } from '../ingest.js';
+import { applySetup } from '../setup/apply.js';
+import { discordSetupGuild, snapshotGuild } from '../setup/discord.js';
+import { renderGuidelines } from '../setup/guidelines.js';
+import { loadSubjectSpecs } from '../setup/load.js';
+import { planSetup } from '../setup/plan.js';
+import { formatPlan, formatReport } from '../setup/report.js';
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
 import {
   addLecturer,
@@ -124,7 +130,11 @@ async function runCommand(
   const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
 
-  if (ADMIN_COMMANDS.has(name) && !isAdmin(i, deps.config.adminRoleName)) {
+  const allowed =
+    name === 'setup'
+      ? canRunSetup(i, deps.config.adminRoleName)
+      : !ADMIN_COMMANDS.has(name) || isAdmin(i, deps.config.adminRoleName);
+  if (!allowed) {
     await reply('Brak uprawnień.');
     return;
   }
@@ -250,6 +260,29 @@ async function runCommand(
       // used the bot.
       await upsertUser(db, toDiscordUser(target));
       await reply(await banReply(db, target.id, name === 'ban'));
+      return;
+    }
+    case 'setup': {
+      await i.deferReply(eph);
+      if (!i.guild) throw new Error('/setup outside a guild');
+      const snapshot = await snapshotGuild(i.guild, i.user.id);
+      const actions = planSetup(
+        await loadSubjectSpecs(db),
+        snapshot,
+        deps.config.adminRoleName,
+        renderGuidelines,
+      );
+      if (i.options.getBoolean('dry_run')) {
+        await i.editReply(replyOptions(formatPlan(actions)));
+        return;
+      }
+      const report = await applySetup(
+        db,
+        discordSetupGuild(i.guild),
+        actions,
+        snapshot,
+      );
+      await i.editReply(replyOptions(formatReport(report)));
       return;
     }
     case 'resync': {

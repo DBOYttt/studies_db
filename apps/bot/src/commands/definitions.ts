@@ -270,6 +270,13 @@ export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
   userCmd('ban', 'Zablokuj dostęp użytkownika do strony'),
   userCmd('unban', 'Odblokuj dostęp użytkownika do strony'),
   new SlashCommandBuilder()
+    .setName('setup')
+    .setDescription('Utwórz fora, tagi, kategorie i rolę admina z bazy')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .addBooleanOption((o) =>
+      o.setName('dry_run').setDescription('Tylko pokaż plan, bez zmian'),
+    ),
+  new SlashCommandBuilder()
     .setName('resync')
     .setDescription('Zsynchronizuj fora z bazą')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),

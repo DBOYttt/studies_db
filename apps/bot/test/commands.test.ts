@@ -393,7 +393,7 @@ describe('escaping and mentions', () => {
 });
 
 describe('commandDefinitions', () => {
-  it('has unique top-level names including all 9', () => {
+  it('has unique top-level names including all 10', () => {
     const names = commandDefinitions.map((c) => c.name);
     expect(new Set(names).size).toBe(names.length);
     for (const n of [
@@ -406,6 +406,7 @@ describe('commandDefinitions', () => {
       'search',
       'class',
       'plan',
+      'setup',
     ])
       expect(names).toContain(n);
   });
