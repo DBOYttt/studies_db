@@ -1,9 +1,13 @@
 import { subjects, users } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import { MessageFlags } from 'discord.js';
+import { Collection, MessageFlags } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
-import { createInteractionHandler, isAdmin } from '../src/commands/router.js';
+import {
+  canRunSetup,
+  createInteractionHandler,
+  isAdmin,
+} from '../src/commands/router.js';
 
 let db: Awaited<ReturnType<typeof resetTestDb>>;
 beforeEach(async () => {
@@ -16,24 +20,65 @@ afterAll(async () => {
 
 const asI = (o: unknown) => o as never;
 
+const guild = {
+  roles: {
+    cache: new Collection([['r', { id: 'r', name: 'Studies Admin' }]]),
+  },
+};
+
 describe('isAdmin', () => {
-  it('handles array roles, cache roles and missing member', () => {
-    expect(isAdmin(asI({ member: { roles: ['a', 'r'] } }), 'r')).toBe(true);
-    expect(isAdmin(asI({ member: { roles: ['a'] } }), 'r')).toBe(false);
+  it('resolves the role by name for array roles, cache roles and missing member', () => {
+    const n = 'Studies Admin';
+    expect(isAdmin(asI({ guild, member: { roles: ['a', 'r'] } }), n)).toBe(
+      true,
+    );
+    expect(isAdmin(asI({ guild, member: { roles: ['a'] } }), n)).toBe(false);
     const cache = new Map([['r', {}]]);
-    expect(isAdmin(asI({ member: { roles: { cache } } }), 'r')).toBe(true);
-    expect(isAdmin(asI({ member: { roles: { cache } } }), 'x')).toBe(false);
-    expect(isAdmin(asI({ member: null }), 'r')).toBe(false);
+    expect(isAdmin(asI({ guild, member: { roles: { cache } } }), n)).toBe(true);
+    expect(isAdmin(asI({ guild, member: { roles: ['r'] } }), 'Other')).toBe(
+      false,
+    );
+    expect(isAdmin(asI({ guild, member: null }), n)).toBe(false);
   });
 });
 
-const config = { adminRoleId: 'r', webBaseUrl: 'https://x.pl' } as never;
+describe('canRunSetup', () => {
+  it('allows the admin role or Manage Server', () => {
+    const n = 'Studies Admin';
+    const manage = { has: () => true };
+    const none = { has: () => false };
+    expect(
+      canRunSetup(
+        asI({ guild, member: { roles: [] }, memberPermissions: manage }),
+        n,
+      ),
+    ).toBe(true);
+    expect(
+      canRunSetup(
+        asI({ guild, member: { roles: ['r'] }, memberPermissions: none }),
+        n,
+      ),
+    ).toBe(true);
+    expect(
+      canRunSetup(
+        asI({ guild, member: { roles: [] }, memberPermissions: none }),
+        n,
+      ),
+    ).toBe(false);
+  });
+});
+
+const config = {
+  adminRoleName: 'Studies Admin',
+  webBaseUrl: 'https://x.pl',
+} as never;
 const mkInteraction = (over: Record<string, unknown>) => ({
   isAutocomplete: () => false,
   isChatInputCommand: () => true,
   isRepliable: () => true,
   deferred: false,
   replied: false,
+  guild,
   member: { roles: ['r'] },
   reply: vi.fn().mockResolvedValue(undefined),
   followUp: vi.fn().mockResolvedValue(undefined),

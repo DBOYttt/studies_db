@@ -11,6 +11,7 @@ import {
   type Client,
   type Interaction,
   MessageFlags,
+  PermissionFlagsBits,
 } from 'discord.js';
 import { like, or } from 'drizzle-orm';
 import { catchUp, discordForumSource } from '../catchup.js';
@@ -55,15 +56,29 @@ const MAX_LEN = 2000;
 const truncate = (s: string) =>
   s.length <= MAX_LEN ? s : `${s.slice(0, MAX_LEN - 1)}…`;
 
+/** Has the role named `roleName` (looked up in the guild's role cache). */
 export function isAdmin(
   i: ChatInputCommandInteraction,
-  adminRoleId: string,
+  roleName: string,
 ): boolean {
   const roles = i.member?.roles;
   if (!roles) return false;
+  const role = i.guild?.roles.cache.find((r) => r.name === roleName);
+  if (!role) return false;
   return Array.isArray(roles)
-    ? roles.includes(adminRoleId)
-    : roles.cache.has(adminRoleId);
+    ? roles.includes(role.id)
+    : roles.cache.has(role.id);
+}
+
+/** /setup also accepts Manage Server, so the first run can create the role. */
+export function canRunSetup(
+  i: ChatInputCommandInteraction,
+  roleName: string,
+): boolean {
+  return (
+    isAdmin(i, roleName) ||
+    i.memberPermissions?.has(PermissionFlagsBits.ManageGuild) === true
+  );
 }
 
 // Escape LIKE wildcards so user input matches literally.
@@ -109,7 +124,7 @@ async function runCommand(
   const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
 
-  if (ADMIN_COMMANDS.has(name) && !isAdmin(i, deps.config.adminRoleId)) {
+  if (ADMIN_COMMANDS.has(name) && !isAdmin(i, deps.config.adminRoleName)) {
     await reply('Brak uprawnień.');
     return;
   }
