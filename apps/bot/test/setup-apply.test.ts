@@ -1,3 +1,6 @@
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import {
   classLecturers,
   classSessions,
@@ -6,6 +9,7 @@ import {
   ensureGroup,
   insertMaterial,
   lecturers,
+  materials,
   subjects,
   tags,
   topics,
@@ -15,6 +19,7 @@ import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { applySetup, type SetupGuild } from '../src/setup/apply.js';
+import { INFO_TITLE } from '../src/setup/info.js';
 import { loadSubjectSpecs } from '../src/setup/load.js';
 import { formatPlan, formatReport } from '../src/setup/report.js';
 import type { Action, GuildSnapshot } from '../src/setup/types.js';
@@ -68,6 +73,29 @@ function fakeGuild(failForum?: string): SetupGuild & { calls: Call[] } {
     },
     async setForumTopic(channelId, topic) {
       calls.push(['setForumTopic', channelId, topic]);
+    },
+    async createThread(forumId, o) {
+      calls.push(['createThread', forumId, o]);
+      const id = `th-${++n}`;
+      return {
+        threadId: id,
+        messageId: id,
+        attachmentIds: o.files.map((_, i) => `${id}-att-${i}`),
+      };
+    },
+    async sendMessage(threadId, o) {
+      calls.push(['sendMessage', threadId, o]);
+      const id = `msg-${++n}`;
+      return {
+        messageId: id,
+        attachmentIds: o.files.map((_, i) => `${id}-att-${i}`),
+      };
+    },
+    async editMessage(threadId, messageId, content) {
+      calls.push(['editMessage', threadId, messageId, content]);
+    },
+    async pinThread(threadId) {
+      calls.push(['pinThread', threadId]);
     },
   };
 }
@@ -418,6 +446,194 @@ describe('applySetup: Discord → DB', () => {
     const bd = (await loadSubjectSpecs(db)).find((x) => x.code === 'BD');
     expect(bd?.classes.map((c) => c.kind)).toEqual(['seminarium']);
     expect(r.updated.join('\n')).toContain('BD');
+  });
+});
+
+describe('applySetup: posts', () => {
+  let storageDir: string;
+  let topicId: number;
+  let uid: number;
+  const mat = async (name: string, onDisk = true) => {
+    if (onDisk) writeFileSync(join(storageDir, name), name);
+    const r = await insertMaterial(
+      db,
+      {
+        topicId,
+        uploaderId: uid,
+        discordMessageId: `seed-m-${name}`,
+        discordAttachmentId: `seed-a-${name}`,
+        originalFilename: name,
+        mimeType: 'application/pdf',
+        sizeBytes: 1,
+        sha256: name.padEnd(64, '0'),
+        storagePath: name,
+        previewKind: 'pdf',
+      },
+      [],
+    );
+    return r.materialId;
+  };
+  const file = (materialId: number, name: string) => ({
+    materialId,
+    name,
+    storagePath: name,
+  });
+  const post = (
+    topic: number,
+    messages: { content: string; files: ReturnType<typeof file>[] }[],
+    title = 'Lab 1',
+  ): Action => ({
+    type: 'postTopic',
+    subjectId: asdId,
+    code: 'ASD',
+    channelId: 'f-asd',
+    topicId: topic,
+    title,
+    tagIds: ['t1'],
+    messages,
+  });
+  const linkOf = async (id: number) =>
+    (
+      await db
+        .select({
+          m: materials.discordMessageId,
+          a: materials.discordAttachmentId,
+        })
+        .from(materials)
+        .where(eq(materials.id, id))
+    )[0];
+  const threadOf = async (id: number) =>
+    (
+      await db
+        .select({ t: topics.discordThreadId })
+        .from(topics)
+        .where(eq(topics.id, id))
+    )[0].t;
+
+  beforeEach(async () => {
+    storageDir = mkdtempSync(join(tmpdir(), 'setup-posts-'));
+    uid = await upsertUser(db, {
+      discordUserId: 'u-ola',
+      displayName: 'Ola',
+      avatarUrl: null,
+    });
+    [{ id: topicId }] = await db
+      .insert(topics)
+      .values({ subjectId: asdId, title: 'Lab 1', discordThreadId: 'seed-1' })
+      .$returningId();
+  });
+
+  it('posts a topic and links the thread and files by upload order', async () => {
+    const a = await mat('a.pdf');
+    const b = await mat('b.pdf');
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [
+          { content: 'hdr', files: [file(a, 'a.pdf'), file(b, 'b.pdf')] },
+        ]),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(g.calls[0]).toEqual([
+      'createThread',
+      'f-asd',
+      {
+        name: 'Lab 1',
+        tagIds: ['t1'],
+        content: 'hdr',
+        files: [
+          { path: join(storageDir, 'a.pdf'), name: 'a.pdf' },
+          { path: join(storageDir, 'b.pdf'), name: 'b.pdf' },
+        ],
+      },
+    ]);
+    expect(await threadOf(topicId)).toBe('th-1');
+    expect(await linkOf(a)).toEqual({ m: 'th-1', a: 'th-1-att-0' });
+    expect(await linkOf(b)).toEqual({ m: 'th-1', a: 'th-1-att-1' });
+    expect(r.created.join('\n')).toContain('Lab 1');
+  });
+
+  it('sends follow-up messages and links their files', async () => {
+    const a = await mat('a.pdf');
+    const b = await mat('b.pdf');
+    const g = fakeGuild();
+    await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [
+          { content: 'hdr', files: [file(a, 'a.pdf')] },
+          { content: 'Pliki (cd.)', files: [file(b, 'b.pdf')] },
+        ]),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(g.calls[1]?.[0]).toBe('sendMessage');
+    expect(g.calls[1]?.[1]).toBe('th-1');
+    expect(await linkOf(b)).toEqual({ m: 'msg-2', a: 'msg-2-att-0' });
+  });
+
+  it('reports a missing file and still posts the next topic', async () => {
+    const gone = await mat('gone.pdf', false);
+    const [{ id: other }] = await db
+      .insert(topics)
+      .values({ subjectId: asdId, title: 'Other', discordThreadId: 'seed-2' })
+      .$returningId();
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [{ content: 'hdr', files: [file(gone, 'gone.pdf')] }]),
+        post(other, [{ content: 'hdr', files: [] }], 'Other'),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('gone.pdf');
+    expect(await threadOf(topicId)).toBe('seed-1');
+    expect(await threadOf(other)).toBe('th-1');
+  });
+
+  it('creates and pins a missing info post, edits a changed one, re-pins', async () => {
+    const info = (
+      existing: Extract<Action, { type: 'upsertInfoPost' }>['existing'],
+    ): Action => ({
+      type: 'upsertInfoPost',
+      subjectId: asdId,
+      code: 'ASD',
+      channelId: 'f-asd',
+      content: 'INFO',
+      existing,
+    });
+    const g = fakeGuild();
+    await applySetup(
+      db,
+      g,
+      [
+        info(null),
+        info({ threadId: 'i2', messageId: 'i2', pinned: true, same: false }),
+        info({ threadId: 'i3', messageId: 'i3', pinned: false, same: true }),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(g.calls).toEqual([
+      [
+        'createThread',
+        'f-asd',
+        { name: INFO_TITLE, tagIds: [], content: 'INFO', files: [] },
+      ],
+      ['pinThread', 'th-1'],
+      ['editMessage', 'i2', 'i2', 'INFO'],
+      ['pinThread', 'i3'],
+    ]);
   });
 });
 

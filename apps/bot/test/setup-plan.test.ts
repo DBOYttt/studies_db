@@ -375,3 +375,226 @@ describe('planSetup: Discord → DB', () => {
     ]);
   });
 });
+
+describe('planSetup: posts', () => {
+  const W = 'https://w.example';
+  const MiB = 1024 * 1024;
+  const forumTags = [
+    'Laboratorium',
+    'Gr. 1',
+    'Kolokwium',
+    'Egzamin',
+    'Notatki',
+    'Zadania',
+    'Inne',
+  ].map((name, i) => ({ id: `t${i}`, name }));
+  const topic = (
+    over: Partial<NonNullable<SubjectSpec['topics']>[number]> = {},
+  ) => ({
+    id: 11,
+    title: 'Lab 1',
+    threadId: 'seed-thread-1',
+    classKind: 'laboratorium' as const,
+    group: 1,
+    tagNames: ['kolokwium', 'Notatki', 'Zadania', 'Inne', 'Brak'],
+    authorName: 'Ola',
+    createdAt: new Date('2026-10-05T10:00:00Z'),
+    materials: [] as {
+      id: number;
+      filename: string;
+      storagePath: string;
+      sizeBytes: number;
+    }[],
+    ...over,
+  });
+  const subject = (
+    topics: NonNullable<SubjectSpec['topics']>,
+  ): SubjectSpec => ({
+    ...ASD,
+    channelId: 'f-asd',
+    classes: [],
+    topics,
+    sessions: [],
+  });
+  const guildWith = (
+    over: Partial<GuildSnapshot['forums'][number]> = {},
+  ): GuildSnapshot =>
+    withRole({
+      forums: [
+        {
+          id: 'f-asd',
+          name: 'asd',
+          parentId: 'c3',
+          tags: [...forumTags],
+          topic: 'G:ASD',
+          threadIds: [],
+          infoPost: null,
+          ...over,
+        },
+      ],
+    });
+  const postsOf = (actions: Action[]) =>
+    actions.filter((a) => a.type === 'postTopic');
+
+  it('posts an unposted topic with mapped tags (max 5) and a header line', () => {
+    const [p] = postsOf(
+      planSetup([subject([topic()])], guildWith(), ROLE, render, {
+        webBaseUrl: W,
+      }),
+    );
+    expect(p).toMatchObject({
+      type: 'postTopic',
+      subjectId: 1,
+      code: 'ASD',
+      channelId: 'f-asd',
+      topicId: 11,
+      title: 'Lab 1',
+      tagIds: ['t0', 't1', 't2', 't4', 't5'],
+    });
+    expect(p?.type === 'postTopic' && p.messages).toEqual([
+      {
+        content: 'Dodane przez Ola · 2026-10-05 (z bazy Studies DB)',
+        files: [],
+      },
+    ]);
+  });
+
+  it('chunks files by 10 and links files over 10 MiB', () => {
+    const files = Array.from({ length: 11 }, (_, i) => ({
+      id: i + 1,
+      filename: `f${i + 1}.pdf`,
+      storagePath: `originals/${i + 1}.pdf`,
+      sizeBytes: 100,
+    }));
+    files.push({
+      id: 99,
+      filename: 'big.pdf',
+      storagePath: 'originals/big.pdf',
+      sizeBytes: 11 * MiB,
+    });
+    const [p] = postsOf(
+      planSetup(
+        [subject([topic({ materials: files })])],
+        guildWith(),
+        ROLE,
+        render,
+        { webBaseUrl: W },
+      ),
+    );
+    if (p?.type !== 'postTopic') throw new Error('no post');
+    expect(p.messages).toHaveLength(2);
+    expect(p.messages[0].files.map((f) => f.materialId)).toEqual([
+      1, 2, 3, 4, 5, 6, 7, 8, 9, 10,
+    ]);
+    expect(p.messages[1].files).toEqual([
+      { materialId: 11, name: 'f11.pdf', storagePath: 'originals/11.pdf' },
+    ]);
+    expect(p.messages[0].content).toContain(`${W}/files/99/original`);
+    expect(p.messages[0].content).toContain('big.pdf');
+  });
+
+  it('posts a topic whose only file is too big, as a link', () => {
+    const [p] = postsOf(
+      planSetup(
+        [
+          subject([
+            topic({
+              materials: [
+                {
+                  id: 7,
+                  filename: 'video.mp4',
+                  storagePath: 'o/v',
+                  sizeBytes: 50 * MiB,
+                },
+              ],
+            }),
+          ]),
+        ],
+        guildWith(),
+        ROLE,
+        render,
+        { webBaseUrl: W },
+      ),
+    );
+    expect(p?.type === 'postTopic' && p.messages[0].files).toEqual([]);
+    expect(p?.type === 'postTopic' && p.messages[0].content).toContain(
+      `${W}/files/7/original`,
+    );
+  });
+
+  it('posts two topics with the same title separately', () => {
+    const posts = postsOf(
+      planSetup(
+        [subject([topic(), topic({ id: 12, threadId: 'seed-2' })])],
+        guildWith(),
+        ROLE,
+        render,
+        { webBaseUrl: W },
+      ),
+    );
+    expect(posts.map((p) => p.type === 'postTopic' && p.topicId)).toEqual([
+      11, 12,
+    ]);
+  });
+
+  it('skips topics already on Discord, forums that are missing, and runs without opts', () => {
+    const s = subject([topic({ threadId: 'real-1' })]);
+    expect(
+      postsOf(
+        planSetup([s], guildWith({ threadIds: ['real-1'] }), ROLE, render, {
+          webBaseUrl: W,
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      postsOf(
+        planSetup([subject([topic()])], withRole(), ROLE, render, {
+          webBaseUrl: W,
+        }),
+      ),
+    ).toEqual([]);
+    expect(
+      postsOf(planSetup([subject([topic()])], guildWith(), ROLE, render)),
+    ).toEqual([]);
+  });
+
+  it('creates, updates or leaves the info post', () => {
+    const s = subject([]);
+    const info = (g: GuildSnapshot) =>
+      planSetup([s], g, ROLE, render, { webBaseUrl: W }).filter(
+        (a) => a.type === 'upsertInfoPost',
+      );
+    const [created] = info(guildWith());
+    expect(created).toMatchObject({
+      type: 'upsertInfoPost',
+      subjectId: 1,
+      code: 'ASD',
+      channelId: 'f-asd',
+      existing: null,
+    });
+    const content = created?.type === 'upsertInfoPost' ? created.content : '';
+    expect(content).toContain('**Algorytmy i struktury danych** (ASD)');
+    const post = { threadId: 'i1', messageId: 'i1', content, pinned: true };
+    expect(info(guildWith({ infoPost: post }))).toEqual([]);
+    expect(info(guildWith({ infoPost: { ...post, content: 'old' } }))).toEqual([
+      {
+        type: 'upsertInfoPost',
+        subjectId: 1,
+        code: 'ASD',
+        channelId: 'f-asd',
+        content,
+        existing: {
+          threadId: 'i1',
+          messageId: 'i1',
+          pinned: true,
+          same: false,
+        },
+      },
+    ]);
+    expect(
+      info(guildWith({ infoPost: { ...post, pinned: false } }))[0],
+    ).toMatchObject({
+      existing: { same: true, pinned: false },
+    });
+  });
+});

@@ -1,6 +1,11 @@
 // discord.js side of /setup: a snapshot of the guild and the SetupGuild
 // operations. Kept thin; the logic lives in plan.ts / apply.ts.
-import { ChannelType, type ForumChannel, type Guild } from 'discord.js';
+import {
+  type AnyThreadChannel,
+  ChannelType,
+  type ForumChannel,
+  type Guild,
+} from 'discord.js';
 import type { SetupGuild } from './apply.js';
 import type { GuildSnapshot } from './types.js';
 
@@ -36,6 +41,12 @@ async function forum(guild: Guild, id: string): Promise<ForumChannel> {
   const c = await guild.channels.fetch(id);
   if (c?.type !== ChannelType.GuildForum)
     throw new Error(`${id} nie jest forum`);
+  return c;
+}
+
+async function thread(guild: Guild, id: string): Promise<AnyThreadChannel> {
+  const c = await guild.channels.fetch(id);
+  if (!c?.isThread()) throw new Error(`${id} nie jest wątkiem`);
   return c;
 }
 
@@ -84,6 +95,40 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
     },
     async setForumTopic(channelId, topic) {
       await (await forum(guild, channelId)).setTopic(topic, '/setup');
+    },
+    async createThread(forumId, { name, tagIds, content, files }) {
+      const thread = await (await forum(guild, forumId)).threads.create({
+        name,
+        appliedTags: tagIds,
+        message: {
+          content,
+          files: files.map((f) => ({ attachment: f.path, name: f.name })),
+          allowedMentions: { parse: [] },
+        },
+        reason: '/setup',
+      });
+      const starter = await thread.fetchStarterMessage();
+      if (!starter) throw new Error(`brak wiadomości startowej w ${thread.id}`);
+      return {
+        threadId: thread.id,
+        messageId: starter.id,
+        attachmentIds: [...starter.attachments.keys()],
+      };
+    },
+    async sendMessage(threadId, { content, files }) {
+      const msg = await (await thread(guild, threadId)).send({
+        content,
+        files: files.map((f) => ({ attachment: f.path, name: f.name })),
+        allowedMentions: { parse: [] },
+      });
+      return { messageId: msg.id, attachmentIds: [...msg.attachments.keys()] };
+    },
+    async editMessage(threadId, messageId, content) {
+      const t = await thread(guild, threadId);
+      await (await t.messages.fetch(messageId)).edit({ content });
+    },
+    async pinThread(threadId) {
+      await (await thread(guild, threadId)).pin('/setup');
     },
   };
 }

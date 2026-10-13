@@ -72,7 +72,25 @@ export type ForumSnapshot = {
   parentId: string | null;
   tags: ForumTag[];
   topic: string | null;
+  /** Thread ids in the forum (active + archived). */
+  threadIds?: string[];
+  /** The bot's pinned info post, if any. */
+  infoPost?: InfoPostSnapshot | null;
 };
+
+export type InfoPostSnapshot = {
+  threadId: string;
+  messageId: string;
+  content: string;
+  pinned: boolean;
+};
+
+export type PostFile = {
+  materialId: number;
+  name: string;
+  storagePath: string;
+};
+export type PostMessage = { content: string; files: PostFile[] };
 
 export type GuildSnapshot = {
   categories: { id: string; name: string }[];
@@ -120,4 +138,27 @@ export type Action =
       classKinds: ClassKind[];
     }
   | { type: 'addClasses'; subjectId: number; code: string; kinds: ClassKind[] }
+  | {
+      type: 'postTopic';
+      subjectId: number;
+      code: string;
+      channelId: string;
+      topicId: number;
+      title: string;
+      tagIds: string[];
+      messages: PostMessage[];
+    }
+  | {
+      type: 'upsertInfoPost';
+      subjectId: number;
+      code: string;
+      channelId: string;
+      content: string;
+      existing: {
+        threadId: string;
+        messageId: string;
+        pinned: boolean;
+        same: boolean;
+      } | null;
+    }
   | { type: 'warn'; code: string | null; message: string };

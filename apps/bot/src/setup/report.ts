@@ -56,6 +56,12 @@ function describeAction(a: Action): string {
       return `${a.code}: dodaj do bazy przedmiot „${a.name}” (sem. ${a.semester}) z forum #${a.forumName}${a.classKinds.length > 0 ? ` z zajęciami ${a.classKinds.map((k) => CLASS_NAMES[k]).join(', ')}` : ''}`;
     case 'addClasses':
       return `${a.code}: dodaj do bazy zajęcia ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`;
+    case 'postTopic': {
+      const n = a.messages.reduce((k, m) => k + m.files.length, 0);
+      return `${a.code}: opublikuj temat „${a.title}” (${n} plików)`;
+    }
+    case 'upsertInfoPost':
+      return `${a.code}: ${a.existing ? 'zaktualizuj' : 'utwórz'} post informacyjny`;
     case 'warn':
       return `uwaga — ${a.code ? `${a.code}: ` : ''}${a.message}`;
   }

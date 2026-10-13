@@ -1,11 +1,24 @@
 // Executes a /setup plan against the guild, one action at a time. A failing
 // action is recorded and later actions for the same subject are skipped; the
 // rest of the plan still runs.
-import { CLASS_NAMES, type Db, ensureClass, subjects } from '@studies/db';
+import { access } from 'node:fs/promises';
+import { join } from 'node:path';
+import {
+  CLASS_NAMES,
+  type Db,
+  ensureClass,
+  materials,
+  subjects,
+  topics,
+} from '@studies/db';
 import { eq } from 'drizzle-orm';
 import { syncForumTags } from '../sync.js';
 import type { ForumTag } from '../types.js';
-import type { Action, GuildSnapshot } from './types.js';
+import { INFO_TITLE } from './info.js';
+import type { Action, GuildSnapshot, PostFile } from './types.js';
+
+export type UploadFile = { path: string; name: string };
+export type SentMessage = { messageId: string; attachmentIds: string[] };
 
 /** The guild operations /setup needs (discord.js implementation in discord.ts). */
 export interface SetupGuild {
@@ -21,6 +34,21 @@ export interface SetupGuild {
   /** Appends tags; returns the forum's full tag list afterwards. */
   addForumTags(channelId: string, names: string[]): Promise<ForumTag[]>;
   setForumTopic(channelId: string, topic: string): Promise<void>;
+  /** New forum post; attachment ids come back in upload order. */
+  createThread(
+    forumId: string,
+    o: { name: string; tagIds: string[]; content: string; files: UploadFile[] },
+  ): Promise<SentMessage & { threadId: string }>;
+  sendMessage(
+    threadId: string,
+    o: { content: string; files: UploadFile[] },
+  ): Promise<SentMessage>;
+  editMessage(
+    threadId: string,
+    messageId: string,
+    content: string,
+  ): Promise<void>;
+  pinThread(threadId: string): Promise<void>;
 }
 
 export type SetupReport = {
@@ -33,12 +61,39 @@ export type SetupReport = {
 const errText = (err: unknown) =>
   err instanceof Error ? err.message : String(err);
 
+/** Points the materials at the message/attachments they were re-uploaded as. */
+async function relinkFiles(db: Db, files: PostFile[], sent: SentMessage) {
+  for (const [i, f] of files.entries()) {
+    await db
+      .update(materials)
+      .set({
+        discordMessageId: sent.messageId,
+        discordAttachmentId: sent.attachmentIds[i],
+      })
+      .where(eq(materials.id, f.materialId));
+  }
+}
+
 export async function applySetup(
   db: Db,
   guild: SetupGuild,
   actions: Action[],
   snapshot: GuildSnapshot,
+  storageDir = '',
 ): Promise<SetupReport> {
+  const uploads = async (files: PostFile[]): Promise<UploadFile[]> => {
+    const out: UploadFile[] = [];
+    for (const f of files) {
+      const path = join(storageDir, f.storagePath);
+      try {
+        await access(path);
+      } catch {
+        throw new Error(`brak pliku ${f.name} w magazynie`);
+      }
+      out.push({ path, name: f.name });
+    }
+    return out;
+  };
   const report: SetupReport = {
     created: [],
     updated: [],
@@ -127,12 +182,64 @@ export async function applySetup(
             `${a.code}: zajęcia ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`,
           );
           break;
+        case 'postTopic': {
+          // Check every file before posting anything for this topic.
+          const prepared = [];
+          for (const m of a.messages) {
+            prepared.push({ ...m, uploads: await uploads(m.files) });
+          }
+          const [first, ...rest] = prepared;
+          const thread = await guild.createThread(a.channelId, {
+            name: a.title,
+            tagIds: a.tagIds,
+            content: first.content,
+            files: first.uploads,
+          });
+          // Link right away so a re-run never posts the topic twice.
+          await db
+            .update(topics)
+            .set({ discordThreadId: thread.threadId })
+            .where(eq(topics.id, a.topicId));
+          await relinkFiles(db, first.files, thread);
+          for (const m of rest) {
+            const sent = await guild.sendMessage(thread.threadId, {
+              content: m.content,
+              files: m.uploads,
+            });
+            await relinkFiles(db, m.files, sent);
+          }
+          const n = prepared.reduce((k, m) => k + m.files.length, 0);
+          report.created.push(`${a.code}: post „${a.title}” (${n} plików)`);
+          break;
+        }
+        case 'upsertInfoPost': {
+          const e = a.existing;
+          if (!e) {
+            const t = await guild.createThread(a.channelId, {
+              name: INFO_TITLE,
+              tagIds: [],
+              content: a.content,
+              files: [],
+            });
+            await guild.pinThread(t.threadId);
+            report.created.push(`${a.code}: post informacyjny`);
+            break;
+          }
+          if (!e.same)
+            await guild.editMessage(e.threadId, e.messageId, a.content);
+          if (!e.pinned) await guild.pinThread(e.threadId);
+          report.updated.push(`${a.code}: post informacyjny`);
+          break;
+        }
         case 'warn':
           report.warnings.push(a.code ? `${a.code}: ${a.message}` : a.message);
           break;
       }
     } catch (err) {
-      if ('subjectId' in a) failedSubjects.add(a.subjectId);
+      // A failed post only affects that topic; other failures stop the subject.
+      if ('subjectId' in a && a.type !== 'postTopic') {
+        failedSubjects.add(a.subjectId);
+      }
       const what = label || a.type;
       report.failures.push(`${what}: ${errText(err)}`);
     }

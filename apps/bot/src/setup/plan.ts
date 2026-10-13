@@ -9,7 +9,15 @@ import {
   stripMarks,
 } from '@studies/db';
 import type { ForumTag } from '../types.js';
-import type { Action, GuildSnapshot, SubjectSpec } from './types.js';
+import { renderInfoPost } from './info.js';
+import type {
+  Action,
+  ForumSnapshot,
+  GuildSnapshot,
+  PostMessage,
+  SubjectSpec,
+  TopicSpec,
+} from './types.js';
 
 export const MAX_FORUM_TAGS = 20;
 const MAX_CHANNEL_NAME = 100;
@@ -77,11 +85,100 @@ const tooManyTags = (code: string, dropped: string[]): Action => ({
   message: `limit ${MAX_FORUM_TAGS} tagów — pominięto: ${dropped.join(', ')}`,
 });
 
+export const MAX_POST_TAGS = 5;
+export const MAX_FILES_PER_MESSAGE = 10;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+const MAX_THREAD_NAME = 100;
+
+/** Starter (+ follow-up) messages for a DB topic posted by the bot. */
+function topicMessages(t: TopicSpec, webBaseUrl: string): PostMessage[] {
+  const header = `Dodane przez ${t.authorName ?? 'nieznanego autora'} · ${t.createdAt
+    .toISOString()
+    .slice(0, 10)} (z bazy Studies DB)`;
+  const upload = t.materials.filter((m) => m.sizeBytes <= MAX_UPLOAD_BYTES);
+  const linked = t.materials.filter((m) => m.sizeBytes > MAX_UPLOAD_BYTES);
+  const links =
+    linked.length > 0
+      ? [
+          'Za duże do wysłania na Discord:',
+          ...linked.map(
+            (m) => `${m.filename}: ${webBaseUrl}/files/${m.id}/original`,
+          ),
+        ]
+      : [];
+  const files = upload.map((m) => ({
+    materialId: m.id,
+    name: m.filename,
+    storagePath: m.storagePath,
+  }));
+  const messages: PostMessage[] = [];
+  for (let i = 0; i < Math.max(files.length, 1); i += MAX_FILES_PER_MESSAGE) {
+    messages.push({
+      content: i === 0 ? [header, ...links].join('\n') : 'Pliki (cd.)',
+      files: files.slice(i, i + MAX_FILES_PER_MESSAGE),
+    });
+  }
+  return messages;
+}
+
+function topicTagIds(t: TopicSpec, forum: ForumSnapshot): string[] {
+  const byKey = new Map(forum.tags.map((x) => [tagKey(x.name), x.id]));
+  const names = [
+    ...(t.classKind ? [CLASS_NAMES[t.classKind]] : []),
+    ...(t.group !== null ? [groupName(t.group)] : []),
+    ...t.tagNames,
+  ];
+  const ids = names.flatMap((n) => byKey.get(tagKey(n)) ?? []);
+  return [...new Set(ids)].slice(0, MAX_POST_TAGS);
+}
+
+function planPosts(
+  s: SubjectSpec,
+  forum: ForumSnapshot,
+  webBaseUrl: string,
+): Action[] {
+  const out: Action[] = [];
+  const onDiscord = new Set(forum.threadIds ?? []);
+  for (const t of s.topics ?? []) {
+    if (onDiscord.has(t.threadId)) continue;
+    out.push({
+      type: 'postTopic',
+      subjectId: s.id,
+      code: s.code,
+      channelId: forum.id,
+      topicId: t.id,
+      title: t.title.slice(0, MAX_THREAD_NAME),
+      tagIds: topicTagIds(t, forum),
+      messages: topicMessages(t, webBaseUrl),
+    });
+  }
+  const content = renderInfoPost(s, webBaseUrl);
+  const info = forum.infoPost ?? null;
+  const same = info?.content === content;
+  if (!info || !same || !info.pinned) {
+    out.push({
+      type: 'upsertInfoPost',
+      subjectId: s.id,
+      code: s.code,
+      channelId: forum.id,
+      content,
+      existing: info && {
+        threadId: info.threadId,
+        messageId: info.messageId,
+        pinned: info.pinned,
+        same,
+      },
+    });
+  }
+  return out;
+}
+
 export function planSetup(
   subjects: SubjectSpec[],
   g: GuildSnapshot,
   roleName: string,
   render: (s: SubjectSpec) => string,
+  opts?: { webBaseUrl: string },
 ): Action[] {
   const actions: Action[] = [];
 
@@ -165,6 +262,7 @@ export function planSetup(
         topic,
       });
     }
+    if (opts) actions.push(...planPosts(s, forum, opts.webBaseUrl));
   }
 
   // Discord → DB: forums no subject points to become subjects.
