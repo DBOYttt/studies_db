@@ -451,12 +451,12 @@ describe('/setup', () => {
           threads: new Collection(),
           hasMore: false,
         }),
+        // The starter message cannot be fetched back: the post still counts.
         create: vi.fn(async () => ({
           id: 'th',
-          fetchStarterMessage: async () => ({
-            id: 'th',
-            attachments: new Collection(),
-          }),
+          fetchStarterMessage: async () => {
+            throw new Error('Unknown Message');
+          },
         })),
       },
     };
@@ -505,6 +505,8 @@ describe('/setup', () => {
     expect(text).toContain('FIZ');
     expect(text).toContain('wytyczne');
     expect(text).toContain('Pobrano');
+    expect(text).toContain('post informacyjny');
+    expect(text).not.toContain('Błędy');
   });
 
   it('skips catch-up and the second pass when nothing was imported', async () => {

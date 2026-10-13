@@ -63,8 +63,16 @@ export type SetupReport = {
 const errText = (err: unknown) =>
   err instanceof Error ? err.message : String(err);
 
-/** Points the materials at the message/attachments they were re-uploaded as. */
-async function relinkFiles(db: Db, files: PostFile[], sent: SentMessage) {
+/**
+ * Points the materials at the message/attachments they were re-uploaded as.
+ * Writes nothing and returns false if the attachment count does not match.
+ */
+async function relinkFiles(
+  db: Db,
+  files: PostFile[],
+  sent: SentMessage,
+): Promise<boolean> {
+  if (sent.attachmentIds.length !== files.length) return false;
   for (const [i, f] of files.entries()) {
     await db
       .update(materials)
@@ -74,7 +82,11 @@ async function relinkFiles(db: Db, files: PostFile[], sent: SentMessage) {
       })
       .where(eq(materials.id, f.materialId));
   }
+  return true;
 }
+
+const unlinkedFiles = (code: string, title: string, n: number) =>
+  `${code}: „${title}”: Discord nie potwierdził ${n} plików — zostały wysłane, ale nie są połączone w bazie`;
 
 export async function applySetup(
   db: Db,
@@ -207,16 +219,24 @@ export async function applySetup(
             .update(topics)
             .set({ discordThreadId: thread.threadId })
             .where(eq(topics.id, a.topicId));
-          await relinkFiles(db, first.files, thread);
+          let unlinked = 0;
+          if (!(await relinkFiles(db, first.files, thread))) {
+            unlinked += first.files.length;
+          }
           for (const m of rest) {
             const sent = await guild.sendMessage(thread.threadId, {
               content: m.content,
               files: m.uploads,
             });
-            await relinkFiles(db, m.files, sent);
+            if (!(await relinkFiles(db, m.files, sent))) {
+              unlinked += m.files.length;
+            }
           }
           const n = prepared.reduce((k, m) => k + m.files.length, 0);
           report.created.push(`${a.code}: post „${a.title}” (${n} plików)`);
+          if (unlinked > 0) {
+            report.failures.push(unlinkedFiles(a.code, a.title, unlinked));
+          }
           break;
         }
         case 'upsertInfoPost': {

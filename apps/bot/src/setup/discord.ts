@@ -187,12 +187,14 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
         },
         reason: '/setup',
       });
-      const starter = await thread.fetchStarterMessage();
-      if (!starter) throw new Error(`brak wiadomości startowej w ${thread.id}`);
+      // The thread exists now: never throw from here on. A forum post's
+      // starter message has the thread's id; attachment ids are best effort
+      // (apply.ts leaves the files unlinked if they don't match).
+      const starter = await thread.fetchStarterMessage().catch(() => null);
       return {
         threadId: thread.id,
-        messageId: starter.id,
-        attachmentIds: [...starter.attachments.keys()],
+        messageId: thread.id,
+        attachmentIds: starter ? [...starter.attachments.keys()] : [],
       };
     },
     async sendMessage(threadId, { content, files }) {

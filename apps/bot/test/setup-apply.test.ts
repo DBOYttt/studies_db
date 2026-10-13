@@ -608,6 +608,74 @@ describe('applySetup: posts', () => {
     expect(await linkOf(b)).toEqual({ m: 'msg-2', a: 'msg-2-att-0' });
   });
 
+  it('links the thread but no files when the starter attachments are unknown', async () => {
+    const a = await mat('a.pdf');
+    const b = await mat('b.pdf');
+    const g = fakeGuild();
+    g.createThread = async () => ({
+      threadId: 'th-x',
+      messageId: 'th-x',
+      attachmentIds: [],
+    });
+    const r = await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [
+          { content: 'hdr', files: [file(a, 'a.pdf'), file(b, 'b.pdf')] },
+        ]),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(await threadOf(topicId)).toBe('th-x');
+    expect(await linkOf(a)).toEqual({ m: 'seed-m-a.pdf', a: 'seed-a-a.pdf' });
+    expect(await linkOf(b)).toEqual({ m: 'seed-m-b.pdf', a: 'seed-a-b.pdf' });
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('ASD');
+    expect(r.failures[0]).toContain('Lab 1');
+  });
+
+  it('relinks nothing from a message whose attachment count is off, but keeps going', async () => {
+    const a = await mat('a.pdf');
+    const b = await mat('b.pdf');
+    const c = await mat('c.pdf');
+    const d = await mat('d.pdf');
+    const g = fakeGuild();
+    let sent = 0;
+    g.sendMessage = async (_threadId, o) => {
+      sent++;
+      const id = `msg-${sent}`;
+      const n = sent === 1 ? o.files.length - 1 : o.files.length;
+      return {
+        messageId: id,
+        attachmentIds: Array.from({ length: n }, (_, i) => `${id}-att-${i}`),
+      };
+    };
+    const r = await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [
+          { content: 'hdr', files: [file(a, 'a.pdf')] },
+          {
+            content: 'Pliki (cd.)',
+            files: [file(b, 'b.pdf'), file(c, 'c.pdf')],
+          },
+          { content: 'Pliki (cd.)', files: [file(d, 'd.pdf')] },
+        ]),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(await linkOf(a)).toEqual({ m: 'th-1', a: 'th-1-att-0' });
+    expect(await linkOf(b)).toEqual({ m: 'seed-m-b.pdf', a: 'seed-a-b.pdf' });
+    expect(await linkOf(c)).toEqual({ m: 'seed-m-c.pdf', a: 'seed-a-c.pdf' });
+    expect(await linkOf(d)).toEqual({ m: 'msg-2', a: 'msg-2-att-0' });
+    expect(await threadOf(topicId)).toBe('th-1');
+    expect(r.failures).toHaveLength(1);
+  });
+
   it('reports a missing file and still posts the next topic', async () => {
     const gone = await mat('gone.pdf', false);
     const [{ id: other }] = await db
