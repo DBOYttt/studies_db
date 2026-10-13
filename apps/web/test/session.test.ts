@@ -1,10 +1,13 @@
 import {
+  consumeLoginToken,
   createLoginToken,
   type Db,
   getSessionUser,
   upsertUser,
+  users,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import { eq } from 'drizzle-orm';
 import { NextRequest } from 'next/server';
 import {
   afterAll,
@@ -21,7 +24,15 @@ let db: Db;
 
 vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
-const { sessionCookieOptions } = await import('../lib/session');
+let cookieSid: string | undefined;
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (n: string) =>
+      n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
+  }),
+}));
+
+const { requireAdmin, sessionCookieOptions } = await import('../lib/session');
 const { GET, POST: CALLBACK } = await import('../app/auth/callback/route');
 const { POST } = await import('../app/auth/logout/route');
 
@@ -182,5 +193,49 @@ describe('POST /auth/logout', () => {
     expect(set).toMatch(/sid=;/);
     expect(set).toMatch(/Max-Age=0/i);
     expect(await getSessionUser(db, sid)).toBeNull();
+  });
+});
+
+describe('requireAdmin', () => {
+  const expect404 = async () => {
+    try {
+      await requireAdmin();
+      expect.unreachable();
+    } catch (e) {
+      expect(String((e as { digest?: string }).digest)).toBe(
+        'NEXT_HTTP_ERROR_FALLBACK;404',
+      );
+    }
+  };
+
+  it('returns the admin, 404s for non-admins and anonymous users', async () => {
+    const userId = await upsertUser(db, {
+      discordUserId: 'adm1',
+      displayName: 'Ada',
+      avatarUrl: null,
+    });
+    const r = await consumeLoginToken(db, await createLoginToken(db, userId));
+    cookieSid = (r as { sessionToken: string }).sessionToken;
+    try {
+      await expect404();
+
+      await db.update(users).set({ isAdmin: true }).where(eq(users.id, userId));
+      expect(await requireAdmin()).toMatchObject({
+        id: userId,
+        displayName: 'Ada',
+        isAdmin: true,
+      });
+
+      await db
+        .update(users)
+        .set({ isAdmin: false })
+        .where(eq(users.id, userId));
+      await expect404();
+
+      cookieSid = undefined;
+      await expect404();
+    } finally {
+      cookieSid = undefined;
+    }
   });
 });

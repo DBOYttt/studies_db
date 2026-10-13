@@ -278,7 +278,7 @@ describe('file route', () => {
         new Request('http://x/'),
         String(unk),
         'preview',
-        { id: userId, displayName: 'Ann', avatarUrl: null },
+        { id: userId, displayName: 'Ann', avatarUrl: null, isAdmin: false },
       );
       expect(res.status).toBe(404);
     } finally {
@@ -334,7 +334,7 @@ describe('file route', () => {
       new Request('http://x/'),
       String(id),
       'original',
-      { id: userId, displayName: 'Ann', avatarUrl: null },
+      { id: userId, displayName: 'Ann', avatarUrl: null, isAdmin: false },
     );
     expect(res.status).toBe(200);
   });

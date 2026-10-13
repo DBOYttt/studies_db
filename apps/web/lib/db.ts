@@ -4,6 +4,7 @@ import mysql from 'mysql2/promise';
 interface Cache {
   db?: { db: Db; pool: mysql.Pool };
   ro?: mysql.Pool;
+  rw?: mysql.Pool;
 }
 
 // Cached on globalThis so dev hot-reloads don't leak pools.
@@ -41,4 +42,20 @@ export function getRoPool(): mysql.Pool {
     uri: env('DATABASE_RO_URL'),
   });
   return cache.ro;
+}
+
+/**
+ * Pool of `studies_rw` for the admin SQL console, or null when
+ * DATABASE_RW_URL is not set (the console is then disabled).
+ * MAX_USER_CONNECTIONS is 5: leave room for watchdog KILL connections.
+ */
+export function getRwPool(): mysql.Pool | null {
+  const uri = process.env.DATABASE_RW_URL;
+  if (!uri) return null;
+  cache.rw ??= mysql.createPool({
+    ...RO_POOL_OPTIONS,
+    connectionLimit: 3,
+    uri,
+  });
+  return cache.rw;
 }

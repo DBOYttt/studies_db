@@ -452,8 +452,8 @@ describe('POST /api/sql', () => {
         method: 'POST',
         body: JSON.stringify({ sql: 'SELECT 1' }),
       });
-    const user = { id: 1, displayName: 'A', avatarUrl: null };
-    const other = { id: 2, displayName: 'B', avatarUrl: null };
+    const user = { id: 1, displayName: 'A', avatarUrl: null, isAdmin: false };
+    const other = { id: 2, displayName: 'B', avatarUrl: null, isAdmin: false };
     expect((await handleSqlRequest(req(), user, roPool, limiter)).status).toBe(
       200,
     );
