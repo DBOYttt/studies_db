@@ -234,6 +234,64 @@ describe('/setup', () => {
     expect(text).toContain('nadaj Ci rolę Studies Admin');
   });
 
+  it('refuses a second /setup while one is running, and allows it afterwards', async () => {
+    let release = () => {};
+    const blocked = new Promise<void>((r) => {
+      release = r;
+    });
+    const run = (defer: () => Promise<void>) => {
+      const deferReply = vi.fn(defer);
+      return {
+        ...mkInteraction({
+          commandName: 'setup',
+          guild: setupGuild,
+          user: { id: 'u1' },
+          member: { roles: [] },
+          memberPermissions: manage,
+          options: { getBoolean: () => true },
+        }),
+        deferReply,
+      };
+    };
+    const first = run(() => blocked);
+    const firstDone = handlerFor()(asI(first));
+    await vi.waitFor(() => expect(first.deferReply).toHaveBeenCalled());
+
+    const second = run(async () => {});
+    await handlerFor()(asI(second));
+    expect(second.deferReply).not.toHaveBeenCalled();
+    expect(second.reply.mock.calls[0]?.[0]).toMatchObject({
+      content: '/setup już trwa — spróbuj za chwilę.',
+      flags: MessageFlags.Ephemeral,
+    });
+
+    release();
+    await firstDone;
+    expect(first.editReply.mock.calls[0]?.[0].content).toContain('Plan');
+    const third = run(async () => {});
+    await handlerFor()(asI(third));
+    expect(third.reply).not.toHaveBeenCalled();
+    expect(third.editReply.mock.calls[0]?.[0].content).toContain('Plan');
+  });
+
+  it('releases the /setup lock when a run fails', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const run = (deferReply: () => Promise<void>) =>
+      mkInteraction({
+        commandName: 'setup',
+        guild: setupGuild,
+        user: { id: 'u1' },
+        member: { roles: [] },
+        memberPermissions: manage,
+        deferReply: vi.fn(deferReply),
+        options: { getBoolean: () => true },
+      });
+    await handlerFor()(asI(run(() => Promise.reject(new Error('boom')))));
+    const next = run(async () => {});
+    await handlerFor()(asI(next));
+    expect(next.editReply.mock.calls[0]?.[0].content).toContain('Plan');
+  });
+
   it('refuses members with neither the role nor Manage Server', async () => {
     const i = mkInteraction({
       commandName: 'setup',

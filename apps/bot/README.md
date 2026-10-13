@@ -27,8 +27,8 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    may run it. For every subject without a forum it creates a `Semestr N` category and a forum
    `<code>-<name>` with class/group tags and guidelines generated from the DB, and links it. Linked forums only get
    missing tags and refreshed guidelines (manual edits to the guidelines are overwritten). Nothing is ever deleted
-   or renamed. A linked forum the bot cannot see is reported, never recreated. Re-running is safe; don't run two
-   `/setup`s at once (a race can leave an unlinked forum).
+   or renamed. A linked forum the bot cannot see is reported, never recreated. Re-running is safe; a second `/setup`
+   while one is running is refused.
    It also works the other way: every forum on the server that no subject points to becomes a subject (code and
    name from the forum name, `asd-algorytmy` -> ASD / "Algorytmy"; semester from a `Semestr N` category, else 1;
    ECTS 0, fix with `/subject edit`). Class tags on forums (Laboratorium, Seminarium, ...) create missing classes.

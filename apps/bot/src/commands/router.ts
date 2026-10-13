@@ -60,6 +60,8 @@ const FORUM_VISIBILITY_WARNING =
   'Uwaga: bot nie widzi tego forum — sprawdź uprawnienia (View Channel, Read Message History).';
 const MAX_LEN = 2000;
 
+let setupRunning = false;
+
 const truncate = (s: string) =>
   s.length <= MAX_LEN ? s : `${s.slice(0, MAX_LEN - 1)}…`;
 
@@ -121,6 +123,70 @@ async function autocomplete(
       value: r.code,
     })),
   );
+}
+
+/** /setup: plan, apply, and a second pass for new or imported forums. */
+async function runSetup(
+  deps: RouterDeps,
+  i: ChatInputCommandInteraction,
+): Promise<void> {
+  const { db } = deps.ingest;
+  const eph = { flags: MessageFlags.Ephemeral } as const;
+  await i.deferReply(eph);
+  if (!i.guild) throw new Error('/setup outside a guild');
+  const guild = i.guild;
+  const plan = async () => {
+    const snapshot = await snapshotGuild(guild, i.user.id);
+    const actions = planSetup(
+      await loadSubjectSpecs(db),
+      snapshot,
+      {
+        name: deps.config.adminRoleName,
+        storedId: await getSetting(db, ADMIN_ROLE_SETTING),
+      },
+      renderGuidelines,
+      { webBaseUrl: deps.config.webBaseUrl },
+    );
+    return { snapshot, actions };
+  };
+  const first = await plan();
+  if (i.options.getBoolean('dry_run')) {
+    await i.editReply(replyOptions(formatPlan(first.actions)));
+    return;
+  }
+  const setupGuild = discordSetupGuild(guild);
+  const storageDir = deps.ingest.storageDir;
+  let report = await applySetup(
+    db,
+    setupGuild,
+    first.actions,
+    first.snapshot,
+    storageDir,
+  );
+  if (first.actions.some((a) => a.type === 'importForum')) {
+    // Pull posts from the imported forums before planning what to add.
+    const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
+      ignoreWatermark: true,
+    });
+    report.updated.push(
+      `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
+    );
+  }
+  if (needsSecondPass(first.actions)) {
+    // New/imported forums: tags, guidelines, topic posts and info post.
+    const second = await plan();
+    report = mergeReports(
+      report,
+      await applySetup(
+        db,
+        setupGuild,
+        second.actions,
+        second.snapshot,
+        storageDir,
+      ),
+    );
+  }
+  await i.editReply(replyOptions(formatReport(report)));
 }
 
 async function runCommand(
@@ -267,61 +333,17 @@ async function runCommand(
       return;
     }
     case 'setup': {
-      await i.deferReply(eph);
-      if (!i.guild) throw new Error('/setup outside a guild');
-      const guild = i.guild;
-      const plan = async () => {
-        const snapshot = await snapshotGuild(guild, i.user.id);
-        const actions = planSetup(
-          await loadSubjectSpecs(db),
-          snapshot,
-          {
-            name: deps.config.adminRoleName,
-            storedId: await getSetting(db, ADMIN_ROLE_SETTING),
-          },
-          renderGuidelines,
-          { webBaseUrl: deps.config.webBaseUrl },
-        );
-        return { snapshot, actions };
-      };
-      const first = await plan();
-      if (i.options.getBoolean('dry_run')) {
-        await i.editReply(replyOptions(formatPlan(first.actions)));
+      // One run at a time: two concurrent runs could both create a forum.
+      if (setupRunning) {
+        await reply('/setup już trwa — spróbuj za chwilę.');
         return;
       }
-      const setupGuild = discordSetupGuild(guild);
-      const storageDir = deps.ingest.storageDir;
-      let report = await applySetup(
-        db,
-        setupGuild,
-        first.actions,
-        first.snapshot,
-        storageDir,
-      );
-      if (first.actions.some((a) => a.type === 'importForum')) {
-        // Pull posts from the imported forums before planning what to add.
-        const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-          ignoreWatermark: true,
-        });
-        report.updated.push(
-          `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
-        );
+      setupRunning = true;
+      try {
+        await runSetup(deps, i);
+      } finally {
+        setupRunning = false;
       }
-      if (needsSecondPass(first.actions)) {
-        // New/imported forums: tags, guidelines, topic posts and info post.
-        const second = await plan();
-        report = mergeReports(
-          report,
-          await applySetup(
-            db,
-            setupGuild,
-            second.actions,
-            second.snapshot,
-            storageDir,
-          ),
-        );
-      }
-      await i.editReply(replyOptions(formatReport(report)));
       return;
     }
     case 'resync': {
