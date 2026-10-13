@@ -6,6 +6,40 @@ export type LecturerSpec = {
   title: string | null;
   /** Group number for a group-scoped assignment, null for the whole class. */
   group: number | null;
+  email?: string | null;
+  officeHours?: string | null;
+  room?: string | null;
+};
+
+/** One timetable occurrence. Times are wall Dates (UTC fields = Warsaw clock). */
+export type SessionSpec = {
+  uid: string;
+  classKind: ClassKind | null;
+  group: number | null;
+  label: string | null;
+  room: string | null;
+  startsAt: Date;
+  endsAt: Date;
+  status: 'confirmed' | 'cancelled';
+};
+
+export type MaterialSpec = {
+  id: number;
+  filename: string;
+  storagePath: string;
+  sizeBytes: number;
+};
+
+export type TopicSpec = {
+  id: number;
+  title: string;
+  threadId: string;
+  classKind: ClassKind | null;
+  group: number | null;
+  tagNames: string[];
+  authorName: string | null;
+  createdAt: Date;
+  materials: MaterialSpec[];
 };
 
 export type ClassSpec = {
@@ -27,6 +61,9 @@ export type SubjectSpec = {
   platformUrl: string | null;
   channelId: string | null;
   classes: ClassSpec[];
+  topics?: TopicSpec[];
+  /** Upcoming sessions (next 14 days) for the info post. */
+  sessions?: SessionSpec[];
 };
 
 export type ForumSnapshot = {

@@ -1,11 +1,15 @@
 import {
   classLecturers,
+  classSessions,
   type Db,
   ensureClass,
   ensureGroup,
+  insertMaterial,
   lecturers,
   subjects,
   tags,
+  topics,
+  upsertUser,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
@@ -112,9 +116,118 @@ describe('loadSubjectSpecs', () => {
     const labSpec = asd?.classes.find((c) => c.kind === 'laboratorium');
     expect(labSpec?.groups).toEqual([1, 2, 3]);
     expect(labSpec?.lecturers).toEqual([
-      { name: 'Michał Kamiński', title: 'mgr', group: 3 },
+      {
+        name: 'Michał Kamiński',
+        title: 'mgr',
+        group: 3,
+        email: null,
+        officeHours: null,
+        room: null,
+      },
     ]);
     expect(asd?.classes.find((c) => c.kind === 'wyklad')?.groups).toEqual([]);
+  });
+});
+
+describe('loadSubjectSpecs: topics, files, sessions', () => {
+  it('loads posted-content data and upcoming sessions', async () => {
+    const lab = await ensureClass(db, asdId, 'laboratorium');
+    const gr1 = await ensureGroup(db, lab, 1);
+    const [{ id: lid }] = await db
+      .insert(lecturers)
+      .values({
+        name: 'Jan Kowalski',
+        email: 'jan@example.edu',
+        officeHours: 'śr. 10',
+        room: 'B-1',
+      })
+      .$returningId();
+    await db
+      .insert(classLecturers)
+      .values({ classId: lab, lecturerId: lid, groupId: null });
+    const uid = await upsertUser(db, {
+      discordUserId: 'u-ola',
+      displayName: 'Ola',
+      avatarUrl: null,
+    });
+    const [{ id: topicId }] = await db
+      .insert(topics)
+      .values({
+        subjectId: asdId,
+        title: 'Lab 1',
+        discordThreadId: 'seed-1',
+        createdBy: uid,
+        classId: lab,
+        groupId: gr1,
+      })
+      .$returningId();
+    await db.insert(topics).values({
+      subjectId: asdId,
+      title: 'Gone',
+      discordThreadId: 'seed-2',
+      deletedAt: new Date(),
+    });
+    const mat = (id: string, status: 'ready' | 'pending', deleted = false) =>
+      insertMaterial(
+        db,
+        {
+          topicId,
+          uploaderId: uid,
+          discordMessageId: `m-${id}`,
+          discordAttachmentId: `a-${id}`,
+          originalFilename: `${id}.pdf`,
+          mimeType: 'application/pdf',
+          sizeBytes: 123,
+          sha256: id.padEnd(64, '0'),
+          storagePath: `originals/${id}.pdf`,
+          previewKind: 'pdf',
+          status,
+          deletedAt: deleted ? new Date() : null,
+        },
+        status === 'ready' ? [] : ['extract_text'],
+      );
+    await mat('a', 'ready');
+    await mat('b', 'pending');
+    await mat('c', 'ready', true);
+    const at = (d: number) => new Date(Date.UTC(2026, 9, d, 8));
+    await db.insert(classSessions).values(
+      [5, 13, 30].map((d) => ({
+        uid: 'u-lab',
+        occurrenceStart: at(d),
+        subjectId: asdId,
+        classId: lab,
+        groupId: gr1,
+        room: 'C-2',
+        startsAt: at(d),
+        endsAt: at(d),
+      })),
+    );
+
+    const [asd] = (await loadSubjectSpecs(db, at(12))).filter(
+      (s) => s.code === 'ASD',
+    );
+    expect(asd.classes[0].lecturers[0]).toMatchObject({
+      email: 'jan@example.edu',
+      officeHours: 'śr. 10',
+      room: 'B-1',
+    });
+    expect(asd.topics).toHaveLength(1);
+    expect(asd.topics?.[0]).toMatchObject({
+      id: topicId,
+      title: 'Lab 1',
+      threadId: 'seed-1',
+      classKind: 'laboratorium',
+      group: 1,
+      authorName: 'Ola',
+    });
+    expect(asd.topics?.[0].materials.map((m) => m.filename)).toEqual(['a.pdf']);
+    expect(asd.sessions?.map((x) => x.startsAt.getUTCDate())).toEqual([13]);
+    expect(asd.sessions?.[0]).toMatchObject({
+      classKind: 'laboratorium',
+      group: 1,
+      room: 'C-2',
+      status: 'confirmed',
+    });
   });
 });
 
