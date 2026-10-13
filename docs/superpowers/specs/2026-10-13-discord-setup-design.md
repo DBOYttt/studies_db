@@ -209,3 +209,18 @@ the starter message when the text differs and re-pin if unpinned.
 **Passes.** `/setup` re-plans and applies a second time when the first pass created or imported any forum, so
 new forums get posts and info posts in the same run. Dry run shows `post N topics (M files)` and
 `create/update info post`.
+
+## Addendum 3 (2026-10-13): review fixes
+
+- **Admin role pinned by id.** `/setup` stores the admin role id in `bot_settings` (`admin_role_id`, migration
+  0007); admin commands check that id. Stored id present in the guild → used. Otherwise exactly one role named
+  `ADMIN_ROLE_NAME` → adopted; none → created; several → warning, nothing stored or assigned. Nothing stored →
+  only `/setup` (via Manage Server) works. One `/setup` at a time (in-process lock).
+- **Info post.** Pinned only when created and no other post in the forum is pinned (else a warning); never
+  re-pinned; edited only when the text differs. A failed pin is a warning. Archived threads are reopened before
+  edit/pin. The invite adds Send Messages, Attach Files and Manage Threads (`292326313040`).
+- **Unreadable forums** (no View Channel / Read Message History, or a failed fetch) are left out of the snapshot
+  with one warning each; never imported, never posted to.
+- **Posts.** The topic is linked as soon as its thread exists; the adapter never throws after that. A message
+  whose attachment count differs from the files sent relinks none of them (failure line). Files of a bot-owned
+  thread whose message is gone are re-sent (`postFiles`, `Pliki (cd.)`). Messages carry ≤ 10 files and ≤ 24 MiB.
