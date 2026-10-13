@@ -10,6 +10,8 @@
     "dev:worker": "pnpm --filter @studies/worker dev",
     "db:up": "sh scripts/db-up.sh",
     "db:migrate": "pnpm --filter @studies/db migrate",
+    "db:seed": "pnpm --filter @studies/db seed",
+    "db:login": "pnpm --filter @studies/db run login-link",
     "dev:web": "pnpm --filter @studies/web dev"
   },
   "devDependencies": {
