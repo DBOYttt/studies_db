@@ -10,11 +10,13 @@ import {
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type Client,
+  type GuildMember,
   type Interaction,
   MessageFlags,
   PermissionFlagsBits,
 } from 'discord.js';
 import { like, or } from 'drizzle-orm';
+import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import { catchUp, discordForumSource } from '../catchup.js';
 import { ADMIN_ROLE_SETTING, type BotConfig } from '../config.js';
 import { toDiscordUser } from '../discord/map.js';
@@ -125,6 +127,9 @@ async function autocomplete(
   );
 }
 
+const callerOf = (i: ChatInputCommandInteraction) =>
+  toDiscordUser(i.user, i.member as GuildMember | null);
+
 /** /setup: plan, apply, and a second pass for new or imported forums. */
 async function runSetup(
   deps: RouterDeps,
@@ -186,6 +191,18 @@ async function runSetup(
       ),
     );
   }
+  // The role was just created/adopted and assigned to the caller: mirror it.
+  const gotRole = first.actions.some((a) => a.type === 'assignRole');
+  if (gotRole) {
+    try {
+      const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
+      if (roleId && report.failures.length === 0) {
+        await syncAdminFlag(db, callerOf(i), [...memberRoleIds(i), roleId]);
+      }
+    } catch (err) {
+      console.error('admin flag sync after /setup failed', err);
+    }
+  }
   await i.editReply(replyOptions(formatReport(report)));
 }
 
@@ -197,6 +214,12 @@ async function runCommand(
   const eph = { flags: MessageFlags.Ephemeral } as const;
   const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
+
+  try {
+    await syncAdminFlag(db, callerOf(i), memberRoleIds(i));
+  } catch (err) {
+    console.error('admin flag sync failed', err);
+  }
 
   const needsAdmin = name === 'setup' || ADMIN_COMMANDS.has(name);
   const roleId = needsAdmin ? await getSetting(db, ADMIN_ROLE_SETTING) : null;
