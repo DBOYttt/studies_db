@@ -57,6 +57,13 @@
       "when": 1791921741498,
       "tag": "0007_bot_settings",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "5",
+      "when": 1791926225001,
+      "tag": "0008_admin",
+      "breakpoints": true
     }
   ]
 }

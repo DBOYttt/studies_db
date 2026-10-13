@@ -122,6 +122,7 @@ export const users = mysqlTable('users', {
   displayName: varchar('display_name', { length: 100 }).notNull(),
   avatarUrl: varchar('avatar_url', { length: 500 }),
   isBanned: boolean('is_banned').notNull().default(false),
+  isAdmin: boolean('is_admin').notNull().default(false),
   createdAt: now(),
 });
 
@@ -248,6 +249,23 @@ export const sessions = mysqlTable('sessions', {
   expiresAt: datetime('expires_at').notNull(),
   createdAt: now(),
 });
+
+export const adminAudit = mysqlTable(
+  'admin_audit',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id),
+    action: varchar('action', { length: 50 }).notNull(),
+    target: varchar('target', { length: 100 }),
+    statement: mediumtext('statement'),
+    rowsAffected: int('rows_affected'),
+    details: json('details'),
+    createdAt: now(),
+  },
+  (t) => [index('idx_admin_audit_created_at').on(t.createdAt)],
+);
 
 export const botState = mysqlTable('bot_state', {
   subjectId: int('subject_id')

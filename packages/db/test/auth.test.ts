@@ -12,7 +12,7 @@ import {
   upsertUser,
 } from '../src/auth.js';
 import type { Db } from '../src/client.js';
-import { loginTokens, sessions } from '../src/schema.js';
+import { loginTokens, sessions, users } from '../src/schema.js';
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 
 let db: Db;
@@ -54,6 +54,7 @@ describe('auth', () => {
       id: u.id,
       displayName: `User ${n}`,
       avatarUrl: null,
+      isAdmin: false,
     });
     expect(await consumeLoginToken(db, token, now)).toBeNull();
   });
@@ -154,6 +155,18 @@ describe('auth', () => {
       id: a,
       displayName: 'B',
       avatarUrl: 'http://x/a.png',
+      isAdmin: false,
     });
+  });
+
+  it('is_admin defaults to false and getSessionUser reflects the flag', async () => {
+    const u = await newUser();
+    const [row] = await db.select().from(users).where(eq(users.id, u.id));
+    expect(row.isAdmin).toBe(false);
+    const token = await createLoginToken(db, u.id);
+    const s = must(await consumeLoginToken(db, token));
+    expect(must(await getSessionUser(db, s.sessionToken)).isAdmin).toBe(false);
+    await db.update(users).set({ isAdmin: true }).where(eq(users.id, u.id));
+    expect(must(await getSessionUser(db, s.sessionToken)).isAdmin).toBe(true);
   });
 });

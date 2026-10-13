@@ -56,3 +56,18 @@ export const PUBLIC_VIEWS = [
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];
+
+/** Tables the admin SQL console's read-write user may SELECT/INSERT/UPDATE/DELETE. */
+export const CONTENT_TABLES = [
+  'subjects',
+  'lecturers',
+  'classes',
+  'class_groups',
+  'class_lecturers',
+  'class_sessions',
+  'topics',
+  'tags',
+  'topic_tags',
+  'materials',
+  'jobs',
+] as const;
