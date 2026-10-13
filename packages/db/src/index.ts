@@ -5,4 +5,5 @@ export * from './hierarchy.js';
 export { insertMaterial, type NewMaterial } from './materials.js';
 export * from './schema.js';
 export * from './search.js';
+export * from './settings.js';
 export * from './unitime/index.js';

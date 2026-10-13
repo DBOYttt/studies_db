@@ -301,3 +301,10 @@ export const planSync = mysqlTable('plan_sync', {
   lastError: text('last_error'),
   stats: json('stats'),
 });
+
+// Bot key/value settings (e.g. `admin_role_id`). Not exposed through views.
+export const botSettings = mysqlTable('bot_settings', {
+  key: varchar('key', { length: 50 }).primaryKey(),
+  value: varchar('value', { length: 200 }).notNull(),
+  updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+});
