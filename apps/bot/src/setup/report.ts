@@ -62,6 +62,10 @@ function describeAction(a: Action): string {
       const n = a.messages.reduce((k, m) => k + m.files.length, 0);
       return `${a.code}: opublikuj temat „${a.title}” (${n} plików)`;
     }
+    case 'postFiles': {
+      const n = a.messages.reduce((k, m) => k + m.files.length, 0);
+      return `${a.code}: doślij ${n} plików do tematu „${a.title}”`;
+    }
     case 'upsertInfoPost':
       return `${a.code}: ${a.existing ? 'zaktualizuj' : 'utwórz'} post informacyjny`;
     case 'warn':

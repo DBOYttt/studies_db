@@ -62,6 +62,10 @@ async function forumSnapshot(
   botId: string,
 ): Promise<ForumSnapshot> {
   const threads = await forumThreads(c);
+  const botThreadMessageIds: Record<string, string[]> = {};
+  for (const t of threads) {
+    if (t.ownerId === botId) botThreadMessageIds[t.id] = await messageIds(t);
+  }
   return {
     id: c.id,
     name: c.name,
@@ -72,7 +76,21 @@ async function forumSnapshot(
     infoPost: await infoPostOf(threads, botId),
     pinnedThreadId:
       threads.find((t) => t.flags.has(ChannelFlags.Pinned))?.id ?? null,
+    botThreadMessageIds,
   };
+}
+
+/** Every message id in a thread, paging back 100 at a time. */
+async function messageIds(t: AnyThreadChannel): Promise<string[]> {
+  const ids: string[] = [];
+  let before: string | undefined;
+  for (;;) {
+    const page = await t.messages.fetch({ limit: 100, before, cache: false });
+    const keys = [...page.keys()];
+    ids.push(...keys);
+    if (keys.length < 100) return ids;
+    before = keys.reduce((a, b) => (BigInt(a) < BigInt(b) ? a : b));
+  }
 }
 
 /** All threads of a forum: active plus every archived page. */

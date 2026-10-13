@@ -155,6 +155,35 @@ function topicMessages(t: TopicSpec, webBaseUrl: string): PostMessage[] {
   }));
 }
 
+/** Uploadable files of a bot-owned thread whose message is gone (or never sent). */
+function planMissingFiles(
+  s: SubjectSpec,
+  t: TopicSpec,
+  forum: ForumSnapshot,
+): Action[] {
+  const ids = forum.botThreadMessageIds?.[t.threadId];
+  if (!ids) return [];
+  const have = new Set(ids);
+  const missing = t.materials.filter(
+    (m) => m.sizeBytes <= MAX_UPLOAD_BYTES && !have.has(m.discordMessageId),
+  );
+  if (missing.length === 0) return [];
+  return [
+    {
+      type: 'postFiles',
+      subjectId: s.id,
+      code: s.code,
+      topicId: t.id,
+      threadId: t.threadId,
+      title: t.title.slice(0, MAX_THREAD_NAME),
+      messages: chunkFiles(missing.map(postFile)).map((files) => ({
+        content: FILES_CONTINUED,
+        files,
+      })),
+    },
+  ];
+}
+
 function topicTagIds(t: TopicSpec, forum: ForumSnapshot): string[] {
   const byKey = new Map(forum.tags.map((x) => [tagKey(x.name), x.id]));
   const names = [
@@ -174,7 +203,10 @@ function planPosts(
   const out: Action[] = [];
   const onDiscord = new Set(forum.threadIds ?? []);
   for (const t of s.topics ?? []) {
-    if (onDiscord.has(t.threadId)) continue;
+    if (onDiscord.has(t.threadId)) {
+      out.push(...planMissingFiles(s, t, forum));
+      continue;
+    }
     out.push({
       type: 'postTopic',
       subjectId: s.id,

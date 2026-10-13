@@ -100,6 +100,7 @@ export async function loadSubjectSpecs(
       filename: materials.originalFilename,
       storagePath: materials.storagePath,
       sizeBytes: materials.sizeBytes,
+      discordMessageId: materials.discordMessageId,
     })
     .from(materials)
     .where(and(eq(materials.status, 'ready'), isNull(materials.deletedAt)))

@@ -1,4 +1,11 @@
-import { botSettings, setSetting, subjects, users } from '@studies/db';
+import {
+  botSettings,
+  insertMaterial,
+  setSetting,
+  subjects,
+  topics,
+  users,
+} from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { ChannelType, Collection, MessageFlags } from 'discord.js';
 import { eq } from 'drizzle-orm';
@@ -213,6 +220,93 @@ describe('/setup', () => {
   };
   const manage = { has: () => true };
   const none = { has: () => false };
+
+  it('plans re-sending files whose message is gone from a bot-owned thread', async () => {
+    const [{ id: sid }] = await db
+      .insert(subjects)
+      .values({
+        code: 'ASD',
+        name: 'Algorytmy',
+        semester: 1,
+        ects: 5,
+        discordChannelId: 'f-asd',
+      })
+      .$returningId();
+    const [{ id: tid }] = await db
+      .insert(topics)
+      .values({ subjectId: sid, title: 'Lab 1', discordThreadId: 'th-b' })
+      .$returningId();
+    const [{ id: uid }] = await db
+      .insert(users)
+      .values({ discordUserId: 'u-x', displayName: 'X' })
+      .$returningId();
+    for (const [n, msg] of [
+      ['a', 'th-b'],
+      ['b', 'gone'],
+    ]) {
+      await insertMaterial(
+        db,
+        {
+          topicId: tid,
+          uploaderId: uid,
+          discordMessageId: msg,
+          discordAttachmentId: `att-${n}`,
+          originalFilename: `${n}.pdf`,
+          mimeType: 'application/pdf',
+          sizeBytes: 1,
+          sha256: n.padEnd(64, '0'),
+          storagePath: `${n}.pdf`,
+          previewKind: 'pdf',
+        },
+        [],
+      );
+    }
+    const fetchMessages = vi.fn(async () => new Collection([['th-b', {}]]));
+    const thread = {
+      id: 'th-b',
+      parentId: 'f-asd',
+      ownerId: 'bot',
+      name: 'Lab 1',
+      flags: { has: () => false },
+      messages: { fetch: fetchMessages },
+    };
+    const forum = {
+      id: 'f-asd',
+      type: ChannelType.GuildForum,
+      name: 'asd',
+      parentId: null,
+      topic: null,
+      availableTags: [],
+      permissionsFor: () => ({ has: () => true }),
+      threads: {
+        fetchActive: async () => ({
+          threads: new Collection([[thread.id, thread]]),
+        }),
+        fetchArchived: async () => ({
+          threads: new Collection(),
+          hasMore: false,
+        }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: {
+        ...setupGuild,
+        channels: {
+          fetch: async () => new Collection([[forum.id, forum]]),
+        },
+      },
+      user: { id: 'u1' },
+      member: { roles: [] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => true },
+    });
+    await handlerFor()(asI(i));
+    expect(fetchMessages).toHaveBeenCalled();
+    const text = i.editReply.mock.calls[0]?.[0].content;
+    expect(text).toContain('ASD: doślij 1 plików do tematu „Lab 1”');
+  });
 
   it('reports forums the bot cannot read and still plans the rest', async () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});

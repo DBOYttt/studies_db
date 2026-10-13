@@ -11,6 +11,7 @@ import type {
   Action,
   ClassSpec,
   GuildSnapshot,
+  MaterialSpec,
   SubjectSpec,
 } from '../src/setup/types.js';
 
@@ -454,12 +455,7 @@ describe('planSetup: posts', () => {
     tagNames: ['kolokwium', 'Notatki', 'Zadania', 'Inne', 'Brak'],
     authorName: 'Ola',
     createdAt: new Date('2026-10-05T10:00:00Z'),
-    materials: [] as {
-      id: number;
-      filename: string;
-      storagePath: string;
-      sizeBytes: number;
-    }[],
+    materials: [] as MaterialSpec[],
     ...over,
   });
   const subject = (
@@ -520,12 +516,14 @@ describe('planSetup: posts', () => {
       filename: `f${i + 1}.pdf`,
       storagePath: `originals/${i + 1}.pdf`,
       sizeBytes: 100,
+      discordMessageId: 'seed',
     }));
     files.push({
       id: 99,
       filename: 'big.pdf',
       storagePath: 'originals/big.pdf',
       sizeBytes: 11 * MiB,
+      discordMessageId: 'seed',
     });
     const [p] = postsOf(
       planSetup(
@@ -560,6 +558,7 @@ describe('planSetup: posts', () => {
       filename: `f${i + 1}.pdf`,
       storagePath: `o/${i + 1}`,
       sizeBytes: Math.round(mb * MiB),
+      discordMessageId: 'seed',
     }));
     const [p] = postsOf(
       planSetup(
@@ -596,6 +595,7 @@ describe('planSetup: posts', () => {
                   filename: 'video.mp4',
                   storagePath: 'o/v',
                   sizeBytes: 50 * MiB,
+                  discordMessageId: 'seed',
                 },
               ],
             }),
@@ -647,6 +647,84 @@ describe('planSetup: posts', () => {
     expect(
       postsOf(planSetup([subject([topic()])], guildWith(), ROLE, render)),
     ).toEqual([]);
+  });
+
+  it('re-sends files missing from a bot-owned thread', () => {
+    const MB = MiB;
+    const m = (id: number, msg: string, size = 100): MaterialSpec => ({
+      id,
+      filename: `f${id}.pdf`,
+      storagePath: `o/${id}`,
+      sizeBytes: size,
+      discordMessageId: msg,
+    });
+    const t = topic({
+      threadId: 'th-1',
+      materials: [
+        m(1, 'th-1'),
+        m(2, 'msg-gone'),
+        m(3, 'seed-x', 20 * MB),
+        m(4, 'msg-2'),
+        m(5, 'seed-y', 9 * MB),
+        m(6, 'seed-z', 9 * MB),
+        m(7, 'seed-w', 9 * MB),
+      ],
+    });
+    const actions = planSetup(
+      [subject([t])],
+      guildWith({
+        threadIds: ['th-1'],
+        botThreadMessageIds: { 'th-1': ['th-1', 'msg-2'] },
+      }),
+      ROLE,
+      render,
+      { webBaseUrl: W },
+    );
+    expect(postsOf(actions)).toEqual([]);
+    const sends = actions.filter((a) => a.type === 'postFiles');
+    expect(sends).toHaveLength(1);
+    const [p] = sends;
+    expect(p).toMatchObject({
+      type: 'postFiles',
+      subjectId: 1,
+      code: 'ASD',
+      topicId: 11,
+      threadId: 'th-1',
+      title: 'Lab 1',
+    });
+    if (p?.type !== 'postFiles') throw new Error('no postFiles');
+    // The 20 MB file is linked in the starter, never re-sent.
+    expect(p.messages.map((x) => x.files.map((f) => f.materialId))).toEqual([
+      [2, 5, 6],
+      [7],
+    ]);
+    expect(p.messages.every((x) => x.content === 'Pliki (cd.)')).toBe(true);
+  });
+
+  it('does not re-send files for threads it has no message list for', () => {
+    const t = topic({
+      threadId: 'th-1',
+      materials: [
+        {
+          id: 1,
+          filename: 'a.pdf',
+          storagePath: 'o/a',
+          sizeBytes: 1,
+          discordMessageId: 'gone',
+        },
+      ],
+    });
+    const plan = (ids?: Record<string, string[]>) =>
+      planSetup(
+        [subject([t])],
+        guildWith({ threadIds: ['th-1'], botThreadMessageIds: ids }),
+        ROLE,
+        render,
+        { webBaseUrl: W },
+      ).filter((a) => a.type === 'postFiles');
+    expect(plan(undefined)).toEqual([]);
+    expect(plan({ other: [] })).toEqual([]);
+    expect(plan({ 'th-1': ['gone'] })).toEqual([]);
   });
 
   it('creates and pins, edits only changed content, never re-pins', () => {

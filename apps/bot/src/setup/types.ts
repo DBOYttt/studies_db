@@ -28,6 +28,8 @@ export type MaterialSpec = {
   filename: string;
   storagePath: string;
   sizeBytes: number;
+  /** Discord message the file is currently linked to. */
+  discordMessageId: string;
 };
 
 export type TopicSpec = {
@@ -78,6 +80,8 @@ export type ForumSnapshot = {
   infoPost?: InfoPostSnapshot | null;
   /** A pinned thread in the forum (Discord allows one), if any. */
   pinnedThreadId?: string | null;
+  /** Message ids of each bot-owned thread in the forum. */
+  botThreadMessageIds?: Record<string, string[]>;
 };
 
 export type InfoPostSnapshot = {
@@ -162,6 +166,16 @@ export type Action =
       topicId: number;
       title: string;
       tagIds: string[];
+      messages: PostMessage[];
+    }
+  /** Files of a bot-posted topic missing from its thread (lost follow-ups). */
+  | {
+      type: 'postFiles';
+      subjectId: number;
+      code: string;
+      topicId: number;
+      threadId: string;
+      title: string;
       messages: PostMessage[];
     }
   | {

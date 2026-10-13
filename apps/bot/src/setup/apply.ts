@@ -239,6 +239,28 @@ export async function applySetup(
           }
           break;
         }
+        case 'postFiles': {
+          const prepared = [];
+          for (const m of a.messages) {
+            prepared.push({ ...m, uploads: await uploads(m.files) });
+          }
+          let unlinked = 0;
+          for (const m of prepared) {
+            const sent = await guild.sendMessage(a.threadId, {
+              content: m.content,
+              files: m.uploads,
+            });
+            if (!(await relinkFiles(db, m.files, sent))) {
+              unlinked += m.files.length;
+            }
+          }
+          const n = prepared.reduce((k, m) => k + m.files.length, 0);
+          report.updated.push(`${a.code}: „${a.title}”: dosłano ${n} plików`);
+          if (unlinked > 0) {
+            report.failures.push(unlinkedFiles(a.code, a.title, unlinked));
+          }
+          break;
+        }
         case 'upsertInfoPost': {
           const e = a.existing;
           if (!e) {
@@ -270,7 +292,11 @@ export async function applySetup(
       }
     } catch (err) {
       // A failed post only affects that topic; other failures stop the subject.
-      if ('subjectId' in a && a.type !== 'postTopic') {
+      if (
+        'subjectId' in a &&
+        a.type !== 'postTopic' &&
+        a.type !== 'postFiles'
+      ) {
         failedSubjects.add(a.subjectId);
       }
       const what = label || a.type;

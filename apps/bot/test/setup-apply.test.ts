@@ -251,6 +251,7 @@ describe('loadSubjectSpecs: topics, files, sessions', () => {
       authorName: 'Ola',
     });
     expect(asd.topics?.[0].materials.map((m) => m.filename)).toEqual(['a.pdf']);
+    expect(asd.topics?.[0].materials[0].discordMessageId).toBe('m-a');
     expect(asd.sessions?.map((x) => x.startsAt.getUTCDate())).toEqual([13]);
     expect(asd.sessions?.[0]).toMatchObject({
       classKind: 'laboratorium',
@@ -675,6 +676,98 @@ describe('applySetup: posts', () => {
     expect(await linkOf(d)).toEqual({ m: 'msg-2', a: 'msg-2-att-0' });
     expect(await threadOf(topicId)).toBe('th-1');
     expect(r.failures).toHaveLength(1);
+  });
+
+  it('re-sends missing files into the thread and relinks them', async () => {
+    const a = await mat('a.pdf');
+    const b = await mat('b.pdf');
+    const c = await mat('c.pdf');
+    const g = fakeGuild();
+    let sent = 0;
+    g.sendMessage = async (threadId, o) => {
+      g.calls.push(['sendMessage', threadId, o]);
+      sent++;
+      const id = `msg-${sent}`;
+      // The second message comes back short: its file stays unlinked.
+      const n = sent === 2 ? 0 : o.files.length;
+      return {
+        messageId: id,
+        attachmentIds: Array.from({ length: n }, (_, i) => `${id}-att-${i}`),
+      };
+    };
+    const send: Action = {
+      type: 'postFiles',
+      subjectId: asdId,
+      code: 'ASD',
+      topicId,
+      threadId: 'th-9',
+      title: 'Lab 1',
+      messages: [
+        { content: 'Pliki (cd.)', files: [file(a, 'a.pdf'), file(b, 'b.pdf')] },
+        { content: 'Pliki (cd.)', files: [file(c, 'c.pdf')] },
+      ],
+    };
+    const r = await applySetup(
+      db,
+      g,
+      [
+        send,
+        {
+          type: 'setGuidelines',
+          subjectId: asdId,
+          code: 'ASD',
+          channelId: 'f-asd',
+          topic: 't',
+        },
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(g.calls.map((x) => [x[0], x[1]])).toEqual([
+      ['sendMessage', 'th-9'],
+      ['sendMessage', 'th-9'],
+      ['setForumTopic', 'f-asd'],
+    ]);
+    expect(await linkOf(a)).toEqual({ m: 'msg-1', a: 'msg-1-att-0' });
+    expect(await linkOf(b)).toEqual({ m: 'msg-1', a: 'msg-1-att-1' });
+    expect(await linkOf(c)).toEqual({ m: 'seed-m-c.pdf', a: 'seed-a-c.pdf' });
+    expect(r.updated.join('\n')).toContain('Lab 1');
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('Lab 1');
+  });
+
+  it('reports a failed re-send without stopping the subject', async () => {
+    const gone = await mat('gone.pdf', false);
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        {
+          type: 'postFiles',
+          subjectId: asdId,
+          code: 'ASD',
+          topicId,
+          threadId: 'th-9',
+          title: 'Lab 1',
+          messages: [
+            { content: 'Pliki (cd.)', files: [file(gone, 'gone.pdf')] },
+          ],
+        },
+        {
+          type: 'setGuidelines',
+          subjectId: asdId,
+          code: 'ASD',
+          channelId: 'f-asd',
+          topic: 't',
+        },
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('gone.pdf');
+    expect(g.calls.map((x) => x[0])).toEqual(['setForumTopic']);
   });
 
   it('reports a missing file and still posts the next topic', async () => {
