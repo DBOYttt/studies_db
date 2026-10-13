@@ -9,8 +9,10 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
 1. Create an application in the [Discord Developer Portal](https://discord.com/developers/applications).
 2. In **Bot**, copy the token (`DISCORD_TOKEN`) and enable the **Message Content** privileged intent.
 3. Copy the Application ID (`DISCORD_CLIENT_ID`) and your server ID (`DISCORD_GUILD_ID`, Developer Mode on).
-   Admin commands are allowed for the role named `ADMIN_ROLE_NAME` (default `Studies Admin`); `/setup`
-   creates it if it does not exist.
+   Admin commands are allowed for the admin role that `/setup` pins by id in the DB (`bot_settings`). On its
+   first run `/setup` adopts the role named `ADMIN_ROLE_NAME` (default `Studies Admin`) or creates it; renaming
+   the role later is fine. Until `/setup` has run, only `/setup` works (for members with Manage Server). If several
+   roles share the name, `/setup` warns and pins nothing; keep one and run it again.
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
    Add Reactions, Send Messages in Threads, Manage Channels, Manage Roles:
    `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=275146409040`

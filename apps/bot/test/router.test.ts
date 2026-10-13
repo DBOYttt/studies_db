@@ -1,4 +1,4 @@
-import { subjects, users } from '@studies/db';
+import { botSettings, setSetting, subjects, users } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { ChannelType, Collection, MessageFlags } from 'discord.js';
 import { eq } from 'drizzle-orm';
@@ -13,6 +13,7 @@ let db: Awaited<ReturnType<typeof resetTestDb>>;
 beforeEach(async () => {
   if (db) await closeTestDb(db);
   db = await resetTestDb();
+  await setSetting(db, 'admin_role_id', 'r');
 });
 afterAll(async () => {
   await closeTestDb(db);
@@ -27,42 +28,45 @@ const guild = {
 };
 
 describe('isAdmin', () => {
-  it('resolves the role by name for array roles, cache roles and missing member', () => {
-    const n = 'Studies Admin';
-    expect(isAdmin(asI({ guild, member: { roles: ['a', 'r'] } }), n)).toBe(
+  it('checks the stored role id for array roles, cache roles and missing member', () => {
+    expect(isAdmin(asI({ guild, member: { roles: ['a', 'r'] } }), 'r')).toBe(
       true,
     );
-    expect(isAdmin(asI({ guild, member: { roles: ['a'] } }), n)).toBe(false);
+    expect(isAdmin(asI({ guild, member: { roles: ['a'] } }), 'r')).toBe(false);
     const cache = new Map([['r', {}]]);
-    expect(isAdmin(asI({ guild, member: { roles: { cache } } }), n)).toBe(true);
-    expect(isAdmin(asI({ guild, member: { roles: ['r'] } }), 'Other')).toBe(
+    expect(isAdmin(asI({ guild, member: { roles: { cache } } }), 'r')).toBe(
+      true,
+    );
+    expect(isAdmin(asI({ guild, member: { roles: ['r'] } }), 'other')).toBe(
       false,
     );
-    expect(isAdmin(asI({ guild, member: null }), n)).toBe(false);
+    expect(isAdmin(asI({ guild, member: null }), 'r')).toBe(false);
+  });
+  it('lets nobody in by role when no role id is stored', () => {
+    expect(isAdmin(asI({ guild, member: { roles: ['r'] } }), null)).toBe(false);
   });
 });
 
 describe('canRunSetup', () => {
   it('allows the admin role or Manage Server', () => {
-    const n = 'Studies Admin';
     const manage = { has: () => true };
     const none = { has: () => false };
     expect(
       canRunSetup(
         asI({ guild, member: { roles: [] }, memberPermissions: manage }),
-        n,
+        null,
       ),
     ).toBe(true);
     expect(
       canRunSetup(
         asI({ guild, member: { roles: ['r'] }, memberPermissions: none }),
-        n,
+        'r',
       ),
     ).toBe(true);
     expect(
       canRunSetup(
         asI({ guild, member: { roles: [] }, memberPermissions: none }),
-        n,
+        'r',
       ),
     ).toBe(false);
   });
@@ -239,6 +243,55 @@ describe('/setup', () => {
     });
     await handlerFor()(asI(i));
     expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+  });
+
+  it('refuses a same-name role when no role id is stored, but still allows /setup via Manage Server', async () => {
+    await db.delete(botSettings);
+    const spoofGuild = {
+      ...setupGuild,
+      roles: {
+        cache: new Collection([
+          ['fake', { id: 'fake', name: 'Studies Admin' }],
+        ]),
+        fetch: async () =>
+          new Collection([['fake', { id: 'fake', name: 'Studies Admin' }]]),
+      },
+    };
+    const sub = mkInteraction({
+      commandName: 'subject',
+      guild: spoofGuild,
+      member: { roles: ['fake'] },
+      memberPermissions: none,
+      options: { getSubcommand: () => 'list' },
+    });
+    await handlerFor()(asI(sub));
+    expect(sub.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+
+    const setup = mkInteraction({
+      commandName: 'setup',
+      guild: spoofGuild,
+      user: { id: 'u1' },
+      member: { roles: ['fake'] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => true },
+    });
+    await handlerFor()(asI(setup));
+    expect(setup.reply).not.toHaveBeenCalled();
+    expect(setup.editReply.mock.calls[0]?.[0].content).toContain(
+      'zapisz rolę Studies Admin jako rolę admina',
+    );
+  });
+
+  it('accepts the stored role id for other admin commands', async () => {
+    const i = mkInteraction({
+      commandName: 'subject',
+      member: { roles: ['r'] },
+      memberPermissions: none,
+      options: { getSubcommand: () => 'list' },
+    });
+    await handlerFor()(asI(i));
+    expect(i.reply.mock.calls[0]?.[0].content).not.toBe('Brak uprawnień.');
   });
 
   it('keeps other admin commands role-only', async () => {

@@ -63,6 +63,13 @@ Either set `ADMIN_ROLE_NAME` to your existing admin role's name or rename that r
 the bot with the new permission integer from the bot README (adds Manage Channels + Manage Roles) and re-register
 slash commands (`pnpm --filter @studies/bot register`).
 
+### Upgrading to the pinned admin role (migration 0007)
+
+Admin commands now check a role id stored in the DB (`bot_settings`) instead of the role name, so a copied role
+with the same name no longer grants access. After deploying: run `pnpm db:migrate` (or let the `migrate`
+container run on `compose up`), then run `/setup` once as a member with Manage Server. It adopts the existing
+`ADMIN_ROLE_NAME` role and pins its id; until then every admin command except `/setup` answers "Brak uprawnień.".
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these

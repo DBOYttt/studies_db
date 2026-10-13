@@ -100,9 +100,21 @@ export type GuildSnapshot = {
   callerRoleIds: string[];
 };
 
+/** The admin role: its configured name and the id stored in bot_settings. */
+export type AdminRole = { name: string; storedId: string | null };
+
 export type Action =
+  /** Creates the admin role and stores its id. */
   | { type: 'createRole'; name: string }
-  | { type: 'assignRole'; roleName: string; userId: string }
+  /** Stores the id of an existing role as the admin role. */
+  | { type: 'adoptRole'; roleId: string; name: string }
+  /** roleId null: the role created earlier in the same run. */
+  | {
+      type: 'assignRole';
+      roleName: string;
+      roleId: string | null;
+      userId: string;
+    }
   | { type: 'createCategory'; name: string }
   | {
       type: 'createForum';

@@ -7,6 +7,7 @@ import {
   type Db,
   ensureClass,
   ensureGroup,
+  getSetting,
   insertMaterial,
   lecturers,
   materials,
@@ -327,18 +328,46 @@ describe('applySetup', () => {
     expect(r.failures[0]).toContain('ASD');
   });
 
-  it('assigns a role created earlier in the same run', async () => {
+  it('stores and assigns a role created earlier in the same run', async () => {
     const g = fakeGuild();
     await applySetup(
       db,
       g,
       [
         { type: 'createRole', name: 'Studies Admin' },
-        { type: 'assignRole', roleName: 'Studies Admin', userId: 'u1' },
+        {
+          type: 'assignRole',
+          roleName: 'Studies Admin',
+          roleId: null,
+          userId: 'u1',
+        },
       ],
       snapshot,
     );
     expect(g.calls).toContainEqual(['addRoleToMember', 'u1', 'role-new']);
+    expect(await getSetting(db, 'admin_role_id')).toBe('role-new');
+  });
+
+  it('stores an adopted role and assigns by id', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        { type: 'adoptRole', roleId: 'r7', name: 'Studies Admin' },
+        {
+          type: 'assignRole',
+          roleName: 'Studies Admin',
+          roleId: 'r7',
+          userId: 'u1',
+        },
+      ],
+      snapshot,
+    );
+    expect(await getSetting(db, 'admin_role_id')).toBe('r7');
+    expect(g.calls).toEqual([['addRoleToMember', 'u1', 'r7']]);
+    expect(r.failures).toEqual([]);
+    expect(r.updated.join('\n')).toContain('Studies Admin');
   });
 
   it('adds tags to an existing forum and re-syncs them', async () => {

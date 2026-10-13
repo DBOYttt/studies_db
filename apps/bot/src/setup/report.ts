@@ -42,6 +42,8 @@ function describeAction(a: Action): string {
   switch (a.type) {
     case 'createRole':
       return `utwórz rolę ${a.name}`;
+    case 'adoptRole':
+      return `zapisz rolę ${a.name} jako rolę admina`;
     case 'assignRole':
       return `nadaj Ci rolę ${a.roleName}`;
     case 'createCategory':

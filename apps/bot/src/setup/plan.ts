@@ -12,6 +12,7 @@ import type { ForumTag } from '../types.js';
 import { renderInfoPost } from './info.js';
 import type {
   Action,
+  AdminRole,
   ForumSnapshot,
   GuildSnapshot,
   PostMessage,
@@ -180,20 +181,46 @@ export function needsSecondPass(actions: Action[]): boolean {
   );
 }
 
+/**
+ * Admin role by stored id; else the only role with the configured name is
+ * adopted, or a new one created. Several roles with that name: warn only.
+ */
+function planRole(role: AdminRole, g: GuildSnapshot): Action[] {
+  const { name } = role;
+  const assign = (roleId: string | null): Action[] =>
+    roleId !== null && g.callerRoleIds.includes(roleId)
+      ? []
+      : [{ type: 'assignRole', roleName: name, roleId, userId: g.callerId }];
+  if (role.storedId !== null && g.roles.some((r) => r.id === role.storedId)) {
+    return assign(role.storedId);
+  }
+  const named = g.roles.filter((r) => r.name === name);
+  if (named.length === 0) {
+    return [{ type: 'createRole', name }, ...assign(null)];
+  }
+  if (named.length === 1) {
+    return [
+      { type: 'adoptRole', roleId: named[0].id, name },
+      ...assign(named[0].id),
+    ];
+  }
+  return [
+    {
+      type: 'warn',
+      code: null,
+      message: `jest kilka ról o nazwie „${name}” — rola admina nie została ustawiona; zostaw jedną (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+    },
+  ];
+}
+
 export function planSetup(
   subjects: SubjectSpec[],
   g: GuildSnapshot,
-  roleName: string,
+  role: AdminRole,
   render: (s: SubjectSpec) => string,
   opts?: { webBaseUrl: string },
 ): Action[] {
-  const actions: Action[] = [];
-
-  const role = g.roles.find((r) => r.name === roleName);
-  if (!role) actions.push({ type: 'createRole', name: roleName });
-  if (!role || !g.callerRoleIds.includes(role.id)) {
-    actions.push({ type: 'assignRole', roleName, userId: g.callerId });
-  }
+  const actions: Action[] = planRole(role, g);
 
   const categories = new Set(g.categories.map((c) => c.name));
   const forums = new Map(g.forums.map((f) => [f.id, f]));

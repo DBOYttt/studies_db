@@ -46,7 +46,8 @@ const BD: SubjectSpec = {
 };
 
 const render = (s: SubjectSpec) => `G:${s.code}`;
-const ROLE = 'Studies Admin';
+const NAME = 'Studies Admin';
+const ROLE = { name: NAME, storedId: 'r1' as string | null };
 
 const emptyGuild = (over: Partial<GuildSnapshot> = {}): GuildSnapshot => ({
   categories: [],
@@ -58,7 +59,7 @@ const emptyGuild = (over: Partial<GuildSnapshot> = {}): GuildSnapshot => ({
 });
 const withRole = (over: Partial<GuildSnapshot> = {}) =>
   emptyGuild({
-    roles: [{ id: 'r1', name: ROLE }],
+    roles: [{ id: 'r1', name: NAME }],
     callerRoleIds: ['r1'],
     categories: [{ id: 'c3', name: 'Semestr 3' }],
     ...over,
@@ -112,8 +113,8 @@ describe('planSetup', () => {
   it('builds everything on an empty guild', () => {
     const actions = planSetup([ASD], emptyGuild(), ROLE, render);
     expect(actions).toEqual<Action[]>([
-      { type: 'createRole', name: ROLE },
-      { type: 'assignRole', roleName: ROLE, userId: 'u1' },
+      { type: 'createRole', name: NAME },
+      { type: 'assignRole', roleName: NAME, roleId: null, userId: 'u1' },
       { type: 'createCategory', name: 'Semestr 3' },
       {
         type: 'createForum',
@@ -140,8 +141,60 @@ describe('planSetup', () => {
       render,
     );
     expect(actions).toEqual([
-      { type: 'assignRole', roleName: ROLE, userId: 'u1' },
+      { type: 'assignRole', roleName: NAME, roleId: 'r1', userId: 'u1' },
     ]);
+  });
+
+  it('uses the stored role id even when another role has the same name', () => {
+    const g = withRole({
+      roles: [
+        { id: 'fake', name: NAME },
+        { id: 'r1', name: 'Renamed' },
+      ],
+    });
+    expect(planSetup([], g, ROLE, render)).toEqual([]);
+  });
+
+  it('adopts the only role with that name when nothing usable is stored', () => {
+    for (const storedId of [null, 'gone']) {
+      const g = withRole({ roles: [{ id: 'r7', name: NAME }] });
+      expect(planSetup([], g, { name: NAME, storedId }, render)).toEqual([
+        { type: 'adoptRole', roleId: 'r7', name: NAME },
+        { type: 'assignRole', roleName: NAME, roleId: 'r7', userId: 'u1' },
+      ]);
+    }
+  });
+
+  it('adopts without assigning when the caller already has the role', () => {
+    const g = withRole({
+      roles: [{ id: 'r7', name: NAME }],
+      callerRoleIds: ['r7'],
+    });
+    expect(planSetup([], g, { name: NAME, storedId: null }, render)).toEqual([
+      { type: 'adoptRole', roleId: 'r7', name: NAME },
+    ]);
+  });
+
+  it('creates the role when the stored one is gone and none has the name', () => {
+    const g = withRole({ roles: [{ id: 'x', name: 'Other' }] });
+    expect(planSetup([], g, ROLE, render)).toEqual([
+      { type: 'createRole', name: NAME },
+      { type: 'assignRole', roleName: NAME, roleId: null, userId: 'u1' },
+    ]);
+  });
+
+  it('warns and neither adopts nor assigns when the name is ambiguous', () => {
+    const g = withRole({
+      roles: [
+        { id: 'a', name: NAME },
+        { id: 'b', name: NAME },
+      ],
+      callerRoleIds: [],
+    });
+    const actions = planSetup([], g, { name: NAME, storedId: null }, render);
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ type: 'warn', code: null });
+    expect(actions[0].type === 'warn' && actions[0].message).toContain(NAME);
   });
 
   it('adds only missing tags (ignoring case and diacritics) and updates guidelines', () => {

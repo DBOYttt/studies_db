@@ -21,6 +21,8 @@ const VARS = [
 ])[];
 
 export const DEFAULT_ADMIN_ROLE_NAME = 'Studies Admin';
+/** bot_settings key holding the admin role id pinned by /setup. */
+export const ADMIN_ROLE_SETTING = 'admin_role_id';
 
 export function loadConfig(env: NodeJS.ProcessEnv): BotConfig {
   const missing = VARS.filter(([k]) => !env[k]).map(([k]) => k);

@@ -1,6 +1,7 @@
 import {
   type Assessment,
   type ClassKind,
+  getSetting,
   lecturers,
   subjects,
   upsertUser,
@@ -15,7 +16,7 @@ import {
 } from 'discord.js';
 import { like, or } from 'drizzle-orm';
 import { catchUp, discordForumSource } from '../catchup.js';
-import type { BotConfig } from '../config.js';
+import { ADMIN_ROLE_SETTING, type BotConfig } from '../config.js';
 import { toDiscordUser } from '../discord/map.js';
 import type { IngestDeps } from '../ingest.js';
 import { applySetup } from '../setup/apply.js';
@@ -62,27 +63,28 @@ const MAX_LEN = 2000;
 const truncate = (s: string) =>
   s.length <= MAX_LEN ? s : `${s.slice(0, MAX_LEN - 1)}…`;
 
-/** Has the role named `roleName` (looked up in the guild's role cache). */
+/**
+ * Has the admin role whose id /setup stored in bot_settings. No stored id:
+ * nobody (a role name alone can be copied by anyone who can create roles).
+ */
 export function isAdmin(
   i: ChatInputCommandInteraction,
-  roleName: string,
+  roleId: string | null,
 ): boolean {
   const roles = i.member?.roles;
-  if (!roles) return false;
-  const role = i.guild?.roles.cache.find((r) => r.name === roleName);
-  if (!role) return false;
+  if (!roles || roleId === null) return false;
   return Array.isArray(roles)
-    ? roles.includes(role.id)
-    : roles.cache.has(role.id);
+    ? roles.includes(roleId)
+    : roles.cache.has(roleId);
 }
 
 /** /setup also accepts Manage Server, so the first run can create the role. */
 export function canRunSetup(
   i: ChatInputCommandInteraction,
-  roleName: string,
+  roleId: string | null,
 ): boolean {
   return (
-    isAdmin(i, roleName) ||
+    isAdmin(i, roleId) ||
     i.memberPermissions?.has(PermissionFlagsBits.ManageGuild) === true
   );
 }
@@ -130,10 +132,12 @@ async function runCommand(
   const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
 
+  const needsAdmin = name === 'setup' || ADMIN_COMMANDS.has(name);
+  const roleId = needsAdmin ? await getSetting(db, ADMIN_ROLE_SETTING) : null;
   const allowed =
     name === 'setup'
-      ? canRunSetup(i, deps.config.adminRoleName)
-      : !ADMIN_COMMANDS.has(name) || isAdmin(i, deps.config.adminRoleName);
+      ? canRunSetup(i, roleId)
+      : !needsAdmin || isAdmin(i, roleId);
   if (!allowed) {
     await reply('Brak uprawnień.');
     return;
@@ -271,7 +275,10 @@ async function runCommand(
         const actions = planSetup(
           await loadSubjectSpecs(db),
           snapshot,
-          deps.config.adminRoleName,
+          {
+            name: deps.config.adminRoleName,
+            storedId: await getSetting(db, ADMIN_ROLE_SETTING),
+          },
           renderGuidelines,
           { webBaseUrl: deps.config.webBaseUrl },
         );

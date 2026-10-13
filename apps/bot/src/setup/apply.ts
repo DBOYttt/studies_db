@@ -8,10 +8,12 @@ import {
   type Db,
   ensureClass,
   materials,
+  setSetting,
   subjects,
   topics,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
+import { ADMIN_ROLE_SETTING } from '../config.js';
 import { syncForumTags } from '../sync.js';
 import type { ForumTag } from '../types.js';
 import { INFO_TITLE } from './info.js';
@@ -100,7 +102,7 @@ export async function applySetup(
     warnings: [],
     failures: [],
   };
-  const roles = new Map(snapshot.roles.map((r) => [r.name, r.id]));
+  let createdRoleId: string | null = null;
   const categories = new Map(snapshot.categories.map((c) => [c.name, c.id]));
   const failedSubjects = new Set<number>();
 
@@ -110,11 +112,16 @@ export async function applySetup(
     try {
       switch (a.type) {
         case 'createRole':
-          roles.set(a.name, await guild.createRole(a.name));
+          createdRoleId = await guild.createRole(a.name);
           report.created.push(`rola ${a.name}`);
+          await setSetting(db, ADMIN_ROLE_SETTING, createdRoleId);
+          break;
+        case 'adoptRole':
+          await setSetting(db, ADMIN_ROLE_SETTING, a.roleId);
+          report.updated.push(`rola ${a.name} zapisana jako rola admina`);
           break;
         case 'assignRole': {
-          const roleId = roles.get(a.roleName);
+          const roleId = a.roleId ?? createdRoleId;
           if (!roleId) throw new Error(`brak roli ${a.roleName}`);
           await guild.addRoleToMember(a.userId, roleId);
           report.updated.push(`nadano Ci rolę ${a.roleName}`);
