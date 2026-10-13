@@ -1,0 +1,117 @@
+// Executes a /setup plan against the guild, one action at a time. A failing
+// action is recorded and later actions for the same subject are skipped; the
+// rest of the plan still runs.
+import { type Db, subjects } from '@studies/db';
+import { eq } from 'drizzle-orm';
+import { syncForumTags } from '../sync.js';
+import type { ForumTag } from '../types.js';
+import type { Action, GuildSnapshot } from './types.js';
+
+/** The guild operations /setup needs (discord.js implementation in discord.ts). */
+export interface SetupGuild {
+  createRole(name: string): Promise<string>;
+  addRoleToMember(userId: string, roleId: string): Promise<void>;
+  createCategory(name: string): Promise<string>;
+  createForum(o: {
+    name: string;
+    parentId: string;
+    tags: string[];
+    topic: string;
+  }): Promise<{ id: string; tags: ForumTag[] }>;
+  /** Appends tags; returns the forum's full tag list afterwards. */
+  addForumTags(channelId: string, names: string[]): Promise<ForumTag[]>;
+  setForumTopic(channelId: string, topic: string): Promise<void>;
+}
+
+export type SetupReport = {
+  created: string[];
+  updated: string[];
+  warnings: string[];
+  failures: string[];
+};
+
+const errText = (err: unknown) =>
+  err instanceof Error ? err.message : String(err);
+
+export async function applySetup(
+  db: Db,
+  guild: SetupGuild,
+  actions: Action[],
+  snapshot: GuildSnapshot,
+): Promise<SetupReport> {
+  const report: SetupReport = {
+    created: [],
+    updated: [],
+    warnings: [],
+    failures: [],
+  };
+  const roles = new Map(snapshot.roles.map((r) => [r.name, r.id]));
+  const categories = new Map(snapshot.categories.map((c) => [c.name, c.id]));
+  const failedSubjects = new Set<number>();
+
+  for (const a of actions) {
+    if ('subjectId' in a && failedSubjects.has(a.subjectId)) continue;
+    const label = 'code' in a && a.code ? a.code : '';
+    try {
+      switch (a.type) {
+        case 'createRole':
+          roles.set(a.name, await guild.createRole(a.name));
+          report.created.push(`rola ${a.name}`);
+          break;
+        case 'assignRole': {
+          const roleId = roles.get(a.roleName);
+          if (!roleId) throw new Error(`brak roli ${a.roleName}`);
+          await guild.addRoleToMember(a.userId, roleId);
+          report.updated.push(`nadano Ci rolę ${a.roleName}`);
+          break;
+        }
+        case 'createCategory':
+          categories.set(a.name, await guild.createCategory(a.name));
+          report.created.push(`kategoria ${a.name}`);
+          break;
+        case 'createForum': {
+          const parentId = categories.get(a.categoryName);
+          if (!parentId) throw new Error(`brak kategorii ${a.categoryName}`);
+          const forum = await guild.createForum({
+            name: a.name,
+            parentId,
+            tags: a.tags,
+            topic: a.topic,
+          });
+          // Link right away so a later crash never leaves an unknown forum.
+          try {
+            await db
+              .update(subjects)
+              .set({ discordChannelId: forum.id })
+              .where(eq(subjects.id, a.subjectId));
+          } catch (err) {
+            throw new Error(
+              `utworzono forum #${a.name}, ale nie udało się go połączyć (${errText(err)})`,
+            );
+          }
+          await syncForumTags(db, a.subjectId, forum.tags);
+          report.created.push(`${a.code}: forum #${a.name}`);
+          break;
+        }
+        case 'addTags': {
+          const all = await guild.addForumTags(a.channelId, a.tags);
+          await syncForumTags(db, a.subjectId, all);
+          report.updated.push(`${a.code}: tagi ${a.tags.join(', ')}`);
+          break;
+        }
+        case 'setGuidelines':
+          await guild.setForumTopic(a.channelId, a.topic);
+          report.updated.push(`${a.code}: wytyczne forum`);
+          break;
+        case 'warn':
+          report.warnings.push(a.code ? `${a.code}: ${a.message}` : a.message);
+          break;
+      }
+    } catch (err) {
+      if ('subjectId' in a) failedSubjects.add(a.subjectId);
+      const what = label || a.type;
+      report.failures.push(`${what}: ${errText(err)}`);
+    }
+  }
+  return report;
+}
