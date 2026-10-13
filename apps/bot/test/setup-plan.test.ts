@@ -55,6 +55,7 @@ const emptyGuild = (over: Partial<GuildSnapshot> = {}): GuildSnapshot => ({
   roles: [],
   callerId: 'u1',
   callerRoleIds: [],
+  unreadableForums: [],
   ...over,
 });
 const withRole = (over: Partial<GuildSnapshot> = {}) =>
@@ -612,12 +613,12 @@ describe('planSetup: posts', () => {
     ).toEqual([]);
   });
 
-  it('creates, updates or leaves the info post', () => {
+  it('creates and pins, edits only changed content, never re-pins', () => {
     const s = subject([]);
+    const plan = (g: GuildSnapshot) =>
+      planSetup([s], g, ROLE, render, { webBaseUrl: W });
     const info = (g: GuildSnapshot) =>
-      planSetup([s], g, ROLE, render, { webBaseUrl: W }).filter(
-        (a) => a.type === 'upsertInfoPost',
-      );
+      plan(g).filter((a) => a.type === 'upsertInfoPost');
     const [created] = info(guildWith());
     expect(created).toMatchObject({
       type: 'upsertInfoPost',
@@ -625,11 +626,16 @@ describe('planSetup: posts', () => {
       code: 'ASD',
       channelId: 'f-asd',
       existing: null,
+      pin: true,
     });
     const content = created?.type === 'upsertInfoPost' ? created.content : '';
     expect(content).toContain('**Algorytmy i struktury danych** (ASD)');
-    const post = { threadId: 'i1', messageId: 'i1', content, pinned: true };
+    const post = { threadId: 'i1', messageId: 'i1', content };
+    // Up to date: nothing, whether or not it is pinned.
     expect(info(guildWith({ infoPost: post }))).toEqual([]);
+    expect(
+      info(guildWith({ infoPost: post, pinnedThreadId: 'other' })),
+    ).toEqual([]);
     expect(info(guildWith({ infoPost: { ...post, content: 'old' } }))).toEqual([
       {
         type: 'upsertInfoPost',
@@ -637,19 +643,61 @@ describe('planSetup: posts', () => {
         code: 'ASD',
         channelId: 'f-asd',
         content,
-        existing: {
-          threadId: 'i1',
-          messageId: 'i1',
-          pinned: true,
-          same: false,
-        },
+        existing: { threadId: 'i1', messageId: 'i1' },
+        pin: false,
       },
     ]);
-    expect(
-      info(guildWith({ infoPost: { ...post, pinned: false } }))[0],
-    ).toMatchObject({
-      existing: { same: true, pinned: false },
+  });
+
+  it('creates the info post unpinned with a warning when another post is pinned', () => {
+    const actions = planSetup(
+      [subject([])],
+      guildWith({ pinnedThreadId: 'p1' }),
+      ROLE,
+      render,
+      { webBaseUrl: W },
+    );
+    expect(actions.find((a) => a.type === 'upsertInfoPost')).toMatchObject({
+      existing: null,
+      pin: false,
     });
+    const warn = actions.find((a) => a.type === 'warn');
+    expect(warn).toMatchObject({ type: 'warn', code: 'ASD' });
+    expect(warn?.type === 'warn' && warn.message).toContain('przypięty');
+  });
+});
+
+describe('planSetup: unreadable forums', () => {
+  const unreadable = { id: 'f-bd', name: 'bd-bazy' };
+  it('warns once for a linked subject whose forum is unreadable and does nothing else', () => {
+    const actions = planSetup(
+      [{ ...BD, topics: [], sessions: [] }],
+      withRole({ unreadableForums: [unreadable] }),
+      ROLE,
+      render,
+      { webBaseUrl: 'https://w' },
+    );
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ type: 'warn', code: 'BD' });
+    const msg = actions[0].type === 'warn' ? actions[0].message : '';
+    expect(msg).toContain('#bd-bazy');
+    expect(msg).not.toContain('nie znaleziono');
+  });
+
+  it('warns about an unlinked unreadable forum and never imports it', () => {
+    const actions = planSetup(
+      [],
+      withRole({
+        unreadableForums: [{ id: 'f-x', name: 'fiz-fizyka' }],
+      }),
+      ROLE,
+      render,
+    );
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ type: 'warn', code: null });
+    expect(actions[0].type === 'warn' && actions[0].message).toContain(
+      '#fiz-fizyka',
+    );
   });
 });
 

@@ -74,15 +74,16 @@ export type ForumSnapshot = {
   topic: string | null;
   /** Thread ids in the forum (active + archived). */
   threadIds?: string[];
-  /** The bot's pinned info post, if any. */
+  /** The bot's info post, if any. */
   infoPost?: InfoPostSnapshot | null;
+  /** A pinned thread in the forum (Discord allows one), if any. */
+  pinnedThreadId?: string | null;
 };
 
 export type InfoPostSnapshot = {
   threadId: string;
   messageId: string;
   content: string;
-  pinned: boolean;
 };
 
 export type PostFile = {
@@ -98,6 +99,8 @@ export type GuildSnapshot = {
   roles: { id: string; name: string }[];
   callerId: string;
   callerRoleIds: string[];
+  /** Forums the bot cannot read (permissions or a failed fetch); not in `forums`. */
+  unreadableForums: { id: string; name: string }[];
 };
 
 /** The admin role: its configured name and the id stored in bot_settings. */
@@ -166,11 +169,9 @@ export type Action =
       code: string;
       channelId: string;
       content: string;
-      existing: {
-        threadId: string;
-        messageId: string;
-        pinned: boolean;
-        same: boolean;
-      } | null;
+      /** Set: edit this message. Null: create the post. */
+      existing: { threadId: string; messageId: string } | null;
+      /** Pin a newly created post (only when no other post is pinned). */
+      pin: boolean;
     }
   | { type: 'warn'; code: string | null; message: string };

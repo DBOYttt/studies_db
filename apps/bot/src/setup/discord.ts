@@ -6,10 +6,15 @@ import {
   ChannelType,
   type ForumChannel,
   type Guild,
+  PermissionFlagsBits,
 } from 'discord.js';
 import type { SetupGuild } from './apply.js';
 import { INFO_TITLE } from './info.js';
-import type { GuildSnapshot, InfoPostSnapshot } from './types.js';
+import type {
+  ForumSnapshot,
+  GuildSnapshot,
+  InfoPostSnapshot,
+} from './types.js';
 
 export async function snapshotGuild(
   guild: Guild,
@@ -20,33 +25,53 @@ export async function snapshotGuild(
   );
   const roles = await guild.roles.fetch();
   const member = await guild.members.fetch(callerId);
-  const forumChannels = channels.filter(
-    (c): c is ForumChannel => c.type === ChannelType.GuildForum,
-  );
-  const threadsOf = new Map<string, AnyThreadChannel[]>();
-  for (const f of forumChannels) threadsOf.set(f.id, await forumThreads(f));
+  const me = guild.members.me ?? (await guild.members.fetchMe());
   const botId = guild.client.user.id;
+  const forums: ForumSnapshot[] = [];
+  const unreadableForums: GuildSnapshot['unreadableForums'] = [];
+  for (const c of channels) {
+    if (c.type !== ChannelType.GuildForum) continue;
+    const readable = c
+      .permissionsFor(me)
+      ?.has([
+        PermissionFlagsBits.ViewChannel,
+        PermissionFlagsBits.ReadMessageHistory,
+      ]);
+    try {
+      if (!readable) throw new Error('missing permissions');
+      forums.push(await forumSnapshot(c, botId));
+    } catch (err) {
+      if (readable) console.error(`/setup: cannot read forum ${c.id}`, err);
+      unreadableForums.push({ id: c.id, name: c.name });
+    }
+  }
   return {
     categories: channels
       .filter((c) => c.type === ChannelType.GuildCategory)
       .map((c) => ({ id: c.id, name: c.name })),
-    forums: await Promise.all(
-      forumChannels.map(async (c) => {
-        const threads = threadsOf.get(c.id) ?? [];
-        return {
-          id: c.id,
-          name: c.name,
-          parentId: c.parentId,
-          tags: c.availableTags.map((t) => ({ id: t.id, name: t.name })),
-          topic: c.topic,
-          threadIds: threads.map((t) => t.id),
-          infoPost: await infoPostOf(threads, botId),
-        };
-      }),
-    ),
+    forums,
     roles: [...roles.values()].map((r) => ({ id: r.id, name: r.name })),
     callerId,
     callerRoleIds: [...member.roles.cache.keys()],
+    unreadableForums,
+  };
+}
+
+async function forumSnapshot(
+  c: ForumChannel,
+  botId: string,
+): Promise<ForumSnapshot> {
+  const threads = await forumThreads(c);
+  return {
+    id: c.id,
+    name: c.name,
+    parentId: c.parentId,
+    tags: c.availableTags.map((t) => ({ id: t.id, name: t.name })),
+    topic: c.topic,
+    threadIds: threads.map((t) => t.id),
+    infoPost: await infoPostOf(threads, botId),
+    pinnedThreadId:
+      threads.find((t) => t.flags.has(ChannelFlags.Pinned))?.id ?? null,
   };
 }
 
@@ -89,7 +114,6 @@ async function infoPostOf(
     threadId: t.id,
     messageId: starter.id,
     content: starter.content,
-    pinned: t.flags.has(ChannelFlags.Pinned),
   };
 }
 

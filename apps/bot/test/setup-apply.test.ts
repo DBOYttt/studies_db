@@ -107,6 +107,7 @@ const snapshot: GuildSnapshot = {
   roles: [],
   callerId: 'u1',
   callerRoleIds: [],
+  unreadableForums: [],
 };
 const forum = (subjectId: number, code: string): Action => ({
   type: 'createForum',
@@ -630,25 +631,28 @@ describe('applySetup: posts', () => {
     expect(await threadOf(other)).toBe('th-1');
   });
 
-  it('creates and pins a missing info post, edits a changed one, re-pins', async () => {
-    const info = (
-      existing: Extract<Action, { type: 'upsertInfoPost' }>['existing'],
-    ): Action => ({
-      type: 'upsertInfoPost',
-      subjectId: asdId,
-      code: 'ASD',
-      channelId: 'f-asd',
-      content: 'INFO',
-      existing,
-    });
+  const info = (
+    existing: Extract<Action, { type: 'upsertInfoPost' }>['existing'],
+    pin = false,
+  ): Action => ({
+    type: 'upsertInfoPost',
+    subjectId: asdId,
+    code: 'ASD',
+    channelId: 'f-asd',
+    content: 'INFO',
+    existing,
+    pin,
+  });
+
+  it('creates (pinning only when asked) and edits info posts', async () => {
     const g = fakeGuild();
     await applySetup(
       db,
       g,
       [
-        info(null),
-        info({ threadId: 'i2', messageId: 'i2', pinned: true, same: false }),
-        info({ threadId: 'i3', messageId: 'i3', pinned: false, same: true }),
+        info(null, true),
+        info(null, false),
+        info({ threadId: 'i2', messageId: 'i2' }),
       ],
       snapshot,
       storageDir,
@@ -660,9 +664,42 @@ describe('applySetup: posts', () => {
         { name: INFO_TITLE, tagIds: [], content: 'INFO', files: [] },
       ],
       ['pinThread', 'th-1'],
+      [
+        'createThread',
+        'f-asd',
+        { name: INFO_TITLE, tagIds: [], content: 'INFO', files: [] },
+      ],
       ['editMessage', 'i2', 'i2', 'INFO'],
-      ['pinThread', 'i3'],
     ]);
+  });
+
+  it('turns a failed pin into a warning and carries on with the subject', async () => {
+    const g = fakeGuild();
+    g.pinThread = async () => {
+      throw new Error('Missing Permissions');
+    };
+    const r = await applySetup(
+      db,
+      g,
+      [
+        info(null, true),
+        {
+          type: 'setGuidelines',
+          subjectId: asdId,
+          code: 'ASD',
+          channelId: 'f-asd',
+          topic: 't',
+        },
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(r.failures).toEqual([]);
+    expect(r.created.join('\n')).toContain('post informacyjny');
+    expect(r.warnings).toHaveLength(1);
+    expect(r.warnings[0]).toContain('ASD');
+    expect(r.warnings[0]).toContain('Missing Permissions');
+    expect(g.calls.at(-1)?.[0]).toBe('setForumTopic');
   });
 });
 

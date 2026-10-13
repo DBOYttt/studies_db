@@ -14,8 +14,9 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    the role later is fine. Until `/setup` has run, only `/setup` works (for members with Manage Server). If several
    roles share the name, `/setup` warns and pins nothing; keep one and run it again.
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
-   Add Reactions, Send Messages in Threads, Manage Channels, Manage Roles:
-   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=275146409040`
+   Add Reactions, Send Messages, Send Messages in Threads, Attach Files, Manage Channels, Manage Threads (to pin
+   the info post), Manage Roles:
+   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=292326313040`
    In Server Settings → Roles, keep the bot's role above the admin role (Discord only lets a bot assign roles below its own).
 5. Forum channels and their tags are created by `/setup` (step 9). Created by hand instead, each subject forum needs
    the tags Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium and Gr. 1 … Gr. N (one per group). A post tagged

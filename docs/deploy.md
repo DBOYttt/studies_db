@@ -60,7 +60,8 @@ backup first:
 
 `ADMIN_ROLE_ID` is gone: the admin role is now looked up by name, `ADMIN_ROLE_NAME` (default `Studies Admin`).
 Either set `ADMIN_ROLE_NAME` to your existing admin role's name or rename that role to `Studies Admin`. Re-invite
-the bot with the new permission integer from the bot README (adds Manage Channels + Manage Roles) and re-register
+the bot with the new permission integer from the bot README (adds Manage Channels + Manage Roles, and for the forum
+posts Send Messages, Attach Files and Manage Threads) and re-register
 slash commands (`pnpm --filter @studies/bot register`).
 
 ### Upgrading to the pinned admin role (migration 0007)

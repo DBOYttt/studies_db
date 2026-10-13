@@ -207,11 +207,79 @@ describe('/setup', () => {
     roles: { ...guild.roles, fetch: async () => guild.roles.cache },
     channels: { fetch: async () => new Collection() },
     members: {
+      me: { id: 'bot' },
       fetch: async () => ({ roles: { cache: new Collection() } }),
     },
   };
   const manage = { has: () => true };
   const none = { has: () => false };
+
+  it('reports forums the bot cannot read and still plans the rest', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const forumBase = {
+      type: ChannelType.GuildForum,
+      parentId: null,
+      topic: null,
+      availableTags: [],
+      threads: {
+        fetchActive: async () => ({ threads: new Collection() }),
+        fetchArchived: async () => ({
+          threads: new Collection(),
+          hasMore: false,
+        }),
+      },
+    };
+    const hidden = {
+      ...forumBase,
+      id: 'f-a',
+      name: 'aaa-ukryte',
+      permissionsFor: () => ({ has: () => false }),
+    };
+    const broken = {
+      ...forumBase,
+      id: 'f-b',
+      name: 'bbb-zepsute',
+      permissionsFor: () => ({ has: () => true }),
+      threads: {
+        ...forumBase.threads,
+        fetchActive: async () => {
+          throw new Error('Missing Access');
+        },
+      },
+    };
+    const ok = {
+      ...forumBase,
+      id: 'f-c',
+      name: 'ccc-dobre',
+      permissionsFor: () => ({ has: () => true }),
+    };
+    const g = {
+      ...setupGuild,
+      channels: {
+        fetch: async () =>
+          new Collection<string, unknown>([
+            [hidden.id, hidden],
+            [broken.id, broken],
+            [ok.id, ok],
+          ]),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: { id: 'u1' },
+      member: { roles: [] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => true },
+    });
+    await handlerFor()(asI(i));
+    const text = i.editReply.mock.calls[0]?.[0].content;
+    expect(text).toContain('nie może odczytać forum #aaa-ukryte');
+    expect(text).toContain('nie może odczytać forum #bbb-zepsute');
+    expect(text).toContain('z forum #ccc-dobre');
+    expect(text).not.toContain('z forum #aaa-ukryte');
+  });
 
   it('runs a dry run for a Manage Server member without the role', async () => {
     const deferReply = vi.fn().mockResolvedValue(undefined);
@@ -368,6 +436,7 @@ describe('/setup', () => {
     const forum = {
       id: 'f-fiz',
       type: ChannelType.GuildForum,
+      permissionsFor: () => ({ has: () => true }),
       name: 'fiz-fizyka',
       parentId: null,
       topic: null,
@@ -407,6 +476,7 @@ describe('/setup', () => {
               : new Collection([[forum.id, forum]]),
       },
       members: {
+        me: { id: 'bot' },
         fetch: async () => ({
           roles: { cache: new Collection([['r', {}]]) },
         }),
@@ -442,6 +512,7 @@ describe('/setup', () => {
     const g = {
       ...setupGuild,
       members: {
+        me: { id: 'bot' },
         fetch: async () => ({
           roles: { cache: new Collection([['r', {}]]) },
         }),

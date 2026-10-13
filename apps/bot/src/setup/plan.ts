@@ -80,6 +80,12 @@ function fitTags(existingCount: number, wanted: string[]) {
   return { fit: wanted.slice(0, room), dropped: wanted.slice(room) };
 }
 
+const unreadableWarn = (code: string | null, f: { name: string }): Action => ({
+  type: 'warn',
+  code,
+  message: `bot nie może odczytać forum #${f.name} (sprawdź View Channel i Read Message History) — pominięto`,
+});
+
 const tooManyTags = (code: string, dropped: string[]): Action => ({
   type: 'warn',
   code,
@@ -155,20 +161,30 @@ function planPosts(
   }
   const content = renderInfoPost(s, webBaseUrl);
   const info = forum.infoPost ?? null;
-  const same = info?.content === content;
-  if (!info || !same || !info.pinned) {
+  const base = {
+    type: 'upsertInfoPost',
+    subjectId: s.id,
+    code: s.code,
+    channelId: forum.id,
+    content,
+  } as const;
+  if (!info) {
+    // Discord allows one pinned post per forum; never unpin someone else's.
+    const pin = !forum.pinnedThreadId;
+    out.push({ ...base, existing: null, pin });
+    if (!pin) {
+      out.push({
+        type: 'warn',
+        code: s.code,
+        message:
+          'nie przypięto posta informacyjnego, bo w forum jest już przypięty inny post',
+      });
+    }
+  } else if (info.content !== content) {
     out.push({
-      type: 'upsertInfoPost',
-      subjectId: s.id,
-      code: s.code,
-      channelId: forum.id,
-      content,
-      existing: info && {
-        threadId: info.threadId,
-        messageId: info.messageId,
-        pinned: info.pinned,
-        same,
-      },
+      ...base,
+      existing: { threadId: info.threadId, messageId: info.messageId },
+      pin: false,
     });
   }
   return out;
@@ -253,6 +269,11 @@ export function planSetup(
     }
 
     const forum = forums.get(s.channelId);
+    const unreadable = g.unreadableForums.find((f) => f.id === s.channelId);
+    if (unreadable) {
+      actions.push(unreadableWarn(s.code, unreadable));
+      continue;
+    }
     if (!forum) {
       actions.push({
         type: 'warn',
@@ -303,6 +324,9 @@ export function planSetup(
   const linked = new Set(subjects.map((s) => s.channelId));
   const codes = new Set(subjects.map((s) => s.code.toUpperCase()));
   const categoryById = new Map(g.categories.map((c) => [c.id, c.name]));
+  for (const f of g.unreadableForums) {
+    if (!linked.has(f.id)) actions.push(unreadableWarn(null, f));
+  }
   for (const f of g.forums) {
     if (linked.has(f.id)) continue;
     const parsed = parseForumName(f.name);

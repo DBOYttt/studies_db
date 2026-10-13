@@ -228,13 +228,19 @@ export async function applySetup(
               content: a.content,
               files: [],
             });
-            await guild.pinThread(t.threadId);
             report.created.push(`${a.code}: post informacyjny`);
+            if (a.pin) {
+              try {
+                await guild.pinThread(t.threadId);
+              } catch (err) {
+                report.warnings.push(
+                  `${a.code}: nie udało się przypiąć posta informacyjnego (${errText(err)})`,
+                );
+              }
+            }
             break;
           }
-          if (!e.same)
-            await guild.editMessage(e.threadId, e.messageId, a.content);
-          if (!e.pinned) await guild.pinThread(e.threadId);
+          await guild.editMessage(e.threadId, e.messageId, a.content);
           report.updated.push(`${a.code}: post informacyjny`);
           break;
         }
