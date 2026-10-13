@@ -16,6 +16,8 @@ export function toThreadInfo(thread: AnyThreadChannel): ThreadInfo | null {
     forumChannelId: parent.id,
     title: thread.name,
     ownerDiscordId: thread.ownerId ?? null,
+    ownerIsBot:
+      thread.ownerId != null && thread.ownerId === thread.client?.user?.id,
     tagIds: [...(thread.appliedTags ?? [])],
   };
 }

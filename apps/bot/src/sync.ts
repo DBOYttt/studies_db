@@ -55,7 +55,16 @@ export async function upsertTopic(
 ): Promise<number | null> {
   const subject = await findSubjectByChannel(db, t.forumChannelId);
   if (!subject) return null;
-  const createdBy = owner ? await upsertUser(db, owner) : null;
+  if (t.ownerIsBot) {
+    // /setup links its own threads; a bot thread alone never makes a topic.
+    const [linked] = await db
+      .select({ id: topics.id })
+      .from(topics)
+      .where(eq(topics.discordThreadId, t.threadId))
+      .limit(1);
+    if (!linked) return null;
+  }
+  const createdBy = owner && !t.ownerIsBot ? await upsertUser(db, owner) : null;
   await db
     .insert(topics)
     .values({

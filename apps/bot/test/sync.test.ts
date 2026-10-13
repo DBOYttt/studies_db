@@ -241,4 +241,46 @@ describe('upsertTopic hierarchy', () => {
         group: 3,
       });
   });
+
+  it('never creates a topic for a bot-owned thread', async () => {
+    const id = await upsertTopic(
+      db,
+      thread({ threadId: 'bot-new', ownerIsBot: true }),
+      owner,
+    );
+    expect(id).toBeNull();
+    const rows = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.discordThreadId, 'bot-new'));
+    expect(rows).toEqual([]);
+  });
+
+  it('updates a topic already linked to a bot-owned thread, keeping its author', async () => {
+    const first = await upsertTopic(
+      db,
+      thread({ threadId: 'bot-linked' }),
+      owner,
+    );
+    const [before] = await db
+      .select({ createdBy: topics.createdBy })
+      .from(topics)
+      .where(eq(topics.id, first as number));
+    const botUser = {
+      discordUserId: 'bot',
+      displayName: 'Bot',
+      avatarUrl: null,
+    };
+    const id = await upsertTopic(
+      db,
+      thread({ threadId: 'bot-linked', title: 'Renamed', ownerIsBot: true }),
+      botUser,
+    );
+    expect(id).toBe(first);
+    const [after] = await db
+      .select({ title: topics.title, createdBy: topics.createdBy })
+      .from(topics)
+      .where(eq(topics.id, first as number));
+    expect(after).toEqual({ title: 'Renamed', createdBy: before.createdBy });
+  });
 });

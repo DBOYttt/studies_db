@@ -30,8 +30,15 @@ describe('toThreadInfo', () => {
       forumChannelId: 'f1',
       title: 'Topic',
       ownerDiscordId: 'o1',
+      ownerIsBot: false,
       tagIds: ['a', 'b'],
     });
+  });
+  it('flags threads started by the bot itself', () => {
+    const t = Object.assign(thread(ChannelType.GuildForum), {
+      client: { user: { id: 'o1' } },
+    });
+    expect(toThreadInfo(t)?.ownerIsBot).toBe(true);
   });
 });
 
