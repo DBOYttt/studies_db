@@ -174,3 +174,38 @@ the bot; if on Discord there are things not in the database add them". Agreed in
   existing catch-up (all linked forums, ignoring the watermark, like `/resync`), then plans and applies a
   second time so imported forums get tags and guidelines; the two reports are merged. Dry run shows the first
   pass plus a note about the follow-up.
+
+## Addendum 2 (2026-10-13): seeding forums with posts
+
+Request: "bot should seed forums with posts containing data from the database if it exists". Agreed in chat:
+both topic posts and a per-forum subject info post.
+
+**Topics → posts.** Every non-deleted DB topic of a subject with a linked, existing forum whose
+`discord_thread_id` is not a thread of that forum becomes a forum post:
+- title = topic title; applied tags = class tag, `Gr. N`, then the topic's plain tags, mapped to the forum's
+  tag ids by `tagKey`, unknown ones dropped, max 5 (Discord limit);
+- starter message `Dodane przez <display name> · <YYYY-MM-DD> (z bazy Studies DB)` with the topic's ready,
+  non-deleted materials attached. Bot limits: 10 files per message, 10 MiB per file. Bigger files are not
+  uploaded; the message lists `WEB_BASE_URL/files/<id>/original` instead. More than 10 uploadable files continue
+  in follow-up messages (10 per message);
+- immediately after creation: `topics.discord_thread_id` = new thread; each uploaded material's
+  `discord_message_id`/`discord_attachment_id` = new message/attachment (matched by upload order). Linked-only
+  materials keep their ids. `created_by` and dates are untouched;
+- a topic failure (e.g. file missing on disk) is reported; the run continues.
+
+**Ingestion guard.** `ThreadInfo.ownerIsBot` (thread owner = the bot's user). `upsertTopic` never *creates* a
+topic for a bot-owned thread (returns null) and never sets `created_by` from a bot owner; it still updates an
+existing topic linked to it. Applies to live events and catch-up alike. Bot-authored messages were already
+ignored.
+
+**Info post.** One per forum: the bot-owned thread titled `ℹ️ Informacje o przedmiocie`. Content (≤ 2000 chars,
+cut with `Więcej: <subject link>`): `**<name>** (<CODE>) — Semestr N, X ECTS`, platform link, subject link
+`WEB_BASE_URL/s/subjects/<CODE>`; per class: assessment (+ note), platform link, lecturers with title, name,
+`(Gr. N)`, e-mail, office hours, room when present; `Plan zajęć`: distinct weekly slots (by session `uid`) of
+confirmed sessions in the next 14 days as `<weekday> HH:MM–HH:MM · <class>[ Gr. N] · <room>`, cancelled ones as
+`odwołane: YYYY-MM-DD <class>`, and `WEB_BASE_URL/s/plan`. Missing → create thread and pin it; present → edit
+the starter message when the text differs and re-pin if unpinned.
+
+**Passes.** `/setup` re-plans and applies a second time when the first pass created or imported any forum, so
+new forums get posts and info posts in the same run. Dry run shows `post N topics (M files)` and
+`create/update info post`.
