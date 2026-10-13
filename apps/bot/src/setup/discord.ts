@@ -148,6 +148,13 @@ async function thread(guild: Guild, id: string): Promise<AnyThreadChannel> {
   return c;
 }
 
+/** Archived threads reject edits and pins; reopen them first. */
+async function openThread(guild: Guild, id: string): Promise<AnyThreadChannel> {
+  const t = await thread(guild, id);
+  if (t.archived) await t.setArchived(false, '/setup');
+  return t;
+}
+
 const tagList = (c: ForumChannel) =>
   c.availableTags.map((t) => ({ id: t.id, name: t.name }));
 
@@ -224,11 +231,11 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
       return { messageId: msg.id, attachmentIds: [...msg.attachments.keys()] };
     },
     async editMessage(threadId, messageId, content) {
-      const t = await thread(guild, threadId);
+      const t = await openThread(guild, threadId);
       await (await t.messages.fetch(messageId)).edit({ content });
     },
     async pinThread(threadId) {
-      await (await thread(guild, threadId)).pin('/setup');
+      await (await openThread(guild, threadId)).pin('/setup');
     },
   };
 }
