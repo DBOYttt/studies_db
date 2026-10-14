@@ -28,8 +28,8 @@ test('SQL write console: preview, execute, audit log', async ({ page }) => {
   await page.keyboard.type(statement);
   await page.getByRole('button', { name: 'Podgląd', exact: true }).click();
   const preview = page.getByRole('region', { name: 'Podgląd zmiany' });
-  await expect(preview.getByText(/zostanie zmienionych/)).toContainText(
-    /1 wiersz/,
+  await expect(preview.getByText(/zostan(ie|ą) zmienion/)).toContainText(
+    /(^|\D)1 wiersz\b/,
   );
   await page.getByRole('button', { name: 'Wykonaj', exact: true }).click();
   await expect(page.getByText(/Zapisano:/)).toBeVisible();

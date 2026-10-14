@@ -35,6 +35,8 @@ export default defineConfig({
       DATABASE_RW_URL: testRwUrl(),
       STORAGE_DIR: E2E_STORAGE_DIR,
       DISCORD_GUILD_ID: 'e2eguild',
+      // The admin SQL API rejects a POST whose Origin is not this base URL.
+      WEB_BASE_URL: `http://localhost:${PORT}`,
     },
   },
 });

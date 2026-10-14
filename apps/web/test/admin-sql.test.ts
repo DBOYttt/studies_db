@@ -259,10 +259,12 @@ describe('preview tokens', () => {
     expect(verifyPreview(t, { userId: 7, sql, now: at })).toEqual({
       ok: true,
       affected: 12,
+      mac: expect.stringMatching(/^[0-9a-f]{64}$/),
+      issuedAt: at,
     });
     expect(
       verifyPreview(t, { userId: 7, sql, now: at + TOKEN_TTL_MS }),
-    ).toEqual({ ok: true, affected: 12 });
+    ).toMatchObject({ ok: true, affected: 12 });
   });
   it('expires after 5 min + 1 ms', () => {
     const t = signPreview({ userId: 7, sql, affected: 12, at });

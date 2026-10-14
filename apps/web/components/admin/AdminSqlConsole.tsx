@@ -19,6 +19,8 @@ import { SqlText } from '@/components/SqlText';
 import {
   canExecute,
   confirmWord,
+  rowCount,
+  rowsWillChange,
   type WriteKind,
   type WritePreview,
 } from '@/lib/admin-console';
@@ -374,7 +376,7 @@ export function AdminSqlConsole({
                 role="status"
                 className="ml-auto font-semibold tabular-nums"
               >
-                {preview.affected} wierszy zostanie zmienionych
+                {rowsWillChange(preview.affected)}
               </span>
             </div>
             {stale && (
@@ -386,7 +388,7 @@ export function AdminSqlConsole({
             {needsConfirm && (
               <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <label htmlFor="admin-sql-confirm" className="text-pretty">
-                  Zmiana obejmuje {preview.affected} wierszy. Aby potwierdzić,
+                  Zmiana obejmuje {rowCount(preview.affected)}. Aby potwierdzić,
                   wpisz {preview.table ? 'nazwę tabeli ' : ''}
                   <code className="rounded bg-box-head px-1 font-mono font-semibold">
                     {confirmWord(preview.table)}

@@ -504,7 +504,9 @@ const EXPIRED_TOKEN = 'Token potwierdzenia wygasł. Wykonaj podgląd ponownie.';
 export function verifyPreview(
   token: string,
   p: { userId: number; sql: string; now: number },
-): { ok: true; affected: number } | { ok: false; reason: string } {
+):
+  | { ok: true; affected: number; mac: string; issuedAt: number }
+  | { ok: false; reason: string } {
   const invalid = { ok: false as const, reason: INVALID_TOKEN };
   if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{1,512}$/.test(token)) {
     return invalid;
@@ -526,7 +528,8 @@ export function verifyPreview(
   if (p.now < at || p.now - at > TOKEN_TTL_MS) {
     return { ok: false, reason: EXPIRED_TOKEN };
   }
-  return { ok: true, affected };
+  // The MAC identifies the preview regardless of how the token was encoded.
+  return { ok: true, affected, mac: m[4], issuedAt: at };
 }
 
 // ------------------------------------------------------------------ errors

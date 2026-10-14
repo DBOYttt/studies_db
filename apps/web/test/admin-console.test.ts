@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   canExecute,
+  confirmMessage,
   confirmWord,
+  rowCount,
+  rowsWillChange,
   type WritePreview,
 } from '../lib/admin-console';
 
@@ -53,5 +56,28 @@ describe('canExecute', () => {
     const unknown = { ...big, preview: { ...big.preview, table: null } };
     expect(canExecute({ ...unknown, confirm: 'TAK' })).toBe(true);
     expect(canExecute({ ...unknown, confirm: 'tak' })).toBe(false);
+  });
+});
+
+describe('row count wording', () => {
+  it.each([
+    [1, '1 wiersz', '1 wiersz zostanie zmieniony'],
+    [2, '2 wiersze', '2 wiersze zostaną zmienione'],
+    [5, '5 wierszy', '5 wierszy zostanie zmienionych'],
+    [22, '22 wiersze', '22 wiersze zostaną zmienione'],
+    [12, '12 wierszy', '12 wierszy zostanie zmienionych'],
+    [0, '0 wierszy', '0 wierszy zostanie zmienionych'],
+  ])('%i', (n, count, change) => {
+    expect(rowCount(n)).toBe(count);
+    expect(rowsWillChange(n)).toBe(change);
+  });
+
+  it('confirmMessage agrees with the count', () => {
+    expect(confirmMessage('subjects', 101)).toBe(
+      'Zmiana obejmuje 101 wierszy. Aby potwierdzić, wpisz nazwę tabeli „subjects”.',
+    );
+    expect(confirmMessage(null, 122)).toBe(
+      'Zmiana obejmuje 122 wiersze. Aby potwierdzić, wpisz „TAK”.',
+    );
   });
 });

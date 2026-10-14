@@ -38,7 +38,8 @@ vi.mock('@studies/db', async (importOriginal) => {
   };
 });
 
-const { POST } = await import('../app/api/admin/sql/route');
+const route = await import('../app/api/admin/sql/route');
+const { POST } = route;
 const { handleAdminSqlRequest } = await import('../lib/admin-sql-handler');
 const { PERMISSION_ERROR, TOKEN_TTL_MS, signPreview } = await import(
   '../lib/admin-sql'
@@ -52,10 +53,10 @@ let plainSid: string;
 let rwPool: mysql.Pool;
 
 type Body = Record<string, unknown>;
-const request = (body: unknown) =>
+const request = (body: unknown, headers: Record<string, string> = {}) =>
   new Request('http://x/api/admin/sql', {
     method: 'POST',
-    headers: { 'content-type': 'application/json' },
+    headers: { 'content-type': 'application/json', ...headers },
     body: JSON.stringify(body),
   });
 
@@ -63,8 +64,9 @@ const request = (body: unknown) =>
 const call = (
   body: Body,
   deps: Partial<Parameters<typeof handleAdminSqlRequest>[2]> = {},
+  headers: Record<string, string> = {},
 ) =>
-  handleAdminSqlRequest(request(body), admin, {
+  handleAdminSqlRequest(request(body, headers), admin, {
     db,
     rw: rwPool,
     limiter: createRateLimiter(1000, 60_000),
@@ -162,6 +164,22 @@ describe('POST /api/admin/sql route gate', () => {
       await expect404(POST(request(body)));
     cookieSid = undefined;
     await expect404(POST(request({ mode: 'preview', sql: 'SELECT 1' })));
+  });
+
+  it('other methods: 404 for non-admins, 405 with Allow: POST for admins', async () => {
+    const methods = ['GET', 'PUT', 'PATCH', 'DELETE'] as const;
+    try {
+      cookieSid = plainSid;
+      for (const m of methods) await expect404(route[m]());
+      cookieSid = adminSid;
+      for (const m of methods) {
+        const res = await route[m]();
+        expect(res.status, m).toBe(405);
+        expect(res.headers.get('Allow'), m).toBe('POST');
+      }
+    } finally {
+      cookieSid = undefined;
+    }
   });
 
   it('404 on the next request once the admin flag is cleared', async () => {
@@ -265,6 +283,90 @@ describe('handleAdminSqlRequest', () => {
     expect(res.status).toBe(400);
     expect((await json(res)).error).toMatch(/wygasł/);
     expect(await ectsOf('ASD')).toBe(9);
+  });
+
+  it('a token executes once; reuse is 400 and changes nothing', async () => {
+    const sql = "UPDATE subjects SET ects = ects + 1 WHERE code = 'ASD'";
+    const preview = await json(await call({ mode: 'preview', sql }));
+    const first = await call({ mode: 'execute', sql, token: preview.token });
+    expect(first.status).toBe(200);
+    const after = await ectsOf('ASD');
+    const before = await auditCount('sql.execute');
+    const again = await call({ mode: 'execute', sql, token: preview.token });
+    expect(again.status).toBe(400);
+    expect((await json(again)).error).toBe(
+      'Token już użyty. Wykonaj podgląd ponownie.',
+    );
+    expect(await ectsOf('ASD')).toBe(after);
+    expect(await auditCount('sql.execute')).toBe(before);
+    await db.update(subjects).set({ ects: 9 }).where(eq(subjects.code, 'ASD'));
+  });
+
+  it('a token is spent even when padded or re-encoded', async () => {
+    const sql = "UPDATE subjects SET ects = 9 WHERE code = 'ASD'";
+    const { token } = await json(await call({ mode: 'preview', sql }));
+    expect((await call({ mode: 'execute', sql, token })).status).toBe(200);
+    const raw = Buffer.from(token as string, 'base64url');
+    for (const variant of [
+      raw.toString('base64'),
+      `${token}=`,
+      raw.toString('base64url'),
+    ]) {
+      const res = await call({ mode: 'execute', sql, token: variant });
+      expect(res.status, variant).toBe(400);
+    }
+  });
+
+  it('403 for a cross-origin POST; same-origin or no Origin is fine', async () => {
+    const sql = 'SELECT 1';
+    vi.stubEnv('WEB_BASE_URL', 'https://studies.example.com/');
+    try {
+      const evil = await call(
+        { mode: 'preview', sql },
+        {},
+        { Origin: 'https://evil.example' },
+      );
+      expect(evil.status).toBe(403);
+      expect((await json(evil)).ok).toBe(false);
+      for (const origin of [
+        'null',
+        'http://x',
+        'https://studies.example.com:444',
+      ]) {
+        const res = await call(
+          { mode: 'preview', sql },
+          {},
+          { Origin: origin },
+        );
+        expect(res.status, origin).toBe(403);
+      }
+      const same = await call(
+        { mode: 'preview', sql },
+        {},
+        { Origin: 'https://studies.example.com' },
+      );
+      expect(same.status).toBe(200);
+      expect((await call({ mode: 'preview', sql })).status).toBe(200);
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('without WEB_BASE_URL the Origin must match the request URL', async () => {
+    vi.stubEnv('WEB_BASE_URL', '');
+    try {
+      const sql = 'SELECT 1';
+      expect(
+        (await call({ mode: 'preview', sql }, {}, { Origin: 'http://x' }))
+          .status,
+      ).toBe(200);
+      expect(
+        (await call({ mode: 'preview', sql }, {}, { Origin: 'http://y' }))
+          .status,
+      ).toBe(403);
+    } finally {
+      vi.unstubAllEnvs();
+    }
   });
 
   it('400 for a missing or bogus token', async () => {

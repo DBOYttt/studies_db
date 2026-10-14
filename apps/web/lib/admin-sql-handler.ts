@@ -9,6 +9,7 @@
  */
 import { type Db, writeAudit } from '@studies/db';
 import type mysql from 'mysql2/promise';
+import { confirmMessage, confirmWord } from './admin-console';
 import {
   adminSqlErrorMessage,
   CONFIRM_THRESHOLD,
@@ -18,6 +19,7 @@ import {
   SELECT_ROWS,
   type StatementKind,
   signPreview,
+  TOKEN_TTL_MS,
   verifyPreview,
 } from './admin-sql';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
@@ -70,12 +72,44 @@ function dbErrorMessage(err: unknown): string {
 const statusFor = (message: string) =>
   message === CONNECT_ERROR || message === BUSY_ERROR ? 503 : 400;
 
-const confirmWord = (table: string | null) => table ?? 'TAK';
+export const TOKEN_USED_ERROR = 'Token już użyty. Wykonaj podgląd ponownie.';
+export const CROSS_ORIGIN_ERROR = 'Nieprawidłowe pochodzenie żądania.';
 
-function confirmMessage(table: string | null, affected: number): string {
-  return `Zmiana obejmuje ${affected} wierszy. Aby potwierdzić, wpisz ${
-    table ? `nazwę tabeli „${table}”` : '„TAK”'
-  }.`;
+/**
+ * MACs of preview tokens already sent to execute, with their expiry. A token
+ * is valid for TOKEN_TTL_MS, so entries can be pruned after that. Kept on
+ * globalThis so dev-mode module reloads share it; per process, which is
+ * enough for the single web container.
+ */
+const usedTokens: Map<string, number> = ((
+  globalThis as { __adminSqlUsedTokens?: Map<string, number> }
+).__adminSqlUsedTokens ??= new Map());
+
+/** Marks a token as used; false if it already was. Synchronous: no await between check and set. */
+function spendToken(mac: string, issuedAt: number, now: number): boolean {
+  for (const [k, expires] of usedTokens) {
+    if (expires < now) usedTokens.delete(k);
+  }
+  if (usedTokens.has(mac)) return false;
+  usedTokens.set(mac, issuedAt + TOKEN_TTL_MS);
+  return true;
+}
+
+/**
+ * Same-origin check for the POST (defence in depth next to the SameSite
+ * session cookie): a present Origin must equal WEB_BASE_URL's origin, or the
+ * request URL's origin when WEB_BASE_URL is not set.
+ */
+function isCrossOrigin(req: Request): boolean {
+  const origin = req.headers.get('origin');
+  if (origin === null) return false;
+  let expected: string;
+  try {
+    expected = new URL(process.env.WEB_BASE_URL || req.url).origin;
+  } catch {
+    return true;
+  }
+  return origin !== expected;
 }
 
 interface Body {
@@ -265,6 +299,10 @@ async function execute(
   if (token.affected > CONFIRM_THRESHOLD && !confirmed) {
     return fail(400, confirmMessage(table, token.affected));
   }
+  // Spent before BEGIN, whatever the outcome: a retry needs a new preview.
+  if (!spendToken(token.mac, token.issuedAt, now)) {
+    return fail(400, TOKEN_USED_ERROR);
+  }
 
   let overLimit = 0;
   const r = await inTransaction(deps.rw, async (conn, commit) => {
@@ -316,6 +354,7 @@ export async function handleAdminSqlRequest(
   user: SessionUser,
   deps: AdminSqlDeps,
 ): Promise<Response> {
+  if (isCrossOrigin(req)) return fail(403, CROSS_ORIGIN_ERROR);
   const body = await parseBody(req);
   if (!body) return fail(400, 'Nieprawidłowe zapytanie.');
   const limiter = deps.limiter ?? adminSqlRateLimiter;

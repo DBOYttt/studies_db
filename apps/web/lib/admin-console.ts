@@ -4,6 +4,8 @@
  * browser. The server (lib/admin-sql-handler.ts) enforces the same rules.
  */
 
+import { pluralPl } from './format';
+
 export type WriteKind = 'insert' | 'update' | 'delete' | 'replace';
 
 /** A successful write preview from POST /api/admin/sql. */
@@ -20,6 +22,26 @@ export interface WritePreview {
 
 /** Word the user types to confirm a large change. */
 export const confirmWord = (table: string | null): string => table ?? 'TAK';
+
+/** "1 wiersz", "2 wiersze", "5 wierszy". */
+export const rowCount = (n: number): string =>
+  `${n} ${pluralPl(n, 'wiersz', 'wiersze', 'wierszy')}`;
+
+/** "1 wiersz zostanie zmieniony", "2 wiersze zostaną zmienione", … */
+export const rowsWillChange = (n: number): string =>
+  `${rowCount(n)} ${pluralPl(
+    n,
+    'zostanie zmieniony',
+    'zostaną zmienione',
+    'zostanie zmienionych',
+  )}`;
+
+/** Server error for a large change sent without the typed confirmation. */
+export function confirmMessage(table: string | null, affected: number): string {
+  return `Zmiana obejmuje ${rowCount(affected)}. Aby potwierdzić, wpisz ${
+    table ? `nazwę tabeli „${table}”` : `„${confirmWord(table)}”`
+  }.`;
+}
 
 /**
  * "Wykonaj" is enabled only for a pending preview whose text still equals
