@@ -10,6 +10,14 @@ import {
   type RESTPostAPIApplicationCommandsJSONBody,
   SlashCommandBuilder,
 } from 'discord.js';
+import {
+  ECTS_MAX,
+  ECTS_MIN,
+  FIELD_MAX,
+  GROUP_MAX,
+  GROUP_MIN,
+  SEMESTERS,
+} from './fields.js';
 
 const subject = new SlashCommandBuilder()
   .setName('subject')
@@ -30,33 +38,36 @@ const subject = new SlashCommandBuilder()
         o
           .setName('name')
           .setDescription('Nazwa')
-          .setMaxLength(200)
+          .setMaxLength(FIELD_MAX.subjectName)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('code')
           .setDescription('Kod')
-          .setMaxLength(20)
+          .setMaxLength(FIELD_MAX.subjectCode)
           .setRequired(true),
       )
       .addIntegerOption((o) =>
         o
           .setName('semester')
           .setDescription('Semestr')
-          .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 })
+          .addChoices(...SEMESTERS.map((n) => ({ name: String(n), value: n })))
           .setRequired(true),
       )
       .addIntegerOption((o) =>
         o
           .setName('ects')
           .setDescription('Punkty ECTS')
-          .setMinValue(0)
-          .setMaxValue(30)
+          .setMinValue(ECTS_MIN)
+          .setMaxValue(ECTS_MAX)
           .setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('description').setDescription('Opis').setMaxLength(1000),
+        o
+          .setName('description')
+          .setDescription('Opis')
+          .setMaxLength(FIELD_MAX.description),
       ),
   )
   .addSubcommand((s) =>
@@ -71,29 +82,35 @@ const subject = new SlashCommandBuilder()
           .setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('name').setDescription('Nazwa').setMaxLength(200),
+        o
+          .setName('name')
+          .setDescription('Nazwa')
+          .setMaxLength(FIELD_MAX.subjectName),
       )
       .addIntegerOption((o) =>
         o
           .setName('semester')
           .setDescription('Semestr')
-          .addChoices({ name: '1', value: 1 }, { name: '2', value: 2 }),
+          .addChoices(...SEMESTERS.map((n) => ({ name: String(n), value: n }))),
       )
       .addIntegerOption((o) =>
         o
           .setName('ects')
           .setDescription('Punkty ECTS')
-          .setMinValue(0)
-          .setMaxValue(30),
+          .setMinValue(ECTS_MIN)
+          .setMaxValue(ECTS_MAX),
       )
       .addStringOption((o) =>
-        o.setName('description').setDescription('Opis').setMaxLength(1000),
+        o
+          .setName('description')
+          .setDescription('Opis')
+          .setMaxLength(FIELD_MAX.description),
       )
       .addStringOption((o) =>
         o
           .setName('platform_url')
           .setDescription('Adres platformy (- usuwa)')
-          .setMaxLength(500),
+          .setMaxLength(FIELD_MAX.platformUrl),
       ),
   )
   .addSubcommand((s) => s.setName('list').setDescription('Lista przedmiotów'));
@@ -110,23 +127,29 @@ const lecturer = new SlashCommandBuilder()
         o
           .setName('name')
           .setDescription('Imię i nazwisko')
-          .setMaxLength(200)
+          .setMaxLength(FIELD_MAX.lecturerName)
           .setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('title').setDescription('Tytuł').setMaxLength(50),
+        o
+          .setName('title')
+          .setDescription('Tytuł')
+          .setMaxLength(FIELD_MAX.lecturerTitle),
       )
       .addStringOption((o) =>
-        o.setName('email').setDescription('E-mail').setMaxLength(200),
+        o
+          .setName('email')
+          .setDescription('E-mail')
+          .setMaxLength(FIELD_MAX.email),
       )
       .addStringOption((o) =>
         o
           .setName('office_hours')
           .setDescription('Konsultacje')
-          .setMaxLength(500),
+          .setMaxLength(FIELD_MAX.officeHours),
       )
       .addStringOption((o) =>
-        o.setName('room').setDescription('Pokój').setMaxLength(100),
+        o.setName('room').setDescription('Pokój').setMaxLength(FIELD_MAX.room),
       ),
   )
   .addSubcommand((s) =>
@@ -141,22 +164,31 @@ const lecturer = new SlashCommandBuilder()
           .setRequired(true),
       )
       .addStringOption((o) =>
-        o.setName('name').setDescription('Imię i nazwisko').setMaxLength(200),
+        o
+          .setName('name')
+          .setDescription('Imię i nazwisko')
+          .setMaxLength(FIELD_MAX.lecturerName),
       )
       .addStringOption((o) =>
-        o.setName('title').setDescription('Tytuł').setMaxLength(50),
+        o
+          .setName('title')
+          .setDescription('Tytuł')
+          .setMaxLength(FIELD_MAX.lecturerTitle),
       )
       .addStringOption((o) =>
-        o.setName('email').setDescription('E-mail').setMaxLength(200),
+        o
+          .setName('email')
+          .setDescription('E-mail')
+          .setMaxLength(FIELD_MAX.email),
       )
       .addStringOption((o) =>
         o
           .setName('office_hours')
           .setDescription('Konsultacje')
-          .setMaxLength(500),
+          .setMaxLength(FIELD_MAX.officeHours),
       )
       .addStringOption((o) =>
-        o.setName('room').setDescription('Pokój').setMaxLength(100),
+        o.setName('room').setDescription('Pokój').setMaxLength(FIELD_MAX.room),
       ),
   )
   .addSubcommand((s) =>
@@ -190,8 +222,8 @@ const lecturer = new SlashCommandBuilder()
         o
           .setName('group')
           .setDescription('Numer grupy')
-          .setMinValue(1)
-          .setMaxValue(99),
+          .setMinValue(GROUP_MIN)
+          .setMaxValue(GROUP_MAX),
       ),
   );
 
@@ -232,13 +264,16 @@ const classCmd = new SlashCommandBuilder()
           ),
       )
       .addStringOption((o) =>
-        o.setName('note').setDescription('Uwagi').setMaxLength(500),
+        o
+          .setName('note')
+          .setDescription('Uwagi')
+          .setMaxLength(FIELD_MAX.classNote),
       )
       .addStringOption((o) =>
         o
           .setName('platform_url')
           .setDescription('Adres platformy')
-          .setMaxLength(500),
+          .setMaxLength(FIELD_MAX.platformUrl),
       ),
   );
 

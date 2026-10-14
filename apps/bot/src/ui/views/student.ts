@@ -16,30 +16,27 @@ import {
 } from '@studies/db/plan';
 import {
   ActionRowBuilder,
-  ButtonBuilder,
+  type ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  MessageFlags,
-  SeparatorBuilder,
-  SeparatorSpacingSize,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
-  TextDisplayBuilder,
 } from 'discord.js';
 import { encodeId } from '../ids.js';
-import { MAX_COMPONENTS, MAX_ID, MAX_OPTIONS, MAX_TEXT } from '../limits.js';
+import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../limits.js';
+import {
+  button,
+  chunk,
+  clip,
+  divider,
+  linkButton,
+  row,
+  text,
+  type View,
+  view,
+} from './parts.js';
 
-export type ViewComponent = ContainerBuilder | TextDisplayBuilder;
-
-export interface View {
-  components: ViewComponent[];
-  flags: MessageFlags.IsComponentsV2;
-}
-
-const view = (...components: ViewComponent[]): View => ({
-  components,
-  flags: MessageFlags.IsComponentsV2,
-});
+export { notice, type View, type ViewComponent } from './parts.js';
 
 export const NO_GROUPS_HINT =
   'Ustaw Moje grupy, aby widzieć tylko swoje zajęcia';
@@ -60,9 +57,6 @@ const dayKey = (d: Date) => d.toISOString().slice(0, 10);
 const midnight = (d: Date) =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
-const clip = (s: string, n = MAX_ID) =>
-  s.length <= n ? s : `${s.slice(0, n - 1)}…`;
-
 /**
  * `HH:MM–HH:MM · <code> <subject> · <class>[ · <group>][ · <room>][ · <lecturer>]`;
  * cancelled sessions are struck through and marked "(odwołane)".
@@ -79,20 +73,6 @@ export function sessionLine(s: PlanSession): string {
   const line = parts.join(' · ');
   return s.status === 'cancelled' ? `~~${line}~~ (odwołane)` : line;
 }
-
-/* ---------- shared pieces ---------- */
-
-const text = (content: string) => new TextDisplayBuilder().setContent(content);
-const divider = () =>
-  new SeparatorBuilder()
-    .setDivider(true)
-    .setSpacing(SeparatorSpacingSize.Small);
-const button = (id: string, label: string, style = ButtonStyle.Secondary) =>
-  new ButtonBuilder().setCustomId(id).setLabel(label).setStyle(style);
-const linkButton = (url: string, label: string) =>
-  new ButtonBuilder().setURL(url).setLabel(label).setStyle(ButtonStyle.Link);
-const row = (...buttons: ButtonBuilder[]) =>
-  new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
 
 const webPlanUrl = (base: string, w: IsoWeek) =>
   `${base.replace(/\/+$/, '')}/s/plan?week=${formatIsoWeek(w)}`;
@@ -295,11 +275,6 @@ export function groupSubjects(options: MyGroupOption[]): string[] {
   return out;
 }
 
-const chunk = <T>(xs: T[], n: number): T[][] =>
-  Array.from({ length: Math.ceil(xs.length / n) }, (_, i) =>
-    xs.slice(i * n, i * n + n),
-  );
-
 function classSelect(o: MyGroupOption, chosen: number | undefined) {
   let groups = o.groups.slice(0, MAX_OPTIONS - 1);
   const mine = o.groups.find((g) => g.id === chosen);
@@ -425,9 +400,4 @@ export function groupsView(
         ),
       ),
   );
-}
-
-/** A single text message (errors and info). */
-export function notice(content: string): View {
-  return view(text(clip(content, MAX_TEXT)));
 }
