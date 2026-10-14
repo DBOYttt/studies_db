@@ -316,6 +316,10 @@ export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
     .setDescription('Zsynchronizuj fora z bazą')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
+    .setName('admin')
+    .setDescription('Otwórz panel administratora')
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
+  new SlashCommandBuilder()
     .setName('link')
     .setDescription('Otrzymaj link do logowania na stronie'),
   new SlashCommandBuilder()

@@ -40,13 +40,28 @@ interface FieldSpec {
   placeholder?: string;
 }
 
+/**
+ * The prefilled value of a field: `value` cut to `max` UTF-16 units without
+ * splitting a surrogate pair. A submitted value equal to it is unchanged.
+ */
+export function prefill(value: string | null | undefined, max: number): string {
+  if (!value) return '';
+  let out = '';
+  for (const ch of value) {
+    if (out.length + ch.length > max) break;
+    out += ch;
+  }
+  return out;
+}
+
 function field(f: FieldSpec): LabelBuilder {
   const input = new TextInputBuilder()
     .setCustomId(f.id)
     .setStyle(f.long ? TextInputStyle.Paragraph : TextInputStyle.Short)
     .setMaxLength(f.max)
     .setRequired(f.required ?? false);
-  if (f.value) input.setValue(f.value.slice(0, f.max));
+  const value = prefill(f.value, f.max);
+  if (value) input.setValue(value);
   if (f.placeholder) input.setPlaceholder(f.placeholder);
   return new LabelBuilder().setLabel(f.label).setTextInputComponent(input);
 }

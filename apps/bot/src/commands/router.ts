@@ -28,18 +28,19 @@ import {
 import { like, or } from 'drizzle-orm';
 import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import { auditDiscord } from '../audit.js';
-import { catchUp, discordForumSource } from '../catchup.js';
+import { discordForumSource } from '../catchup.js';
 import { ADMIN_ROLE_SETTING, type BotConfig } from '../config.js';
 import { toDiscordUser } from '../discord/map.js';
 import type { IngestDeps } from '../ingest.js';
-import { applySetup } from '../setup/apply.js';
-import { discordSetupGuild, snapshotGuild } from '../setup/discord.js';
-import { renderGuidelines } from '../setup/guidelines.js';
-import { loadSubjectSpecs } from '../setup/load.js';
-import { needsSecondPass, planSetup } from '../setup/plan.js';
-import { formatPlan, formatReport, mergeReports } from '../setup/report.js';
+import {
+  type Audit,
+  BUSY_TEXT,
+  runResync,
+  runSetup,
+  withSetupLock,
+} from '../ops.js';
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
-import { handleUi, openStudentPanel } from '../ui/router.js';
+import { handleUi, openAdminPanel, openStudentPanel } from '../ui/router.js';
 import { notice } from '../ui/views/student.js';
 import { planStatusReply, planSyncReply } from './plan.js';
 import { replyOptions } from './reply.js';
@@ -68,13 +69,12 @@ const ADMIN_COMMANDS = new Set([
   'ban',
   'unban',
   'resync',
+  'admin',
 ]);
 const ERROR_TEXT = 'Wystąpił błąd. Spróbuj ponownie później.';
 const FORUM_VISIBILITY_WARNING =
   'Uwaga: bot nie widzi tego forum — sprawdź uprawnienia (View Channel, Read Message History).';
 const MAX_LEN = 2000;
-
-let setupRunning = false;
 
 /** A V2 text notice (no `content`), for editing a deferred V2 response. */
 const uiNotice = (text: string) => {
@@ -149,97 +149,8 @@ async function autocomplete(
   );
 }
 
-type Audit = (
-  action: string,
-  target: string | null,
-  details: object,
-) => Promise<void>;
-
 const callerOf = (i: ChatInputCommandInteraction) =>
   toDiscordUser(i.user, i.member as GuildMember | null);
-
-/** /setup: plan, apply, and a second pass for new or imported forums. */
-async function runSetup(
-  deps: RouterDeps,
-  i: ChatInputCommandInteraction,
-  audit: Audit,
-): Promise<void> {
-  const { db } = deps.ingest;
-  const eph = { flags: MessageFlags.Ephemeral } as const;
-  await i.deferReply(eph);
-  if (!i.guild) throw new Error('/setup outside a guild');
-  const guild = i.guild;
-  const plan = async () => {
-    const snapshot = await snapshotGuild(guild, i.user.id);
-    const actions = planSetup(
-      await loadSubjectSpecs(db),
-      snapshot,
-      {
-        name: deps.config.adminRoleName,
-        storedId: await getSetting(db, ADMIN_ROLE_SETTING),
-      },
-      renderGuidelines,
-      { webBaseUrl: deps.config.webBaseUrl },
-    );
-    return { snapshot, actions };
-  };
-  const first = await plan();
-  if (i.options.getBoolean('dry_run')) {
-    await i.editReply(replyOptions(formatPlan(first.actions)));
-    await audit('bot.setup_dry_run', null, {
-      actions: first.actions.length,
-    });
-    return;
-  }
-  const setupGuild = discordSetupGuild(guild);
-  const storageDir = deps.ingest.storageDir;
-  let report = await applySetup(
-    db,
-    setupGuild,
-    first.actions,
-    first.snapshot,
-    storageDir,
-  );
-  if (first.actions.some((a) => a.type === 'importForum')) {
-    // Pull posts from the imported forums before planning what to add.
-    const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-      ignoreWatermark: true,
-    });
-    report.updated.push(
-      `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
-    );
-  }
-  if (needsSecondPass(first.actions)) {
-    // New/imported forums: tags, guidelines, topic posts and info post.
-    const second = await plan();
-    report = mergeReports(
-      report,
-      await applySetup(
-        db,
-        setupGuild,
-        second.actions,
-        second.snapshot,
-        storageDir,
-      ),
-    );
-  }
-  // The stored role may have just been created, adopted or replaced (which
-  // clears every flag): mirror it for the caller, counting a role this run
-  // assigned, which the interaction's member roles don't include yet.
-  try {
-    const roles = memberRoleIds(i);
-    if (report.assignedRoleId) roles.push(report.assignedRoleId);
-    await syncAdminFlag(db, callerOf(i), roles);
-  } catch (err) {
-    console.error('admin flag sync after /setup failed', err);
-  }
-  await i.editReply(replyOptions(formatReport(report)));
-  await audit('bot.setup', null, {
-    created: report.created.length,
-    updated: report.updated.length,
-    failures: report.failures.length,
-  });
-}
 
 async function runCommand(
   deps: RouterDeps,
@@ -471,34 +382,28 @@ async function runCommand(
       return;
     }
     case 'setup': {
-      // One run at a time: two concurrent runs could both create a forum.
-      if (setupRunning) {
-        await reply('/setup już trwa — spróbuj za chwilę.');
-        return;
-      }
-      setupRunning = true;
-      try {
-        await runSetup(deps, i, audit);
-      } finally {
-        setupRunning = false;
-      }
+      const result = await withSetupLock(async () => {
+        await i.deferReply(eph);
+        if (!i.guild) throw new Error('/setup outside a guild');
+        const text = await runSetup(
+          deps,
+          i.guild,
+          i.user.id,
+          i.options.getBoolean('dry_run') === true,
+          audit,
+        );
+        await i.editReply(replyOptions(text));
+      });
+      if (result === 'busy') await reply(BUSY_TEXT);
       return;
     }
     case 'resync': {
       await i.deferReply(eph);
-      const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-        ignoreWatermark: true,
-      });
-      await i.editReply(
-        replyOptions(
-          `Zsynchronizowano: ${r.topics} tematów, ${r.created} nowych plików, ${r.failed} błędów.`,
-        ),
-      );
-      await audit('bot.resync', null, {
-        topics: r.topics,
-        created: r.created,
-        failed: r.failed,
-      });
+      await i.editReply(replyOptions(await runResync(deps, audit)));
+      return;
+    }
+    case 'admin': {
+      await openAdminPanel(i);
       return;
     }
     case 'link': {

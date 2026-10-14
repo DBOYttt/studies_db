@@ -25,6 +25,7 @@ import {
 import {
   classModal,
   lecturerModal,
+  prefill,
   subjectModal,
 } from '../src/ui/views/modals.js';
 import type { View } from '../src/ui/views/parts.js';
@@ -638,5 +639,40 @@ describe('modals', () => {
         expect(field(m, id).max_length).toBe(optionMax('lecturer', 'add', opt));
       }
     }
+  });
+});
+
+describe('prefill and display names', () => {
+  it('clips prefills without splitting a surrogate pair', () => {
+    expect(prefill('a😀', 2)).toBe('a');
+    expect(prefill('a😀', 3)).toBe('a😀');
+    expect(prefill(null, 5)).toBe('');
+    const m = subjectModal({
+      code: 'ASD',
+      name: 'A',
+      semester: 1,
+      ects: 5,
+      description: `${'a'.repeat(999)}😀`,
+      platformUrl: null,
+    }).toJSON() as Json;
+    const walk = (c: Json): Json[] => [
+      c,
+      ...(c.components ?? []).flatMap(walk),
+      ...(c.component ? walk(c.component) : []),
+    ];
+    const desc = walk(m).find((n) => n.custom_id === 'description');
+    expect(desc.value).toBe('a'.repeat(999));
+  });
+
+  it('keeps display names on one line in headings and bold text', () => {
+    const u = { ...USER, displayName: 'Ola\n## Hack' };
+    expect(allText(userCard(u, false))).toContain('## Ola ## Hack\n');
+    expect(allText(banConfirm(u, true))).toContain('**Ola ## Hack**');
+  });
+
+  it('shows a user who never used the bot', () => {
+    expect(allText(userCard({ ...USER, createdAt: null }, false))).toContain(
+      'Pierwsze użycie: jeszcze nie korzystał z bota',
+    );
   });
 });

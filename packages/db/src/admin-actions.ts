@@ -106,7 +106,9 @@ export async function addSubject(
 export async function editSubject(
   db: Db,
   code: string,
-  patch: Partial<Omit<SubjectInput, 'channelId' | 'code'>> & {
+  patch: Partial<Omit<SubjectInput, 'channelId' | 'code' | 'description'>> & {
+    /** null clears it. */
+    description?: string | null;
     platformUrl?: string;
   },
 ): Promise<ActionResult> {

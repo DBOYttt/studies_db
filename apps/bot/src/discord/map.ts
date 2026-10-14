@@ -1,5 +1,6 @@
 import {
   type AnyThreadChannel,
+  type APIGuildMember,
   type APIInteractionGuildMember,
   ChannelType,
   type GuildMember,
@@ -24,13 +25,14 @@ export function toThreadInfo(thread: AnyThreadChannel): ThreadInfo | null {
 }
 
 /** Server nickname of a cached member (`nickname`) or a raw API one (`nick`). */
-const nickOf = (
-  m: GuildMember | APIInteractionGuildMember | null | undefined,
-) => (!m ? null : 'nickname' in m ? m.nickname : (m.nick ?? null));
+type AnyMember = GuildMember | APIInteractionGuildMember | APIGuildMember;
+
+const nickOf = (m: AnyMember | null | undefined) =>
+  !m ? null : 'nickname' in m ? m.nickname : (m.nick ?? null);
 
 export function toDiscordUser(
   user: User,
-  member?: GuildMember | APIInteractionGuildMember | null,
+  member?: AnyMember | null,
 ): DiscordUser {
   return {
     discordUserId: user.id,

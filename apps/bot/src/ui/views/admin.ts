@@ -73,7 +73,8 @@ export interface UserCardData {
   displayName: string;
   isAdmin: boolean;
   isBanned: boolean;
-  createdAt: Date;
+  /** First use of the bot; null when the user has no row yet. */
+  createdAt: Date | null;
 }
 
 export interface StatusData {
@@ -556,6 +557,10 @@ export function userPicker(): View {
 
 const yesNo = (b: boolean) => (b ? 'tak' : 'nie');
 
+/** A display name for one-line headings and bold text. */
+const oneLine = (s: string) =>
+  clip(s.replace(/[\r\n]+/g, ' ').trim() || '—', 100);
+
 export function userCard(u: UserCardData, isSelf: boolean): View {
   const action: ButtonBuilder = u.isBanned
     ? button(
@@ -568,13 +573,13 @@ export function userCard(u: UserCardData, isSelf: boolean): View {
         'Zablokuj',
         ButtonStyle.Danger,
       );
-  const c = card(clip(u.displayName, 100), `<@${u.discordUserId}>`)
+  const c = card(oneLine(u.displayName), `<@${u.discordUserId}>`)
     .addTextDisplayComponents(
       text(
         [
           `Admin: ${yesNo(u.isAdmin)}`,
           `Dostęp do strony: ${u.isBanned ? 'zablokowany' : 'aktywny'}`,
-          `Pierwsze użycie: ${warsawDate.format(u.createdAt)}`,
+          `Pierwsze użycie: ${u.createdAt ? warsawDate.format(u.createdAt) : 'jeszcze nie korzystał z bota'}`,
         ].join('\n'),
       ),
     )
@@ -594,7 +599,7 @@ export function userCard(u: UserCardData, isSelf: boolean): View {
 
 /** Confirm step; `banned` is the state being confirmed. */
 export function banConfirm(u: UserCardData, banned: boolean): View {
-  const name = clip(u.displayName, 100);
+  const name = oneLine(u.displayName);
   return view(
     card(banned ? 'Zablokować dostęp?' : 'Odblokować dostęp?')
       .addTextDisplayComponents(
