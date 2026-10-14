@@ -105,7 +105,6 @@ export interface PlanSession {
   status: 'confirmed' | 'cancelled';
 }
 
-/** localStorage `studiesdb.myGroups.v1`: `{ "<class_id>": <group_id> }`. */
 const isId = (n: unknown): n is number =>
   typeof n === 'number' && Number.isSafeInteger(n) && n > 0;
 
@@ -125,6 +124,7 @@ export function parseMyGroups(raw: string | null): MyGroups {
   }
   return out;
 }
+
 /** Valid group ids per class id (as listed by the server). */
 export type ValidGroups = Record<string, number[]>;
 

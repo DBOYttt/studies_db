@@ -257,6 +257,12 @@ describe('DB queries', () => {
       subjectId: id.fiz,
     });
     await sess(W(2026, 10, 19, 0), W(2026, 10, 19, 1), { subjectId: id.fiz });
+    // Class with groups outside week 42 (Fizyka: groups inserted out of order).
+    await sess(W(2026, 10, 26, 10), W(2026, 10, 26, 11), {
+      subjectId: id.fiz,
+      classId: id.fizC,
+      groupId: id.fizC1,
+    });
   });
   afterAll(async () => {
     await pool.end();
@@ -287,6 +293,15 @@ describe('DB queries', () => {
         subjectName: 'Algebra',
         className: 'Ćwiczenia',
         groups: [{ id: id.algC1, name: 'Gr. 1' }],
+      },
+      {
+        classId: id.fizC,
+        subjectName: 'Fizyka',
+        className: 'Ćwiczenia',
+        groups: [
+          { id: id.fizC1, name: 'Gr. 1' },
+          { id: id.fizC2, name: 'Gr. 2' },
+        ],
       },
     ]);
   });
