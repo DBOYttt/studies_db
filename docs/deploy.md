@@ -80,8 +80,19 @@ container run on `compose up`), then run `/setup` once as a member with Manage S
 
 Set both `DB_RW_PASSWORD` and `DATABASE_RW_URL` (`mysql://studies_rw:<pw>@mariadb:3306/studies`, URL-safe
 password) in `.env`, run `pnpm db:migrate` (or let the `migrate` container run on `compose up`) to create the
-`studies_rw` user, then run `/setup` once so the bot has the admin role id. Without `DB_RW_PASSWORD` the migrate
-step logs "admin SQL console disabled" and the web console stays off.
+`studies_rw` user, then run `/setup` once so the bot has the admin role id.
+
+The two variables do different things. `DATABASE_RW_URL` on the `web` container is what enables the console:
+without it `/api/admin/sql` answers 503. `DB_RW_PASSWORD` only controls whether `migrate` creates `studies_rw`
+and resets its password and grants (without it migrate logs "admin SQL console disabled" and leaves an existing
+user alone). To turn the console off, unset `DATABASE_RW_URL` and recreate `web`; to also remove the user, run
+`DROP USER 'studies_rw'@'%';` as root.
+
+`studies_rw` may not INSERT into `materials` nor UPDATE its file columns (`storage_path`, `preview_path`,
+`sha256`, `size_bytes`). Migrate resets the user's grants on every run with `DB_RW_PASSWORD` set, so an
+existing deployment picks this up on its next `migrate` run (with the password set). Console DELETEs follow the foreign keys:
+deleting a subject also deletes its classes, groups, class lecturers and plan sessions, deleting a material
+deletes its jobs (prefer setting `deleted_at`).
 
 ## Tagi forum
 
