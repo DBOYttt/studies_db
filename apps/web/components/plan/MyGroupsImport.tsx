@@ -13,11 +13,13 @@ export const MY_GROUPS_KEY = 'studiesdb.myGroups.v1';
 let attempted = false;
 
 /**
- * Renders nothing. Rendered only when the user has no saved groups in the DB:
- * moves a choice left in this browser's localStorage into the DB once, always
- * drops the key afterwards, and refreshes the page when something was stored.
+ * Renders nothing. Moves a choice left in this browser's localStorage into
+ * the DB once, only when the user has no saved groups there (`hasStored`
+ * false); otherwise the stale key is just dropped, so it can never resurrect
+ * groups the user cleared later. Always drops the key; refreshes the page
+ * when something was stored.
  */
-export function MyGroupsImport() {
+export function MyGroupsImport({ hasStored }: { hasStored: boolean }) {
   const router = useRouter();
   useEffect(() => {
     if (attempted) return;
@@ -29,7 +31,7 @@ export function MyGroupsImport() {
       return; // storage disabled
     }
     if (raw === null) return;
-    const groups = parseMyGroups(raw);
+    const groups = hasStored ? {} : parseMyGroups(raw);
     const done = () => {
       try {
         window.localStorage.removeItem(MY_GROUPS_KEY);
@@ -45,6 +47,6 @@ export function MyGroupsImport() {
       done();
       if (imported) router.refresh();
     }, done);
-  }, [router]);
+  }, [router, hasStored]);
   return null;
 }

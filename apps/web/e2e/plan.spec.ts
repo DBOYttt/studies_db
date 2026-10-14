@@ -52,7 +52,7 @@ test('Moje grupy filters groups, persists, and clears', async ({ page }) => {
   await cleared;
   await page.goto(WEEK);
   // A block click only works once hydrated, so the checks below see the
-  // client-side (stored-choice) state, not the unfiltered server HTML.
+  // settled page, not the server HTML.
   const clearedPanel = page.getByRole('complementary', {
     name: 'Szczegóły zajęć',
   });

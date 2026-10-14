@@ -36,6 +36,8 @@ export function MyGroupsForm({
   const [chosen, setChosen] = useState<MyGroups>(initialGroups);
   const [failed, setFailed] = useState(false);
   const pending = useRef(new Set<Promise<unknown>>());
+  // Latest save per class: a superseded save never reverts the newer choice.
+  const seq = useRef(new Map<string, number>());
   // Stale entries (group no longer in its class) are not shown.
   const current = useMemo(
     () =>
@@ -57,6 +59,8 @@ export function MyGroupsForm({
     const key = String(classId);
     const groupId = value ? Number(value) : null;
     const before = chosen[key];
+    const mine = (seq.current.get(key) ?? 0) + 1;
+    seq.current.set(key, mine);
     const apply = (id: number | undefined) =>
       setChosen((c) => {
         const next = { ...c };
@@ -67,6 +71,7 @@ export function MyGroupsForm({
     setFailed(false);
     apply(groupId ?? undefined);
     const revert = () => {
+      if (seq.current.get(key) !== mine) return;
       apply(before);
       setFailed(true);
     };

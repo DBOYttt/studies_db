@@ -11,15 +11,15 @@ export const errBox =
 
 /** "Moje grupy" tab of the plan; `weekHref` is the week view of the same mode. */
 export async function GroupsTab({ weekHref }: { weekHref: string }) {
+  const user = await requireUser();
   try {
-    const user = await requireUser();
     const [options, stored] = await Promise.all([
       listMyGroupOptions(getRoPool()),
       getMyGroups(getDb(), user.id),
     ]);
     return (
       <>
-        {Object.keys(stored).length === 0 && <MyGroupsImport />}
+        <MyGroupsImport hasStored={Object.keys(stored).length > 0} />
         {/* remount when an import fills the saved choice */}
         <MyGroupsForm
           key={JSON.stringify(stored)}

@@ -1,10 +1,12 @@
 import {
+  clearMyGroups,
   consumeLoginToken,
   createLoginToken,
   type Db,
   ensureClass,
   ensureGroup,
   getMyGroups,
+  setMyGroup,
   subjects,
   upsertUser,
 } from '@studies/db';
@@ -121,11 +123,40 @@ describe('my-groups actions', () => {
     expect(await getMyGroups(db, aliceId)).toEqual({});
   });
 
-  it('clears all choices', async () => {
+  it('clears all choices of the session user only', async () => {
+    await setMyGroup(db, bobId, classA, grA2);
     cookieSid = aliceSid;
     await saveMyGroupAction(classA, grA1);
     await saveMyGroupAction(classB, grB1);
     await clearMyGroupsAction();
+    expect(await getMyGroups(db, aliceId)).toEqual({});
+    expect(await getMyGroups(db, bobId)).toEqual({ [classA]: grA2 });
+    await clearMyGroups(db, bobId);
+  });
+
+  it('import keeps only canonical numeric keys', async () => {
+    cookieSid = aliceSid;
+    const keys = { [classA]: grA1, '01': grB1, '1e3': grB1, ' 5': grB1 };
+    expect(await importMyGroupsAction(keys)).toBe(true);
+    expect(await getMyGroups(db, aliceId)).toEqual({ [classA]: grA1 });
+    await clearMyGroups(db, aliceId);
+  });
+
+  it('import only looks at the first 200 entries', async () => {
+    cookieSid = aliceSid;
+    // Own-key order of a plain object is numeric for integer keys, so a
+    // Proxy fixes the order: 200 junk entries, then the one valid pair.
+    const keys = Array.from({ length: 200 }, (_, i) => String(1_000_001 + i));
+    keys.push(String(classA));
+    const groups = new Proxy({} as Record<string, number>, {
+      ownKeys: () => keys,
+      getOwnPropertyDescriptor: (_t, k) => ({
+        value: k === String(classA) ? grA1 : 1,
+        enumerable: true,
+        configurable: true,
+      }),
+    });
+    expect(await importMyGroupsAction(groups)).toBe(false);
     expect(await getMyGroups(db, aliceId)).toEqual({});
   });
 

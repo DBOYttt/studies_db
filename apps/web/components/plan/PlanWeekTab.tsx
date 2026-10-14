@@ -47,6 +47,8 @@ export async function PlanWeekTab({
 }) {
   const pool = getRoPool();
   const now = nowWall();
+  // Outside the try: a redirect must not end up in the error box.
+  const user = myGroupsFilter ? await requireUser() : null;
   const raw = typeof rawWeek === 'string' ? rawWeek : undefined;
   try {
     const week =
@@ -56,9 +58,7 @@ export async function PlanWeekTab({
       // Without the lookups blocks link to the subject only.
       loadLinkContext(getDb()).catch(() => undefined),
       myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
-      myGroupsFilter
-        ? requireUser().then((u) => getMyGroups(getDb(), u.id))
-        : Promise.resolve(null),
+      user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
     ]);
     const validGroups = options
       ? Object.fromEntries(
@@ -70,7 +70,9 @@ export async function PlanWeekTab({
       validGroups && stored ? sanitizeMyGroups(stored, validGroups) : undefined;
     return (
       <>
-        {stored && Object.keys(stored).length === 0 && <MyGroupsImport />}
+        {stored && (
+          <MyGroupsImport hasStored={Object.keys(stored).length > 0} />
+        )}
         <WeekView
           week={week}
           days={weekDays(rows, week).map((d) => d.toISOString())}

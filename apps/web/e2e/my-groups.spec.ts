@@ -60,3 +60,41 @@ test('a choice left in localStorage is imported once and removed', async ({
     page.getByLabel(/Plan testowy.*Ćwiczenia/).locator('option:checked'),
   ).toHaveText('Gr. 2');
 });
+
+test('a stale localStorage key never resurrects cleared groups', async ({
+  page,
+}) => {
+  await page.goto(GROUPS);
+  const select = page.getByLabel(/Plan testowy.*Ćwiczenia/);
+  const saved = page.waitForResponse((r) => r.request().method() === 'POST');
+  await select.selectOption({ label: 'Gr. 2' });
+  await saved;
+  const classId = (await select.getAttribute('id'))?.replace('my-group-', '');
+  const gr1 = await select
+    .locator('option', { hasText: 'Gr. 1' })
+    .getAttribute('value');
+  await page.evaluate(
+    ([key, value]) => localStorage.setItem(key, value),
+    [KEY, JSON.stringify({ [classId as string]: Number(gr1) })],
+  );
+
+  // The DB already has groups: the key is dropped, the DB choice stays.
+  await page.goto(GROUPS);
+  await expect
+    .poll(() => page.evaluate((key) => localStorage.getItem(key), KEY))
+    .toBeNull();
+  await expect(
+    page.getByLabel(/Plan testowy.*Ćwiczenia/).locator('option:checked'),
+  ).toHaveText('Gr. 2');
+
+  const cleared = page.waitForResponse((r) => r.request().method() === 'POST');
+  await page.getByRole('button', { name: 'Wyczyść' }).click();
+  await cleared;
+  await page.reload();
+  await expect(
+    page.getByLabel(/Plan testowy.*Ćwiczenia/).locator('option:checked'),
+  ).toHaveText('Wszystkie');
+  expect(
+    await page.evaluate((key) => localStorage.getItem(key), KEY),
+  ).toBeNull();
+});
