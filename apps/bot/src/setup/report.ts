@@ -1,5 +1,6 @@
 import { CLASS_NAMES } from '@studies/db/constants';
 import type { SetupReport } from './apply.js';
+import { PANEL_CHANNEL_NAMES } from './plan.js';
 import type { Action } from './types.js';
 
 const MAX_LEN = 2000;
@@ -69,6 +70,14 @@ function describeAction(a: Action): string {
     }
     case 'upsertInfoPost':
       return `${a.code}: ${a.existing ? 'zaktualizuj' : 'utwórz'} post informacyjny`;
+    case 'ensurePanelChannel':
+      return a.existingId
+        ? `zapisz kanał #${a.name} jako kanał panelu`
+        : `utwórz kanał #${a.name}`;
+    case 'ensurePanelMessage':
+      return a.messageId
+        ? `odśwież panel w #${PANEL_CHANNEL_NAMES[a.which]} (albo opublikuj go ponownie, jeśli zniknął)`
+        : `opublikuj panel w #${PANEL_CHANNEL_NAMES[a.which]}`;
     case 'warn':
       return `uwaga — ${a.code ? `${a.code}: ` : ''}${a.message}`;
   }

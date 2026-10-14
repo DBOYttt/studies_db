@@ -16,6 +16,7 @@ import type {
   ForumSnapshot,
   GuildSnapshot,
   MaterialSpec,
+  PanelWhich,
   PostFile,
   PostMessage,
   SubjectSpec,
@@ -288,6 +289,55 @@ function planRole(role: AdminRole, g: GuildSnapshot): Action[] {
   ];
 }
 
+export const PANEL_CHANNEL_NAMES = {
+  panel: 'panel',
+  admin: 'admin-panel',
+} as const satisfies Record<PanelWhich, string>;
+
+/**
+ * The #panel and #admin-panel channels and their permanent messages. A stored
+ * channel that still exists is kept; otherwise the only text channel with the
+ * name is adopted, or a new one created. The message is always planned: apply
+ * edits it in place, or posts it when it is gone.
+ */
+function planPanels(ordered: SubjectSpec[], g: GuildSnapshot): Action[] {
+  const forums = new Map(g.forums.map((f) => [f.id, f]));
+  const first = ordered.find((s) => s.channelId && forums.has(s.channelId));
+  const parentId = first?.channelId
+    ? (forums.get(first.channelId)?.parentId ?? null)
+    : null;
+  const channels: Action[] = [];
+  const messages: Action[] = [];
+  for (const which of ['panel', 'admin'] as const) {
+    const name = PANEL_CHANNEL_NAMES[which];
+    const stored = g.panelChannels[which];
+    if (stored !== null && g.textChannels.some((c) => c.id === stored)) {
+      messages.push({
+        type: 'ensurePanelMessage',
+        which,
+        channelId: stored,
+        messageId: g.panelMessages[which],
+      });
+      continue;
+    }
+    const named = g.textChannels.filter((c) => c.name === name);
+    channels.push({
+      type: 'ensurePanelChannel',
+      which,
+      name,
+      existingId: named.length === 1 ? named[0].id : null,
+      parentId,
+    });
+    messages.push({
+      type: 'ensurePanelMessage',
+      which,
+      channelId: null,
+      messageId: null,
+    });
+  }
+  return [...channels, ...messages];
+}
+
 export function planSetup(
   subjects: SubjectSpec[],
   g: GuildSnapshot,
@@ -302,6 +352,8 @@ export function planSetup(
   const ordered = [...subjects].sort(
     (a, b) => a.semester - b.semester || a.code.localeCompare(b.code),
   );
+  // Right after the role: #admin-panel needs the admin role id.
+  actions.push(...planPanels(ordered, g));
 
   for (const s of ordered) {
     const wanted = desiredTags(s);

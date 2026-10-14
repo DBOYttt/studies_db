@@ -1,6 +1,6 @@
 import { type Db, setSetting, subjects, users } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import { Collection } from 'discord.js';
+import { ChannelType, Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RouterDeps } from '../src/commands/router.js';
@@ -27,11 +27,19 @@ const deps = (client: object = {}): RouterDeps => ({
 });
 
 const roles = new Collection([['r', { id: 'r', name: 'Studies Admin' }]]);
+/** The #panel / #admin-panel channel /setup creates and posts into. */
+const panelText = {
+  type: ChannelType.GuildText,
+  send: async () => ({ id: 'pm', pin: async () => {} }),
+};
 const guild = (callerRoles: string[]) =>
   ({
     client: { user: { id: 'bot' } },
-    roles: { cache: roles, fetch: async () => roles },
-    channels: { fetch: async () => new Collection() },
+    roles: { cache: roles, everyone: { id: 'e' }, fetch: async () => roles },
+    channels: {
+      fetch: async (id?: string) => (id ? panelText : new Collection()),
+      create: async (o: { name: string }) => ({ id: `text-${o.name}` }),
+    },
     members: {
       me: { id: 'bot' },
       fetch: async () => ({
@@ -62,14 +70,15 @@ describe('runSetup', () => {
       .values({ discordUserId: 'u1', displayName: 'u1', isAdmin: false });
     const audit = vi.fn().mockResolvedValue(undefined);
     const text = await runSetup(deps(), guild(['r']), 'u1', false, audit);
-    expect(text).toBe('Wszystko jest aktualne.');
+    expect(text).not.toContain('Błędy');
     const [u] = await db
       .select()
       .from(users)
       .where(eq(users.discordUserId, 'u1'));
     expect(u.isAdmin).toBe(true);
+    // The two panel channels and their messages.
     expect(audit).toHaveBeenCalledWith('bot.setup', null, {
-      created: 0,
+      created: 4,
       updated: 0,
       failures: 0,
     });

@@ -106,7 +106,14 @@ export type GuildSnapshot = {
   callerRoleIds: string[];
   /** Forums the bot cannot read (permissions or a failed fetch); not in `forums`. */
   unreadableForums: { id: string; name: string }[];
+  textChannels: { id: string; name: string; parentId: string | null }[];
+  /** Panel channel ids stored in bot_settings. */
+  panelChannels: { panel: string | null; admin: string | null };
+  /** Panel message ids stored in bot_settings. */
+  panelMessages: { panel: string | null; admin: string | null };
 };
+
+export type PanelWhich = 'panel' | 'admin';
 
 /** The admin role: its configured name and the id stored in bot_settings. */
 export type AdminRole = { name: string; storedId: string | null };
@@ -188,5 +195,27 @@ export type Action =
       existing: { threadId: string; messageId: string } | null;
       /** Pin a newly created post (only when no other post is pinned). */
       pin: boolean;
+    }
+  /**
+   * Creates the panel text channel (existingId null) or stores the id of the
+   * only text channel with that name (adopted as is, permissions untouched).
+   */
+  | {
+      type: 'ensurePanelChannel';
+      which: PanelWhich;
+      name: 'panel' | 'admin-panel';
+      existingId: string | null;
+      parentId: string | null;
+    }
+  /**
+   * Edits the stored panel message, or posts it (and stores the id) when it
+   * is gone or was never posted. channelId null: the channel from the
+   * ensurePanelChannel action earlier in the same run.
+   */
+  | {
+      type: 'ensurePanelMessage';
+      which: PanelWhich;
+      channelId: string | null;
+      messageId: string | null;
     }
   | { type: 'warn'; code: string | null; message: string };

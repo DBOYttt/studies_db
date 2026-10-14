@@ -341,11 +341,26 @@ describe('/setup', () => {
       pool: {} as never,
       config,
     });
+  /** The #panel / #admin-panel channel /setup creates and posts into. */
+  const panelText = {
+    type: ChannelType.GuildText,
+    send: vi.fn(async () => ({ id: 'pm', pin: async () => {} })),
+  };
+  const createChannel = async (o: { name: string }) => ({
+    id: `text-${o.name}`,
+  });
   const setupGuild = {
     ...guild,
     client: { user: { id: 'bot' } },
-    roles: { ...guild.roles, fetch: async () => guild.roles.cache },
-    channels: { fetch: async () => new Collection() },
+    roles: {
+      ...guild.roles,
+      everyone: { id: 'everyone' },
+      fetch: async () => guild.roles.cache,
+    },
+    channels: {
+      fetch: async (id?: string) => (id ? panelText : new Collection()),
+      create: createChannel,
+    },
     members: {
       me: { id: 'bot' },
       fetch: async () => ({ roles: { cache: new Collection() } }),
@@ -826,9 +841,12 @@ describe('/setup', () => {
         fetch: async (id?: string) =>
           id === 'th'
             ? infoThread
-            : id
-              ? forum
-              : new Collection([[forum.id, forum]]),
+            : id?.startsWith('text-')
+              ? panelText
+              : id
+                ? forum
+                : new Collection([[forum.id, forum]]),
+        create: createChannel,
       },
       members: {
         me: { id: 'bot' },
@@ -890,8 +908,15 @@ describe('/setup', () => {
       config,
     })(asI(i));
     expect(clientFetch).not.toHaveBeenCalled();
+    // Only the panels (created on the first run).
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(
-      'Wszystko jest aktualne.',
+      [
+        '**Utworzono**',
+        '- kanał #panel',
+        '- kanał #admin-panel',
+        '- panel w #panel',
+        '- panel w #admin-panel',
+      ].join('\n'),
     );
   });
 });

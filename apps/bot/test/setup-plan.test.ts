@@ -5,7 +5,7 @@ import {
   forumSlug,
   needsSecondPass,
   parseForumName,
-  planSetup,
+  planSetup as planWithPanels,
 } from '../src/setup/plan.js';
 import type {
   Action,
@@ -47,6 +47,12 @@ const BD: SubjectSpec = {
 };
 
 const render = (s: SubjectSpec) => `G:${s.code}`;
+
+const isPanel = (a: Action) =>
+  a.type === 'ensurePanelChannel' || a.type === 'ensurePanelMessage';
+/** The plan without the panel actions (covered in 'planSetup: panels'). */
+const planSetup: typeof planWithPanels = (...args) =>
+  planWithPanels(...args).filter((a) => !isPanel(a));
 const NAME = 'Studies Admin';
 const ROLE = { name: NAME, storedId: 'r1' as string | null };
 
@@ -57,6 +63,9 @@ const emptyGuild = (over: Partial<GuildSnapshot> = {}): GuildSnapshot => ({
   callerId: 'u1',
   callerRoleIds: [],
   unreadableForums: [],
+  textChannels: [],
+  panelChannels: { panel: null, admin: null },
+  panelMessages: { panel: null, admin: null },
   ...over,
 });
 const withRole = (over: Partial<GuildSnapshot> = {}) =>
@@ -836,5 +845,101 @@ describe('needsSecondPass', () => {
     expect(needsSecondPass([{ type: 'warn', code: null, message: 'm' }])).toBe(
       false,
     );
+  });
+});
+
+describe('planSetup: panels', () => {
+  const panelActions = (actions: Action[]) => actions.filter(isPanel);
+  const newChannel = (which: 'panel' | 'admin', parentId: string | null) =>
+    ({
+      type: 'ensurePanelChannel',
+      which,
+      name: which === 'panel' ? 'panel' : 'admin-panel',
+      existingId: null,
+      parentId,
+    }) as const;
+  const message = (
+    which: 'panel' | 'admin',
+    channelId: string | null,
+    messageId: string | null,
+  ) => ({ type: 'ensurePanelMessage', which, channelId, messageId }) as const;
+
+  it('creates both channels and posts both panels on an empty guild, after the role actions', () => {
+    const actions = planWithPanels([], emptyGuild(), ROLE, render);
+    expect(actions).toEqual<Action[]>([
+      { type: 'createRole', name: NAME },
+      { type: 'assignRole', roleName: NAME, roleId: null, userId: 'u1' },
+      newChannel('panel', null),
+      newChannel('admin', null),
+      message('panel', null, null),
+      message('admin', null, null),
+    ]);
+  });
+
+  it('only edits the stored messages when both channels exist', () => {
+    const g = withRole({
+      textChannels: [
+        { id: 'ch-p', name: 'panel', parentId: null },
+        { id: 'ch-a', name: 'admin-panel', parentId: null },
+      ],
+      panelChannels: { panel: 'ch-p', admin: 'ch-a' },
+      panelMessages: { panel: 'm-p', admin: 'm-a' },
+    });
+    expect(planWithPanels([], g, ROLE, render)).toEqual<Action[]>([
+      message('panel', 'ch-p', 'm-p'),
+      message('admin', 'ch-a', 'm-a'),
+    ]);
+  });
+
+  it('recreates a stored channel that is gone and posts a new message there', () => {
+    const g = withRole({
+      textChannels: [{ id: 'ch-a', name: 'admin-panel', parentId: null }],
+      panelChannels: { panel: 'ch-gone', admin: 'ch-a' },
+      panelMessages: { panel: 'm-p', admin: 'm-a' },
+    });
+    expect(panelActions(planWithPanels([], g, ROLE, render))).toEqual<Action[]>(
+      [
+        newChannel('panel', null),
+        message('panel', null, null),
+        message('admin', 'ch-a', 'm-a'),
+      ],
+    );
+  });
+
+  it('adopts the only text channel with the name when nothing usable is stored', () => {
+    const g = withRole({
+      textChannels: [
+        { id: 'x1', name: 'panel', parentId: null },
+        { id: 'x2', name: 'admin-panel', parentId: null },
+        { id: 'x3', name: 'admin-panel', parentId: null },
+      ],
+    });
+    expect(panelActions(planWithPanels([], g, ROLE, render))).toEqual<Action[]>(
+      [
+        { ...newChannel('panel', null), existingId: 'x1' },
+        newChannel('admin', null),
+        message('panel', null, null),
+        message('admin', null, null),
+      ],
+    );
+  });
+
+  it("puts new channels in the first subject's forum category", () => {
+    const linked = { ...ASD, channelId: 'f-asd' };
+    const g = withRole({
+      forums: [
+        {
+          id: 'f-asd',
+          name: 'asd',
+          parentId: 'c3',
+          tags: [],
+          topic: null,
+        },
+      ],
+    });
+    const channels = planWithPanels([BD, linked], g, ROLE, render).filter(
+      (a) => a.type === 'ensurePanelChannel',
+    );
+    expect(channels.map((a) => a.parentId)).toEqual(['c3', 'c3']);
   });
 });

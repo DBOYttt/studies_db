@@ -5,6 +5,7 @@ import {
   classLecturers,
   classSessions,
   type Db,
+  getSetting,
   lecturers,
   materials,
   subjects,
@@ -15,8 +16,10 @@ import {
   utcToWarsawWall,
 } from '@studies/db';
 import { and, asc, eq, gte, isNull, lt } from 'drizzle-orm';
+import { PANEL_SETTINGS } from '../config.js';
 import type {
   ClassSpec,
+  GuildSnapshot,
   SessionSpec,
   SubjectSpec,
   TopicSpec,
@@ -158,4 +161,21 @@ export async function loadSubjectSpecs(
     topics: topicRows.filter((t) => t.subjectId === s.id).map(toTopic),
     sessions: sessionRows.filter((r) => r.subjectId === s.id).map(toSession),
   }));
+}
+
+/** The panel channel and message ids stored by earlier /setup runs. */
+export async function loadPanelSettings(
+  db: Db,
+): Promise<Pick<GuildSnapshot, 'panelChannels' | 'panelMessages'>> {
+  const get = (key: string) => getSetting(db, key);
+  return {
+    panelChannels: {
+      panel: await get(PANEL_SETTINGS.panel.channel),
+      admin: await get(PANEL_SETTINGS.admin.channel),
+    },
+    panelMessages: {
+      panel: await get(PANEL_SETTINGS.panel.message),
+      admin: await get(PANEL_SETTINGS.admin.message),
+    },
+  };
 }
