@@ -70,6 +70,11 @@ describe('link and ban', () => {
       await consumeLoginToken(db, r.url.slice(prefix.length)),
     ).not.toBeNull();
   });
+  it('appends an encoded next when given', async () => {
+    const r = await linkFor(db, 'https://x.pl', user, '/admin');
+    if (!r.ok) throw new Error('expected ok');
+    expect(r.url.endsWith('&next=%2Fadmin')).toBe(true);
+  });
   it('banned user is refused', async () => {
     await upsertUser(db, user);
     await setBanned(db, 'u1', true);

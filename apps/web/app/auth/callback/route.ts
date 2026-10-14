@@ -2,6 +2,8 @@ import { consumeLoginToken } from '@studies/db';
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { seeOther } from '@/lib/http';
+import { safeNext } from '@/lib/login-next';
+import { MODE_COOKIE, modeCookieOptions } from '@/lib/mode';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/session';
 
 const EXPIRED = '/login-info?error=expired';
@@ -16,7 +18,7 @@ const escapeHtml = (s: string) =>
       ] as string,
   );
 
-function confirmPage(token: string): string {
+function confirmPage(token: string, next: string | null): string {
   return `<!doctype html>
 <html lang="pl">
 <head>
@@ -36,7 +38,7 @@ button{font:inherit;font-weight:600;padding:.6rem 1.5rem;border:0;border-radius:
 <h1>Zaloguj się do Studies DB</h1>
 <form method="post" action="/auth/callback">
 <input type="hidden" name="token" value="${escapeHtml(token)}">
-<button type="submit">Zaloguj się</button>
+${next === null ? '' : `<input type="hidden" name="next" value="${escapeHtml(next)}">\n`}<button type="submit">Zaloguj się</button>
 </form>
 </main>
 </body>
@@ -51,7 +53,8 @@ button{font:inherit;font-weight:600;padding:.6rem 1.5rem;border:0;border-radius:
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   if (!token || token.length > MAX_TOKEN_LEN) return seeOther(EXPIRED);
-  return new Response(confirmPage(token), {
+  const next = req.nextUrl.searchParams.get('next');
+  return new Response(confirmPage(token, next), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
       'Referrer-Policy': 'no-referrer',
@@ -66,8 +69,11 @@ export async function GET(req: NextRequest) {
 /** Consumes the token (form-encoded `token`) and starts a session. */
 export async function POST(req: NextRequest) {
   let token: unknown = null;
+  let rawNext: unknown = null;
   try {
-    token = (await req.formData()).get('token');
+    const form = await req.formData();
+    token = form.get('token');
+    rawNext = form.get('next');
   } catch {
     // not form-encoded
   }
@@ -76,8 +82,10 @@ export async function POST(req: NextRequest) {
       ? await consumeLoginToken(getDb(), token)
       : null;
   if (!result) return seeOther(EXPIRED);
-  const res = seeOther('/');
+  const next = safeNext(rawNext);
+  const res = seeOther(next ?? '/');
   res.cookies.set(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());
+  if (next) res.cookies.set(MODE_COOKIE, 'advanced', modeCookieOptions());
   res.headers.set('Referrer-Policy', 'no-referrer');
   return res;
 }

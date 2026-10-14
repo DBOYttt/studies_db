@@ -13,6 +13,7 @@ export async function linkFor(
   db: Db,
   webBaseUrl: string,
   user: DiscordUser,
+  next?: '/admin',
 ): Promise<{ ok: true; url: string } | { ok: false; reason: 'banned' }> {
   const userId = await upsertUser(db, user);
   const [row] = await db
@@ -21,7 +22,11 @@ export async function linkFor(
     .where(eq(users.id, userId));
   if (row?.isBanned) return { ok: false, reason: 'banned' };
   const token = await createLoginToken(db, userId);
-  return { ok: true, url: `${webBaseUrl}/auth/callback?token=${token}` };
+  const suffix = next ? `&next=${encodeURIComponent(next)}` : '';
+  return {
+    ok: true,
+    url: `${webBaseUrl}/auth/callback?token=${token}${suffix}`,
+  };
 }
 
 export async function searchReply(
