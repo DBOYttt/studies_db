@@ -2,10 +2,13 @@
 
 import { FloppyDisk, UsersThree, X } from '@phosphor-icons/react';
 import { useRouter } from 'next/navigation';
-import { type FormEvent, useMemo, useState } from 'react';
+import { type FormEvent, useMemo, useRef, useState } from 'react';
+import {
+  clearMyGroupsAction,
+  saveMyGroupAction,
+} from '@/lib/my-groups-actions';
 import { type MyGroups, sanitizeMyGroups } from '@/lib/plan';
 import type { MyGroupOption } from '@/lib/plan-queries';
-import { saveMyGroups, useMyGroups } from './useMyGroups';
 
 const primaryBtn =
   'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover';
@@ -16,50 +19,80 @@ const selectCls =
 
 /**
  * "Moje grupy": one select per class with groups (Wszystkie = no choice).
- * Zapisz stores the choice in localStorage and returns to the week view;
- * Wyczyść forgets it. Entries for classes not listed here are kept.
+ * Each pick shows at once and is saved to the account in the background (a
+ * rejected save reverts that one choice); Zapisz waits for pending saves and
+ * returns to the week view; Wyczyść forgets all choices.
  */
 export function MyGroupsForm({
   options,
+  initialGroups,
   weekHref,
 }: {
   options: MyGroupOption[];
+  initialGroups: MyGroups;
   weekHref: string;
 }) {
   const router = useRouter();
-  const stored = useMyGroups();
-  // Edits on top of the stored choice; null = untouched (shows `stored`).
-  const [draft, setDraft] = useState<MyGroups | null>(null);
-  // Stale entries (group no longer in its class) are dropped, so Zapisz
-  // cleans them.
-  const valid = useMemo(
-    () =>
-      Object.fromEntries(
-        options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
-      ),
-    [options],
-  );
+  const [chosen, setChosen] = useState<MyGroups>(initialGroups);
+  const [failed, setFailed] = useState(false);
+  const pending = useRef(new Set<Promise<unknown>>());
+  // Stale entries (group no longer in its class) are not shown.
   const current = useMemo(
-    () => sanitizeMyGroups(draft ?? stored, valid),
-    [draft, stored, valid],
+    () =>
+      sanitizeMyGroups(
+        chosen,
+        Object.fromEntries(
+          options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
+        ),
+      ),
+    [chosen, options],
   );
 
-  const set = (classId: number, value: string) => {
-    const next = { ...current };
-    if (value) next[String(classId)] = Number(value);
-    else delete next[String(classId)];
-    setDraft(next);
+  const track = (p: Promise<unknown>) => {
+    pending.current.add(p);
+    p.finally(() => pending.current.delete(p));
   };
 
-  const onSubmit = (e: FormEvent) => {
+  const set = (classId: number, value: string) => {
+    const key = String(classId);
+    const groupId = value ? Number(value) : null;
+    const before = chosen[key];
+    const apply = (id: number | undefined) =>
+      setChosen((c) => {
+        const next = { ...c };
+        if (id === undefined) delete next[key];
+        else next[key] = id;
+        return next;
+      });
+    setFailed(false);
+    apply(groupId ?? undefined);
+    const revert = () => {
+      apply(before);
+      setFailed(true);
+    };
+    track(
+      saveMyGroupAction(classId, groupId).then((r) => {
+        if (!r.ok) revert();
+      }, revert),
+    );
+  };
+
+  const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    saveMyGroups(current);
+    await Promise.allSettled([...pending.current]);
     router.push(weekHref);
   };
 
   const onClear = () => {
-    saveMyGroups({});
-    setDraft(null);
+    const before = chosen;
+    setFailed(false);
+    setChosen({});
+    track(
+      clearMyGroupsAction().catch(() => {
+        setChosen(before);
+        setFailed(true);
+      }),
+    );
   };
 
   return (
@@ -77,7 +110,7 @@ export function MyGroupsForm({
       <p className="m-0 border-b border-line px-3 py-2 text-muted">
         Wybierz swoją grupę w zajęciach z podziałem na grupy. Tydzień pokaże
         tylko te grupy; wykłady i zajęcia bez wyboru zostają widoczne. Wybór
-        jest zapisany w tej przeglądarce.
+        jest zapisany na Twoim koncie.
       </p>
       {options.length === 0 ? (
         <p className="m-0 px-3 py-6 text-center text-muted">
@@ -117,6 +150,14 @@ export function MyGroupsForm({
             );
           })}
         </ul>
+      )}
+      {failed && (
+        <p
+          role="alert"
+          className="m-0 border-b border-line px-3 py-2 text-err-fg"
+        >
+          Nie udało się zapisać wyboru. Spróbuj ponownie.
+        </p>
       )}
       <div className="flex flex-wrap gap-1.5 bg-bar px-3 py-2">
         <button type="submit" className={primaryBtn}>

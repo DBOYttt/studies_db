@@ -44,12 +44,12 @@ test('Moje grupy filters groups, persists, and clears', async ({ page }) => {
   await expect(blocks.filter({ hasText: 'B-2 201' })).toHaveCount(0);
 
   await page.goto('/plan?tab=groups');
+  // The choice lives in the DB: wait for the save to land before leaving.
+  const cleared = page.waitForResponse(
+    (r) => r.request().method() === 'POST' && r.url().includes('/plan'),
+  );
   await page.getByRole('button', { name: 'Wyczyść' }).click();
-  await expect
-    .poll(() =>
-      page.evaluate(() => localStorage.getItem('studiesdb.myGroups.v1')),
-    )
-    .toBeNull();
+  await cleared;
   await page.goto(WEEK);
   // A block click only works once hydrated, so the checks below see the
   // client-side (stored-choice) state, not the unfiltered server HTML.

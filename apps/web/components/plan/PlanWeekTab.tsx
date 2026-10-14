@@ -1,3 +1,5 @@
+import { getMyGroups } from '@studies/db';
+import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
@@ -6,6 +8,7 @@ import {
   isoWeekOf,
   nowWall,
   parseIsoWeek,
+  sanitizeMyGroups,
   weekDays,
 } from '@/lib/plan';
 import {
@@ -16,6 +19,7 @@ import {
 } from '@/lib/plan-queries';
 import { toWeekSession, wallDateKey, weekNav } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
+import { requireUser } from '@/lib/session';
 
 const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
@@ -47,28 +51,37 @@ export async function PlanWeekTab({
   try {
     const week =
       parseIsoWeek(raw) ?? defaultWeek(now, await sessionRange(pool, filter));
-    const [{ rows }, links, options] = await Promise.all([
+    const [{ rows }, links, options, stored] = await Promise.all([
       listWeekSessions(pool, week, filter),
       // Without the lookups blocks link to the subject only.
       loadLinkContext(getDb()).catch(() => undefined),
       myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
+      myGroupsFilter
+        ? requireUser().then((u) => getMyGroups(getDb(), u.id))
+        : Promise.resolve(null),
     ]);
     const validGroups = options
       ? Object.fromEntries(
           options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
         )
       : undefined;
+    // Stale entries (group no longer in its class) are ignored.
+    const myGroups =
+      validGroups && stored ? sanitizeMyGroups(stored, validGroups) : undefined;
     return (
-      <WeekView
-        week={week}
-        days={weekDays(rows, week).map((d) => d.toISOString())}
-        sessions={rows.map((s) => toWeekSession(s, links, simple))}
-        nav={weekNav(path, week, isoWeekOf(now), extra)}
-        today={wallDateKey(now)}
-        myGroupsFilter={myGroupsFilter}
-        validGroups={validGroups}
-        simple={simple}
-      />
+      <>
+        {stored && Object.keys(stored).length === 0 && <MyGroupsImport />}
+        <WeekView
+          week={week}
+          days={weekDays(rows, week).map((d) => d.toISOString())}
+          sessions={rows.map((s) => toWeekSession(s, links, simple))}
+          nav={weekNav(path, week, isoWeekOf(now), extra)}
+          today={wallDateKey(now)}
+          myGroupsFilter={myGroupsFilter}
+          myGroups={myGroups}
+          simple={simple}
+        />
+      </>
     );
   } catch (err) {
     return (

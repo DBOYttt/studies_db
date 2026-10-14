@@ -373,6 +373,15 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_SCHEMA = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_NONADMIN = await createLoginToken(db, userId);
 
+    // Moje grupy stored per user (my-groups.spec.ts): its own user, so the
+    // saved choice cannot leak into the other specs.
+    const groupsUserId = await upsertUser(db, {
+      discordUserId: 'e2e-groups',
+      displayName: 'Grażyna Grupowa',
+      avatarUrl: null,
+    });
+    process.env.E2E_TOKEN_GROUPS = await createLoginToken(db, groupsUserId);
+
     // Admin panel (admin.spec.ts): a user flagged is_admin.
     const adminId = await upsertUser(db, {
       discordUserId: 'e2e-admin',
