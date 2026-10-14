@@ -4,6 +4,7 @@ export { createDb, type Db, type DbExecutor } from './client.js';
 export * from './files.js';
 export * from './hierarchy.js';
 export { insertMaterial, type NewMaterial } from './materials.js';
+export * from './my-groups.js';
 export * from './schema.js';
 export * from './search.js';
 export * from './settings.js';

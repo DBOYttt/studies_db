@@ -126,6 +126,23 @@ export const users = mysqlTable('users', {
   createdAt: now(),
 });
 
+// A user's own lab/exercise group per class ("Moje grupy"), shared by web and bot.
+export const userGroups = mysqlTable(
+  'user_groups',
+  {
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    classId: int('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    groupId: int('group_id')
+      .notNull()
+      .references(() => classGroups.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.userId, t.classId] })],
+);
+
 export const topics = mysqlTable(
   'topics',
   {
