@@ -81,9 +81,11 @@ export const CROSS_ORIGIN_ERROR = 'Nieprawidłowe pochodzenie żądania.';
  * globalThis so dev-mode module reloads share it; per process, which is
  * enough for the single web container.
  */
-const usedTokens: Map<string, number> = ((
-  globalThis as { __adminSqlUsedTokens?: Map<string, number> }
-).__adminSqlUsedTokens ??= new Map());
+const tokenStore = globalThis as {
+  __adminSqlUsedTokens?: Map<string, number>;
+};
+tokenStore.__adminSqlUsedTokens ??= new Map();
+const usedTokens = tokenStore.__adminSqlUsedTokens;
 
 /** Marks a token as used; false if it already was. Synchronous: no await between check and set. */
 function spendToken(mac: string, issuedAt: number, now: number): boolean {
