@@ -6,7 +6,9 @@ import {
   originalRelPath,
   planProcessing,
   previewRelPath,
+  resolveInStorage,
   resolveStorageDir,
+  StoragePathError,
   searchNameFor,
 } from '../src/files.js';
 
@@ -65,6 +67,48 @@ describe('storage paths', () => {
 
   it('builds the preview path', () => {
     expect(previewRelPath(sha)).toBe(`previews/${sha}.pdf`);
+  });
+
+  it.each([
+    '',
+    'AB'.repeat(32),
+    'ab'.repeat(31),
+    `${'ab'.repeat(32)}0`,
+    '../../../../tmp/x',
+    `${'ab'.repeat(31)}/.`,
+  ])('rejects a malformed sha256: %j', (bad) => {
+    expect(() => previewRelPath(bad)).toThrow(StoragePathError);
+    expect(() => originalRelPath(bad, 'pdf')).toThrow(StoragePathError);
+  });
+});
+
+describe('resolveInStorage', () => {
+  const root = '/data/storage';
+
+  it.each([
+    ['originals/a.pdf', '/data/storage/originals/a.pdf'],
+    ['previews/../originals/a', '/data/storage/originals/a'],
+    ['./x', '/data/storage/x'],
+  ])('keeps %j inside the root', (rel, abs) => {
+    expect(resolveInStorage(root, rel)).toBe(abs);
+    expect(resolveInStorage(`${root}/`, rel)).toBe(abs);
+  });
+
+  it.each([
+    '../../proc/self/environ',
+    '/etc/passwd',
+    '../storage-other/x',
+    '..',
+    '.',
+    '',
+  ])('refuses %j', (rel) => {
+    expect(() => resolveInStorage(root, rel)).toThrow(StoragePathError);
+  });
+
+  it('uses a message that does not echo the path', () => {
+    expect(() => resolveInStorage(root, '/etc/passwd')).toThrow(
+      /^Nieprawidłowa ścieżka pliku$/,
+    );
   });
 });
 

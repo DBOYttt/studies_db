@@ -25,6 +25,11 @@ Fill in: `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
 `STORAGE_DIR` is forced to `/data/storage` by compose; it must be absolute in production
 (the apps throw at startup otherwise).
 
+The `worker` service does not load `.env` as a whole: compose passes it only `DATABASE_URL`,
+`UNITIME_ICAL_URL` and the optional `WORKER_CONCURRENCY` / `SOFFICE_BIN` / `PDFTOTEXT_BIN` (and forces
+`STORAGE_DIR`). It opens files named by DB rows, so it should not hold the Discord token or other secrets.
+If you add a worker setting, list it under `worker.environment` in `compose.yaml`.
+
 ## 2. Cloudflare Tunnel
 
 1. Cloudflare Zero Trust dashboard -> Networks -> Tunnels -> Create tunnel (Cloudflared).

@@ -1,6 +1,10 @@
 import { stat } from 'node:fs/promises';
-import { join } from 'node:path';
-import { type Db, materials, previewRelPath } from '@studies/db';
+import {
+  type Db,
+  materials,
+  previewRelPath,
+  resolveInStorage,
+} from '@studies/db';
 import { eq } from 'drizzle-orm';
 import { convertToPdf } from './convert.js';
 import {
@@ -47,11 +51,14 @@ export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
     .from(materials)
     .where(eq(materials.id, job.materialId));
   if (!m || m.deletedAt) return;
-  const original = join(deps.storageDir, m.storagePath);
+  // Every path comes from the row, which the admin SQL console can edit:
+  // resolveInStorage/previewRelPath throw StoragePathError (a permanent
+  // failure, see failJob) before anything is read or written.
+  const original = resolveInStorage(deps.storageDir, m.storagePath);
 
   if (job.type === 'convert') {
     const rel = previewRelPath(m.sha256);
-    const preview = join(deps.storageDir, rel);
+    const preview = resolveInStorage(deps.storageDir, rel);
     if (!(await exists(preview))) {
       await convertToPdf(original, preview, {
         timeoutMs: CONVERT_TIMEOUT_MS,
@@ -71,7 +78,10 @@ export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
   let text: string;
   const pdfOpts = { timeoutMs: EXTRACT_TIMEOUT_MS, bin: deps.pdftotextBin };
   if (m.previewKind === 'pdf' && m.previewPath) {
-    text = await extractPdfText(join(deps.storageDir, m.previewPath), pdfOpts);
+    text = await extractPdfText(
+      resolveInStorage(deps.storageDir, m.previewPath),
+      pdfOpts,
+    );
   } else if (m.previewKind === 'pdf') {
     text = await extractPdfText(original, pdfOpts);
   } else if (m.previewKind === 'text') {

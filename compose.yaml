@@ -63,9 +63,15 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Containerfile
-    env_file: .env
+    # Only what the worker reads (no env_file): it opens files named by DB rows,
+    # so keep Discord/RW/RO/tunnel secrets out of its environment.
     environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       STORAGE_DIR: /data/storage
+      UNITIME_ICAL_URL: ${UNITIME_ICAL_URL:-}
+      WORKER_CONCURRENCY: ${WORKER_CONCURRENCY:-}
+      SOFFICE_BIN: ${SOFFICE_BIN:-}
+      PDFTOTEXT_BIN: ${PDFTOTEXT_BIN:-}
     volumes:
       - storage:/data/storage
     depends_on:
