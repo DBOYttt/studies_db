@@ -1,21 +1,17 @@
-import {
-  type Assessment,
-  CLASS_NAMES,
-  type ClassKind,
-  classes,
-  classLecturers,
-  type Db,
-  ensureClass,
-  ensureGroup,
-  groupName,
-  lecturers,
-  setBanned,
-  subjects,
-} from '@studies/db';
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import { setBanned } from './auth.js';
+import type { Db } from './client.js';
+import { type Assessment, CLASS_NAMES, type ClassKind } from './constants.js';
+import { ensureClass, ensureGroup, groupName } from './hierarchy.js';
+import { classes, classLecturers, lecturers, subjects } from './schema.js';
+
+export type ActionResult = { ok: boolean; message: string };
+
+const ok = (message: string): ActionResult => ({ ok: true, message });
+const refused = (message: string): ActionResult => ({ ok: false, message });
 
 export type SubjectInput = {
-  channelId: string;
+  channelId: string | null;
   name: string;
   code: string;
   semester: 1 | 2;
@@ -39,22 +35,25 @@ const INVALID_URL = 'Nieprawidłowy adres URL.';
 const DUP_EMAIL = 'Prowadzący z tym adresem e-mail już istnieje.';
 
 /** `-` clears the field (NULL); anything else is stored trimmed. */
-const textOrNull = (v: string): string | null => {
+export const textOrNull = (v: string): string | null => {
   const t = v.trim();
   return t === '-' || t === '' ? null : t;
 };
-const urlOrNull = (v: string): string | null | undefined => {
+export const urlOrNull = (v: string): string | null | undefined => {
   const t = textOrNull(v);
   return t === null || URL_RE.test(t) ? t : undefined;
 };
-const emailOrNull = (v: string): string | null => {
+export const emailOrNull = (v: string): string | null => {
   const t = textOrNull(v);
   return t === null ? null : t.toLowerCase();
 };
 
 const notFound = (code: string) => `Nie znaleziono przedmiotu ${code}.`;
 
-export async function addSubject(db: Db, i: SubjectInput): Promise<string> {
+export async function addSubject(
+  db: Db,
+  i: SubjectInput,
+): Promise<ActionResult> {
   const code = i.code.trim().toUpperCase();
   const [existing] = await db
     .select({
@@ -64,7 +63,7 @@ export async function addSubject(db: Db, i: SubjectInput): Promise<string> {
     })
     .from(subjects)
     .where(eq(subjects.code, code));
-  if (existing && existing.channel === null) {
+  if (existing && existing.channel === null && i.channelId !== null) {
     try {
       await db
         .update(subjects)
@@ -77,11 +76,11 @@ export async function addSubject(db: Db, i: SubjectInput): Promise<string> {
         .where(eq(subjects.id, existing.id));
     } catch (err) {
       if (isDuplicateEntry(err)) {
-        return 'Przedmiot z tym kodem lub kanałem już istnieje.';
+        return refused('Przedmiot z tym kodem lub kanałem już istnieje.');
       }
       throw err;
     }
-    return `Połączono przedmiot ${code} z kanałem.`;
+    return ok(`Połączono przedmiot ${code} z kanałem.`);
   }
   try {
     await db.insert(subjects).values({
@@ -94,11 +93,11 @@ export async function addSubject(db: Db, i: SubjectInput): Promise<string> {
     });
   } catch (err) {
     if (isDuplicateEntry(err)) {
-      return 'Przedmiot z tym kodem lub kanałem już istnieje.';
+      return refused('Przedmiot z tym kodem lub kanałem już istnieje.');
     }
     throw err;
   }
-  return `Dodano przedmiot ${code} (${i.name}).`;
+  return ok(`Dodano przedmiot ${code} (${i.name}).`);
 }
 
 export async function editSubject(
@@ -107,7 +106,7 @@ export async function editSubject(
   patch: Partial<Omit<SubjectInput, 'channelId' | 'code'>> & {
     platformUrl?: string;
   },
-): Promise<string> {
+): Promise<ActionResult> {
   const upper = code.trim().toUpperCase();
   const set: Partial<typeof subjects.$inferInsert> = {};
   if (patch.name !== undefined) set.name = patch.name;
@@ -116,29 +115,33 @@ export async function editSubject(
   if (patch.description !== undefined) set.description = patch.description;
   if (patch.platformUrl !== undefined) {
     const url = urlOrNull(patch.platformUrl);
-    if (url === undefined) return INVALID_URL;
+    if (url === undefined) return refused(INVALID_URL);
     set.platformUrl = url;
   }
   const [row] = await db
     .select({ id: subjects.id })
     .from(subjects)
     .where(eq(subjects.code, upper));
-  if (!row) return notFound(upper);
+  if (!row) return refused(notFound(upper));
   if (Object.keys(set).length > 0) {
     await db.update(subjects).set(set).where(eq(subjects.id, row.id));
   }
-  return `Zaktualizowano przedmiot ${upper}.`;
+  return ok(`Zaktualizowano przedmiot ${upper}.`);
 }
 
-export async function listSubjects(db: Db): Promise<string> {
+export async function listSubjects(db: Db): Promise<ActionResult> {
   const rows = await db
     .select()
     .from(subjects)
     .orderBy(asc(subjects.semester), asc(subjects.code));
-  if (rows.length === 0) return 'Brak przedmiotów.';
-  return rows
-    .map((s) => `**${s.code}** ${s.name} — sem. ${s.semester}, ${s.ects} ECTS`)
-    .join('\n');
+  if (rows.length === 0) return ok('Brak przedmiotów.');
+  return ok(
+    rows
+      .map(
+        (s) => `**${s.code}** ${s.name} — sem. ${s.semester}, ${s.ects} ECTS`,
+      )
+      .join('\n'),
+  );
 }
 
 const lecturerLabel = (title: string | null | undefined, name: string) =>
@@ -153,7 +156,7 @@ export async function addLecturer(
     officeHours?: string;
     room?: string;
   },
-): Promise<string> {
+): Promise<ActionResult> {
   let r: { insertId: number };
   try {
     [r] = await db.insert(lecturers).values({
@@ -165,10 +168,12 @@ export async function addLecturer(
       room: i.room === undefined ? null : textOrNull(i.room),
     });
   } catch (err) {
-    if (isDuplicateEntry(err)) return DUP_EMAIL;
+    if (isDuplicateEntry(err)) return refused(DUP_EMAIL);
     throw err;
   }
-  return `Dodano prowadzącego ${lecturerLabel(i.title, i.name)} (id ${r.insertId}).`;
+  return ok(
+    `Dodano prowadzącego ${lecturerLabel(i.title, i.name)} (id ${r.insertId}).`,
+  );
 }
 
 export async function editLecturer(
@@ -181,11 +186,12 @@ export async function editLecturer(
     officeHours?: string;
     room?: string;
   },
-): Promise<string> {
+): Promise<ActionResult> {
   const set: Partial<typeof lecturers.$inferInsert> = {};
   if (patch.name !== undefined) {
     const name = patch.name.trim();
-    if (name === '' || name === '-') return 'Nazwa nie może być pusta.';
+    if (name === '' || name === '-')
+      return refused('Nazwa nie może być pusta.');
     set.name = name;
   }
   if (patch.title !== undefined) set.title = textOrNull(patch.title);
@@ -197,12 +203,12 @@ export async function editLecturer(
     .select({ id: lecturers.id })
     .from(lecturers)
     .where(eq(lecturers.id, id));
-  if (!row) return `Nie znaleziono prowadzącego o id ${id}.`;
+  if (!row) return refused(`Nie znaleziono prowadzącego o id ${id}.`);
   if (Object.keys(set).length > 0) {
     try {
       await db.update(lecturers).set(set).where(eq(lecturers.id, id));
     } catch (err) {
-      if (isDuplicateEntry(err)) return DUP_EMAIL;
+      if (isDuplicateEntry(err)) return refused(DUP_EMAIL);
       throw err;
     }
   }
@@ -210,7 +216,9 @@ export async function editLecturer(
     .select({ title: lecturers.title, name: lecturers.name })
     .from(lecturers)
     .where(eq(lecturers.id, id));
-  return `Zaktualizowano prowadzącego ${lecturerLabel(after?.title, after?.name ?? '')}.`;
+  return ok(
+    `Zaktualizowano prowadzącego ${lecturerLabel(after?.title, after?.name ?? '')}.`,
+  );
 }
 
 export async function editClass(
@@ -223,7 +231,7 @@ export async function editClass(
     note?: string;
     platformUrl?: string;
   },
-): Promise<string> {
+): Promise<ActionResult> {
   const code = i.subjectCode.trim().toUpperCase();
   const set: Partial<typeof classes.$inferInsert> = {};
   if (i.assessment !== undefined)
@@ -231,24 +239,26 @@ export async function editClass(
   if (i.note !== undefined) set.assessmentNote = textOrNull(i.note);
   if (i.platformUrl !== undefined) {
     const url = urlOrNull(i.platformUrl);
-    if (url === undefined) return INVALID_URL;
+    if (url === undefined) return refused(INVALID_URL);
     set.platformUrl = url;
   }
   const [subject] = await db
     .select({ id: subjects.id })
     .from(subjects)
     .where(eq(subjects.code, code));
-  if (!subject) return notFound(code);
+  if (!subject) return refused(notFound(code));
   const [cls] = await db
     .select({ id: classes.id })
     .from(classes)
     .where(and(eq(classes.subjectId, subject.id), eq(classes.kind, i.kind)));
   if (!cls)
-    return `Przedmiot ${code} nie ma zajęć typu ${CLASS_NAMES[i.kind]}.`;
+    return refused(
+      `Przedmiot ${code} nie ma zajęć typu ${CLASS_NAMES[i.kind]}.`,
+    );
   if (Object.keys(set).length > 0) {
     await db.update(classes).set(set).where(eq(classes.id, cls.id));
   }
-  return `Zaktualizowano ${code} / ${CLASS_NAMES[i.kind]}.`;
+  return ok(`Zaktualizowano ${code} / ${CLASS_NAMES[i.kind]}.`);
 }
 
 export async function assignLecturer(
@@ -259,18 +269,19 @@ export async function assignLecturer(
     classKind: ClassKind;
     groupNumber?: number;
   },
-): Promise<string> {
+): Promise<ActionResult> {
   const code = i.subjectCode.trim().toUpperCase();
   const [subject] = await db
     .select({ id: subjects.id })
     .from(subjects)
     .where(eq(subjects.code, code));
-  if (!subject) return `Nie znaleziono przedmiotu ${i.subjectCode}.`;
+  if (!subject) return refused(`Nie znaleziono przedmiotu ${i.subjectCode}.`);
   const [lecturer] = await db
     .select({ id: lecturers.id })
     .from(lecturers)
     .where(eq(lecturers.id, i.lecturerId));
-  if (!lecturer) return `Nie znaleziono prowadzącego o id ${i.lecturerId}.`;
+  if (!lecturer)
+    return refused(`Nie znaleziono prowadzącego o id ${i.lecturerId}.`);
   const classId = await ensureClass(db, subject.id, i.classKind);
   const groupId =
     i.groupNumber === undefined
@@ -297,17 +308,17 @@ export async function assignLecturer(
     i.groupNumber === undefined
       ? CLASS_NAMES[i.classKind]
       : `${CLASS_NAMES[i.classKind]}, ${groupName(i.groupNumber)}`;
-  return `Przypisano prowadzącego do ${code} / ${where}.`;
+  return ok(`Przypisano prowadzącego do ${code} / ${where}.`);
 }
 
-export async function banReply(
+export async function banUser(
   db: Db,
   discordUserId: string,
   banned: boolean,
-): Promise<string> {
+): Promise<ActionResult> {
   const found = await setBanned(db, discordUserId, banned);
-  if (!found) return 'Ten użytkownik nie korzystał jeszcze z bota.';
-  return banned
-    ? 'Zablokowano dostęp do strony.'
-    : 'Odblokowano dostęp do strony.';
+  if (!found) return refused('Ten użytkownik nie korzystał jeszcze z bota.');
+  return ok(
+    banned ? 'Zablokowano dostęp do strony.' : 'Odblokowano dostęp do strony.',
+  );
 }

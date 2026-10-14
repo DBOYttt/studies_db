@@ -1,4 +1,5 @@
 import {
+  adminAudit,
   botSettings,
   getSetting,
   insertMaterial,
@@ -161,6 +162,51 @@ describe('router', () => {
     );
     expect(i.reply).toHaveBeenCalledTimes(1);
     err.mockRestore();
+  });
+
+  describe('audit', () => {
+    const run = async (patch: Record<string, unknown>) => {
+      await db
+        .insert(subjects)
+        .values({ code: 'ALG', name: 'Algebra', semester: 1, ects: 5 });
+      const i = mkInteraction({
+        commandName: 'subject',
+        user: {
+          id: 'adm',
+          username: 'adm',
+          globalName: null,
+          displayAvatarURL: () => 'a',
+        },
+        options: {
+          getSubcommand: () => 'edit',
+          getString: (n: string) => (n === 'code' ? 'alg' : (patch[n] ?? null)),
+          getInteger: () => null,
+        },
+      });
+      await createInteractionHandler({
+        ingest: { db, storageDir: '', fetchBody: vi.fn() },
+        client: {} as never,
+        config,
+      })(asI(i));
+      return db.select().from(adminAudit);
+    };
+    it('a successful /subject edit writes one discord audit row', async () => {
+      const rows = await run({ name: 'Algebra 2' });
+      expect(rows).toHaveLength(1);
+      const [adm] = await db
+        .select()
+        .from(users)
+        .where(eq(users.discordUserId, 'adm'));
+      expect(rows[0]).toMatchObject({
+        action: 'subject.edit',
+        target: 'ALG',
+        userId: adm?.id,
+      });
+      expect(rows[0]?.details).toMatchObject({ source: 'discord' });
+    });
+    it('a refused /subject edit writes none', async () => {
+      expect(await run({ platform_url: 'ftp://x' })).toHaveLength(0);
+    });
   });
 
   it('/ban upserts a never-seen user so the ban takes effect', async () => {

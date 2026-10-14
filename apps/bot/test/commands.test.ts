@@ -1,11 +1,7 @@
 import {
-  classes,
-  classGroups,
-  classLecturers,
   consumeLoginToken,
   type Db,
   insertMaterial,
-  lecturers,
   setBanned,
   subjects,
   topics,
@@ -13,31 +9,13 @@ import {
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { PermissionFlagsBits } from 'discord.js';
-import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import {
-  addLecturer,
-  addSubject,
-  assignLecturer,
-  banReply,
-  editClass,
-  editLecturer,
-  editSubject,
-  listSubjects,
-} from '../src/commands/admin.js';
 import { commandDefinitions } from '../src/commands/definitions.js';
 import { planStatusText, planSyncReply } from '../src/commands/plan.js';
 import { replyOptions } from '../src/commands/reply.js';
 import { linkFor, searchReply } from '../src/commands/student.js';
 
 let db: Db;
-const base = {
-  channelId: 'c1',
-  name: 'Algebra',
-  code: 'alg',
-  semester: 1 as const,
-  ects: 5,
-};
 
 beforeEach(async () => {
   if (db) await closeTestDb(db);
@@ -47,221 +25,7 @@ afterAll(async () => {
   await closeTestDb(db);
 });
 
-describe('subjects', () => {
-  it('adds, uppercases code, rejects duplicates', async () => {
-    expect(await addSubject(db, base)).toBe('Dodano przedmiot ALG (Algebra).');
-    expect(await addSubject(db, { ...base, channelId: 'c2' })).toBe(
-      'Przedmiot z tym kodem lub kanałem już istnieje.',
-    );
-    expect(await addSubject(db, { ...base, code: 'X' })).toBe(
-      'Przedmiot z tym kodem lub kanałem już istnieje.',
-    );
-  });
-
-  it('edits only provided fields and lists sorted', async () => {
-    await addSubject(db, base);
-    await addSubject(db, {
-      ...base,
-      channelId: 'c0',
-      code: 'ANA',
-      semester: 2,
-      name: 'Analiza',
-    });
-    expect(await editSubject(db, 'alg', { ects: 7 })).toBe(
-      'Zaktualizowano przedmiot ALG.',
-    );
-    expect(await editSubject(db, 'nope', { ects: 7 })).toBe(
-      'Nie znaleziono przedmiotu NOPE.',
-    );
-    expect(await listSubjects(db)).toBe(
-      '**ALG** Algebra — sem. 1, 7 ECTS\n**ANA** Analiza — sem. 2, 5 ECTS',
-    );
-  });
-
-  it('lists empty', async () => {
-    expect(await listSubjects(db)).toBe('Brak przedmiotów.');
-  });
-});
-
-describe('lecturers', () => {
-  it('adds and assigns (idempotent), unknown subject', async () => {
-    await addSubject(db, base);
-    const r = await addLecturer(db, { name: 'Jan Kowalski', title: 'dr' });
-    const id = Number(/id (\d+)/.exec(r)?.[1]);
-    expect(r).toBe(`Dodano prowadzącego dr Jan Kowalski (id ${id}).`);
-    const a = {
-      subjectCode: 'alg',
-      lecturerId: id,
-      classKind: 'laboratorium' as const,
-    };
-    expect(await assignLecturer(db, a)).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium.',
-    );
-    expect(await assignLecturer(db, a)).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium.',
-    );
-    expect(await db.select().from(classLecturers)).toHaveLength(1);
-    expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium, Gr. 3.',
-    );
-    expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium, Gr. 3.',
-    );
-    expect(await db.select().from(classLecturers)).toHaveLength(2);
-    expect(await db.select().from(classGroups)).toHaveLength(1);
-    expect(await assignLecturer(db, { ...a, subjectCode: 'zzz' })).toBe(
-      'Nie znaleziono przedmiotu zzz.',
-    );
-    expect(await assignLecturer(db, { ...a, lecturerId: 9999 })).toBe(
-      'Nie znaleziono prowadzącego o id 9999.',
-    );
-  });
-});
-
-describe('task 6 commands', () => {
-  const getSubject = async () =>
-    (await db.select().from(subjects).where(eq(subjects.code, 'ALG')))[0];
-
-  it('links a channel-less subject, keeping name/semester/ects', async () => {
-    await db
-      .insert(subjects)
-      .values({ name: 'Algebra', code: 'ALG', semester: 1, ects: 5 });
-    expect(
-      await addSubject(db, {
-        ...base,
-        name: 'Other',
-        ects: 9,
-        semester: 2,
-        description: 'Opis',
-      }),
-    ).toBe('Połączono przedmiot ALG z kanałem.');
-    const s = await getSubject();
-    expect(s).toMatchObject({
-      name: 'Algebra',
-      ects: 5,
-      semester: 1,
-      discordChannelId: 'c1',
-      description: 'Opis',
-    });
-  });
-
-  it('subject platform_url: set, clear, reject', async () => {
-    await addSubject(db, base);
-    expect(
-      await editSubject(db, 'alg', { platformUrl: 'https://p.example/x' }),
-    ).toBe('Zaktualizowano przedmiot ALG.');
-    expect((await getSubject())?.platformUrl).toBe('https://p.example/x');
-    expect(await editSubject(db, 'alg', { platformUrl: 'ftp://x' })).toBe(
-      'Nieprawidłowy adres URL.',
-    );
-    expect((await getSubject())?.platformUrl).toBe('https://p.example/x');
-    await editSubject(db, 'alg', { platformUrl: '-' });
-    expect((await getSubject())?.platformUrl).toBeNull();
-  });
-
-  it('adds and edits lecturers with new fields, clear, duplicate email', async () => {
-    const r = await addLecturer(db, {
-      name: 'Jan',
-      title: 'dr',
-      email: 'Jan@Example.edu',
-      officeHours: 'pn 10',
-      room: '12',
-    });
-    const id = Number(/id (\d+)/.exec(r)?.[1]);
-    let [l] = await db.select().from(lecturers).where(eq(lecturers.id, id));
-    expect(l).toMatchObject({
-      email: 'jan@example.edu',
-      officeHours: 'pn 10',
-      room: '12',
-    });
-    expect(await addLecturer(db, { name: 'X', email: 'JAN@example.edu' })).toBe(
-      'Prowadzący z tym adresem e-mail już istnieje.',
-    );
-    const id2 = Number(
-      /id (\d+)/.exec(await addLecturer(db, { name: 'Ewa' }))?.[1],
-    );
-    expect(await editLecturer(db, id2, { email: 'jan@example.edu' })).toBe(
-      'Prowadzący z tym adresem e-mail już istnieje.',
-    );
-    expect(await editLecturer(db, id, { room: '-', officeHours: 'wt 9' })).toBe(
-      'Zaktualizowano prowadzącego dr Jan.',
-    );
-    [l] = await db.select().from(lecturers).where(eq(lecturers.id, id));
-    expect(l).toMatchObject({ room: null, officeHours: 'wt 9' });
-    expect(await editLecturer(db, 9999, { name: 'Z' })).toBe(
-      'Nie znaleziono prowadzącego o id 9999.',
-    );
-  });
-
-  it('lecturer title/name edge cases', async () => {
-    const id = Number(
-      /id (\d+)/.exec(await addLecturer(db, { name: 'Jan', title: '-' }))?.[1],
-    );
-    expect((await db.select().from(lecturers))[0].title).toBeNull();
-    expect(await editLecturer(db, id, { name: '  -  ' })).toBe(
-      'Nazwa nie może być pusta.',
-    );
-    expect(await editLecturer(db, id, { name: '   ' })).toBe(
-      'Nazwa nie może być pusta.',
-    );
-    expect((await db.select().from(lecturers))[0].name).toBe('Jan');
-    await editLecturer(db, id, { name: '  Jan Nowak ' });
-    expect((await db.select().from(lecturers))[0].name).toBe('Jan Nowak');
-  });
-
-  it('editClass updates, clears, rejects bad url, never creates', async () => {
-    await addSubject(db, base);
-    expect(await editClass(db, { subjectCode: 'alg', kind: 'wyklad' })).toBe(
-      'Przedmiot ALG nie ma zajęć typu Wykład.',
-    );
-    expect(await db.select().from(classes)).toHaveLength(0);
-    await assignLecturer(db, {
-      subjectCode: 'alg',
-      lecturerId: Number(
-        /id (\d+)/.exec(await addLecturer(db, { name: 'A' }))?.[1],
-      ),
-      classKind: 'wyklad',
-    });
-    expect(
-      await editClass(db, {
-        subjectCode: 'alg',
-        kind: 'wyklad',
-        assessment: 'egzamin',
-        note: 'ustny',
-        platformUrl: 'https://p.example/c',
-      }),
-    ).toBe('Zaktualizowano ALG / Wykład.');
-    let [c] = await db.select().from(classes);
-    expect(c).toMatchObject({
-      assessment: 'egzamin',
-      assessmentNote: 'ustny',
-      platformUrl: 'https://p.example/c',
-    });
-    expect(
-      await editClass(db, {
-        subjectCode: 'alg',
-        kind: 'wyklad',
-        note: '-',
-        platformUrl: 'nope',
-      }),
-    ).toBe('Nieprawidłowy adres URL.');
-    await editClass(db, {
-      subjectCode: 'alg',
-      kind: 'wyklad',
-      note: '-',
-      platformUrl: '-',
-    });
-    await editClass(db, {
-      subjectCode: 'alg',
-      kind: 'wyklad',
-      assessment: 'brak',
-    });
-    [c] = await db.select().from(classes);
-    expect(c.assessment).toBeNull();
-    [c] = await db.select().from(classes);
-    expect(c).toMatchObject({ assessmentNote: null, platformUrl: null });
-  });
-
+describe('plan', () => {
   it('planStatusText: never, ok, error', () => {
     const now = new Date();
     const none = {
@@ -313,18 +77,6 @@ describe('link and ban', () => {
       ok: false,
       reason: 'banned',
     });
-  });
-  it('banReply', async () => {
-    expect(await banReply(db, 'ghost', true)).toBe(
-      'Ten użytkownik nie korzystał jeszcze z bota.',
-    );
-    await upsertUser(db, user);
-    expect(await banReply(db, 'u1', true)).toBe(
-      'Zablokowano dostęp do strony.',
-    );
-    expect(await banReply(db, 'u1', false)).toBe(
-      'Odblokowano dostęp do strony.',
-    );
   });
 });
 

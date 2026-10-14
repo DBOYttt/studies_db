@@ -1,3 +1,4 @@
+export * from './admin-actions.js';
 export * from './audit.js';
 export * from './auth.js';
 export { createDb, type Db, type DbExecutor } from './client.js';
