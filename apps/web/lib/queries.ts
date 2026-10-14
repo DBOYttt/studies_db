@@ -15,7 +15,7 @@ import {
   topicTags,
   users,
 } from '@studies/db';
-import type { Assessment } from '@studies/db/constants';
+import { type Assessment, KIND_ORDER } from '@studies/db/constants';
 import {
   and,
   asc,
@@ -45,7 +45,8 @@ export interface SubjectInfo {
   platformUrl: string | null;
 }
 
-export const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
+export { KIND_ORDER };
+
 const NONE_NAME = 'Bez kategorii';
 
 function toDate(v: unknown): Date {
