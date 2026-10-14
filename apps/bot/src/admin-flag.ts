@@ -1,11 +1,14 @@
 import { type Db, getSetting, users } from '@studies/db';
-import type { ChatInputCommandInteraction } from 'discord.js';
+import type { Interaction } from 'discord.js';
 import { sql } from 'drizzle-orm';
 import { ADMIN_ROLE_SETTING } from './config.js';
 import type { DiscordUser } from './types.js';
 
-/** Role ids of the invoking member (plain array or GuildMemberRoleManager). */
-export function memberRoleIds(i: ChatInputCommandInteraction): string[] {
+/**
+ * Role ids of the invoking member (plain array or GuildMemberRoleManager), for
+ * any interaction that carries a member.
+ */
+export function memberRoleIds(i: Pick<Interaction, 'member'>): string[] {
   const roles = i.member?.roles;
   if (!roles) return [];
   return Array.isArray(roles) ? [...roles] : [...roles.cache.keys()];

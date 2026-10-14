@@ -6,6 +6,7 @@ import {
   assignLecturer,
   banUser,
   type ClassKind,
+  type createDb,
   editClass,
   editLecturer,
   editSubject,
@@ -38,14 +39,24 @@ import { loadSubjectSpecs } from '../setup/load.js';
 import { needsSecondPass, planSetup } from '../setup/plan.js';
 import { formatPlan, formatReport, mergeReports } from '../setup/report.js';
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
+import { handleUi, openStudentPanel } from '../ui/router.js';
 import { planStatusReply, planSyncReply } from './plan.js';
 import { replyOptions } from './reply.js';
-import { linkFor, searchReply } from './student.js';
+import {
+  LINK_BANNED,
+  LINK_DM_CLOSED,
+  LINK_SENT,
+  linkFor,
+  searchReply,
+  sendLoginDm,
+} from './student.js';
 
 export type RouterDeps = {
   ingest: IngestDeps;
   client: Client;
   config: BotConfig;
+  /** Raw pool for the shared plan queries (`@studies/db/plan`). */
+  pool: ReturnType<typeof createDb>['pool'];
 };
 
 const ADMIN_COMMANDS = new Set([
@@ -486,28 +497,16 @@ async function runCommand(
         toDiscordUser(i.user, i.member as never),
       );
       if (!res.ok) {
-        await reply('Twój dostęp do strony jest zablokowany.');
+        await reply(LINK_BANNED);
         return;
       }
       await i.deferReply(eph);
-      try {
-        // <url> + SuppressEmbeds: no link preview, so Discord's crawler
-        // never fetches the one-time URL.
-        await i.user.send({
-          content: `Twój link do Studies DB (ważny 15 minut, jednorazowy): <${res.url}>`,
-          flags: MessageFlags.SuppressEmbeds,
-        });
-      } catch {
-        await i.editReply(
-          replyOptions(
-            'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.',
-          ),
-        );
-        return;
-      }
-      await i.editReply(
-        replyOptions('Wysłałem Ci link w wiadomości prywatnej.'),
-      );
+      const sent = await sendLoginDm(i.user, res.url);
+      await i.editReply(replyOptions(sent ? LINK_SENT : LINK_DM_CLOSED));
+      return;
+    }
+    case 'panel': {
+      await openStudentPanel(i);
       return;
     }
     case 'search': {
@@ -535,13 +534,25 @@ export function createInteractionHandler(deps: RouterDeps) {
         await autocomplete(deps, interaction);
       } else if (interaction.isChatInputCommand()) {
         await runCommand(deps, interaction);
+      } else if (
+        interaction.isButton() ||
+        interaction.isStringSelectMenu() ||
+        interaction.isUserSelectMenu() ||
+        interaction.isModalSubmit()
+      ) {
+        await handleUi(deps, interaction);
       }
     } catch (err) {
       console.error('interaction failed', err);
       if (interaction.isAutocomplete() || !interaction.isRepliable()) return;
       try {
         const content = ERROR_TEXT;
-        if (interaction.deferred)
+        // A component's deferred response is the user's panel (deferUpdate)
+        // or a fresh ephemeral reply: never overwrite it, follow up instead.
+        const isUi = !interaction.isChatInputCommand();
+        if (interaction.deferred && isUi)
+          await interaction.followUp(replyOptions(content, true));
+        else if (interaction.deferred)
           await interaction.editReply(replyOptions(content));
         else if (interaction.replied) {
           await interaction.followUp(replyOptions(content, true));

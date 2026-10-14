@@ -284,6 +284,9 @@ export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
     .setName('link')
     .setDescription('Otrzymaj link do logowania na stronie'),
   new SlashCommandBuilder()
+    .setName('panel')
+    .setDescription('Otwórz panel: plan zajęć, Moje grupy, logowanie'),
+  new SlashCommandBuilder()
     .setName('search')
     .setDescription('Szukaj materiałów')
     .addStringOption((o) =>

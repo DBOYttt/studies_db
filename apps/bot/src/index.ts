@@ -38,7 +38,7 @@ const ingest = {
 registerEvents(client, ingest);
 client.on(
   Events.InteractionCreate,
-  (i) => void createInteractionHandler({ ingest, client, config })(i),
+  (i) => void createInteractionHandler({ ingest, client, config, pool })(i),
 );
 
 client.once(Events.ClientReady, (c) => {

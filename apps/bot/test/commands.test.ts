@@ -150,7 +150,7 @@ describe('escaping and mentions', () => {
 });
 
 describe('commandDefinitions', () => {
-  it('has unique top-level names including all 10', () => {
+  it('has unique top-level names including all 11', () => {
     const names = commandDefinitions.map((c) => c.name);
     expect(new Set(names).size).toBe(names.length);
     for (const n of [
@@ -160,6 +160,7 @@ describe('commandDefinitions', () => {
       'unban',
       'resync',
       'link',
+      'panel',
       'search',
       'class',
       'plan',
@@ -279,6 +280,6 @@ describe('commandDefinitions', () => {
       'resync',
     ])
       expect(perms(n)).toBe(String(PermissionFlagsBits.ManageGuild));
-    for (const n of ['link', 'search']) expect(perms(n)).toBeFalsy();
+    for (const n of ['link', 'panel', 'search']) expect(perms(n)).toBeFalsy();
   });
 });

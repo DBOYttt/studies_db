@@ -222,12 +222,16 @@ export function planDay(
   return planView(head, shown, rest, nav);
 }
 
-/** One ISO week; one text block per day with a line per session. */
+/**
+ * One ISO week; one text block per day with a line per session. "Dzień"
+ * opens `today` (a wall Date) when it falls in the week, else the Monday.
+ */
 export function planWeek(
   sessions: PlanSession[],
   week: IsoWeek,
   hasGroups: boolean,
   webBaseUrl: string,
+  today?: Date,
 ): View {
   const monday = weekStart(week);
   const sunday = new Date(monday.getTime() + 6 * DAY_MS);
@@ -257,6 +261,8 @@ export function planWeek(
     if (l.first) blocks.push(`**${l.day}**\n${l.line}`);
     else blocks[blocks.length - 1] += `\n${l.line}`;
   }
+  const dayTarget =
+    today && formatIsoWeek(isoWeekOf(today)) === wanted ? today : monday;
   const nav = [
     button(
       encodeId('stu', 'plan', 'week', formatIsoWeek(shiftWeek(week, -1))),
@@ -266,7 +272,7 @@ export function planWeek(
       encodeId('stu', 'plan', 'week', formatIsoWeek(shiftWeek(week, 1))),
       '▶',
     ),
-    button(encodeId('stu', 'plan', 'day', dayKey(monday)), 'Dzień'),
+    button(encodeId('stu', 'plan', 'day', dayKey(dayTarget)), 'Dzień'),
     linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
   ];
   return planView(head, blocks, rest, nav);

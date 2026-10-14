@@ -110,6 +110,7 @@ describe('router', () => {
     const handler = createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -132,6 +133,7 @@ describe('router', () => {
       await createInteractionHandler({
         ingest: { db, storageDir: '', fetchBody: vi.fn() },
         client: {} as never,
+        pool: {} as never,
         config,
       })(asI(i));
       const [u] = await db
@@ -155,6 +157,7 @@ describe('router', () => {
     await createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     })(asI(i));
     expect(err).toHaveBeenCalledWith(
@@ -187,6 +190,7 @@ describe('router', () => {
       await createInteractionHandler({
         ingest: { db, storageDir: '', fetchBody: vi.fn() },
         client: {} as never,
+        pool: {} as never,
         config,
       })(asI(i));
       return db.select().from(adminAudit);
@@ -222,6 +226,7 @@ describe('router', () => {
       await createInteractionHandler({
         ingest: { db, storageDir: '', fetchBody: vi.fn() },
         client: {} as never,
+        pool: {} as never,
         config,
       })(asI(i));
       const [l] = await db.select().from(lecturers);
@@ -252,6 +257,7 @@ describe('router', () => {
     const handler = createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -282,6 +288,7 @@ describe('router', () => {
       client: {
         channels: { fetch: vi.fn().mockRejectedValue(new Error('Missing')) },
       } as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -310,6 +317,7 @@ describe('router', () => {
     const handler = createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -330,6 +338,7 @@ describe('/setup', () => {
     createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
   const setupGuild = {
@@ -839,6 +848,7 @@ describe('/setup', () => {
     await createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: { channels: { fetch: clientFetch } } as never,
+      pool: {} as never,
       config,
     })(asI(i));
     const [s] = await db.select().from(subjects);
@@ -876,6 +886,7 @@ describe('/setup', () => {
     await createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: { channels: { fetch: clientFetch } } as never,
+      pool: {} as never,
       config,
     })(asI(i));
     expect(clientFetch).not.toHaveBeenCalled();

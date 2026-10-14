@@ -278,6 +278,21 @@ describe('planWeek', () => {
     expect(allText(v)).toContain('Ustaw Moje grupy');
   });
 
+  it('"Dzień" opens today in the current week, else the Monday', () => {
+    const dayId = (v: View) =>
+      customIds(v).find((id) => id.startsWith('v1:stu:plan:day:'));
+    const today = wall('2026-10-14T23:30:00');
+    expect(dayId(planWeek([], week, true, WEB, today))).toBe(
+      'v1:stu:plan:day:2026-10-14',
+    );
+    expect(dayId(planWeek([], week, true, WEB))).toBe(
+      'v1:stu:plan:day:2026-10-12',
+    );
+    expect(
+      dayId(planWeek([], { year: 2026, week: 43 }, true, WEB, today)),
+    ).toBe('v1:stu:plan:day:2026-10-19');
+  });
+
   it('stops at the text limit', () => {
     const many = Array.from({ length: 200 }, (_, i) =>
       session('2026-10-13T08:00:00', '2026-10-13T09:30:00', {

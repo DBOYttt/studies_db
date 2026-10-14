@@ -5,7 +5,7 @@ import {
   upsertUser,
   users,
 } from '@studies/db';
-import { escapeMarkdown } from 'discord.js';
+import { escapeMarkdown, MessageFlags, type User } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { DiscordUser } from '../types.js';
 
@@ -27,6 +27,28 @@ export async function linkFor(
     ok: true,
     url: `${webBaseUrl}/auth/callback?token=${token}${suffix}`,
   };
+}
+
+export const LINK_BANNED = 'Twój dostęp do strony jest zablokowany.';
+export const LINK_SENT = 'Wysłałem Ci link w wiadomości prywatnej.';
+export const LINK_DM_CLOSED =
+  'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.';
+
+/**
+ * DMs the one-time login URL; false when the user's DMs are closed. `<url>`
+ * plus SuppressEmbeds: no link preview, so Discord's crawler never fetches
+ * the one-time URL.
+ */
+export async function sendLoginDm(user: User, url: string): Promise<boolean> {
+  try {
+    await user.send({
+      content: `Twój link do Studies DB (ważny 15 minut, jednorazowy): <${url}>`,
+      flags: MessageFlags.SuppressEmbeds,
+    });
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export async function searchReply(
