@@ -9,7 +9,7 @@
  */
 import { type Db, writeAudit } from '@studies/db';
 import type mysql from 'mysql2/promise';
-import { confirmMessage, confirmWord } from './admin-console';
+import { confirmMessage, confirmWord, rowCount } from './admin-console';
 import {
   adminSqlErrorMessage,
   CONFIRM_THRESHOLD,
@@ -322,7 +322,7 @@ async function execute(
   if (!r.value) {
     return fail(
       400,
-      `Liczba wierszy zmieniła się od podglądu. ${confirmMessage(table, overLimit)}`,
+      `Liczba wierszy zmieniła się od podglądu (teraz ${rowCount(overLimit)}). Wykonaj podgląd ponownie.`,
     );
   }
 

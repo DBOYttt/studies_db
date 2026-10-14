@@ -413,7 +413,9 @@ describe('handleAdminSqlRequest', () => {
     const before = await auditCount('sql.execute');
     const res = await call({ mode: 'execute', sql, token });
     expect(res.status).toBe(400);
-    expect((await json(res)).error).toMatch(/zmieniła się od podglądu/);
+    expect((await json(res)).error).toMatch(
+      /zmieniła się od podglądu.*Wykonaj podgląd ponownie/,
+    );
     expect(await ectsOf('B000')).toBe(2);
     expect(await auditCount('sql.execute')).toBe(before);
   });
