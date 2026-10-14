@@ -54,6 +54,40 @@ describe('studies_rw grants', () => {
     });
   });
 
+  // The worker turns these columns into file paths; see resolveInStorage.
+  describe('materials', () => {
+    const deniedMaterials = [
+      "UPDATE materials SET storage_path = '../../proc/self/environ'",
+      "UPDATE materials SET preview_path = '../x.pdf'",
+      "UPDATE materials SET sha256 = 'x'",
+      'UPDATE materials SET size_bytes = 1',
+      "UPDATE materials SET deleted_at = NULL, storage_path = 'x'",
+      `INSERT INTO materials (topic_id, uploader_id, discord_message_id,
+         discord_attachment_id, original_filename, mime_type, size_bytes,
+         sha256, storage_path, preview_kind)
+       VALUES (1, 1, 'm', 'a', 'f', 't', 1, 's', '../../etc/passwd', 'text')`,
+      "REPLACE INTO materials (id, storage_path) VALUES (1, 'x')",
+    ];
+    it.each(deniedMaterials)('refuses: %s', async (sql) => {
+      await asRw(async (c) => {
+        await expect(c.query(sql)).rejects.toMatchObject({
+          errno: expect.toSatisfy((n: number) => [1142, 1143].includes(n)),
+        });
+      });
+    });
+
+    it('may read, soft-delete, edit metadata and delete', async () => {
+      await asRw(async (c) => {
+        await c.query('SELECT storage_path, sha256 FROM materials');
+        await c.query('UPDATE materials SET deleted_at = NOW() WHERE id = -1');
+        await c.query(
+          "UPDATE materials SET original_filename = 'x', status = 'ready', preview_kind = 'none' WHERE id = -1",
+        );
+        await c.query('DELETE FROM materials WHERE id = -1');
+      });
+    });
+  });
+
   it('is idempotent and resets manual extra grants', async () => {
     const url = process.env.TEST_DATABASE_URL as string;
     const admin = await mysql.createConnection({ uri: url });
@@ -75,5 +109,19 @@ describe('studies_rw grants', () => {
       });
       await c.query('UPDATE subjects SET ects = ects');
     });
+  });
+});
+
+describe('materialsUpdatableColumns', () => {
+  it('derives from the schema and leaves out the file columns', async () => {
+    const { materialsUpdatableColumns } = await import(
+      '../src/readwrite-user.js'
+    );
+    const cols = materialsUpdatableColumns();
+    expect(cols).toContain('deleted_at');
+    expect(cols).toContain('original_filename');
+    for (const c of ['storage_path', 'preview_path', 'sha256', 'size_bytes']) {
+      expect(cols).not.toContain(c);
+    }
   });
 });
