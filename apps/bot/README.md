@@ -13,6 +13,8 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    first run `/setup` adopts the role named `ADMIN_ROLE_NAME` (default `Studies Admin`) or creates it; renaming
    the role later is fine. Until `/setup` has run, only `/setup` works (for members with Manage Server). If several
    roles share the name, `/setup` warns and pins nothing; keep one and run it again.
+   The same role also sets `users.is_admin` for web users: the bot syncs the flag from members holding the pinned role,
+   which unlocks the web admin panel (`/admin`, SQL write console and audit log).
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
    Add Reactions, Send Messages, Send Messages in Threads, Attach Files, Manage Channels, Manage Threads (to pin
    the info post), Manage Roles:

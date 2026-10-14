@@ -11,7 +11,7 @@ try {
 
 const PORT = 3100;
 export const E2E_STORAGE_DIR = join(tmpdir(), 'studies-db-e2e-storage');
-const { testRoUrl } = await import('@studies/db/testing');
+const { testRoUrl, testRwUrl } = await import('@studies/db/testing');
 
 export default defineConfig({
   testDir: './e2e',
@@ -32,6 +32,7 @@ export default defineConfig({
       NEXT_DIST_DIR: '.next-e2e',
       DATABASE_URL: process.env.TEST_DATABASE_URL ?? '',
       DATABASE_RO_URL: testRoUrl(),
+      DATABASE_RW_URL: testRwUrl(),
       STORAGE_DIR: E2E_STORAGE_DIR,
       DISCORD_GUILD_ID: 'e2eguild',
     },

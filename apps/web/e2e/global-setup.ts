@@ -15,6 +15,7 @@ import {
   topics,
   topicTags,
   upsertUser,
+  users,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
@@ -370,6 +371,17 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_SIMPLE = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_SIMPLE_LANDING = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_SCHEMA = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_NONADMIN = await createLoginToken(db, userId);
+
+    // Admin panel (admin.spec.ts): a user flagged is_admin.
+    const adminId = await upsertUser(db, {
+      discordUserId: 'e2e-admin',
+      displayName: 'Adam Administrator',
+      avatarUrl: null,
+    });
+    await db.update(users).set({ isAdmin: true }).where(eq(users.id, adminId));
+    process.env.E2E_TOKEN_ADMIN = await createLoginToken(db, adminId);
+    process.env.E2E_TOKEN_ADMIN_SIMPLE = await createLoginToken(db, adminId);
   } finally {
     await closeTestDb(db);
   }
