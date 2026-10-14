@@ -142,7 +142,11 @@ export function SimpleShell({
             : 'max-md:invisible max-md:-translate-x-full max-md:transition-[translate,visibility]'
         }`}
       >
-        <SimpleSidebar subjects={subjects} active={active} />
+        <SimpleSidebar
+          subjects={subjects}
+          active={active}
+          isAdmin={user.isAdmin}
+        />
       </aside>
 
       <div inert={open} className="flex min-h-0 min-w-0 flex-col">

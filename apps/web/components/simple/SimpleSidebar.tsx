@@ -6,6 +6,7 @@ import {
   Database,
   House,
   MagnifyingGlass,
+  ShieldCheck,
 } from '@phosphor-icons/react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
@@ -58,9 +59,12 @@ const on = 'bg-selected font-semibold text-fg';
 export function SimpleSidebar({
   subjects,
   active,
+  isAdmin = false,
 }: {
   subjects: NavSubject[];
   active: SimpleActive;
+  /** Shows "Panel admina" (switches to the advanced mode at /admin). */
+  isAdmin?: boolean;
 }) {
   return (
     <>
@@ -123,6 +127,19 @@ export function SimpleSidebar({
             </Link>
           );
         })}
+        {isAdmin && (
+          // The admin pages live in the advanced shell: switch the mode
+          // cookie too, so "/" does not bounce back to /s afterwards.
+          <a
+            href="/mode?to=advanced&next=%2Fadmin"
+            className={`${row} font-medium text-accent-ink ${idle}`}
+          >
+            <span aria-hidden className="grid">
+              <ShieldCheck size={18} />
+            </span>
+            Panel admina
+          </a>
+        )}
       </nav>
 
       <h2 className="m-0 shrink-0 border-t border-line px-[18px] pt-3.5 pb-1.5 text-xs font-semibold tracking-[0.04em] text-muted uppercase">
