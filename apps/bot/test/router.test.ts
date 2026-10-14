@@ -1,5 +1,6 @@
 import {
   botSettings,
+  getSetting,
   insertMaterial,
   setSetting,
   subjects,
@@ -463,6 +464,42 @@ describe('/setup', () => {
       .select()
       .from(users)
       .where(eq(users.discordUserId, 'caller'));
+    expect(u?.isAdmin).toBe(true);
+  });
+
+  it('sets is_admin when /setup adopts a role the caller already holds', async () => {
+    await db.delete(botSettings);
+    const g = {
+      ...setupGuild,
+      members: {
+        me: { id: 'bot' },
+        addRole: vi.fn().mockResolvedValue(undefined),
+        fetch: async () => ({
+          roles: { cache: new Collection([['r', { id: 'r' }]]) },
+        }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: {
+        id: 'holder',
+        username: 'holder',
+        globalName: null,
+        displayAvatarURL: () => 'a',
+      },
+      member: { roles: ['r'] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => false },
+    });
+    await handlerFor()(asI(i));
+    expect(g.members.addRole).not.toHaveBeenCalled();
+    expect(await getSetting(db, 'admin_role_id')).toBe('r');
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'holder'));
     expect(u?.isAdmin).toBe(true);
   });
 

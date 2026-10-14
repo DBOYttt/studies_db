@@ -7,10 +7,12 @@ import {
   CLASS_NAMES,
   type Db,
   ensureClass,
+  getSetting,
   materials,
   setSetting,
   subjects,
   topics,
+  users,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
 import { ADMIN_ROLE_SETTING } from '../config.js';
@@ -58,7 +60,27 @@ export type SetupReport = {
   updated: string[];
   warnings: string[];
   failures: string[];
+  /** Role id the run gave the caller (assignRole succeeded), if any. */
+  assignedRoleId?: string;
 };
+
+/**
+ * Pins the admin role id. When it replaces a different stored id, every
+ * users.is_admin is cleared first: those flags mirrored the old role, and
+ * holders of the new one get theirs back on their next bot command.
+ */
+async function storeAdminRole(db: Db, roleId: string): Promise<void> {
+  await db.transaction(async (tx) => {
+    const previous = await getSetting(tx, ADMIN_ROLE_SETTING);
+    if (previous !== null && previous !== roleId) {
+      await tx
+        .update(users)
+        .set({ isAdmin: false })
+        .where(eq(users.isAdmin, true));
+    }
+    await setSetting(tx, ADMIN_ROLE_SETTING, roleId);
+  });
+}
 
 const errText = (err: unknown) =>
   err instanceof Error ? err.message : String(err);
@@ -126,16 +148,17 @@ export async function applySetup(
         case 'createRole':
           createdRoleId = await guild.createRole(a.name);
           report.created.push(`rola ${a.name}`);
-          await setSetting(db, ADMIN_ROLE_SETTING, createdRoleId);
+          await storeAdminRole(db, createdRoleId);
           break;
         case 'adoptRole':
-          await setSetting(db, ADMIN_ROLE_SETTING, a.roleId);
+          await storeAdminRole(db, a.roleId);
           report.updated.push(`rola ${a.name} zapisana jako rola admina`);
           break;
         case 'assignRole': {
           const roleId = a.roleId ?? createdRoleId;
           if (!roleId) throw new Error(`brak roli ${a.roleName}`);
           await guild.addRoleToMember(a.userId, roleId);
+          report.assignedRoleId = roleId;
           report.updated.push(`nadano Ci rolę ${a.roleName}`);
           break;
         }

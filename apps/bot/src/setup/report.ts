@@ -25,6 +25,7 @@ export function mergeReports(a: SetupReport, b: SetupReport): SetupReport {
     updated: [...a.updated, ...b.updated],
     warnings: [...a.warnings, ...b.warnings],
     failures: [...a.failures, ...b.failures],
+    assignedRoleId: b.assignedRoleId ?? a.assignedRoleId,
   };
 }
 

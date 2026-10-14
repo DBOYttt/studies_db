@@ -191,18 +191,15 @@ async function runSetup(
       ),
     );
   }
-  // The role was just created/adopted and assigned to the caller: mirror it.
-  // Gate on the assignRole step itself succeeding; unrelated failures don't matter.
-  const gotRole = report.updated.some((u) => u.startsWith('nadano Ci rolę'));
-  if (gotRole) {
-    try {
-      const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
-      if (roleId) {
-        await syncAdminFlag(db, callerOf(i), [...memberRoleIds(i), roleId]);
-      }
-    } catch (err) {
-      console.error('admin flag sync after /setup failed', err);
-    }
+  // The stored role may have just been created, adopted or replaced (which
+  // clears every flag): mirror it for the caller, counting a role this run
+  // assigned, which the interaction's member roles don't include yet.
+  try {
+    const roles = memberRoleIds(i);
+    if (report.assignedRoleId) roles.push(report.assignedRoleId);
+    await syncAdminFlag(db, callerOf(i), roles);
+  } catch (err) {
+    console.error('admin flag sync after /setup failed', err);
   }
   await i.editReply(replyOptions(formatReport(report)));
 }
@@ -216,14 +213,25 @@ async function runCommand(
   const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
 
+  // The sync also yields the stored admin role id; read it directly only if
+  // the sync failed and this command needs it.
+  let synced: string | null | undefined;
   try {
-    await syncAdminFlag(db, callerOf(i), memberRoleIds(i));
+    ({ roleId: synced } = await syncAdminFlag(
+      db,
+      callerOf(i),
+      memberRoleIds(i),
+    ));
   } catch (err) {
     console.error('admin flag sync failed', err);
   }
 
   const needsAdmin = name === 'setup' || ADMIN_COMMANDS.has(name);
-  const roleId = needsAdmin ? await getSetting(db, ADMIN_ROLE_SETTING) : null;
+  const roleId = !needsAdmin
+    ? null
+    : synced !== undefined
+      ? synced
+      : await getSetting(db, ADMIN_ROLE_SETTING);
   const allowed =
     name === 'setup'
       ? canRunSetup(i, roleId)

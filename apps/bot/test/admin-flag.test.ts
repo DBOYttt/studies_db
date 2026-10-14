@@ -21,25 +21,47 @@ const flag = async () =>
 describe('syncAdminFlag', () => {
   it('sets the flag when the stored role is held', async () => {
     await setSetting(db, 'admin_role_id', 'r');
-    expect(await syncAdminFlag(db, u, ['x', 'r'])).toBe(true);
+    expect(await syncAdminFlag(db, u, ['x', 'r'])).toEqual({
+      isAdmin: true,
+      roleId: 'r',
+    });
     expect(await flag()).toBe(true);
   });
   it('clears a previously true flag when the role is missing', async () => {
     await setSetting(db, 'admin_role_id', 'r');
     await syncAdminFlag(db, u, ['r']);
-    expect(await syncAdminFlag(db, u, ['x'])).toBe(false);
+    expect((await syncAdminFlag(db, u, ['x'])).isAdmin).toBe(false);
     expect(await flag()).toBe(false);
   });
   it('is false when no role id is stored', async () => {
-    expect(await syncAdminFlag(db, u, ['r'])).toBe(false);
+    expect(await syncAdminFlag(db, u, ['r'])).toEqual({
+      isAdmin: false,
+      roleId: null,
+    });
     expect(await flag()).toBe(false);
   });
-  it('does not issue an UPDATE when unchanged', async () => {
+  it('upserts the user and the flag in one statement', async () => {
     await setSetting(db, 'admin_role_id', 'r');
     await syncAdminFlag(db, u, ['r']);
-    const spy = vi.spyOn(db, 'update');
-    expect(await syncAdminFlag(db, u, ['r'])).toBe(true);
-    expect(spy).not.toHaveBeenCalled();
+    const insert = vi.spyOn(db, 'insert');
+    const update = vi.spyOn(db, 'update');
+    const res = await syncAdminFlag(
+      db,
+      { ...u, displayName: 'Nowe', avatarUrl: 'av' },
+      ['r'],
+    );
+    expect(res.isAdmin).toBe(true);
+    expect(insert).toHaveBeenCalledTimes(1);
+    expect(update).not.toHaveBeenCalled();
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'u1'));
+    expect(row).toMatchObject({
+      displayName: 'Nowe',
+      avatarUrl: 'av',
+      isAdmin: true,
+    });
     expect(await getSetting(db, 'admin_role_id')).toBe('r');
   });
 });
