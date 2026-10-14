@@ -348,7 +348,7 @@ async function runCommand(
         await auditResult(
           result,
           'lecturer.add',
-          /\(id (\d+)\)\.$/.exec(result.message)?.[1] ?? null,
+          result.id === undefined ? null : String(result.id),
           { name },
         );
         return;

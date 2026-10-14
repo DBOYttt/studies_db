@@ -5,9 +5,11 @@ import { type Assessment, CLASS_NAMES, type ClassKind } from './constants.js';
 import { ensureClass, ensureGroup, groupName } from './hierarchy.js';
 import { classes, classLecturers, lecturers, subjects } from './schema.js';
 
-export type ActionResult = { ok: boolean; message: string };
+/** `id` is the new row's id for actions that insert one. */
+export type ActionResult = { ok: boolean; message: string; id?: number };
 
-const ok = (message: string): ActionResult => ({ ok: true, message });
+const ok = (message: string, id?: number): ActionResult =>
+  id === undefined ? { ok: true, message } : { ok: true, message, id };
 const refused = (message: string): ActionResult => ({ ok: false, message });
 
 export type SubjectInput = {
@@ -82,8 +84,9 @@ export async function addSubject(
     }
     return ok(`Połączono przedmiot ${code} z kanałem.`);
   }
+  let ins: { insertId: number };
   try {
-    await db.insert(subjects).values({
+    [ins] = await db.insert(subjects).values({
       name: i.name,
       code,
       semester: i.semester,
@@ -97,7 +100,7 @@ export async function addSubject(
     }
     throw err;
   }
-  return ok(`Dodano przedmiot ${code} (${i.name}).`);
+  return ok(`Dodano przedmiot ${code} (${i.name}).`, ins.insertId);
 }
 
 export async function editSubject(
@@ -173,6 +176,7 @@ export async function addLecturer(
   }
   return ok(
     `Dodano prowadzącego ${lecturerLabel(i.title, i.name)} (id ${r.insertId}).`,
+    r.insertId,
   );
 }
 

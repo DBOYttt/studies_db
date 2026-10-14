@@ -3,6 +3,7 @@ import {
   botSettings,
   getSetting,
   insertMaterial,
+  lecturers,
   setSetting,
   subjects,
   topics,
@@ -203,6 +204,33 @@ describe('router', () => {
         userId: adm?.id,
       });
       expect(rows[0]?.details).toMatchObject({ source: 'discord' });
+    });
+    it('/lecturer add audits lecturer.add with the new id as target', async () => {
+      const i = mkInteraction({
+        commandName: 'lecturer',
+        user: {
+          id: 'adm',
+          username: 'adm',
+          globalName: null,
+          displayAvatarURL: () => 'a',
+        },
+        options: {
+          getSubcommand: () => 'add',
+          getString: (n: string) => (n === 'name' ? 'Jan Kowalski' : null),
+        },
+      });
+      await createInteractionHandler({
+        ingest: { db, storageDir: '', fetchBody: vi.fn() },
+        client: {} as never,
+        config,
+      })(asI(i));
+      const [l] = await db.select().from(lecturers);
+      const rows = await db.select().from(adminAudit);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        action: 'lecturer.add',
+        target: String(l?.id),
+      });
     });
     it('a refused /subject edit writes none', async () => {
       expect(await run({ platform_url: 'ftp://x' })).toHaveLength(0);

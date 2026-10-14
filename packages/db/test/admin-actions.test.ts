@@ -261,6 +261,16 @@ describe('task 6 commands', () => {
 });
 
 describe('ok flag and null channel', () => {
+  it('returns the inserted row id', async () => {
+    const l = await A.addLecturer(db, { name: 'Jan' });
+    const [row] = await db.select().from(lecturers);
+    expect(l.id).toBe(row?.id);
+    const s = await A.addSubject(db, base);
+    const [sub] = await db.select().from(subjects);
+    expect(s.id).toBe(sub?.id);
+    expect((await A.editSubject(db, 'alg', { ects: 6 })).id).toBeUndefined();
+  });
+
   const ban = { discordUserId: 'u1', displayName: 'Ann', avatarUrl: null };
 
   it('is true on success and false on every refusal', async () => {
@@ -315,7 +325,10 @@ describe('ok flag and null channel', () => {
 
   it('addSubject with channelId null inserts a subject with no channel', async () => {
     const r = await A.addSubject(db, { ...base, channelId: null });
-    expect(r).toEqual({ ok: true, message: 'Dodano przedmiot ALG (Algebra).' });
+    expect(r).toMatchObject({
+      ok: true,
+      message: 'Dodano przedmiot ALG (Algebra).',
+    });
     const [s] = await db.select().from(subjects);
     expect(s?.discordChannelId).toBeNull();
     expect((await A.addSubject(db, { ...base, channelId: null })).ok).toBe(
