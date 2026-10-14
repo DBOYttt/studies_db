@@ -21,10 +21,11 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    new role get it back on their next command (the caller of `/setup` right away).
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
    Add Reactions, Send Messages, Send Messages in Threads, Attach Files, Manage Channels, Manage Threads (to pin
-   the info post), Manage Messages (to pin the panels), Manage Roles:
-   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=292326321232`
-   A bot invited earlier without Manage Messages: grant it to the bot's role, otherwise `/setup` cannot create
-   `#panel` (Discord refuses channel permissions the bot doesn't have itself).
+   the info post), Pin Messages (to pin the panels), Manage Roles:
+   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=2252092139998288`
+   A bot invited earlier without Pin Messages: grant it to the bot's role first, otherwise `/setup` cannot create
+   `#panel` and `#admin-panel` (Discord refuses channel permission overwrites that grant a permission the bot
+   doesn't have itself) and cannot pin the panels.
    In Server Settings → Roles, keep the bot's role above the admin role (Discord only lets a bot assign roles below its own).
 5. Forum channels and their tags are created by `/setup` (step 9). Created by hand instead, each subject forum needs
    the tags Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium and Gr. 1 … Gr. N (one per group). A post tagged
@@ -50,11 +51,12 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    Each forum also gets a pinned `ℹ️ Informacje o przedmiocie` post (classes, lecturers with contacts, weekly
    plan for the next 14 days) that `/setup` refreshes on every run. Threads started by the bot are never
    turned into topics on their own.
-   `/setup` also creates two text channels (next to the first subject forum's category, if any) with one pinned
-   panel message each: `#panel` for students (everyone reads, only the bot posts; buttons for today's plan, the
+   `/setup` also creates two text channels (inside the category of the first subject's forum, if any) with one pinned
+   panel message each: `#panel` for students (everyone reads; only the bot posts, no reactions or threads; buttons for today's plan, the
    week, "Moje grupy" and the web login) and `#admin-panel` (only the admin role and the bot see it; status and
-   sync, subjects, lecturers, users). Each run edits the panel message in place; a deleted message (or channel)
-   is posted (created) again, never duplicated. The ids are kept in `bot_settings`. Everything the panels show
+   sync, subjects, lecturers, users). Each run edits the panel message in place (and pins it if it isn't); a deleted
+   message (or channel) is posted (created) again, never duplicated. A panel that can't be pinned is reported
+   as a warning. The ids are kept in `bot_settings`. Everything the panels show
    is also available privately through `/panel` and `/admin`, and every admin change is checked against the admin
    role and written to the audit log.
 

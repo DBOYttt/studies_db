@@ -7,6 +7,7 @@ import {
   DiscordAPIError,
   type ForumChannel,
   type Guild,
+  type Message,
   OverwriteType,
   PermissionFlagsBits,
   RESTJSONErrorCodes,
@@ -61,7 +62,13 @@ export async function snapshotGuild(
     unreadableForums,
     textChannels: channels
       .filter((c) => c.type === ChannelType.GuildText)
-      .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId })),
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        parentId: c.parentId,
+        everyoneCanView:
+          c.permissionsFor(guild.roles.everyone)?.has(ViewChannel) ?? false,
+      })),
   };
 }
 
@@ -170,18 +177,39 @@ async function textChannel(guild: Guild, id: string): Promise<TextChannel> {
   return c;
 }
 
+/** Pins a panel message; false (logged) when Discord refuses. */
+async function pin(msg: Message): Promise<boolean> {
+  try {
+    await msg.pin('/setup');
+    return true;
+  } catch (err) {
+    console.error(`/setup: cannot pin the panel in ${msg.channelId}`, err);
+    return false;
+  }
+}
+
 /** The panel message or its channel was deleted. */
 const isGone = (err: unknown) =>
   err instanceof DiscordAPIError &&
   (err.code === RESTJSONErrorCodes.UnknownMessage ||
     err.code === RESTJSONErrorCodes.UnknownChannel);
 
-const { ViewChannel, ReadMessageHistory, SendMessages, ManageMessages } =
-  PermissionFlagsBits;
+const {
+  AddReactions,
+  CreatePrivateThreads,
+  CreatePublicThreads,
+  PinMessages,
+  ReadMessageHistory,
+  SendMessages,
+  SendMessagesInThreads,
+  ViewChannel,
+} = PermissionFlagsBits;
 
 /**
- * #panel: everyone reads, only the bot posts. #admin-panel: only the admin
- * role and the bot see it, and the role cannot post.
+ * #panel: everyone reads, only the bot posts (no reactions or threads either).
+ * #admin-panel: only the admin role and the bot see it, and the role cannot
+ * post. The bot pins the panel (Pin Messages; Manage Messages no longer
+ * covers pinning).
  */
 function panelOverwrites(
   everyoneId: string,
@@ -191,7 +219,7 @@ function panelOverwrites(
   const bot = {
     id: botId,
     type: OverwriteType.Member,
-    allow: [ViewChannel, SendMessages, ManageMessages],
+    allow: [ViewChannel, SendMessages, PinMessages],
   };
   if (!o.private) {
     return [
@@ -199,7 +227,13 @@ function panelOverwrites(
         id: everyoneId,
         type: OverwriteType.Role,
         allow: [ViewChannel, ReadMessageHistory],
-        deny: [SendMessages],
+        deny: [
+          SendMessages,
+          AddReactions,
+          CreatePublicThreads,
+          CreatePrivateThreads,
+          SendMessagesInThreads,
+        ],
       },
       bot,
     ];
@@ -320,21 +354,19 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
         allowedMentions: { parse: [] },
       });
       // The message exists now: never throw, or a re-run would post it again.
-      await msg.pin('/setup').catch((err: unknown) => {
-        console.error(`/setup: cannot pin the panel in ${channelId}`, err);
-      });
-      return msg.id;
+      return { id: msg.id, pinned: await pin(msg) };
     },
     async editPanel(channelId, messageId, view) {
+      let msg: Message;
       try {
         const c = await textChannel(guild, channelId);
-        const msg = await c.messages.fetch(messageId);
+        msg = await c.messages.fetch(messageId);
         await msg.edit({ components: view.components, flags: view.flags });
-        return true;
       } catch (err) {
         if (isGone(err)) return false;
         throw err;
       }
+      return { pinned: msg.pinned || (await pin(msg)) };
     },
   };
 }

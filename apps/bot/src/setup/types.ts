@@ -106,7 +106,13 @@ export type GuildSnapshot = {
   callerRoleIds: string[];
   /** Forums the bot cannot read (permissions or a failed fetch); not in `forums`. */
   unreadableForums: { id: string; name: string }[];
-  textChannels: { id: string; name: string; parentId: string | null }[];
+  textChannels: {
+    id: string;
+    name: string;
+    parentId: string | null;
+    /** @everyone can view the channel. */
+    everyoneCanView: boolean;
+  }[];
   /** Panel channel ids stored in bot_settings. */
   panelChannels: { panel: string | null; admin: string | null };
   /** Panel message ids stored in bot_settings. */

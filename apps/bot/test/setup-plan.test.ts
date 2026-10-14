@@ -879,8 +879,13 @@ describe('planSetup: panels', () => {
   it('only edits the stored messages when both channels exist', () => {
     const g = withRole({
       textChannels: [
-        { id: 'ch-p', name: 'panel', parentId: null },
-        { id: 'ch-a', name: 'admin-panel', parentId: null },
+        { id: 'ch-p', name: 'panel', parentId: null, everyoneCanView: true },
+        {
+          id: 'ch-a',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: true,
+        },
       ],
       panelChannels: { panel: 'ch-p', admin: 'ch-a' },
       panelMessages: { panel: 'm-p', admin: 'm-a' },
@@ -893,7 +898,14 @@ describe('planSetup: panels', () => {
 
   it('recreates a stored channel that is gone and posts a new message there', () => {
     const g = withRole({
-      textChannels: [{ id: 'ch-a', name: 'admin-panel', parentId: null }],
+      textChannels: [
+        {
+          id: 'ch-a',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+        },
+      ],
       panelChannels: { panel: 'ch-gone', admin: 'ch-a' },
       panelMessages: { panel: 'm-p', admin: 'm-a' },
     });
@@ -909,9 +921,19 @@ describe('planSetup: panels', () => {
   it('adopts the only text channel with the name when nothing usable is stored', () => {
     const g = withRole({
       textChannels: [
-        { id: 'x1', name: 'panel', parentId: null },
-        { id: 'x2', name: 'admin-panel', parentId: null },
-        { id: 'x3', name: 'admin-panel', parentId: null },
+        { id: 'x1', name: 'panel', parentId: null, everyoneCanView: true },
+        {
+          id: 'x2',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: true,
+        },
+        {
+          id: 'x3',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: true,
+        },
       ],
     });
     expect(panelActions(planWithPanels([], g, ROLE, render))).toEqual<Action[]>(

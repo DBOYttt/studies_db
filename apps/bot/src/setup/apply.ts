@@ -67,9 +67,20 @@ export interface SetupGuild {
     private: boolean;
     adminRoleId: string | null;
   }): Promise<string>;
-  postPanel(channelId: string, view: View): Promise<string>;
-  /** False when the message (or its channel) is gone; other errors throw. */
-  editPanel(channelId: string, messageId: string, view: View): Promise<boolean>;
+  /** Posts and pins the panel; pinned false when pinning was refused. */
+  postPanel(
+    channelId: string,
+    view: View,
+  ): Promise<{ id: string; pinned: boolean }>;
+  /**
+   * Edits the panel in place and pins it if it isn't pinned. False when the
+   * message (or its channel) is gone; other errors throw.
+   */
+  editPanel(
+    channelId: string,
+    messageId: string,
+    view: View,
+  ): Promise<false | { pinned: boolean }>;
 }
 
 const PANEL_VIEWS: Record<PanelWhich, () => View> = {
@@ -346,6 +357,16 @@ export async function applySetup(
             report.updated.push(
               `kanał #${a.name} zapisany jako kanał panelu (uprawnienia bez zmian)`,
             );
+            const adopted = snapshot.textChannels.find(
+              (c) => c.id === a.existingId,
+            );
+            if (a.which === 'admin' && adopted?.everyoneCanView) {
+              // Not a leak (every adm interaction re-checks the role), but
+              // the admin panel is meant to be hidden.
+              report.warnings.push(
+                `kanał #${a.name} widzą wszyscy — ogranicz go do roli admina`,
+              );
+            }
             break;
           }
           const adminRoleId =
@@ -372,16 +393,24 @@ export async function applySetup(
           const channelId = a.channelId ?? panelChannels[a.which];
           if (!channelId) throw new Error('brak kanału panelu');
           const view = PANEL_VIEWS[a.which]();
-          if (
+          const notPinned = () =>
+            report.warnings.push(
+              `nie udało się przypiąć panelu w #${name} (bot potrzebuje uprawnienia Pin Messages)`,
+            );
+          const edited =
             a.messageId !== null &&
-            (await guild.editPanel(channelId, a.messageId, view))
-          ) {
+            (await guild.editPanel(channelId, a.messageId, view));
+          if (edited) {
             report.updated.push(`panel w #${name}`);
+            if (!edited.pinned) notPinned();
             break;
           }
-          const messageId = await guild.postPanel(channelId, view);
-          await setSetting(db, keys.message, messageId);
+          const posted = await guild.postPanel(channelId, view);
+          // Accepted risk: if storing the id fails, the next run cannot find
+          // this message and posts a second panel.
+          await setSetting(db, keys.message, posted.id);
           report.created.push(`panel w #${name}`);
+          if (!posted.pinned) notPinned();
           break;
         }
         case 'warn':

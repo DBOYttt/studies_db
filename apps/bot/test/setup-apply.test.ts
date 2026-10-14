@@ -52,10 +52,15 @@ function fakeGuild(failForum?: string): SetupGuild & {
   calls: Call[];
   /** Panel messages that exist on the fake server. */
   panelMessages: Set<string>;
+  /** Pinned panel messages. */
+  pinned: Set<string>;
+  /** Discord refuses pins (no Pin Messages). */
+  refusePin: boolean;
   textChannels: GuildSnapshot['textChannels'];
 } {
   const calls: Call[] = [];
   const panelMessages = new Set<string>();
+  const pinned = new Set<string>();
   const textChannels: GuildSnapshot['textChannels'] = [];
   let n = 0;
   const tagsOf = (names: string[]) =>
@@ -63,6 +68,8 @@ function fakeGuild(failForum?: string): SetupGuild & {
   return {
     calls,
     panelMessages,
+    pinned,
+    refusePin: false,
     textChannels,
     async createRole(name) {
       calls.push(['createRole', name]);
@@ -113,18 +120,26 @@ function fakeGuild(failForum?: string): SetupGuild & {
     async createTextChannel(o) {
       calls.push(['createTextChannel', o]);
       const id = `text-${++n}`;
-      textChannels.push({ id, name: o.name, parentId: o.parentId });
+      textChannels.push({
+        id,
+        name: o.name,
+        parentId: o.parentId,
+        everyoneCanView: !o.private,
+      });
       return id;
     },
     async postPanel(channelId) {
       calls.push(['postPanel', channelId]);
       const id = `panel-msg-${++n}`;
       panelMessages.add(id);
-      return id;
+      if (!this.refusePin) pinned.add(id);
+      return { id, pinned: pinned.has(id) };
     },
     async editPanel(channelId, messageId) {
       calls.push(['editPanel', channelId, messageId]);
-      return panelMessages.has(messageId);
+      if (!panelMessages.has(messageId)) return false;
+      if (!this.refusePin) pinned.add(messageId);
+      return { pinned: pinned.has(messageId) };
     },
   };
 }
@@ -1155,6 +1170,85 @@ describe('applySetup: panels', () => {
     expect(g.calls.filter((c) => c[0] === 'createTextChannel')).toHaveLength(2);
     expect(g.calls.filter((c) => c[0] === 'postPanel')).toHaveLength(2);
     expect(g.calls.filter((c) => c[0] === 'editPanel')).toHaveLength(2);
+  });
+});
+
+describe('applySetup: panel pins and adopted channels', () => {
+  const message = (messageId: string | null): Action => ({
+    type: 'ensurePanelMessage',
+    which: 'panel',
+    channelId: 'ch-p',
+    messageId,
+  });
+
+  it('warns when a new panel cannot be pinned', async () => {
+    const g = fakeGuild();
+    g.refusePin = true;
+    const r = await applySetup(db, g, [message(null)], snapshot);
+    expect(r.failures).toEqual([]);
+    expect(r.created).toEqual(['panel w #panel']);
+    expect(r.warnings).toEqual([
+      'nie udało się przypiąć panelu w #panel (bot potrzebuje uprawnienia Pin Messages)',
+    ]);
+    expect(await getSetting(db, 'panel_message_id')).toBe('panel-msg-1');
+  });
+
+  it('pins an existing unpinned panel on edit, and warns when that is refused', async () => {
+    const g = fakeGuild();
+    g.panelMessages.add('m-p');
+    const r1 = await applySetup(db, g, [message('m-p')], snapshot);
+    expect(g.pinned.has('m-p')).toBe(true);
+    expect(r1.warnings).toEqual([]);
+    const h = fakeGuild();
+    h.panelMessages.add('m-p');
+    h.refusePin = true;
+    const r2 = await applySetup(db, h, [message('m-p')], snapshot);
+    expect(h.calls.map((c) => c[0])).toEqual(['editPanel']);
+    expect(r2.warnings[0]).toContain('nie udało się przypiąć panelu w #panel');
+  });
+
+  it('warns when an adopted #admin-panel is visible to everyone', async () => {
+    const adopt = (which: 'panel' | 'admin', id: string): Action => ({
+      type: 'ensurePanelChannel',
+      which,
+      name: which === 'panel' ? 'panel' : 'admin-panel',
+      existingId: id,
+      parentId: null,
+    });
+    const snap: GuildSnapshot = {
+      ...snapshot,
+      textChannels: [
+        { id: 'x1', name: 'panel', parentId: null, everyoneCanView: true },
+        {
+          id: 'x2',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: true,
+        },
+        {
+          id: 'x3',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+        },
+      ],
+    };
+    const open = await applySetup(
+      db,
+      fakeGuild(),
+      [adopt('panel', 'x1'), adopt('admin', 'x2')],
+      snap,
+    );
+    expect(open.warnings).toEqual([
+      'kanał #admin-panel widzą wszyscy — ogranicz go do roli admina',
+    ]);
+    const hidden = await applySetup(
+      db,
+      fakeGuild(),
+      [adopt('admin', 'x3')],
+      snap,
+    );
+    expect(hidden.warnings).toEqual([]);
   });
 });
 

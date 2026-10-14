@@ -6,7 +6,7 @@ import {
   PermissionFlagsBits,
   RESTJSONErrorCodes,
 } from 'discord.js';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { discordSetupGuild } from '../src/setup/discord.js';
 import type { View } from '../src/ui/views/parts.js';
 
@@ -93,19 +93,59 @@ describe('discordSetupGuild: panels', () => {
     ).rejects.toThrow();
   });
 
-  it('edits an existing message in place', async () => {
-    const edits: unknown[] = [];
-    const g = fakePanelGuild(async () => ({
+  it('edits in place and pins only an unpinned message', async () => {
+    const calls: string[] = [];
+    const msg = (pinned: boolean, pinFails = false) => ({
+      channelId: 'c',
+      pinned,
       edit: async (o: unknown) => {
-        edits.push(o);
+        calls.push(`edit:${JSON.stringify(o)}`);
       },
-    }));
-    expect(await discordSetupGuild(g.guild).editPanel('c', 'm', view)).toBe(
-      true,
-    );
-    expect(edits).toEqual([
-      { components: [], flags: MessageFlags.IsComponentsV2 },
+      pin: async () => {
+        calls.push('pin');
+        if (pinFails) throw apiError(RESTJSONErrorCodes.MissingPermissions);
+      },
+    });
+    const pinnedMsg = fakePanelGuild(async () => msg(true));
+    expect(
+      await discordSetupGuild(pinnedMsg.guild).editPanel('c', 'm', view),
+    ).toEqual({ pinned: true });
+    expect(calls).toEqual([
+      `edit:${JSON.stringify({ components: [], flags: MessageFlags.IsComponentsV2 })}`,
     ]);
+    calls.length = 0;
+    const unpinned = fakePanelGuild(async () => msg(false));
+    expect(
+      await discordSetupGuild(unpinned.guild).editPanel('c', 'm', view),
+    ).toEqual({ pinned: true });
+    expect(calls.at(-1)).toBe('pin');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const refused = fakePanelGuild(async () => msg(false, true));
+    expect(
+      await discordSetupGuild(refused.guild).editPanel('c', 'm', view),
+    ).toEqual({ pinned: false });
+  });
+
+  it('posts, pins, and reports a refused pin without throwing', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const post = (pinFails: boolean) => {
+      const g = fakePanelGuild(async () => null);
+      const channel = {
+        type: ChannelType.GuildText,
+        send: async () => ({
+          id: 'p1',
+          channelId: 'c',
+          pin: async () => {
+            if (pinFails) throw new Error('Missing Permissions');
+          },
+        }),
+      };
+      (g.guild as { channels: { fetch: unknown } }).channels.fetch = async () =>
+        channel;
+      return discordSetupGuild(g.guild).postPanel('c', view);
+    };
+    expect(await post(false)).toEqual({ id: 'p1', pinned: true });
+    expect(await post(true)).toEqual({ id: 'p1', pinned: false });
   });
 
   it('locks #panel to the bot and hides #admin-panel from everyone but the role', async () => {
@@ -123,12 +163,20 @@ describe('discordSetupGuild: panels', () => {
       private: true,
       adminRoleId: 'r-admin',
     });
-    const { ViewChannel, ReadMessageHistory, SendMessages, ManageMessages } =
-      PermissionFlagsBits;
+    const {
+      AddReactions,
+      CreatePrivateThreads,
+      CreatePublicThreads,
+      PinMessages,
+      ReadMessageHistory,
+      SendMessages,
+      SendMessagesInThreads,
+      ViewChannel,
+    } = PermissionFlagsBits;
     const bot = {
       id: 'bot',
       type: OverwriteType.Member,
-      allow: [ViewChannel, SendMessages, ManageMessages],
+      allow: [ViewChannel, SendMessages, PinMessages],
     };
     expect(g.created).toMatchObject([
       {
@@ -139,7 +187,13 @@ describe('discordSetupGuild: panels', () => {
           {
             id: 'everyone',
             allow: [ViewChannel, ReadMessageHistory],
-            deny: [SendMessages],
+            deny: [
+              SendMessages,
+              AddReactions,
+              CreatePublicThreads,
+              CreatePrivateThreads,
+              SendMessagesInThreads,
+            ],
           },
           bot,
         ],
@@ -157,6 +211,37 @@ describe('discordSetupGuild: panels', () => {
           bot,
         ],
       },
+    ]);
+    // Exactly these overwrites, nothing more (ManageMessages is not needed).
+    const overwrites = (g.created as { permissionOverwrites: unknown }[]).map(
+      (c) => c.permissionOverwrites,
+    );
+    expect(overwrites).toEqual([
+      [
+        {
+          id: 'everyone',
+          type: OverwriteType.Role,
+          allow: [ViewChannel, ReadMessageHistory],
+          deny: [
+            SendMessages,
+            AddReactions,
+            CreatePublicThreads,
+            CreatePrivateThreads,
+            SendMessagesInThreads,
+          ],
+        },
+        bot,
+      ],
+      [
+        { id: 'everyone', type: OverwriteType.Role, deny: [ViewChannel] },
+        {
+          id: 'r-admin',
+          type: OverwriteType.Role,
+          allow: [ViewChannel, ReadMessageHistory],
+          deny: [SendMessages],
+        },
+        bot,
+      ],
     ]);
   });
 });
