@@ -185,8 +185,8 @@ describe('handleUi', () => {
     for (const cid of ['v1:stu:nope', 'v1:stu:plan:day:2026-13-45']) {
       const i = component(cid);
       await handler()(i);
-      const arg = (i.editReply.mock.calls[0] ?? i.reply.mock.calls[0])[0];
-      expect(textOf(arg)).toContain(STALE);
+      expect(i.calls).toEqual(['reply']);
+      expect(textOf(i.reply.mock.calls[0][0])).toContain(STALE);
     }
   });
 
@@ -361,16 +361,53 @@ describe('handleUi', () => {
     expect(u?.isAdmin).toBe(true);
   });
 
-  it('reports a thrown error by followUp once deferred', async () => {
+  const ERROR = 'Wystąpił błąd. Spróbuj ponownie później.';
+
+  for (const ephemeral of [false, true]) {
+    it(`replaces the deferred response with a V2 error notice (ephemeral view: ${ephemeral})`, async () => {
+      const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+      const i = component('v1:stu:plan:day', { ephemeral });
+      i.editReply = vi
+        .fn()
+        .mockRejectedValueOnce(new Error('boom'))
+        .mockResolvedValue(undefined);
+      await handler()(i);
+      expect(i.followUp).not.toHaveBeenCalled();
+      expect(i.editReply).toHaveBeenCalledTimes(2);
+      const arg = i.editReply.mock.calls[1][0];
+      expect(arg.content).toBeUndefined();
+      expect(arg.flags & MessageFlags.IsComponentsV2).toBeTruthy();
+      expect(arg.allowedMentions).toEqual({ parse: [] });
+      expect(textOf(arg)).toBe(`\n${ERROR}`);
+      err.mockRestore();
+    });
+  }
+
+  it('falls back to an ephemeral V2 followUp when the error edit fails', async () => {
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-    const i = component('v1:stu:plan:day');
+    const i = component('v1:stu:plan:day', { ephemeral: true });
     i.editReply = vi.fn().mockRejectedValue(new Error('boom'));
     await handler()(i);
+    expect(i.editReply).toHaveBeenCalledTimes(2);
     expect(i.followUp).toHaveBeenCalledTimes(1);
     const arg = i.followUp.mock.calls[0][0];
-    expect(arg.content).toBe('Wystąpił błąd. Spróbuj ponownie później.');
-    expect(arg.flags).toBe(MessageFlags.Ephemeral);
+    expect(arg.content).toBeUndefined();
+    expect(arg.flags).toBe(
+      MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+    );
+    expect(textOf(arg)).toContain(ERROR);
     err.mockRestore();
+  });
+
+  it('uses the raw API member nick as the display name', async () => {
+    const i = component('v1:stu:plan:day');
+    i.member = { roles: [], nick: 'Ksywka' };
+    await handler()(i);
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'stud'));
+    expect(u?.displayName).toBe('Ksywka');
   });
 });
 

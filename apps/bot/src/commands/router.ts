@@ -40,6 +40,7 @@ import { needsSecondPass, planSetup } from '../setup/plan.js';
 import { formatPlan, formatReport, mergeReports } from '../setup/report.js';
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
 import { handleUi, openStudentPanel } from '../ui/router.js';
+import { notice } from '../ui/views/student.js';
 import { planStatusReply, planSyncReply } from './plan.js';
 import { replyOptions } from './reply.js';
 import {
@@ -74,6 +75,16 @@ const FORUM_VISIBILITY_WARNING =
 const MAX_LEN = 2000;
 
 let setupRunning = false;
+
+/** A V2 text notice (no `content`), for editing a deferred V2 response. */
+const uiNotice = (text: string) => {
+  const v = notice(text);
+  return {
+    components: v.components,
+    flags: v.flags,
+    allowedMentions: { parse: [] as never[] },
+  };
+};
 
 const truncate = (s: string) =>
   s.length <= MAX_LEN ? s : `${s.slice(0, MAX_LEN - 1)}…`;
@@ -547,12 +558,21 @@ export function createInteractionHandler(deps: RouterDeps) {
       if (interaction.isAutocomplete() || !interaction.isRepliable()) return;
       try {
         const content = ERROR_TEXT;
-        // A component's deferred response is the user's panel (deferUpdate)
-        // or a fresh ephemeral reply: never overwrite it, follow up instead.
+        // A deferred UI response is a V2 view (or a pending ephemeral
+        // reply): replace it with a V2 notice, since `content` can't be set
+        // on a V2 message. Fall back to a separate ephemeral notice.
         const isUi = !interaction.isChatInputCommand();
-        if (interaction.deferred && isUi)
-          await interaction.followUp(replyOptions(content, true));
-        else if (interaction.deferred)
+        if (interaction.deferred && isUi) {
+          try {
+            await interaction.editReply(uiNotice(content));
+          } catch (err3) {
+            console.error('failed to edit the deferred response', err3);
+            await interaction.followUp({
+              ...uiNotice(content),
+              flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+            });
+          }
+        } else if (interaction.deferred)
           await interaction.editReply(replyOptions(content));
         else if (interaction.replied) {
           await interaction.followUp(replyOptions(content, true));

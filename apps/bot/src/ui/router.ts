@@ -5,7 +5,6 @@
 import { users } from '@studies/db';
 import {
   type ChatInputCommandInteraction,
-  type GuildMember,
   type MessageComponentInteraction,
   MessageFlags,
   type ModalSubmitInteraction,
@@ -89,7 +88,7 @@ export async function handleUi(
 
   // The login answer is a message of its own: keep the panel it came from.
   await ack(i, action.kind === 'login');
-  const member = i.member as GuildMember | null;
+  const member = i.member;
   const { userId } = await syncAdminFlag(
     deps.ingest.db,
     toDiscordUser(i.user, member),

@@ -12,7 +12,7 @@ import {
   nowWall,
   parseIsoWeek,
 } from '@studies/db/plan';
-import type { GuildMember, User } from 'discord.js';
+import type { APIInteractionGuildMember, GuildMember, User } from 'discord.js';
 import type { RouterDeps } from '../commands/router.js';
 import {
   LINK_BANNED,
@@ -97,7 +97,7 @@ export function parseStudentAction(
 export interface StudentContext {
   deps: RouterDeps;
   user: User;
-  member: GuildMember | null;
+  member: GuildMember | APIInteractionGuildMember | null;
   /** users.id of the caller. */
   userId: number;
   /** Shows a view as the interaction's (already acknowledged) response. */
