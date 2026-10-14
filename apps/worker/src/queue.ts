@@ -1,4 +1,10 @@
-import { type Db, type JobType, jobs, materials } from '@studies/db';
+import {
+  type Db,
+  type JobType,
+  jobs,
+  materials,
+  StoragePathError,
+} from '@studies/db';
 import { and, eq, inArray, lt, lte, sql } from 'drizzle-orm';
 
 export type Job = {
@@ -111,6 +117,9 @@ export async function enqueueJob(
   await db.insert(jobs).values({ materialId, type });
 }
 
+/** Errors that retrying cannot fix: the job fails on the first attempt. */
+const isPermanent = (err: unknown) => err instanceof StoragePathError;
+
 export async function failJob(
   db: Db,
   job: Job,
@@ -121,7 +130,7 @@ export async function failJob(
     0,
     MAX_ERROR_LENGTH,
   );
-  if (job.attempts < MAX_ATTEMPTS) {
+  if (job.attempts < MAX_ATTEMPTS && !isPermanent(err)) {
     const delay = BACKOFF_MS[job.attempts - 1] ?? BACKOFF_MS.at(-1) ?? 0;
     const res = await db
       .update(jobs)

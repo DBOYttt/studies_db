@@ -56,3 +56,33 @@ export const PUBLIC_VIEWS = [
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];
+
+/**
+ * Tables the admin SQL console's read-write user may SELECT/INSERT/UPDATE/DELETE,
+ * except `materials`, see MATERIAL_FILE_COLUMNS.
+ */
+export const CONTENT_TABLES = [
+  'subjects',
+  'lecturers',
+  'classes',
+  'class_groups',
+  'class_lecturers',
+  'class_sessions',
+  'topics',
+  'tags',
+  'topic_tags',
+  'materials',
+  'jobs',
+] as const;
+
+/**
+ * `materials` columns the worker and file routes turn into paths on disk (or
+ * that describe the stored file). The console's read-write user may not write
+ * them, and may not INSERT into `materials` at all: rows come from the bot.
+ */
+export const MATERIAL_FILE_COLUMNS = [
+  'storage_path',
+  'preview_path',
+  'sha256',
+  'size_bytes',
+] as const;

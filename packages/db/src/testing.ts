@@ -2,9 +2,12 @@ import mysql from 'mysql2/promise';
 import { createDb, type Db } from './client.js';
 import { runMigrations } from './migrate.js';
 import { ensureReadonlyUser } from './readonly-user.js';
+import { ensureReadWriteUser } from './readwrite-user.js';
 
 const TEST_RO_USER = 'studies_ro_test';
 const TEST_RO_PASSWORD = 'test-ro';
+const TEST_RW_USER = 'studies_rw_test';
+const TEST_RW_PASSWORD = 'test-rw';
 
 function testUrl(): string {
   const url = process.env.TEST_DATABASE_URL;
@@ -16,6 +19,13 @@ export function testRoUrl(): string {
   const u = new URL(testUrl());
   u.username = TEST_RO_USER;
   u.password = TEST_RO_PASSWORD;
+  return u.toString();
+}
+
+export function testRwUrl(): string {
+  const u = new URL(testUrl());
+  u.username = TEST_RW_USER;
+  u.password = TEST_RW_PASSWORD;
   return u.toString();
 }
 
@@ -43,6 +53,7 @@ export async function resetTestDb(): Promise<Db> {
   }
   await runMigrations(url);
   await ensureReadonlyUser(url, TEST_RO_PASSWORD, TEST_RO_USER);
+  await ensureReadWriteUser(url, TEST_RW_PASSWORD, TEST_RW_USER);
   return createDb(url).db;
 }
 

@@ -11,10 +11,12 @@ import {
   insertMaterial,
   lecturers,
   materials,
+  setSetting,
   subjects,
   tags,
   topics,
   upsertUser,
+  users,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
@@ -370,6 +372,79 @@ describe('applySetup', () => {
     expect(g.calls).toEqual([['addRoleToMember', 'u1', 'r7']]);
     expect(r.failures).toEqual([]);
     expect(r.updated.join('\n')).toContain('Studies Admin');
+  });
+
+  describe('admin role change', () => {
+    const adminFlags = async () =>
+      (await db.select().from(users).orderBy(users.discordUserId)).map(
+        (u) => u.isAdmin,
+      );
+    const twoAdmins = async () => {
+      for (const id of ['a1', 'a2']) {
+        await upsertUser(db, {
+          discordUserId: id,
+          displayName: id,
+          avatarUrl: null,
+        });
+      }
+      await db.update(users).set({ isAdmin: true });
+    };
+
+    it('clears every is_admin when an adopted role replaces the stored one', async () => {
+      await setSetting(db, 'admin_role_id', 'old');
+      await twoAdmins();
+      await applySetup(
+        db,
+        fakeGuild(),
+        [{ type: 'adoptRole', roleId: 'r7', name: 'Studies Admin' }],
+        snapshot,
+      );
+      expect(await getSetting(db, 'admin_role_id')).toBe('r7');
+      expect(await adminFlags()).toEqual([false, false]);
+    });
+
+    it('clears every is_admin when a created role replaces the stored one', async () => {
+      await setSetting(db, 'admin_role_id', 'old');
+      await twoAdmins();
+      await applySetup(
+        db,
+        fakeGuild(),
+        [{ type: 'createRole', name: 'Studies Admin' }],
+        snapshot,
+      );
+      expect(await getSetting(db, 'admin_role_id')).toBe('role-new');
+      expect(await adminFlags()).toEqual([false, false]);
+    });
+
+    it('keeps is_admin when the same role id is stored again', async () => {
+      await setSetting(db, 'admin_role_id', 'r7');
+      await twoAdmins();
+      await applySetup(
+        db,
+        fakeGuild(),
+        [{ type: 'adoptRole', roleId: 'r7', name: 'Studies Admin' }],
+        snapshot,
+      );
+      expect(await adminFlags()).toEqual([true, true]);
+    });
+
+    it('reports the assigned role id', async () => {
+      const r = await applySetup(
+        db,
+        fakeGuild(),
+        [
+          { type: 'createRole', name: 'Studies Admin' },
+          {
+            type: 'assignRole',
+            roleName: 'Studies Admin',
+            roleId: null,
+            userId: 'u1',
+          },
+        ],
+        snapshot,
+      );
+      expect(r.assignedRoleId).toBe('role-new');
+    });
   });
 
   it('adds tags to an existing forum and re-syncs them', async () => {

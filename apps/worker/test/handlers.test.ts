@@ -220,6 +220,99 @@ describe('processOne', () => {
   });
 });
 
+describe('storage containment', () => {
+  const jobOf = async (materialId: number) =>
+    (await db.select().from(jobs).where(eq(jobs.materialId, materialId)))[0];
+
+  // What the admin SQL console could do: repoint a row at a file outside
+  // STORAGE_DIR and queue a job for it.
+  it('fails an extract_text job whose storage_path escapes, without reading it', async () => {
+    const secret = join(dirname(storageDir), `secret-${seq}.txt`);
+    await writeFile(secret, 'SECRET=hunter2\n');
+    try {
+      const { materialId } = await ingest(
+        'x',
+        'notes.txt',
+        'text/plain',
+        Buffer.from('ok'),
+      );
+      const rel = join('..', `secret-${seq}.txt`);
+      await db
+        .update(materials)
+        .set({ storagePath: rel })
+        .where(eq(materials.id, materialId));
+      expect(await processOne(deps())).toBe(true);
+      const m = await material(materialId);
+      expect(m.extractedText).toBeNull();
+      expect(m.status).toBe('failed');
+      const j = await jobOf(materialId);
+      expect(j.status).toBe('failed');
+      expect(j.attempts).toBe(1);
+      expect(j.lastError).toBe('Nieprawidłowa ścieżka pliku');
+      expect(await processOne(deps())).toBe(false);
+    } finally {
+      await rm(secret, { force: true });
+    }
+  });
+
+  it('refuses an absolute storage_path', async () => {
+    const { materialId } = await ingest(
+      'x',
+      'notes.txt',
+      'text/plain',
+      Buffer.from('ok'),
+    );
+    await db
+      .update(materials)
+      .set({ storagePath: '/etc/passwd' })
+      .where(eq(materials.id, materialId));
+    await processOne(deps());
+    expect((await material(materialId)).extractedText).toBeNull();
+    expect((await jobOf(materialId)).lastError).toBe(
+      'Nieprawidłowa ścieżka pliku',
+    );
+  });
+
+  it('refuses a preview_path that escapes', async () => {
+    const { materialId } = await ingest(
+      'x',
+      'notes.txt',
+      'text/plain',
+      Buffer.from('ok'),
+    );
+    await db
+      .update(materials)
+      .set({ previewKind: 'pdf', previewPath: '../../etc/x.pdf' })
+      .where(eq(materials.id, materialId));
+    await processOne(deps());
+    const j = await jobOf(materialId);
+    expect(j.status).toBe('failed');
+    expect(j.lastError).toBe('Nieprawidłowa ścieżka pliku');
+  });
+
+  it('refuses convert when sha256 is malformed', async () => {
+    const { materialId } = await ingest(
+      'sample.docx',
+      'sample.docx',
+      'application/octet-stream',
+    );
+    const outside = `../../../${'x'.repeat(10)}`;
+    await db
+      .update(materials)
+      .set({ sha256: outside })
+      .where(eq(materials.id, materialId));
+    expect(await processOne(deps())).toBe(true);
+    expect(await sofficeCalls()).toBe(0);
+    const m = await material(materialId);
+    expect(m.previewPath).toBeNull();
+    expect(m.status).toBe('failed');
+    const j = await jobOf(materialId);
+    expect(j.status).toBe('failed');
+    expect(j.attempts).toBe(1);
+    expect(j.lastError).toBe('Nieprawidłowa ścieżka pliku');
+  });
+});
+
 describe('startWorker', () => {
   it('stops on abort', async () => {
     const ac = new AbortController();

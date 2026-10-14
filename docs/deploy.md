@@ -25,6 +25,11 @@ Fill in: `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
 `STORAGE_DIR` is forced to `/data/storage` by compose; it must be absolute in production
 (the apps throw at startup otherwise).
 
+The `worker` service does not load `.env` as a whole: compose passes it only `DATABASE_URL`,
+`UNITIME_ICAL_URL` and the optional `WORKER_CONCURRENCY` / `SOFFICE_BIN` / `PDFTOTEXT_BIN` (and forces
+`STORAGE_DIR`). It opens files named by DB rows, so it should not hold the Discord token or other secrets.
+If you add a worker setting, list it under `worker.environment` in `compose.yaml`.
+
 ## 2. Cloudflare Tunnel
 
 1. Cloudflare Zero Trust dashboard -> Networks -> Tunnels -> Create tunnel (Cloudflared).
@@ -70,6 +75,24 @@ Admin commands now check a role id stored in the DB (`bot_settings`) instead of 
 with the same name no longer grants access. After deploying: run `pnpm db:migrate` (or let the `migrate`
 container run on `compose up`), then run `/setup` once as a member with Manage Server. It adopts the existing
 `ADMIN_ROLE_NAME` role and pins its id; until then every admin command except `/setup` answers "Brak uprawnień.".
+
+### Upgrading to the admin panel (migration 0008, `studies_rw`)
+
+Set both `DB_RW_PASSWORD` and `DATABASE_RW_URL` (`mysql://studies_rw:<pw>@mariadb:3306/studies`, URL-safe
+password) in `.env`, run `pnpm db:migrate` (or let the `migrate` container run on `compose up`) to create the
+`studies_rw` user, then run `/setup` once so the bot has the admin role id.
+
+The two variables do different things. `DATABASE_RW_URL` on the `web` container is what enables the console:
+without it `/api/admin/sql` answers 503. `DB_RW_PASSWORD` only controls whether `migrate` creates `studies_rw`
+and resets its password and grants (without it migrate logs "admin SQL console disabled" and leaves an existing
+user alone). To turn the console off, unset `DATABASE_RW_URL` and recreate `web`; to also remove the user, run
+`DROP USER 'studies_rw'@'%';` as root.
+
+`studies_rw` may not INSERT into `materials` nor UPDATE its file columns (`storage_path`, `preview_path`,
+`sha256`, `size_bytes`). Migrate resets the user's grants on every run with `DB_RW_PASSWORD` set, so an
+existing deployment picks this up on its next `migrate` run (with the password set). Console DELETEs follow the foreign keys:
+deleting a subject also deletes its classes, groups, class lecturers and plan sessions, deleting a material
+deletes its jobs (prefer setting `deleted_at`).
 
 ## Tagi forum
 

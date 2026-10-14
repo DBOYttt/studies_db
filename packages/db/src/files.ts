@@ -1,4 +1,4 @@
-import { isAbsolute, resolve } from 'node:path';
+import { isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export type PreviewKind = 'pdf' | 'image' | 'text' | 'none';
@@ -79,12 +79,44 @@ export function planProcessing(
   return { previewKind: 'none', jobs: [] };
 }
 
+/**
+ * A stored file path that would leave STORAGE_DIR (or is built from a
+ * malformed sha256). The message is deliberately generic: it ends up in
+ * `jobs.last_error`, which the admin console can read.
+ */
+export class StoragePathError extends Error {
+  constructor() {
+    super('Nieprawidłowa ścieżka pliku');
+    this.name = 'StoragePathError';
+  }
+}
+
+const SHA256_RE = /^[0-9a-f]{64}$/;
+
+function checkSha256(sha256: string): string {
+  if (!SHA256_RE.test(sha256)) throw new StoragePathError();
+  return sha256;
+}
+
 export function originalRelPath(sha256: string, ext: string): string {
+  checkSha256(sha256);
   return ext === '' ? `originals/${sha256}` : `originals/${sha256}.${ext}`;
 }
 
 export function previewRelPath(sha256: string): string {
-  return `previews/${sha256}.pdf`;
+  return `previews/${checkSha256(sha256)}.pdf`;
+}
+
+/**
+ * Resolves a storage-relative path (as stored in `materials`) against the
+ * storage root; throws StoragePathError if the result is not strictly inside
+ * it. Paths in the DB are not trusted: the admin SQL console can write rows.
+ */
+export function resolveInStorage(root: string, rel: string): string {
+  const base = resolve(root);
+  const abs = resolve(base, rel);
+  if (!abs.startsWith(base + sep)) throw new StoragePathError();
+  return abs;
 }
 
 /** Absolute paths pass through; relative ones resolve against the monorepo root. */

@@ -77,7 +77,7 @@ function isSessionExpired(res: Response): boolean {
 }
 
 /** Editor look (design lines 111-116): 13px mono, 20px lines, grey gutter. */
-const editorTheme = EditorView.theme({
+export const editorTheme = EditorView.theme({
   '&': {
     minHeight: '176px',
     fontSize: '13px',
@@ -130,7 +130,7 @@ const editorTheme = EditorView.theme({
 });
 
 /** Same colours as the highlighted SQL boxes (lib/sql-highlight.ts). */
-const sqlHighlight = HighlightStyle.define([
+export const sqlHighlight = HighlightStyle.define([
   { tag: t.keyword, color: 'var(--sql-keyword)', fontWeight: '600' },
   {
     tag: [t.typeName, t.standard(t.name), t.bool, t.null],

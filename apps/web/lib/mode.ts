@@ -79,6 +79,12 @@ function isSimplePath(next: string): boolean {
   return path === '/s' || path.startsWith('/s/');
 }
 
+/**
+ * Where `/mode?to=` lands. Any advanced path (including `/admin…`) is kept as
+ * is when switching to advanced; switching to simple maps the few pages that
+ * have a simple twin and sends everything else (e.g. `/admin…`, which has no
+ * simple counterpart) to `/s`.
+ */
 export function modeTarget(to: UiMode, next: string | null): string {
   // Already in the target mode: stay exactly where the user is.
   const safe = safeNext(next);

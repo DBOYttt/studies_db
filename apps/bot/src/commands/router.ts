@@ -10,11 +10,13 @@ import {
   type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type Client,
+  type GuildMember,
   type Interaction,
   MessageFlags,
   PermissionFlagsBits,
 } from 'discord.js';
 import { like, or } from 'drizzle-orm';
+import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import { catchUp, discordForumSource } from '../catchup.js';
 import { ADMIN_ROLE_SETTING, type BotConfig } from '../config.js';
 import { toDiscordUser } from '../discord/map.js';
@@ -125,6 +127,9 @@ async function autocomplete(
   );
 }
 
+const callerOf = (i: ChatInputCommandInteraction) =>
+  toDiscordUser(i.user, i.member as GuildMember | null);
+
 /** /setup: plan, apply, and a second pass for new or imported forums. */
 async function runSetup(
   deps: RouterDeps,
@@ -186,6 +191,16 @@ async function runSetup(
       ),
     );
   }
+  // The stored role may have just been created, adopted or replaced (which
+  // clears every flag): mirror it for the caller, counting a role this run
+  // assigned, which the interaction's member roles don't include yet.
+  try {
+    const roles = memberRoleIds(i);
+    if (report.assignedRoleId) roles.push(report.assignedRoleId);
+    await syncAdminFlag(db, callerOf(i), roles);
+  } catch (err) {
+    console.error('admin flag sync after /setup failed', err);
+  }
   await i.editReply(replyOptions(formatReport(report)));
 }
 
@@ -198,8 +213,25 @@ async function runCommand(
   const reply = (content: string) => i.reply(replyOptions(content, true));
   const name = i.commandName;
 
+  // The sync also yields the stored admin role id; read it directly only if
+  // the sync failed and this command needs it.
+  let synced: string | null | undefined;
+  try {
+    ({ roleId: synced } = await syncAdminFlag(
+      db,
+      callerOf(i),
+      memberRoleIds(i),
+    ));
+  } catch (err) {
+    console.error('admin flag sync failed', err);
+  }
+
   const needsAdmin = name === 'setup' || ADMIN_COMMANDS.has(name);
-  const roleId = needsAdmin ? await getSetting(db, ADMIN_ROLE_SETTING) : null;
+  const roleId = !needsAdmin
+    ? null
+    : synced !== undefined
+      ? synced
+      : await getSetting(db, ADMIN_ROLE_SETTING);
   const allowed =
     name === 'setup'
       ? canRunSetup(i, roleId)

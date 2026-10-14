@@ -1,5 +1,6 @@
 import {
   botSettings,
+  getSetting,
   insertMaterial,
   setSetting,
   subjects,
@@ -111,6 +112,55 @@ describe('router', () => {
     });
     await handler(asI(i));
     expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+  });
+
+  it('any command syncs users.is_admin from the member roles', async () => {
+    const run = async (roles: string[]) => {
+      const i = mkInteraction({
+        commandName: 'subject',
+        user: {
+          id: 'adm',
+          username: 'adm',
+          globalName: null,
+          displayAvatarURL: () => 'a',
+        },
+        member: { roles },
+        options: { getSubcommand: () => 'list' },
+      });
+      await createInteractionHandler({
+        ingest: { db, storageDir: '', fetchBody: vi.fn() },
+        client: {} as never,
+        config,
+      })(asI(i));
+      const [u] = await db
+        .select()
+        .from(users)
+        .where(eq(users.discordUserId, 'adm'));
+      return u?.isAdmin;
+    };
+    expect(await run(['r'])).toBe(true);
+    expect(await run([])).toBe(false);
+  });
+
+  it('logs a failing admin-flag sync and still runs the command', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const i = mkInteraction({
+      commandName: 'subject',
+      user: { id: 'x', username: 'x', globalName: null },
+      member: { roles: ['r'] },
+      options: { getSubcommand: () => 'list' },
+    });
+    await createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      config,
+    })(asI(i));
+    expect(err).toHaveBeenCalledWith(
+      'admin flag sync failed',
+      expect.anything(),
+    );
+    expect(i.reply).toHaveBeenCalledTimes(1);
+    err.mockRestore();
   });
 
   it('/ban upserts a never-seen user so the ban takes effect', async () => {
@@ -373,6 +423,134 @@ describe('/setup', () => {
     expect(text).toContain('nie może odczytać forum #bbb-zepsute');
     expect(text).toContain('z forum #ccc-dobre');
     expect(text).not.toContain('z forum #aaa-ukryte');
+  });
+
+  it('leaves the caller with is_admin after /setup creates the role', async () => {
+    await db.delete(botSettings);
+    let created = 0;
+    const g = {
+      ...setupGuild,
+      roles: {
+        cache: new Collection(),
+        fetch: async () => new Collection(),
+        create: async () => {
+          created++;
+          return { id: 'newrole' };
+        },
+      },
+      members: {
+        me: { id: 'bot' },
+        addRole: vi.fn().mockResolvedValue(undefined),
+        fetch: async () => ({ roles: { cache: new Collection() } }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: {
+        id: 'caller',
+        username: 'caller',
+        globalName: null,
+        displayAvatarURL: () => 'a',
+      },
+      member: { roles: [] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => false },
+    });
+    await handlerFor()(asI(i));
+    expect(created).toBe(1);
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'caller'));
+    expect(u?.isAdmin).toBe(true);
+  });
+
+  it('sets is_admin when /setup adopts a role the caller already holds', async () => {
+    await db.delete(botSettings);
+    const g = {
+      ...setupGuild,
+      members: {
+        me: { id: 'bot' },
+        addRole: vi.fn().mockResolvedValue(undefined),
+        fetch: async () => ({
+          roles: { cache: new Collection([['r', { id: 'r' }]]) },
+        }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: {
+        id: 'holder',
+        username: 'holder',
+        globalName: null,
+        displayAvatarURL: () => 'a',
+      },
+      member: { roles: ['r'] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => false },
+    });
+    await handlerFor()(asI(i));
+    expect(g.members.addRole).not.toHaveBeenCalled();
+    expect(await getSetting(db, 'admin_role_id')).toBe('r');
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'holder'));
+    expect(u?.isAdmin).toBe(true);
+  });
+
+  it('still sets is_admin when an unrelated setup action fails', async () => {
+    await db.delete(botSettings);
+    await db.insert(subjects).values({
+      code: 'ZZZ',
+      name: 'Zzz',
+      semester: 1,
+      ects: 5,
+    });
+    const g = {
+      ...setupGuild,
+      roles: {
+        cache: new Collection(),
+        fetch: async () => new Collection(),
+        create: async () => ({ id: 'newrole' }),
+      },
+      channels: {
+        fetch: async () => new Collection(),
+        create: async () => {
+          throw new Error('boom');
+        },
+      },
+      members: {
+        me: { id: 'bot' },
+        addRole: vi.fn().mockResolvedValue(undefined),
+        fetch: async () => ({ roles: { cache: new Collection() } }),
+      },
+    };
+    const i = mkInteraction({
+      commandName: 'setup',
+      guild: g,
+      user: {
+        id: 'caller2',
+        username: 'c2',
+        globalName: null,
+        displayAvatarURL: () => 'a',
+      },
+      member: { roles: [] },
+      memberPermissions: manage,
+      deferReply: vi.fn().mockResolvedValue(undefined),
+      options: { getBoolean: () => false },
+    });
+    await handlerFor()(asI(i));
+    expect(i.editReply.mock.calls[0]?.[0].content).toContain('boom');
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'caller2'));
+    expect(u?.isAdmin).toBe(true);
   });
 
   it('runs a dry run for a Manage Server member without the role', async () => {

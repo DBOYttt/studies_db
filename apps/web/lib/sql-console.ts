@@ -26,6 +26,8 @@ export interface QueryOptions {
   maxBytes?: number;
   /** `?` placeholder values (server-built SQL only, never console input). */
   values?: unknown[];
+  /** Query error -> user message (default: MariaDB text verbatim). */
+  errorMessage?: (err: DbError) => string;
 }
 
 const ER_STATEMENT_TIMEOUT = 1969;
@@ -179,7 +181,10 @@ export async function runReadonlyQuery(
       ) {
         finish({ ok: false, error: timeoutError });
       } else {
-        finish({ ok: false, error: queryErrorMessage(err) });
+        finish({
+          ok: false,
+          error: (opts.errorMessage ?? queryErrorMessage)(err),
+        });
       }
     });
   });

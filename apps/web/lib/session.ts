@@ -1,6 +1,6 @@
 import { getSessionUser, SESSION_TTL_MS } from '@studies/db';
 import { cookies } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { getDb } from './db';
 
@@ -10,6 +10,7 @@ export interface SessionUser {
   id: number;
   displayName: string;
   avatarUrl: string | null;
+  isAdmin: boolean;
 }
 
 export function sessionCookieOptions() {
@@ -39,5 +40,16 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
 export async function requireUser(): Promise<SessionUser> {
   const user = await currentUser();
   if (!user) redirect('/login-info');
+  return user;
+}
+
+/**
+ * Gate for every /admin page and /api/admin/* route handler: 404 (not a
+ * redirect) for anonymous users and non-admins, so the panel's existence is
+ * not revealed. The flag is read from the DB on every request.
+ */
+export async function requireAdmin(): Promise<SessionUser> {
+  const user = await currentUser();
+  if (!user?.isAdmin) notFound();
   return user;
 }

@@ -13,6 +13,12 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    first run `/setup` adopts the role named `ADMIN_ROLE_NAME` (default `Studies Admin`) or creates it; renaming
    the role later is fine. Until `/setup` has run, only `/setup` works (for members with Manage Server). If several
    roles share the name, `/setup` warns and pins nothing; keep one and run it again.
+   The same role also sets `users.is_admin` for web users: the bot syncs the flag from members holding the pinned role,
+   which unlocks the web admin panel (`/admin`, SQL write console and audit log).
+   The flag is refreshed whenever the member runs a bot command, not when roles change: a member who leaves the
+   server or loses the role keeps web admin until their next bot command (and web sessions last up to 30 days).
+   When `/setup` pins a different role id than the stored one, it clears `is_admin` for everyone; holders of the
+   new role get it back on their next command (the caller of `/setup` right away).
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
    Add Reactions, Send Messages, Send Messages in Threads, Attach Files, Manage Channels, Manage Threads (to pin
    the info post), Manage Roles:

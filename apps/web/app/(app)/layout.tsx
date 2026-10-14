@@ -32,7 +32,9 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   }));
   return (
     <ShellFrame
-      nav={<NavPanel subjects={subjects} views={views} />}
+      nav={
+        <NavPanel subjects={subjects} views={views} isAdmin={user.isAdmin} />
+      }
       footer={<ConsoleFooter />}
       topbarEnd={
         <>

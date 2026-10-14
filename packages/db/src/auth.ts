@@ -91,12 +91,14 @@ export async function getSessionUser(
   id: number;
   displayName: string;
   avatarUrl: string | null;
+  isAdmin: boolean;
 } | null> {
   const [row] = await db
     .select({
       id: users.id,
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
+      isAdmin: users.isAdmin,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))

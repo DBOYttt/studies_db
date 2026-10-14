@@ -1,8 +1,7 @@
 import { createReadStream } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
-import { resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
-import { materials } from '@studies/db';
+import { materials, resolveInStorage } from '@studies/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getDb } from './db';
 import type { SessionUser } from './session';
@@ -144,9 +143,12 @@ export async function handleFileRequest(
     }
   }
 
-  const root = resolve(storageDir());
-  const abs = resolve(root, rel);
-  if (!abs.startsWith(root + sep)) return notFound();
+  let abs: string;
+  try {
+    abs = resolveInStorage(storageDir(), rel);
+  } catch {
+    return notFound();
+  }
   let size: number;
   try {
     const s = await stat(abs);

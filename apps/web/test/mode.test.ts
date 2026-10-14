@@ -65,6 +65,11 @@ describe('modeTarget simple -> advanced', () => {
     expect(t('/%2F%2Fevil.com')).toBe('/');
     expect(t('//evil.com')).toBe('/');
   });
+  it('keeps admin pages in advanced mode', () => {
+    expect(t('/admin')).toBe('/admin');
+    expect(t('/admin/sql')).toBe('/admin/sql');
+    expect(t('/admin/audit?user=3&page=2')).toBe('/admin/audit?user=3&page=2');
+  });
   it('maps reports to SQL console', () => {
     expect(t('/s/reports?r=1')).toBe(sqlHref('/sql', EXAMPLE_QUERIES[1].sql));
   });
@@ -94,6 +99,12 @@ describe('modeTarget advanced -> simple', () => {
     expect(t('/search?q=abc')).toBe('/s/search?q=abc');
     expect(t('/sql?q=SELECT')).toBe('/s');
     expect(t('/tables/v_tags')).toBe('/s');
+  });
+  it('sends admin pages to the simple start (no simple admin pages)', () => {
+    expect(t('/admin')).toBe('/s');
+    expect(t('/admin/audit')).toBe('/s');
+    expect(t('/admin/audit/7')).toBe('/s');
+    expect(t('/admin/sql?q=x')).toBe('/s');
   });
   it('keeps the place when already in simple mode', () => {
     expect(t('/s')).toBe('/s');
