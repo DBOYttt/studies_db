@@ -6,10 +6,10 @@ import {
   Database,
   House,
   MagnifyingGlass,
-  ShieldCheck,
 } from '@phosphor-icons/react';
 import Link from 'next/link';
 import type { ReactNode } from 'react';
+import { navRow, navRowIdle } from './nav-classes';
 
 export type SimpleScreen =
   | 'home'
@@ -50,21 +50,20 @@ const NAV: {
   },
 ];
 
-const row =
-  'flex min-h-[38px] items-center gap-2.5 rounded-md px-2.5 transition-colors duration-100';
-const idle = 'hover:bg-line';
+const row = navRow;
+const idle = navRowIdle;
 const on = 'bg-selected font-semibold text-fg';
 
 /** Simple-mode sidebar (design: 248px, logo, search, nav, PRZEDMIOTY list). */
 export function SimpleSidebar({
   subjects,
   active,
-  isAdmin = false,
+  adminEntry,
 }: {
   subjects: NavSubject[];
   active: SimpleActive;
-  /** Shows "Panel admina" (switches to the advanced mode at /admin). */
-  isAdmin?: boolean;
+  /** "Panel admina", passed in by the server only for admins. */
+  adminEntry?: ReactNode;
 }) {
   return (
     <>
@@ -127,19 +126,7 @@ export function SimpleSidebar({
             </Link>
           );
         })}
-        {isAdmin && (
-          // The admin pages live in the advanced shell: switch the mode
-          // cookie too, so "/" does not bounce back to /s afterwards.
-          <a
-            href="/mode?to=advanced&next=%2Fadmin"
-            className={`${row} font-medium text-accent-ink ${idle}`}
-          >
-            <span aria-hidden className="grid">
-              <ShieldCheck size={18} />
-            </span>
-            Panel admina
-          </a>
-        )}
+        {adminEntry}
       </nav>
 
       <h2 className="m-0 shrink-0 border-t border-line px-[18px] pt-3.5 pb-1.5 text-xs font-semibold tracking-[0.04em] text-muted uppercase">

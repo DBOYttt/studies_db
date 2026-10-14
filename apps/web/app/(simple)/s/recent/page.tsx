@@ -1,5 +1,6 @@
 import Link from 'next/link';
 import { FileList } from '@/components/simple/FileList';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb } from '@/lib/db';
@@ -44,6 +45,7 @@ export default async function SimpleRecent({
         { label: 'Ostatnio dodane', href: '/s/recent' },
       ]}
       user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
       aside={
         preview && (
           <SimplePreview

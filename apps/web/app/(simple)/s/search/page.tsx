@@ -1,4 +1,5 @@
 import { FileList } from '@/components/simple/FileList';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb } from '@/lib/db';
@@ -37,6 +38,7 @@ export default async function SimpleSearch({
       active={{ screen: 'search', q }}
       crumbs={[{ label: 'Start', href: '/s' }, { label: 'Wyszukiwanie' }]}
       user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
       aside={
         preview && (
           <SimplePreview

@@ -7,6 +7,7 @@ import { getPlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
 import { GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
@@ -50,6 +51,7 @@ export default async function SimplePlan({
         { label: 'Plan zajęć', href: '/s/plan' },
       ]}
       user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
     >
       <div>
         <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">

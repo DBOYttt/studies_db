@@ -1,5 +1,6 @@
 import { DownloadSimple, TerminalWindow } from '@phosphor-icons/react/dist/ssr';
 import { ReportCards } from '@/components/simple/ReportCards';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
@@ -49,6 +50,7 @@ export default async function SimpleReports({
         { label: 'Gotowe zestawienia', href: '/s/reports' },
       ]}
       user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
     >
       <div>
         <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">

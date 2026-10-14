@@ -1,6 +1,7 @@
 import { SignOut } from '@phosphor-icons/react/dist/ssr';
 import { PUBLIC_VIEWS } from '@studies/db/constants';
 import type { ReactNode } from 'react';
+import { AdminNavLink } from '@/components/shell/AdminNavLink';
 import { ConsoleFooter } from '@/components/shell/ConsoleFooter';
 import { ModeSwitch } from '@/components/shell/ModeSwitch';
 import { NavPanel } from '@/components/shell/NavPanel';
@@ -33,7 +34,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   return (
     <ShellFrame
       nav={
-        <NavPanel subjects={subjects} views={views} isAdmin={user.isAdmin} />
+        <NavPanel
+          subjects={subjects}
+          views={views}
+          adminEntry={user.isAdmin ? <AdminNavLink /> : null}
+        />
       }
       footer={<ConsoleFooter />}
       topbarEnd={

@@ -13,7 +13,6 @@ import {
   House,
   type Icon,
   MagnifyingGlass,
-  ShieldCheck,
   SignOut,
   Stack,
   Table,
@@ -33,6 +32,7 @@ import {
   navAncestors,
   navKey,
 } from '@/lib/nav-tree';
+import { toolBtn } from './tool-button';
 
 const TOOLBAR: { title: string; href: string; icon: Icon }[] = [
   { title: 'Strona główna', href: '/', icon: House },
@@ -41,19 +41,16 @@ const TOOLBAR: { title: string; href: string; icon: Icon }[] = [
   { title: 'Projektant', href: '/schema', icon: TreeStructure },
 ];
 
-const toolBtn =
-  'grid h-[26px] w-[28px] place-items-center rounded text-accent-ink hover:bg-line';
-
 /** Left navigation panel: logo, icon toolbar, name filter and the database tree. */
 export function NavPanel({
   subjects,
   views,
-  isAdmin = false,
+  adminEntry,
 }: {
   subjects: NavSubject[];
   views: NavView[];
-  /** Shows the "Admin" toolbar entry (/admin). */
-  isAdmin?: boolean;
+  /** The admin toolbar entry, passed in by the server only for admins. */
+  adminEntry?: ReactNode;
 }) {
   const [filter, setFilter] = useState('');
   const treeProps = { subjects, views, filter };
@@ -86,10 +83,10 @@ export function NavPanel({
             <I size={16} />
           </Link>
         ))}
-        {isAdmin && (
+        {adminEntry && (
           <>
             <span aria-hidden className="mx-1 my-[5px] w-px bg-line" />
-            <AdminLink />
+            {adminEntry}
           </>
         )}
         <form action="/auth/logout" method="post" className="ml-auto">
@@ -125,38 +122,6 @@ export function NavPanel({
         </Suspense>
       </nav>
     </>
-  );
-}
-
-function AdminLink() {
-  return (
-    <Suspense fallback={<AdminLinkBody active={false} />}>
-      <LocatedAdminLink />
-    </Suspense>
-  );
-}
-
-function LocatedAdminLink() {
-  const pathname = usePathname();
-  return (
-    <AdminLinkBody
-      active={pathname === '/admin' || pathname.startsWith('/admin/')}
-    />
-  );
-}
-
-/** Toolbar entry of the admin panel, set apart from the database tools. */
-function AdminLinkBody({ active }: { active: boolean }) {
-  return (
-    <Link
-      href="/admin"
-      title="Admin"
-      aria-label="Admin"
-      aria-current={active ? 'page' : undefined}
-      className={`${toolBtn} ${active ? 'bg-selected text-fg' : ''}`}
-    >
-      <ShieldCheck size={16} weight={active ? 'fill' : 'regular'} />
-    </Link>
   );
 }
 

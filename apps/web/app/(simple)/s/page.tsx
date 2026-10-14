@@ -1,4 +1,5 @@
 import { FileList } from '@/components/simple/FileList';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
@@ -31,6 +32,7 @@ export default async function SimpleStart({
       active={{ screen: 'home' }}
       crumbs={[{ label: 'Start', href: '/s' }]}
       user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
       aside={
         preview && (
           <SimplePreview

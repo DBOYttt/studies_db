@@ -5,6 +5,7 @@ import { FileList } from '@/components/simple/FileList';
 import { type ChipRow, FilterChips } from '@/components/simple/FilterChips';
 import { LecturerCards } from '@/components/simple/LecturerCards';
 import { NextSessions } from '@/components/simple/NextSessions';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import type { Crumb } from '@/components/simple/SimpleShell';
 import { SimpleShell } from '@/components/simple/SimpleShell';
@@ -144,6 +145,7 @@ export default async function SimpleSubject({
       active={{ screen: 'subject', code: subject.code }}
       crumbs={crumbs}
       user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
       aside={
         preview && (
           <SimplePreview

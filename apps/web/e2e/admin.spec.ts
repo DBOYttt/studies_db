@@ -71,6 +71,37 @@ test.describe('non-admin', () => {
     );
   });
 
+  test('pages ship no admin entries, not even in their scripts', async ({
+    page,
+    context,
+  }) => {
+    const scripts: Promise<string>[] = [];
+    page.on('response', (r) => {
+      if (r.request().resourceType() === 'script') {
+        scripts.push(r.text().catch(() => ''));
+      }
+    });
+    for (const [mode, path] of [
+      ['simple', '/s'],
+      ['advanced', '/'],
+    ] as const) {
+      await context.addCookies([
+        { name: 'studiesdb.mode', value: mode, url: 'http://localhost:3100' },
+      ]);
+      await page.goto(path);
+      await page.waitForLoadState('load');
+      await expect(
+        page.getByRole('link', { name: 'Admin', exact: true }),
+      ).toHaveCount(0);
+      await expect(
+        page.getByRole('link', { name: 'Panel admina' }),
+      ).toHaveCount(0);
+    }
+    const js = (await Promise.all(scripts)).join('\n');
+    expect(js).not.toContain('Panel admina');
+    expect(js).not.toMatch(/title:\s*"Admin"/);
+  });
+
   test('POST /api/admin/sql returns 404', async ({ context }) => {
     const res = await context.request.post('/api/admin/sql', {
       headers: { Origin: 'http://localhost:3100' },

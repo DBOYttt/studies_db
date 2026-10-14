@@ -34,6 +34,7 @@ export function SimpleShell({
   active,
   crumbs,
   user,
+  adminEntry,
   aside,
   children,
 }: {
@@ -41,6 +42,8 @@ export function SimpleShell({
   active: SimpleActive;
   crumbs: Crumb[];
   user: SessionUser;
+  /** "Panel admina" (SimpleAdminEntry); the page passes it only for admins. */
+  adminEntry?: ReactNode;
   aside?: ReactNode;
   children: ReactNode;
 }) {
@@ -145,7 +148,7 @@ export function SimpleShell({
         <SimpleSidebar
           subjects={subjects}
           active={active}
-          isAdmin={user.isAdmin}
+          adminEntry={adminEntry}
         />
       </aside>
 
