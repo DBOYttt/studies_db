@@ -68,6 +68,11 @@ export async function snapshotGuild(
         parentId: c.parentId,
         everyoneCanView:
           c.permissionsFor(guild.roles.everyone)?.has(ViewChannel) ?? false,
+        viewRoleIds: [...c.permissionOverwrites.cache.values()]
+          .filter(
+            (o) => o.type === OverwriteType.Role && o.allow.has(ViewChannel),
+          )
+          .map((o) => o.id),
       })),
   };
 }
@@ -241,15 +246,18 @@ function panelOverwrites(
   if (o.adminRoleId === null) throw new Error('brak roli admina');
   return [
     { id: everyoneId, type: OverwriteType.Role, deny: [ViewChannel] },
-    {
-      id: o.adminRoleId,
-      type: OverwriteType.Role,
-      allow: [ViewChannel, ReadMessageHistory],
-      deny: [SendMessages],
-    },
+    adminOverwrite(o.adminRoleId),
     bot,
   ];
 }
+
+/** #admin-panel: the admin role reads the panel but cannot post. */
+const adminOverwrite = (roleId: string) => ({
+  id: roleId,
+  type: OverwriteType.Role,
+  allow: [ViewChannel, ReadMessageHistory],
+  deny: [SendMessages],
+});
 
 const tagList = (c: ForumChannel) =>
   c.availableTags.map((t) => ({ id: t.id, name: t.name }));
@@ -346,6 +354,22 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
         reason: '/setup',
       });
       return c.id;
+    },
+    async syncAdminPanelPerms(channelId, roleId) {
+      // Touch only the overwrites that change: re-sending the rest could hit
+      // permissions the bot cannot grant.
+      const c = await textChannel(guild, channelId);
+      const roles = await guild.roles.fetch();
+      for (const o of [...c.permissionOverwrites.cache.values()]) {
+        if (o.type === OverwriteType.Role && !roles.has(o.id)) {
+          await c.permissionOverwrites.delete(o.id, '/setup');
+        }
+      }
+      await c.permissionOverwrites.edit(
+        roleId,
+        { ViewChannel: true, ReadMessageHistory: true, SendMessages: false },
+        { type: OverwriteType.Role, reason: '/setup' },
+      );
     },
     async postPanel(channelId, view) {
       const msg = await (await textChannel(guild, channelId)).send({

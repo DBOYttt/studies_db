@@ -125,6 +125,7 @@ function fakeGuild(failForum?: string): SetupGuild & {
         name: o.name,
         parentId: o.parentId,
         everyoneCanView: !o.private,
+        viewRoleIds: o.private && o.adminRoleId ? [o.adminRoleId] : [],
       });
       return id;
     },
@@ -134,6 +135,9 @@ function fakeGuild(failForum?: string): SetupGuild & {
       panelMessages.add(id);
       if (!this.refusePin) pinned.add(id);
       return { id, pinned: pinned.has(id) };
+    },
+    async syncAdminPanelPerms(channelId, roleId) {
+      calls.push(['syncAdminPanelPerms', channelId, roleId]);
     },
     async editPanel(channelId, messageId) {
       calls.push(['editPanel', channelId, messageId]);
@@ -1218,18 +1222,26 @@ describe('applySetup: panel pins and adopted channels', () => {
     const snap: GuildSnapshot = {
       ...snapshot,
       textChannels: [
-        { id: 'x1', name: 'panel', parentId: null, everyoneCanView: true },
+        {
+          id: 'x1',
+          name: 'panel',
+          parentId: null,
+          everyoneCanView: true,
+          viewRoleIds: [],
+        },
         {
           id: 'x2',
           name: 'admin-panel',
           parentId: null,
           everyoneCanView: true,
+          viewRoleIds: [],
         },
         {
           id: 'x3',
           name: 'admin-panel',
           parentId: null,
           everyoneCanView: false,
+          viewRoleIds: [],
         },
       ],
     };
@@ -1249,6 +1261,85 @@ describe('applySetup: panel pins and adopted channels', () => {
       snap,
     );
     expect(hidden.warnings).toEqual([]);
+  });
+});
+
+describe('applySetup: #admin-panel permissions', () => {
+  const sync = (roleId: string | null): Action => ({
+    type: 'syncAdminPanelPerms',
+    channelId: 'ch-a',
+    roleId,
+  });
+
+  it('grants the role created earlier in the run', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [{ type: 'createRole', name: 'Studies Admin' }, sync(null)],
+      snapshot,
+    );
+    expect(g.calls).toEqual([
+      ['createRole', 'Studies Admin'],
+      ['syncAdminPanelPerms', 'ch-a', 'role-new'],
+    ]);
+    expect(r.updated).toEqual([
+      'kanał #admin-panel: uprawnienia dla roli admina',
+    ]);
+    expect(r.failures).toEqual([]);
+  });
+
+  it('grants an existing role by id', async () => {
+    const g = fakeGuild();
+    await applySetup(db, g, [sync('r2')], snapshot);
+    expect(g.calls).toEqual([['syncAdminPanelPerms', 'ch-a', 'r2']]);
+  });
+
+  it('fails when the role was not created', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(db, g, [sync(null)], snapshot);
+    expect(g.calls).toEqual([]);
+    expect(r.failures).toEqual(['#admin-panel: brak roli admina']);
+  });
+
+  it('re-grants a kept #admin-panel after the admin role was replaced', async () => {
+    await setSetting(db, 'admin_role_id', 'r-old');
+    await setSetting(db, 'admin_panel_channel_id', 'ch-a');
+    const g = fakeGuild();
+    const snap: GuildSnapshot = {
+      ...snapshot,
+      textChannels: [
+        {
+          id: 'ch-a',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+          viewRoleIds: ['r-old'],
+        },
+      ],
+      ...(await loadPanelSettings(db)),
+    };
+    const actions = planSetup(
+      [],
+      snap,
+      { name: 'Studies Admin', storedId: 'r-old' },
+      () => '',
+    );
+    const r = await applySetup(db, g, actions, snap);
+    expect(g.calls).toContainEqual(['syncAdminPanelPerms', 'ch-a', 'role-new']);
+    expect(r.updated).toContain(
+      'kanał #admin-panel: uprawnienia dla roli admina',
+    );
+  });
+});
+
+describe('formatPlan: #admin-panel permissions', () => {
+  it('lists the permission sync in a dry run', () => {
+    expect(
+      formatPlan([
+        { type: 'syncAdminPanelPerms', channelId: 'c', roleId: null },
+      ]),
+    ).toContain('ustaw uprawnienia #admin-panel dla roli admina');
   });
 });
 

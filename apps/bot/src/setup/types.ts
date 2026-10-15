@@ -112,6 +112,8 @@ export type GuildSnapshot = {
     parentId: string | null;
     /** @everyone can view the channel. */
     everyoneCanView: boolean;
+    /** Role ids with an overwrite that allows View Channel. */
+    viewRoleIds: string[];
   }[];
   /** Panel channel ids stored in bot_settings. */
   panelChannels: { panel: string | null; admin: string | null };
@@ -224,4 +226,10 @@ export type Action =
       channelId: string | null;
       messageId: string | null;
     }
+  /**
+   * Gives the admin role its #admin-panel overwrite (view, no posting) and
+   * drops overwrites of roles that no longer exist. roleId null: the role
+   * created earlier in the same run.
+   */
+  | { type: 'syncAdminPanelPerms'; channelId: string; roleId: string | null }
   | { type: 'warn'; code: string | null; message: string };

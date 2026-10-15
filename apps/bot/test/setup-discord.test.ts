@@ -245,3 +245,50 @@ describe('discordSetupGuild: panels', () => {
     ]);
   });
 });
+
+describe('discordSetupGuild: #admin-panel permissions', () => {
+  it('sets the admin role overwrite and drops overwrites of deleted roles', async () => {
+    const calls: unknown[] = [];
+    const ow = (id: string, type: OverwriteType) => ({ id, type });
+    const cache = new Map([
+      ['everyone', ow('everyone', OverwriteType.Role)],
+      ['bot', ow('bot', OverwriteType.Member)],
+      ['gone-user', ow('gone-user', OverwriteType.Member)],
+      ['r-old', ow('r-old', OverwriteType.Role)],
+      ['r-mod', ow('r-mod', OverwriteType.Role)],
+    ]);
+    const channel = {
+      type: ChannelType.GuildText,
+      permissionOverwrites: {
+        cache,
+        delete: async (...a: unknown[]) => {
+          calls.push(['delete', ...a]);
+        },
+        edit: async (...a: unknown[]) => {
+          calls.push(['edit', ...a]);
+        },
+      },
+    };
+    const guild = {
+      roles: {
+        fetch: async () =>
+          new Map([
+            ['everyone', {}],
+            ['r-new', {}],
+            ['r-mod', {}],
+          ]),
+      },
+      channels: { fetch: async () => channel },
+    } as never;
+    await discordSetupGuild(guild).syncAdminPanelPerms('ch-a', 'r-new');
+    expect(calls).toEqual([
+      ['delete', 'r-old', '/setup'],
+      [
+        'edit',
+        'r-new',
+        { ViewChannel: true, ReadMessageHistory: true, SendMessages: false },
+        { type: OverwriteType.Role, reason: '/setup' },
+      ],
+    ]);
+  });
+});

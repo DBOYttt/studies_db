@@ -13,7 +13,7 @@ import { applySetup } from './setup/apply.js';
 import { discordSetupGuild, snapshotGuild } from './setup/discord.js';
 import { renderGuidelines } from './setup/guidelines.js';
 import { loadPanelSettings, loadSubjectSpecs } from './setup/load.js';
-import { needsSecondPass, planSetup } from './setup/plan.js';
+import { needsSecondPass, planSetup, secondPassActions } from './setup/plan.js';
 import { formatPlan, formatReport, mergeReports } from './setup/report.js';
 
 /** Records an applied admin change (admin_audit); never throws. */
@@ -118,9 +118,7 @@ export async function runSetup(
     // New/imported forums: tags, guidelines, topic posts and info post. The
     // panels were handled by the first pass.
     const second = await plan();
-    second.actions = second.actions.filter(
-      (a) => a.type !== 'ensurePanelChannel' && a.type !== 'ensurePanelMessage',
-    );
+    second.actions = secondPassActions(first.actions, second.actions);
     report = mergeReports(
       report,
       await applySetup(

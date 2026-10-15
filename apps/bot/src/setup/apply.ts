@@ -67,6 +67,11 @@ export interface SetupGuild {
     private: boolean;
     adminRoleId: string | null;
   }): Promise<string>;
+  /**
+   * Lets the admin role view #admin-panel without posting (as on creation)
+   * and removes overwrites of roles that no longer exist.
+   */
+  syncAdminPanelPerms(channelId: string, roleId: string): Promise<void>;
   /** Posts and pins the panel; pinned false when pinning was refused. */
   postPanel(
     channelId: string,
@@ -182,7 +187,9 @@ export async function applySetup(
         ? a.code
         : 'which' in a
           ? `#${PANEL_CHANNEL_NAMES[a.which]}`
-          : '';
+          : a.type === 'syncAdminPanelPerms'
+            ? `#${PANEL_CHANNEL_NAMES.admin}`
+            : '';
     try {
       switch (a.type) {
         case 'createRole':
@@ -385,6 +392,15 @@ export async function applySetup(
           await setSetting(db, keys.channel, id);
           panelChannels[a.which] = id;
           report.created.push(`kanał #${a.name}`);
+          break;
+        }
+        case 'syncAdminPanelPerms': {
+          const roleId = a.roleId ?? createdRoleId;
+          if (!roleId) throw new Error('brak roli admina');
+          await guild.syncAdminPanelPerms(a.channelId, roleId);
+          report.updated.push(
+            `kanał #${PANEL_CHANNEL_NAMES.admin}: uprawnienia dla roli admina`,
+          );
           break;
         }
         case 'ensurePanelMessage': {

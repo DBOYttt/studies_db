@@ -6,6 +6,7 @@ import {
   needsSecondPass,
   parseForumName,
   planSetup as planWithPanels,
+  secondPassActions,
 } from '../src/setup/plan.js';
 import type {
   Action,
@@ -49,7 +50,10 @@ const BD: SubjectSpec = {
 const render = (s: SubjectSpec) => `G:${s.code}`;
 
 const isPanel = (a: Action) =>
-  a.type === 'ensurePanelChannel' || a.type === 'ensurePanelMessage';
+  a.type === 'ensurePanelChannel' ||
+  a.type === 'ensurePanelMessage' ||
+  a.type === 'syncAdminPanelPerms' ||
+  (a.type === 'warn' && a.message.includes('kanałów tekstowych'));
 /** The plan without the panel actions (covered in 'planSetup: panels'). */
 const planSetup: typeof planWithPanels = (...args) =>
   planWithPanels(...args).filter((a) => !isPanel(a));
@@ -824,6 +828,46 @@ describe('planSetup: unreadable forums', () => {
   });
 });
 
+describe('secondPassActions', () => {
+  it('drops panel actions and warnings the first pass already reported', () => {
+    const warn = (message: string): Action => ({
+      type: 'warn',
+      code: null,
+      message,
+    });
+    const tags: Action = {
+      type: 'addTags',
+      subjectId: 1,
+      code: 'ASD',
+      channelId: 'f',
+      tags: ['Gr. 1'],
+    };
+    const second: Action[] = [
+      warn('dup'),
+      warn('new'),
+      {
+        type: 'ensurePanelChannel',
+        which: 'admin',
+        name: 'admin-panel',
+        existingId: null,
+        parentId: null,
+      },
+      { type: 'syncAdminPanelPerms', channelId: 'ch-a', roleId: 'r' },
+      {
+        type: 'ensurePanelMessage',
+        which: 'panel',
+        channelId: 'c',
+        messageId: 'm',
+      },
+      tags,
+    ];
+    expect(secondPassActions([warn('dup')], second)).toEqual([
+      warn('new'),
+      tags,
+    ]);
+  });
+});
+
 describe('needsSecondPass', () => {
   it('is true after a forum was created or imported, false otherwise', () => {
     const forum = planSetup([ASD], withRole(), ROLE, render);
@@ -879,12 +923,19 @@ describe('planSetup: panels', () => {
   it('only edits the stored messages when both channels exist', () => {
     const g = withRole({
       textChannels: [
-        { id: 'ch-p', name: 'panel', parentId: null, everyoneCanView: true },
+        {
+          id: 'ch-p',
+          name: 'panel',
+          parentId: null,
+          everyoneCanView: true,
+          viewRoleIds: [],
+        },
         {
           id: 'ch-a',
           name: 'admin-panel',
           parentId: null,
           everyoneCanView: true,
+          viewRoleIds: ['r1'],
         },
       ],
       panelChannels: { panel: 'ch-p', admin: 'ch-a' },
@@ -904,6 +955,7 @@ describe('planSetup: panels', () => {
           name: 'admin-panel',
           parentId: null,
           everyoneCanView: false,
+          viewRoleIds: ['r1'],
         },
       ],
       panelChannels: { panel: 'ch-gone', admin: 'ch-a' },
@@ -921,29 +973,143 @@ describe('planSetup: panels', () => {
   it('adopts the only text channel with the name when nothing usable is stored', () => {
     const g = withRole({
       textChannels: [
-        { id: 'x1', name: 'panel', parentId: null, everyoneCanView: true },
+        {
+          id: 'x1',
+          name: 'panel',
+          parentId: null,
+          everyoneCanView: true,
+          viewRoleIds: [],
+        },
         {
           id: 'x2',
           name: 'admin-panel',
           parentId: null,
-          everyoneCanView: true,
-        },
-        {
-          id: 'x3',
-          name: 'admin-panel',
-          parentId: null,
-          everyoneCanView: true,
+          everyoneCanView: false,
+          viewRoleIds: ['r1'],
         },
       ],
     });
     expect(panelActions(planWithPanels([], g, ROLE, render))).toEqual<Action[]>(
       [
         { ...newChannel('panel', null), existingId: 'x1' },
-        newChannel('admin', null),
+        { ...newChannel('admin', null), existingId: 'x2' },
         message('panel', null, null),
         message('admin', null, null),
       ],
     );
+  });
+
+  it('warns and creates nothing when several text channels share the name', () => {
+    const g = withRole({
+      textChannels: [
+        {
+          id: 'x1',
+          name: 'panel',
+          parentId: null,
+          everyoneCanView: true,
+          viewRoleIds: [],
+        },
+        {
+          id: 'x2',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+          viewRoleIds: ['r1'],
+        },
+        {
+          id: 'x3',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+          viewRoleIds: ['r1'],
+        },
+      ],
+    });
+    expect(panelActions(planWithPanels([], g, ROLE, render))).toEqual<Action[]>(
+      [
+        { ...newChannel('panel', null), existingId: 'x1' },
+        {
+          type: 'warn',
+          code: null,
+          message:
+            'jest kilka kanałów tekstowych o nazwie #admin-panel — panel nie został utworzony; zostaw jeden (albo zmień nazwy pozostałych) i uruchom /setup ponownie',
+        },
+        message('panel', null, null),
+      ],
+    );
+  });
+
+  const adminChannel = (viewRoleIds: string[]) =>
+    ({
+      id: 'ch-a',
+      name: 'admin-panel',
+      parentId: null,
+      everyoneCanView: false,
+      viewRoleIds,
+    }) as const;
+
+  it('re-grants the stored #admin-panel to a role that replaced a deleted one', () => {
+    // The stored role r-old is gone; the only role with the name is adopted.
+    const adopted = withRole({
+      roles: [{ id: 'r2', name: NAME }],
+      callerRoleIds: ['r2'],
+      textChannels: [adminChannel(['r-old'])],
+      panelChannels: { panel: null, admin: 'ch-a' },
+      panelMessages: { panel: null, admin: 'm-a' },
+    });
+    const role = { name: NAME, storedId: 'r-old' };
+    expect(
+      planWithPanels([], adopted, role, render).filter(
+        (a) => a.type === 'syncAdminPanelPerms',
+      ),
+    ).toEqual([
+      { type: 'syncAdminPanelPerms', channelId: 'ch-a', roleId: 'r2' },
+    ]);
+    // No role with the name either: the role created in this run (null).
+    const created = { ...adopted, roles: [], callerRoleIds: [] };
+    const actions = planWithPanels([], created, role, render);
+    expect(actions.map((a) => a.type)).toEqual([
+      'createRole',
+      'assignRole',
+      'ensurePanelChannel',
+      'syncAdminPanelPerms',
+      'ensurePanelMessage',
+      'ensurePanelMessage',
+    ]);
+    expect(actions[3]).toEqual({
+      type: 'syncAdminPanelPerms',
+      channelId: 'ch-a',
+      roleId: null,
+    });
+  });
+
+  it('grants an adopted #admin-panel without the admin role overwrite', () => {
+    const g = withRole({
+      textChannels: [{ ...adminChannel([]), id: 'x2' }],
+    });
+    expect(
+      planWithPanels([], g, ROLE, render).filter(
+        (a) => a.type === 'syncAdminPanelPerms',
+      ),
+    ).toEqual([{ type: 'syncAdminPanelPerms', channelId: 'x2', roleId: 'r1' }]);
+  });
+
+  it('leaves #admin-panel permissions alone when the role is ambiguous', () => {
+    const g = emptyGuild({
+      roles: [
+        { id: 'a', name: NAME },
+        { id: 'b', name: NAME },
+      ],
+      textChannels: [adminChannel([])],
+      panelChannels: { panel: null, admin: 'ch-a' },
+    });
+    const actions = planWithPanels(
+      [],
+      g,
+      { name: NAME, storedId: null },
+      render,
+    );
+    expect(actions.some((a) => a.type === 'syncAdminPanelPerms')).toBe(false);
   });
 
   it("puts new channels in the first subject's forum category", () => {

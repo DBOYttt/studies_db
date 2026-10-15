@@ -74,6 +74,8 @@ function describeAction(a: Action): string {
       return a.existingId
         ? `zapisz kanał #${a.name} jako kanał panelu`
         : `utwórz kanał #${a.name}`;
+    case 'syncAdminPanelPerms':
+      return `ustaw uprawnienia #${PANEL_CHANNEL_NAMES.admin} dla roli admina`;
     case 'ensurePanelMessage':
       return a.messageId
         ? `odśwież panel w #${PANEL_CHANNEL_NAMES[a.which]} (albo opublikuj go ponownie, jeśli zniknął)`
