@@ -59,6 +59,14 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    as a warning. The ids are kept in `bot_settings`. Everything the panels show
    is also available privately through `/panel` and `/admin`, and every admin change is checked against the admin
    role and written to the audit log.
+   When the admin role changes (deleted, then created or adopted again by `/setup`) or an adopted `#admin-panel`
+   doesn't let the admin role see it, `/setup` gives the current admin role view access (no posting) to
+   `#admin-panel` and removes the overwrites of deleted roles. With several text channels named `panel` or
+   `admin-panel` and none stored, `/setup` warns and creates nothing for that panel; keep one and run it again.
+   The admin slash commands (`/setup`, `/admin`, `/subject`, `/lecturer`, `/resync`, ...) are shown by default only to
+   members with Manage Server; the bot itself checks the admin role. Admins without Manage Server won't see them
+   unless the server owner allows the `Studies Admin` role under Server Settings → Integrations → the bot. The pinned
+   `#admin-panel` works regardless.
 
 A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
 
