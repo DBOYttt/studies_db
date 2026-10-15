@@ -398,8 +398,12 @@ async function runCommand(
       return;
     }
     case 'resync': {
-      await i.deferReply(eph);
-      await i.editReply(replyOptions(await runResync(deps, audit)));
+      // Under the /setup lock: a catch-up during /setup could race it.
+      const result = await withSetupLock(async () => {
+        await i.deferReply(eph);
+        await i.editReply(replyOptions(await runResync(deps, audit)));
+      });
+      if (result === 'busy') await reply(BUSY_TEXT);
       return;
     }
     case 'admin': {

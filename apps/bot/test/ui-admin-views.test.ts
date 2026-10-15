@@ -398,6 +398,23 @@ describe('assignPicker', () => {
     ]);
   });
 
+  it('shows 24 groups and a hint for the rest', () => {
+    const many = Array.from({ length: 30 }, (_, i) => ({
+      number: i + 1,
+      name: `Gr. ${i + 1}`,
+    }));
+    const v = assignPicker('AM1', 'laboratorium', lecturers(3), many, {
+      lecturerId: 2,
+    });
+    expectValid(v);
+    expect(selects(v)[1].options).toHaveLength(25);
+    expect(allText(v)).toContain('…i 6 więcej — użyj /lecturer assign');
+    const few = assignPicker('AM1', 'laboratorium', lecturers(3), groups, {
+      lecturerId: 2,
+    });
+    expect(allText(few)).not.toContain('więcej');
+  });
+
   it('pages lecturers by 25 and keeps the chosen one on its page', () => {
     const all = lecturers(30);
     const v = assignPicker('AM1', 'cwiczenia', all, []);

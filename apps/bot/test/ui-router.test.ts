@@ -223,6 +223,31 @@ describe('handleUi', () => {
     expect(text).not.toContain('Ustaw Moje grupy');
   });
 
+  it('ignores a saved group that is no longer a group of its class (like the web)', async () => {
+    const [u] = await db
+      .insert(users)
+      .values({ discordUserId: 'stud', displayName: 'stud' })
+      .$returningId();
+    await db
+      .insert(userGroups)
+      .values({ userId: u.id, classId: id.cls, groupId: id.g2 });
+    // Gr. 2 moves to another class: the saved pair is stale.
+    const [other] = await db
+      .insert(classes)
+      .values({ subjectId: id.subj, kind: 'cwiczenia', name: 'Ćwiczenia' })
+      .$returningId();
+    await db
+      .update(classGroups)
+      .set({ classId: other.id })
+      .where(eq(classGroups.id, id.g2));
+    const i = component('v1:stu:plan:day:2026-10-14', { ephemeral: true });
+    await handler()(i);
+    const text = textOf(i.editReply.mock.calls[0][0]);
+    expect(text).toContain('08:00–09:30');
+    expect(text).toContain('10:00–11:30');
+    expect(text).toContain('12:00–13:30');
+  });
+
   it('plan week: the Dzień button targets today in the current week', async () => {
     const i = component('v1:stu:plan:week', { ephemeral: true });
     await handler()(i);

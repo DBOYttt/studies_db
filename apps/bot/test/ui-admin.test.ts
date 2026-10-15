@@ -31,6 +31,7 @@ beforeEach(async () => {
   if (db) await closeTestDb(db);
   db = await resetTestDb();
   pool = (db as unknown as { $client: RouterDeps['pool'] }).$client;
+  clientUsers.fetch.mockClear();
   await setSetting(db, 'admin_role_id', 'r');
   await db.insert(subjects).values({
     code: 'ASD',
@@ -284,6 +285,26 @@ describe('subjects', () => {
     });
     await handler()(i);
     expect((await subject()).description).toBe(long);
+    expect((await auditRows())[0].details).toEqual({
+      fields: ['name'],
+      source: 'discord',
+    });
+  });
+
+  it('treats a CRLF description that comes back with LF as unchanged', async () => {
+    await db
+      .update(subjects)
+      .set({ description: 'Linia 1\r\nLinia 2\rLinia 3' })
+      .where(eq(subjects.code, 'ASD'));
+    const i = interaction('v1:adm:subj:save:ASD', {
+      kind: 'modal',
+      fields: subjectFields({
+        name: 'Inna',
+        description: 'Linia 1\nLinia 2\nLinia 3',
+      }),
+    });
+    await handler()(i);
+    expect((await subject()).description).toBe('Linia 1\r\nLinia 2\rLinia 3');
     expect((await auditRows())[0].details).toEqual({
       fields: ['name'],
       source: 'discord',

@@ -357,6 +357,13 @@ async function longRun(
   );
 }
 
+/**
+ * Paragraph fields come back from Discord with LF line endings; a CRLF value
+ * stored by other paths must not count as changed.
+ */
+const lf = (s: string) => s.replace(/\r\n?/g, '\n');
+const sameText = (a: string, b: string) => lf(a) === lf(b);
+
 async function saveSubject(ctx: Ctx, code: string | null): Promise<void> {
   const { i, db } = ctx;
   const name = textField(i, 'name').trim();
@@ -400,7 +407,7 @@ async function saveSubject(ctx: Ctx, code: string | null): Promise<void> {
   if (name !== cur.name) patch.name = name;
   if (semester !== cur.semester) patch.semester = semester;
   if (ects !== cur.ects) patch.ects = ects;
-  if (description !== prefill(cur.description, FIELD_MAX.description))
+  if (!sameText(description, prefill(cur.description, FIELD_MAX.description)))
     patch.description = description.trim() || null;
   const url = textField(i, 'platform_url');
   if (url !== prefill(cur.platformUrl, FIELD_MAX.platformUrl))
@@ -444,7 +451,7 @@ async function saveClass(
   if (assessment !== (cur.assessment ?? 'brak'))
     input.assessment = assessment as Assessment | 'brak';
   const note = textField(i, 'note');
-  if (note !== prefill(cur.assessmentNote, FIELD_MAX.classNote))
+  if (!sameText(note, prefill(cur.assessmentNote, FIELD_MAX.classNote)))
     input.note = note;
   const url = textField(i, 'platform_url');
   if (url !== prefill(cur.platformUrl, FIELD_MAX.platformUrl))

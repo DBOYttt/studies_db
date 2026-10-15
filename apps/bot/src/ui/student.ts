@@ -11,6 +11,7 @@ import {
   listWeekSessionRows,
   nowWall,
   parseIsoWeek,
+  sanitizeMyGroups,
 } from '@studies/db/plan';
 import type { APIInteractionGuildMember, GuildMember, User } from 'discord.js';
 import type { RouterDeps } from '../commands/router.js';
@@ -104,12 +105,20 @@ export interface StudentContext {
   show: (v: View) => Promise<void>;
 }
 
-/** Week sessions, narrowed to the caller's groups when any are saved. */
+/**
+ * Week sessions, narrowed to the caller's groups when any are saved. Like the
+ * web, saved groups that are no longer groups of their class are ignored.
+ */
 async function planData(ctx: StudentContext, week: IsoWeek) {
-  const [sessions, my] = await Promise.all([
+  const [sessions, stored, options] = await Promise.all([
     listWeekSessionRows(ctx.deps.pool, week),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
+    listMyGroupOptions(ctx.deps.pool),
   ]);
+  const valid = Object.fromEntries(
+    options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
+  );
+  const my = sanitizeMyGroups(stored, valid);
   const hasGroups = Object.keys(my).length > 0;
   return {
     sessions: hasGroups ? filterMyGroups(sessions, my) : sessions,

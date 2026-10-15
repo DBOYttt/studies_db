@@ -456,6 +456,13 @@ export function assignPicker(
           ),
       ),
     );
+    // One option is "Całe zajęcia"; later groups only via the slash command.
+    const hidden = groups.length - (MAX_OPTIONS - 1);
+    if (hidden > 0) {
+      c.addTextDisplayComponents(
+        text(`-# …i ${hidden} więcej — użyj /lecturer assign`),
+      );
+    }
   }
   if (pg.pages > 1) {
     c.addActionRowComponents(

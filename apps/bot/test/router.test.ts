@@ -18,6 +18,7 @@ import {
   createInteractionHandler,
   isAdmin,
 } from '../src/commands/router.js';
+import { withSetupLock } from '../src/ops.js';
 
 let db: Awaited<ReturnType<typeof resetTestDb>>;
 beforeEach(async () => {
@@ -330,6 +331,37 @@ describe('router', () => {
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(
       'Wysłałem Ci link w wiadomości prywatnej.',
     );
+  });
+});
+
+describe('/resync', () => {
+  it('refuses while /setup holds the lock', async () => {
+    let release = () => {};
+    const held = withSetupLock(
+      () =>
+        new Promise<void>((r) => {
+          release = r;
+        }),
+    );
+    const deferReply = vi.fn().mockResolvedValue(undefined);
+    const i = {
+      ...mkInteraction({ commandName: 'resync', user: { id: 'u1' } }),
+      deferReply,
+    };
+    const handler = createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      pool: {} as never,
+      config,
+    });
+    await handler(asI(i));
+    release();
+    await held;
+    expect(deferReply).not.toHaveBeenCalled();
+    expect(i.reply.mock.calls[0]?.[0]).toMatchObject({
+      content: '/setup już trwa — spróbuj za chwilę.',
+      flags: MessageFlags.Ephemeral,
+    });
   });
 });
 
