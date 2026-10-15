@@ -39,6 +39,7 @@ export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_materials: [940, 20],
   v_files: [940, 250],
   v_class_sessions: [940, 640],
+  v_events: [480, 640],
 };
 
 export type DesignerHighlight = {

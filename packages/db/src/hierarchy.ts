@@ -1,4 +1,4 @@
-import { and, asc, eq, isNull } from 'drizzle-orm';
+import { and, asc, eq, isNotNull, isNull } from 'drizzle-orm';
 import type { Db, DbExecutor } from './client.js';
 import {
   CLASS_NAMES,
@@ -117,9 +117,16 @@ export async function backfillTopicHierarchy(db: Db): Promise<number> {
   const pending = await db
     .select({ id: topics.id, subjectId: topics.subjectId })
     .from(topics)
-    .where(and(isNull(topics.classId), isNull(topics.deletedAt)));
+    .where(
+      and(
+        isNull(topics.classId),
+        isNull(topics.deletedAt),
+        isNotNull(topics.subjectId),
+      ),
+    );
   let updated = 0;
   for (const t of pending) {
+    if (t.subjectId === null) continue;
     const rows = await db
       .select({ name: tags.name })
       .from(topicTags)

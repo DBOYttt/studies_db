@@ -17,7 +17,7 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
-import { ASSESSMENTS, CLASS_KINDS } from './constants.js';
+import { ASSESSMENTS, CLASS_KINDS, EVENT_KIND_KEYS } from './constants.js';
 import type { JobType, PreviewKind } from './files.js';
 
 export {
@@ -27,6 +27,8 @@ export {
   CLASS_KINDS,
   CLASS_NAMES,
   type ClassKind,
+  EVENT_KINDS,
+  type EventKind,
   PUBLIC_VIEWS,
   type PublicView,
 } from './constants.js';
@@ -147,9 +149,7 @@ export const topics = mysqlTable(
   'topics',
   {
     id: int('id').autoincrement().primaryKey(),
-    subjectId: int('subject_id')
-      .notNull()
-      .references(() => subjects.id),
+    subjectId: int('subject_id').references(() => subjects.id),
     title: varchar('title', { length: 300 }).notNull(),
     discordThreadId: varchar('discord_thread_id', { length: 32 })
       .notNull()
@@ -343,3 +343,73 @@ export const botSettings = mysqlTable('bot_settings', {
   value: varchar('value', { length: 200 }).notNull(),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// One row per event occurrence (kolokwium, wyjazd, ...). Times are Europe/Warsaw
+// wall time like class_sessions. `series_id` is added with recurring events.
+export const events = mysqlTable(
+  'events',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    kind: mysqlEnum('kind', EVENT_KIND_KEYS).notNull(),
+    title: varchar('title', { length: 100 }).notNull(),
+    subjectId: int('subject_id').references(() => subjects.id),
+    classId: int('class_id').references(() => classes.id, {
+      onDelete: 'set null',
+    }),
+    groupId: int('group_id').references(() => classGroups.id, {
+      onDelete: 'set null',
+    }),
+    startsAt: datetime('starts_at').notNull(),
+    endsAt: datetime('ends_at'),
+    allDay: boolean('all_day').notNull().default(false),
+    place: varchar('place', { length: 100 }),
+    note: varchar('note', { length: 1000 }),
+    topicId: int('topic_id').references(() => topics.id, {
+      onDelete: 'set null',
+    }),
+    createdBy: int('created_by').references(() => users.id),
+    updatedBy: int('updated_by').references(() => users.id),
+    createdAt: now(),
+    updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    deletedAt: datetime('deleted_at'),
+  },
+  (t) => [
+    index('idx_events_starts').on(t.startsAt),
+    index('idx_events_subject_starts').on(t.subjectId, t.startsAt),
+  ],
+);
+
+// Existing forum posts linked to an event. `id` is a surrogate key so a series
+// owner (nullable series_id) can be added later without rebuilding the PK.
+export const eventTopics = mysqlTable(
+  'event_topics',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    eventId: int('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    topicId: int('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+  },
+  (t) => [unique('uq_event_topics').on(t.eventId, t.topicId)],
+);
+
+// Generic DB queue the web/worker use to ask the bot to do things.
+export const botRequests = mysqlTable(
+  'bot_requests',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    kind: varchar('kind', { length: 40 }).notNull(),
+    target: varchar('target', { length: 100 }).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'done', 'failed'])
+      .notNull()
+      .default('queued'),
+    payload: json('payload'),
+    error: varchar('error', { length: 500 }),
+    createdAt: now(),
+    startedAt: datetime('started_at'),
+    finishedAt: datetime('finished_at'),
+  },
+  (t) => [index('idx_bot_requests_status').on(t.status, t.createdAt)],
+);

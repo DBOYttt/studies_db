@@ -34,6 +34,17 @@ describe('studies_rw grants', () => {
     });
   });
 
+  it('may update events but not read bot_requests', async () => {
+    await asRw(async (c) => {
+      await c.query('UPDATE events SET title = title');
+      await c.query('SELECT * FROM v_events');
+      await c.query('SELECT * FROM event_topics');
+      await expect(c.query('SELECT * FROM bot_requests')).rejects.toMatchObject(
+        { errno: 1142 },
+      );
+    });
+  });
+
   const denied = [
     'SELECT * FROM users',
     'SELECT * FROM sessions',

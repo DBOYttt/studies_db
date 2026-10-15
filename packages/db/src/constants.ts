@@ -72,6 +72,25 @@ export const ASSESSMENT_NAMES: Record<Assessment, string> = {
   zaliczenie: 'Zaliczenie',
 };
 
+export const EVENT_KIND_KEYS = [
+  'kolokwium',
+  'egzamin',
+  'wyjazd',
+  'zajecia_dodatkowe',
+  'inne',
+] as const;
+export type EventKind = (typeof EVENT_KIND_KEYS)[number];
+export const EVENT_KINDS: Record<EventKind, { label: string; symbol: string }> =
+  {
+    kolokwium: { label: 'Kolokwium', symbol: '📝' },
+    egzamin: { label: 'Egzamin', symbol: '🎓' },
+    wyjazd: { label: 'Wyjazd', symbol: '🚌' },
+    zajecia_dodatkowe: { label: 'Zajęcia dodatkowe', symbol: '➕' },
+    inne: { label: 'Inne', symbol: '📌' },
+  };
+/** Symbol for a recurring series. */
+export const SERIES_SYMBOL = '🔁';
+
 export const PUBLIC_VIEWS = [
   'v_subjects',
   'v_lecturers',
@@ -85,6 +104,7 @@ export const PUBLIC_VIEWS = [
   'v_files',
   'v_users',
   'v_class_sessions',
+  'v_events',
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];
@@ -105,6 +125,8 @@ export const CONTENT_TABLES = [
   'topic_tags',
   'materials',
   'jobs',
+  'events',
+  'event_topics',
 ] as const;
 
 /**
