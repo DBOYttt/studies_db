@@ -145,9 +145,11 @@ export function sanitizeMyGroups(
 }
 
 /**
- * Sessions of my groups: anything without a class or group (lectures),
- * classes with no (valid) choice made, and sessions of the chosen group.
- * With `validByClass`, stale choices are ignored.
+ * Sessions of my groups. With no saved (valid) group nothing is filtered.
+ * Otherwise: anything without a class or group (lectures) and only the picked
+ * group of each picked class; sessions with a group in a class without a pick
+ * are hidden. With `validByClass`, stale picks are ignored (so a class whose
+ * only pick is stale counts as not picked).
  */
 export function filterMyGroups(
   sessions: PlanSession[],
@@ -155,11 +157,20 @@ export function filterMyGroups(
   validByClass?: ValidGroups,
 ): PlanSession[] {
   const mineByClass = validByClass ? sanitizeMyGroups(g, validByClass) : g;
+  if (Object.keys(mineByClass).length === 0) return sessions;
   return sessions.filter((s) => {
     if (s.classId === null || s.groupId === null) return true;
-    const mine = mineByClass[String(s.classId)];
-    return mine === undefined || mine === s.groupId;
+    return mineByClass[String(s.classId)] === s.groupId;
   });
+}
+
+/** How many sessions `filterMyGroups` hides. */
+export function hiddenByMyGroups(
+  sessions: PlanSession[],
+  g: MyGroups,
+  validByClass?: ValidGroups,
+): number {
+  return sessions.length - filterMyGroups(sessions, g, validByClass).length;
 }
 
 /* ---------- week grid layout (web WeekView, bot plan image) ---------- */

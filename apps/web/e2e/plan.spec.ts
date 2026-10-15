@@ -38,6 +38,11 @@ test('Moje grupy filters groups, persists, and clears', async ({ page }) => {
   await expect(blocks.filter({ hasText: 'B-2 201' })).toHaveCount(0);
   await expect(blocks.filter({ hasText: 'B-2 202' })).toHaveCount(1);
   await expect(blocks.filter({ hasText: 'A-1 101' })).toHaveCount(1);
+  const note = page.getByRole('link', {
+    name: 'Ukryte zajęcia: 1 — uzupełnij Moje grupy',
+  });
+  await expect(note).toBeVisible();
+  await expect(note).toHaveAttribute('href', '/plan?tab=groups');
 
   await page.reload();
   await expect(page.getByText('Filtr: Moje grupy')).toBeVisible();
@@ -61,6 +66,7 @@ test('Moje grupy filters groups, persists, and clears', async ({ page }) => {
     await expect(clearedPanel).toBeVisible({ timeout: 1000 });
   }).toPass();
   await expect(page.getByText('Filtr: Moje grupy')).toHaveCount(0);
+  await expect(page.getByText(/Ukryte zajęcia/)).toHaveCount(0);
   await expect(blocks).toHaveCount(4);
 });
 

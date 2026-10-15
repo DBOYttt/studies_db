@@ -15,6 +15,7 @@ export {
   DAY_START_MIN,
   filterMyGroups,
   formatIsoWeek,
+  hiddenByMyGroups,
   type IsoWeek,
   isoWeekOf,
   layoutDay,

@@ -184,6 +184,13 @@ function countLine(image: PlanImage): string {
   return `-# Zajęcia: ${active}${off} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`;
 }
 
+/** The note under a plan when "Moje grupy" hides sessions; '' for none. */
+const hiddenNote = (hidden: number) =>
+  hidden > 0 ? `-# Ukryte zajęcia: ${hidden} — uzupełnij Moje grupy` : '';
+
+const noteCost = (hidden: number) =>
+  hidden > 0 ? hiddenNote(hidden).length + 1 : 0;
+
 /**
  * Plan layout: heading, divider, then the image with a count line, or the
  * body blocks (or "Brak zajęć") with an overflow line; divider, navigation
@@ -195,6 +202,7 @@ function planView(
   rest: number,
   nav: ButtonBuilder[],
   image: PlanImage | null,
+  hidden = 0,
 ): View {
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text(head))
@@ -218,6 +226,7 @@ function planView(
     for (const b of bodies) container.addTextDisplayComponents(text(b));
     if (rest > 0) container.addTextDisplayComponents(text(`-# ${more(rest)}`));
   }
+  if (hidden > 0) container.addTextDisplayComponents(text(hiddenNote(hidden)));
   return {
     ...view(
       container
@@ -246,6 +255,7 @@ export function planDay(
   hasGroups: boolean,
   webBaseUrl: string,
   image: Buffer | null = null,
+  hidden = 0,
 ): View {
   const d = midnight(day);
   const key = dayKey(d);
@@ -270,22 +280,29 @@ export function planDay(
   ];
   const head = heading(title, hasGroups);
   if (image && lines.length > 0) {
-    return planView(head, [], 0, nav, {
-      png: image,
-      name: `plan-${key}.png`,
-      title,
-      sessions: daySessions,
-      withDay: false,
-      hasGroups,
-    });
+    return planView(
+      head,
+      [],
+      0,
+      nav,
+      {
+        png: image,
+        name: `plan-${key}.png`,
+        title,
+        sessions: daySessions,
+        withDay: false,
+        hasGroups,
+      },
+      hidden,
+    );
   }
   const { shown, rest } = takeFitting(
     lines,
     (l) => l.length,
-    MAX_TEXT - head.length,
-    MAX_COMPONENTS - planChrome(nav),
+    MAX_TEXT - head.length - noteCost(hidden),
+    MAX_COMPONENTS - planChrome(nav) - (hidden > 0 ? 1 : 0),
   );
-  return planView(head, shown, rest, nav, null);
+  return planView(head, shown, rest, nav, null, hidden);
 }
 
 /**
@@ -300,6 +317,7 @@ export function planWeek(
   webBaseUrl: string,
   today?: Date,
   image: Buffer | null = null,
+  hidden = 0,
 ): View {
   const monday = weekStart(week);
   const sunday = new Date(monday.getTime() + 6 * DAY_MS);
@@ -319,7 +337,7 @@ export function planWeek(
   const { shown, rest } = takeFitting(
     lines,
     (l) => l.line.length + 1 + (l.first ? l.day.length + 5 : 0),
-    MAX_TEXT - head.length,
+    MAX_TEXT - head.length - noteCost(hidden),
     Number.POSITIVE_INFINITY,
   );
   const blocks: string[] = [];
@@ -342,16 +360,23 @@ export function planWeek(
     linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
   ];
   if (image && lines.length > 0) {
-    return planView(head, [], 0, nav, {
-      png: image,
-      name: `plan-${wanted}.png`,
-      title,
-      sessions: weekSessions,
-      withDay: true,
-      hasGroups,
-    });
+    return planView(
+      head,
+      [],
+      0,
+      nav,
+      {
+        png: image,
+        name: `plan-${wanted}.png`,
+        title,
+        sessions: weekSessions,
+        withDay: true,
+        hasGroups,
+      },
+      hidden,
+    );
   }
-  return planView(head, blocks, rest, nav, null);
+  return planView(head, blocks, rest, nav, null, hidden);
 }
 
 /* ---------- Moje grupy ---------- */

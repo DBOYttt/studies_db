@@ -18,6 +18,7 @@ import {
   DAY_END_MIN,
   DAY_START_MIN,
   filterMyGroups,
+  hiddenByMyGroups,
   type IsoWeek,
   layoutDay,
   type MyGroups,
@@ -107,6 +108,10 @@ export function WeekView({
     () => (filterOn ? (filterMyGroups(all, myGroups) as Session[]) : all),
     [all, filterOn, myGroups],
   );
+  const hidden = useMemo(
+    () => (filterOn ? hiddenByMyGroups(all, myGroups) : 0),
+    [all, filterOn, myGroups],
+  );
   const days = useMemo(() => dayIsos.map((d) => new Date(d)), [dayIsos]);
   const columns = useMemo(
     () =>
@@ -168,6 +173,14 @@ export function WeekView({
           >
             zmień
           </Link>
+          {hidden > 0 && (
+            <Link
+              href="/plan?tab=groups"
+              className="ml-1 text-muted hover:underline"
+            >
+              Ukryte zajęcia: {hidden} — uzupełnij Moje grupy
+            </Link>
+          )}
         </div>
       )}
 

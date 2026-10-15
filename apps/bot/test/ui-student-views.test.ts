@@ -354,6 +354,28 @@ describe('plan image', () => {
     expect(customIds(v)).toEqual(customIds(planWeek(two, week, false, WEB)));
   });
 
+  it('shows the hidden-by-Moje-grupy note under the image and in the text', () => {
+    const note = 'Ukryte zajęcia: 3 — uzupełnij Moje grupy';
+    const withImg = planDay(two, day, true, WEB, png, 3);
+    expectValid(withImg);
+    expect(allText(withImg)).toContain(note);
+    const textDay = planDay(two, day, true, WEB, null, 3);
+    expectValid(textDay);
+    expect(allText(textDay)).toContain(note);
+    const emptyDay = planDay([], day, true, WEB, null, 3);
+    expectValid(emptyDay);
+    expect(allText(emptyDay)).toContain(note);
+    for (const v of [
+      planWeek(two, week, true, WEB, undefined, png, 3),
+      planWeek(two, week, true, WEB, undefined, null, 3),
+    ]) {
+      expectValid(v);
+      expect(allText(v)).toContain(note);
+    }
+    expect(allText(planDay(two, day, true, WEB, png))).not.toContain('Ukryte');
+    expect(allText(planWeek(two, week, true, WEB))).not.toContain('Ukryte');
+  });
+
   it('counts active sessions and names the cancelled ones apart', () => {
     const list = [
       ...two,

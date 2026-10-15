@@ -12,6 +12,7 @@ import {
 import {
   filterMyGroups,
   formatIsoWeek,
+  hiddenByMyGroups,
   isoWeekOf,
   listMyGroupOptions,
   listWeekSessionRows,
@@ -125,52 +126,47 @@ describe('my groups', () => {
       '9': 3,
     });
   });
-  it('filterMyGroups keeps lectures, unknown classes and my group only', () => {
-    const lecture = S(W(2026, 10, 12, 8), W(2026, 10, 12, 9), {
-      classId: 1,
-      groupId: null,
-    });
-    const mine = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 7,
-    });
-    const other = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 8,
-    });
-    const unknown = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 4,
-      groupId: 9,
-    });
-    const noClass = S(W(2026, 10, 12, 11), W(2026, 10, 12, 12));
-    const all = [lecture, mine, other, unknown, noClass];
-    expect(filterMyGroups(all, { '3': 7 })).toEqual([
-      lecture,
-      mine,
-      unknown,
-      noClass,
-    ]);
-    expect(filterMyGroups(all, {})).toEqual(all);
+  const mk = (classId: number | null, groupId: number | null, h = 9) =>
+    S(W(2026, 10, 12, h), W(2026, 10, 12, h + 1), { classId, groupId });
+  it('filterMyGroups keeps lectures and the picked group of picked classes only', () => {
+    const lecture = mk(1, null, 8);
+    const mine = mk(3, 7);
+    const other = mk(3, 8);
+    const unpicked = mk(4, 9);
+    const noClass = mk(null, null, 11);
+    const all = [lecture, mine, other, unpicked, noClass];
+    expect(filterMyGroups(all, { '3': 7 })).toEqual([lecture, mine, noClass]);
+    expect(hiddenByMyGroups(all, { '3': 7 })).toBe(2);
   });
-  it('ignores stale group ids, keeps valid ones and unknown classes', () => {
-    const a = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 7,
-    });
-    const b = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 8,
-    });
-    const u = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 4,
-      groupId: 9,
-    });
-    const valid = { '3': [7, 8] };
-    // stale id 99: class shown
+  it('keeps everything when no groups are saved', () => {
+    const all = [mk(1, null), mk(3, 7), mk(4, 9)];
+    expect(filterMyGroups(all, {})).toEqual(all);
+    expect(hiddenByMyGroups(all, {})).toBe(0);
+    // stale-only picks count as none saved only after sanitising; raw {} here
+    expect(hiddenByMyGroups(all, {}, { '3': [7] })).toBe(0);
+  });
+  it('treats a class whose only pick is stale as unpicked', () => {
+    const a = mk(3, 7);
+    const b = mk(3, 8);
+    const u = mk(4, 9);
+    const lec = mk(4, null);
+    const valid = { '3': [7, 8], '4': [9] };
+    // stale pick for class 3, valid pick for class 4: class 3 hidden
+    expect(filterMyGroups([a, b, u, lec], { '3': 99, '4': 9 }, valid)).toEqual([
+      u,
+      lec,
+    ]);
+    expect(hiddenByMyGroups([a, b, u, lec], { '3': 99, '4': 9 }, valid)).toBe(
+      2,
+    );
+    // only a stale pick: nothing saved after sanitising, nothing filtered
     expect(filterMyGroups([a, b, u], { '3': 99 }, valid)).toEqual([a, b, u]);
-    // valid id still filters
-    expect(filterMyGroups([a, b, u], { '3': 7 }, valid)).toEqual([a, u]);
-    expect(sanitizeMyGroups({ '3': 99, '4': 5 }, valid)).toEqual({ '4': 5 });
+    expect(hiddenByMyGroups([a, b, u], { '3': 99 }, valid)).toBe(0);
+    expect(filterMyGroups([a, b, u], { '3': 7 }, valid)).toEqual([a]);
+    expect(sanitizeMyGroups({ '3': 99, '4': 9, '5': 1 }, valid)).toEqual({
+      '4': 9,
+      '5': 1,
+    });
     expect(sanitizeMyGroups({ '3': 8 }, valid)).toEqual({ '3': 8 });
   });
 });
