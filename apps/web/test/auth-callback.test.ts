@@ -53,6 +53,14 @@ describe('/auth/callback next', () => {
     }
   });
 
+  it('POST with a non-ASCII next still logs in and goes to /', async () => {
+    const res = await post(await freshToken(), '/admin/ż');
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/');
+    expect(res.cookies.get('sid')?.value).toBeTruthy();
+    expect(res.cookies.get('studiesdb.mode')).toBeUndefined();
+  });
+
   it('POST without next keeps going to /', async () => {
     const res = await post(await freshToken());
     expect(res.headers.get('location')).toBe('/');
@@ -62,12 +70,23 @@ describe('/auth/callback next', () => {
   it('GET renders next as an escaped hidden field', async () => {
     const res = await GET(
       new NextRequest(
-        `http://localhost:3000/auth/callback?token=abc&next=${encodeURIComponent('/admin"><x')}`,
+        `http://localhost:3000/auth/callback?token=abc&next=${encodeURIComponent('/admin/"><x')}`,
       ),
     );
     const html = await res.text();
-    expect(html).toContain('name="next" value="/admin&quot;&gt;&lt;x"');
+    expect(html).toContain('name="next" value="/admin/&quot;&gt;&lt;x"');
     expect(html).not.toContain('<x');
+  });
+
+  it('GET drops an invalid next', async () => {
+    for (const next of ['//evil.com', '/admin/ż', '/s']) {
+      const res = await GET(
+        new NextRequest(
+          `http://localhost:3000/auth/callback?token=abc&next=${encodeURIComponent(next)}`,
+        ),
+      );
+      expect(await res.text()).not.toContain('name="next"');
+    }
   });
 
   it('GET omits the next field when absent', async () => {

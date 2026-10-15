@@ -83,6 +83,20 @@ describe('my groups', () => {
     await clearMyGroups(db, userId);
     expect(await getMyGroups(db, userId)).toEqual({});
   });
+  it('import of nothing or only invalid pairs writes nothing', async () => {
+    expect(await importMyGroups(db, userId, {})).toBe(false);
+    expect(
+      await importMyGroups(db, userId, { [c1]: h1, [c2]: g2, '999999': 1 }),
+    ).toBe(false);
+    expect(await getMyGroups(db, userId)).toEqual({});
+  });
+  it('import writes every valid pair', async () => {
+    expect(
+      await importMyGroups(db, userId, { [c1]: g2, [c2]: h1, '999999': 1 }),
+    ).toBe(true);
+    expect(await getMyGroups(db, userId)).toEqual({ [c1]: g2, [c2]: h1 });
+    await clearMyGroups(db, userId);
+  });
   it('import only into empty, skipping invalid pairs', async () => {
     expect(
       await importMyGroups(db, userId, { [c1]: g1, [c2]: g1, '999999': 1 }),

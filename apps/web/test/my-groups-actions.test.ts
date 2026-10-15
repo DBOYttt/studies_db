@@ -142,22 +142,29 @@ describe('my-groups actions', () => {
     await clearMyGroups(db, aliceId);
   });
 
-  it('import only looks at the first 200 entries', async () => {
+  it('import only looks at the first 50 entries', async () => {
     cookieSid = aliceSid;
     // Own-key order of a plain object is numeric for integer keys, so a
-    // Proxy fixes the order: 200 junk entries, then the one valid pair.
-    const keys = Array.from({ length: 200 }, (_, i) => String(1_000_001 + i));
+    // Proxy fixes the order: 50 junk entries, then the one valid pair.
+    const keys = Array.from({ length: 50 }, (_, i) => String(1_000_001 + i));
     keys.push(String(classA));
-    const groups = new Proxy({} as Record<string, number>, {
-      ownKeys: () => keys,
-      getOwnPropertyDescriptor: (_t, k) => ({
-        value: k === String(classA) ? grA1 : 1,
-        enumerable: true,
-        configurable: true,
-      }),
-    });
-    expect(await importMyGroupsAction(groups)).toBe(false);
+    const value = (k: string | symbol) => (k === String(classA) ? grA1 : 1);
+    const groups = (n: number) =>
+      new Proxy({} as Record<string, number>, {
+        ownKeys: () => keys.slice(-n),
+        get: (_t, k) => value(k),
+        getOwnPropertyDescriptor: (_t, k) => ({
+          value: value(k),
+          enumerable: true,
+          configurable: true,
+        }),
+      });
+    expect(await importMyGroupsAction(groups(51))).toBe(false);
     expect(await getMyGroups(db, aliceId)).toEqual({});
+    // Control: with the valid pair inside the first 50 it is imported.
+    expect(await importMyGroupsAction(groups(50))).toBe(true);
+    expect(await getMyGroups(db, aliceId)).toEqual({ [classA]: grA1 });
+    await clearMyGroups(db, aliceId);
   });
 
   it('imports once, skipping invalid pairs and garbage', async () => {

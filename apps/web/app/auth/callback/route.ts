@@ -2,7 +2,7 @@ import { consumeLoginToken } from '@studies/db';
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { seeOther } from '@/lib/http';
-import { safeNext } from '@/lib/login-next';
+import { safeLoginNext } from '@/lib/login-next';
 import { MODE_COOKIE, modeCookieOptions } from '@/lib/mode';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/session';
 
@@ -53,7 +53,7 @@ ${next === null ? '' : `<input type="hidden" name="next" value="${escapeHtml(nex
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token');
   if (!token || token.length > MAX_TOKEN_LEN) return seeOther(EXPIRED);
-  const next = req.nextUrl.searchParams.get('next');
+  const next = safeLoginNext(req.nextUrl.searchParams.get('next'));
   return new Response(confirmPage(token, next), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
@@ -77,12 +77,13 @@ export async function POST(req: NextRequest) {
   } catch {
     // not form-encoded
   }
+  // Before the token is spent: a bad next only falls back to '/'.
+  const next = safeLoginNext(rawNext);
   const result =
     typeof token === 'string' && token && token.length <= MAX_TOKEN_LEN
       ? await consumeLoginToken(getDb(), token)
       : null;
   if (!result) return seeOther(EXPIRED);
-  const next = safeNext(rawNext);
   const res = seeOther(next ?? '/');
   res.cookies.set(SESSION_COOKIE, result.sessionToken, sessionCookieOptions());
   if (next) res.cookies.set(MODE_COOKIE, 'advanced', modeCookieOptions());

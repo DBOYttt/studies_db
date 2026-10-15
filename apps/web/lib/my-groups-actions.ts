@@ -9,7 +9,7 @@ import {
 import { getDb } from './db';
 import { requireUser } from './session';
 
-const MAX_IMPORT = 200;
+const MAX_IMPORT = 50;
 
 const isId = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v > 0;

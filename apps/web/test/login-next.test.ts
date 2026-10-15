@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { safeNext } from '../lib/login-next';
+import { safeLoginNext } from '../lib/login-next';
 
-describe('login safeNext', () => {
+describe('safeLoginNext', () => {
   it('accepts /admin paths', () => {
-    expect(safeNext('/admin')).toBe('/admin');
-    expect(safeNext('/admin/sql')).toBe('/admin/sql');
+    expect(safeLoginNext('/admin')).toBe('/admin');
+    expect(safeLoginNext('/admin/sql')).toBe('/admin/sql');
   });
   it.each([
     '/',
@@ -20,16 +20,21 @@ describe('login safeNext', () => {
     '/admin\n',
     '/admin\r',
     '/admin:x',
+    '/admin/ż',
+    '/admin\0',
+    '/admin\t',
+    '/admin/ x',
+    '/admin/\x7f',
     null,
     undefined,
     42,
     `/admin/${'a'.repeat(200)}`,
   ])('rejects %j', (raw) => {
-    expect(safeNext(raw)).toBeNull();
+    expect(safeLoginNext(raw)).toBeNull();
   });
   it('accepts exactly 200 characters', () => {
     const p = `/admin/${'a'.repeat(193)}`;
     expect(p).toHaveLength(200);
-    expect(safeNext(p)).toBe(p);
+    expect(safeLoginNext(p)).toBe(p);
   });
 });
