@@ -5,6 +5,7 @@
 import { clearMyGroups, getMyGroups, setMyGroup } from '@studies/db';
 import {
   filterMyGroups,
+  hiddenByMyGroups,
   type IsoWeek,
   isoWeekOf,
   listMyGroupOptions,
@@ -110,7 +111,7 @@ export interface StudentContext {
  * Week sessions, narrowed to the caller's groups when any are saved. Like the
  * web, saved groups that are no longer groups of their class are ignored.
  */
-async function planData(ctx: StudentContext, week: IsoWeek) {
+async function planData(ctx: StudentContext, week: IsoWeek, day?: Date) {
   const [sessions, stored, options] = await Promise.all([
     listWeekSessionRows(ctx.deps.pool, week),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
@@ -122,8 +123,19 @@ async function planData(ctx: StudentContext, week: IsoWeek) {
   const my = sanitizeMyGroups(stored, valid);
   const hasGroups = Object.keys(my).length > 0;
   return {
-    sessions: hasGroups ? filterMyGroups(sessions, my) : sessions,
+    sessions: filterMyGroups(sessions, my),
     hasGroups,
+    /** Sessions (of `day` when given, else of the week) that Moje grupy hides. */
+    hidden: hiddenByMyGroups(
+      day
+        ? sessions.filter(
+            (s) =>
+              s.startsAt.toISOString().slice(0, 10) ===
+              day.toISOString().slice(0, 10),
+          )
+        : sessions,
+      my,
+    ),
   };
 }
 
@@ -163,19 +175,25 @@ export async function runStudentAction(
   switch (a.kind) {
     case 'planDay': {
       const day = a.day ?? nowWall();
-      const { sessions, hasGroups } = await planData(ctx, isoWeekOf(day));
+      const { sessions, hasGroups, hidden } = await planData(
+        ctx,
+        isoWeekOf(day),
+        day,
+      );
       const image = await tryRender('day', () => renderDayImage(sessions, day));
-      await ctx.show(planDay(sessions, day, hasGroups, base, image));
+      await ctx.show(planDay(sessions, day, hasGroups, base, image, hidden));
       return;
     }
     case 'planWeek': {
       const today = nowWall();
       const week = a.week ?? isoWeekOf(today);
-      const { sessions, hasGroups } = await planData(ctx, week);
+      const { sessions, hasGroups, hidden } = await planData(ctx, week);
       const image = await tryRender('week', () =>
         renderWeekImage(sessions, week, today),
       );
-      await ctx.show(planWeek(sessions, week, hasGroups, base, today, image));
+      await ctx.show(
+        planWeek(sessions, week, hasGroups, base, today, image, hidden),
+      );
       return;
     }
     case 'groupsOpen':
