@@ -5,6 +5,7 @@
  * everything here reads UTC fields only and never converts time zones.
  */
 import type { MyGroups } from '@studies/db';
+import { CLASS_NAMES } from '@studies/db/constants';
 import {
   formatIsoWeek,
   type IsoWeek,
@@ -135,13 +136,52 @@ function heading(title: string, hasGroups: boolean): string {
   return hasGroups ? `## ${title}` : `## ${title}\n-# ${NO_GROUPS_HINT}`;
 }
 
-/** A rendered plan: the PNG, its file name and the alt text. */
+/** Discord's limit on a media item's description. */
+const MAX_ALT = 1024;
+
+/** A rendered plan: the PNG, its file name and what it shows. */
 interface PlanImage {
   png: Buffer;
   name: string;
-  alt: string;
-  count: number;
+  title: string;
+  /** Shown sessions, in order. */
+  sessions: PlanSession[];
+  /** Prefix each session in the alt text with its day (week view). */
+  withDay: boolean;
   hasGroups: boolean;
+}
+
+/** `HH:MM–HH:MM KOD rodzaj[ grupa][ (odwołane)]` */
+function altSession(s: PlanSession): string {
+  const kind =
+    s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label);
+  return [
+    `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`,
+    s.subjectCode || s.subjectName,
+    kind,
+    s.groupName,
+    s.status === 'cancelled' ? '(odwołane)' : null,
+  ]
+    .filter((p): p is string => !!p)
+    .join(' ');
+}
+
+/** The image's alt text: the title, then every session; at most 1024 chars. */
+function altText(image: PlanImage): string {
+  const items = image.sessions.map((s) =>
+    image.withDay ? `${dayLabel(s.startsAt)} ${altSession(s)}` : altSession(s),
+  );
+  return clip(`${image.title}: ${items.join('; ')}`, MAX_ALT);
+}
+
+/** `Zajęcia: N[ (odwołane: k)] · Moje grupy: tak|nie`; N counts active ones. */
+function countLine(image: PlanImage): string {
+  const cancelled = image.sessions.filter(
+    (s) => s.status === 'cancelled',
+  ).length;
+  const active = image.sessions.length - cancelled;
+  const off = cancelled > 0 ? ` (odwołane: ${cancelled})` : '';
+  return `-# Zajęcia: ${active}${off} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`;
 }
 
 /**
@@ -167,14 +207,10 @@ function planView(
         new MediaGalleryBuilder().addItems(
           new MediaGalleryItemBuilder()
             .setURL(`attachment://${image.name}`)
-            .setDescription(image.alt),
+            .setDescription(altText(image)),
         ),
       )
-      .addTextDisplayComponents(
-        text(
-          `-# Zajęcia: ${image.count} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`,
-        ),
-      );
+      .addTextDisplayComponents(text(countLine(image)));
   } else {
     if (bodies.length === 0 && rest === 0) {
       container.addTextDisplayComponents(text(EMPTY_DAY));
@@ -213,10 +249,10 @@ export function planDay(
 ): View {
   const d = midnight(day);
   const key = dayKey(d);
-  const lines = sessions
+  const daySessions = sessions
     .filter((s) => dayKey(s.startsAt) === key)
-    .sort(byStart)
-    .map(sessionLine);
+    .sort(byStart);
+  const lines = daySessions.map(sessionLine);
   const title = `Plan — ${dayLabel(d)}`;
   const week = isoWeekOf(d);
   const nav = [
@@ -237,8 +273,9 @@ export function planDay(
     return planView(head, [], 0, nav, {
       png: image,
       name: `plan-${key}.png`,
-      alt: title,
-      count: lines.length,
+      title,
+      sessions: daySessions,
+      withDay: false,
       hasGroups,
     });
   }
@@ -268,14 +305,14 @@ export function planWeek(
   const sunday = new Date(monday.getTime() + 6 * DAY_MS);
   const wanted = formatIsoWeek(week);
   // Each line carries its day; the first line of a day pays for the day title.
-  const lines = sessions
+  const weekSessions = sessions
     .filter((s) => formatIsoWeek(isoWeekOf(s.startsAt)) === wanted)
-    .sort(byStart)
-    .map((s, i, all) => ({
-      day: dayLabel(s.startsAt),
-      line: sessionLine(s),
-      first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
-    }));
+    .sort(byStart);
+  const lines = weekSessions.map((s, i, all) => ({
+    day: dayLabel(s.startsAt),
+    line: sessionLine(s),
+    first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
+  }));
   const title = `Plan — tydzień ${ddmm(monday)}–${ddmm(sunday)}`;
   const head = heading(title, hasGroups);
   // At most 7 day blocks, far below the component limit; text decides.
@@ -308,8 +345,9 @@ export function planWeek(
     return planView(head, [], 0, nav, {
       png: image,
       name: `plan-${wanted}.png`,
-      alt: title,
-      count: lines.length,
+      title,
+      sessions: weekSessions,
+      withDay: true,
       hasGroups,
     });
   }

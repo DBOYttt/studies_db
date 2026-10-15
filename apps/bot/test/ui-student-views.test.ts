@@ -2,6 +2,7 @@ import type { MyGroupOption, PlanSession } from '@studies/db';
 import { MessageFlags } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../src/ui/limits.js';
+import { ephemeral } from '../src/ui/respond.js';
 import {
   groupsView,
   notice,
@@ -351,6 +352,61 @@ describe('plan image', () => {
     expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
     expect(text).toContain('Ustaw Moje grupy');
     expect(customIds(v)).toEqual(customIds(planWeek(two, week, false, WEB)));
+  });
+
+  it('counts active sessions and names the cancelled ones apart', () => {
+    const list = [
+      ...two,
+      session('2026-10-14T12:00:00', '2026-10-14T13:30:00', {
+        status: 'cancelled',
+      }),
+    ];
+    expect(allText(planDay(list, day, true, WEB, png))).toContain(
+      'Zajęcia: 2 (odwołane: 1) · Moje grupy: tak',
+    );
+    expect(allText(planWeek(list, week, false, WEB, undefined, png))).toContain(
+      'Zajęcia: 3 (odwołane: 1) · Moje grupy: nie',
+    );
+    expect(allText(planDay(two, day, true, WEB, png))).not.toContain(
+      'odwołane',
+    );
+  });
+
+  it('describes every session in the alt text', () => {
+    const list = [
+      ...two,
+      session('2026-10-14T12:00:00', '2026-10-14T13:30:00', {
+        subjectCode: 'PO',
+        className: 'Wykład',
+        groupName: null,
+        status: 'cancelled',
+      }),
+    ];
+    const alt = (v: View) => gallery(v)[0].items[0].description as string;
+    expect(alt(planDay(list, day, true, WEB, png))).toBe(
+      'Plan — śr 14.10: 08:00–09:30 AM1 Laboratorium Gr. 2; ' +
+        '10:00–11:30 AM1 Laboratorium Gr. 2; 12:00–13:30 PO Wykład (odwołane)',
+    );
+    expect(alt(planWeek(list, week, true, WEB, undefined, png))).toMatch(
+      /^Plan — tydzień 12\.10–18\.10: śr 14\.10 08:00–09:30 AM1 Laboratorium Gr\. 2; .*; cz 15\.10 10:00–11:30 AM1 Laboratorium Gr\. 2$/,
+    );
+  });
+
+  it('clips the alt text to 1024 characters', () => {
+    const many = Array.from({ length: 80 }, () =>
+      session('2026-10-14T08:00:00', '2026-10-14T09:30:00'),
+    );
+    const a = gallery(planDay(many, day, true, WEB, png))[0].items[0]
+      .description as string;
+    expect(a).toHaveLength(1024);
+    expect(a.endsWith('…')).toBe(true);
+  });
+
+  it("a fresh ephemeral reply carries the view's files", () => {
+    const v = planDay(two, day, true, WEB, png);
+    const payload = ephemeral(v);
+    expect(payload.files?.map((f) => f.name)).toEqual(['plan-2026-10-14.png']);
+    expect(payload.flags & MessageFlags.Ephemeral).toBeTruthy();
   });
 
   it('without an image: the text list and no files', () => {

@@ -21,6 +21,7 @@ export const NO_MENTIONS = { parse: [] as never[] };
 export const ephemeral = (v: View) => ({
   components: v.components,
   flags: v.flags | MessageFlags.Ephemeral,
+  files: v.files ?? [],
   allowedMentions: NO_MENTIONS,
 });
 
