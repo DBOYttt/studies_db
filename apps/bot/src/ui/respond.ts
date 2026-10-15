@@ -37,11 +37,16 @@ export async function ack(i: UiInteraction, fresh = false): Promise<void> {
   else await i.deferReply({ flags: MessageFlags.Ephemeral });
 }
 
-/** Replaces the acknowledged response with a view. */
+/**
+ * Replaces the acknowledged response with a view. Its files replace any
+ * previous attachments, so a plan image is swapped in place (or dropped).
+ */
 export async function show(i: UiInteraction, v: View): Promise<void> {
   await i.editReply({
     components: v.components,
     flags: v.flags,
+    files: v.files ?? [],
+    attachments: [],
     allowedMentions: NO_MENTIONS,
   });
 }

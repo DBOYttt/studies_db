@@ -16,9 +16,12 @@ import {
 } from '@studies/db/plan';
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   type ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
@@ -132,29 +135,61 @@ function heading(title: string, hasGroups: boolean): string {
   return hasGroups ? `## ${title}` : `## ${title}\n-# ${NO_GROUPS_HINT}`;
 }
 
+/** A rendered plan: the PNG, its file name and the alt text. */
+interface PlanImage {
+  png: Buffer;
+  name: string;
+  alt: string;
+  count: number;
+  hasGroups: boolean;
+}
+
 /**
- * Plan layout: heading, divider, body blocks (or "Brak zajęć"), overflow
- * line, divider, navigation row.
+ * Plan layout: heading, divider, then the image with a count line, or the
+ * body blocks (or "Brak zajęć") with an overflow line; divider, navigation
+ * row.
  */
 function planView(
   head: string,
   bodies: string[],
   rest: number,
   nav: ButtonBuilder[],
+  image: PlanImage | null,
 ): View {
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text(head))
     .addSeparatorComponents(divider());
-  if (bodies.length === 0 && rest === 0) {
-    container.addTextDisplayComponents(text(EMPTY_DAY));
-  }
-  for (const b of bodies) container.addTextDisplayComponents(text(b));
-  if (rest > 0) container.addTextDisplayComponents(text(`-# ${more(rest)}`));
-  return view(
+  const files: AttachmentBuilder[] = [];
+  if (image) {
+    files.push(new AttachmentBuilder(image.png, { name: image.name }));
     container
-      .addSeparatorComponents(divider())
-      .addActionRowComponents(row(...nav)),
-  );
+      .addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder()
+            .setURL(`attachment://${image.name}`)
+            .setDescription(image.alt),
+        ),
+      )
+      .addTextDisplayComponents(
+        text(
+          `-# Zajęcia: ${image.count} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`,
+        ),
+      );
+  } else {
+    if (bodies.length === 0 && rest === 0) {
+      container.addTextDisplayComponents(text(EMPTY_DAY));
+    }
+    for (const b of bodies) container.addTextDisplayComponents(text(b));
+    if (rest > 0) container.addTextDisplayComponents(text(`-# ${more(rest)}`));
+  }
+  return {
+    ...view(
+      container
+        .addSeparatorComponents(divider())
+        .addActionRowComponents(row(...nav)),
+    ),
+    files,
+  };
 }
 
 /** Components of planView besides the body: container, heading, 2 dividers, row. */
@@ -165,12 +200,16 @@ const byStart = (a: PlanSession, b: PlanSession) =>
   a.endsAt.getTime() - b.endsAt.getTime() ||
   a.id - b.id;
 
-/** One day; each session is its own text block. `day` is a wall Date. */
+/**
+ * One day (`day` is a wall Date): the rendered `image` of it, or without one
+ * each session as its own text block.
+ */
 export function planDay(
   sessions: PlanSession[],
   day: Date,
   hasGroups: boolean,
   webBaseUrl: string,
+  image: Buffer | null = null,
 ): View {
   const d = midnight(day);
   const key = dayKey(d);
@@ -178,6 +217,7 @@ export function planDay(
     .filter((s) => dayKey(s.startsAt) === key)
     .sort(byStart)
     .map(sessionLine);
+  const title = `Plan — ${dayLabel(d)}`;
   const week = isoWeekOf(d);
   const nav = [
     button(
@@ -192,19 +232,29 @@ export function planDay(
     button(encodeId('stu', 'plan', 'week', formatIsoWeek(week)), 'Tydzień'),
     linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
   ];
-  const head = heading(`Plan — ${dayLabel(d)}`, hasGroups);
+  const head = heading(title, hasGroups);
+  if (image && lines.length > 0) {
+    return planView(head, [], 0, nav, {
+      png: image,
+      name: `plan-${key}.png`,
+      alt: title,
+      count: lines.length,
+      hasGroups,
+    });
+  }
   const { shown, rest } = takeFitting(
     lines,
     (l) => l.length,
     MAX_TEXT - head.length,
     MAX_COMPONENTS - planChrome(nav),
   );
-  return planView(head, shown, rest, nav);
+  return planView(head, shown, rest, nav, null);
 }
 
 /**
- * One ISO week; one text block per day with a line per session. "Dzień"
- * opens `today` (a wall Date) when it falls in the week, else the Monday.
+ * One ISO week: the rendered `image` of it, or without one a text block per
+ * day with a line per session. "Dzień" opens `today` (a wall Date) when it
+ * falls in the week, else the Monday.
  */
 export function planWeek(
   sessions: PlanSession[],
@@ -212,6 +262,7 @@ export function planWeek(
   hasGroups: boolean,
   webBaseUrl: string,
   today?: Date,
+  image: Buffer | null = null,
 ): View {
   const monday = weekStart(week);
   const sunday = new Date(monday.getTime() + 6 * DAY_MS);
@@ -225,10 +276,8 @@ export function planWeek(
       line: sessionLine(s),
       first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
     }));
-  const head = heading(
-    `Plan — tydzień ${ddmm(monday)}–${ddmm(sunday)}`,
-    hasGroups,
-  );
+  const title = `Plan — tydzień ${ddmm(monday)}–${ddmm(sunday)}`;
+  const head = heading(title, hasGroups);
   // At most 7 day blocks, far below the component limit; text decides.
   const { shown, rest } = takeFitting(
     lines,
@@ -255,7 +304,16 @@ export function planWeek(
     button(encodeId('stu', 'plan', 'day', dayKey(dayTarget)), 'Dzień'),
     linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
   ];
-  return planView(head, blocks, rest, nav);
+  if (image && lines.length > 0) {
+    return planView(head, [], 0, nav, {
+      png: image,
+      name: `plan-${wanted}.png`,
+      alt: title,
+      count: lines.length,
+      hasGroups,
+    });
+  }
+  return planView(head, blocks, rest, nav, null);
 }
 
 /* ---------- Moje grupy ---------- */

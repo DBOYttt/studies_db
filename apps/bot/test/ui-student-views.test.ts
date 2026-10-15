@@ -308,6 +308,71 @@ describe('planWeek', () => {
   });
 });
 
+describe('plan image', () => {
+  const day = wall('2026-10-14T00:00:00');
+  const week = { year: 2026, week: 42 };
+  const png = Buffer.from([0x89, 0x50, 0x4e, 0x47]);
+  const two = [
+    session('2026-10-14T08:00:00', '2026-10-14T09:30:00'),
+    session('2026-10-14T10:00:00', '2026-10-14T11:30:00'),
+    session('2026-10-15T10:00:00', '2026-10-15T11:30:00'),
+  ];
+  const gallery = (v: View) => nodes(v).filter((n) => n.type === 12);
+
+  it('day: the image replaces the text list, with a count line', () => {
+    const v = planDay(two, day, true, WEB, png);
+    expectValid(v);
+    const [g] = gallery(v);
+    expect(g.items.map((x: Json) => x.media.url)).toEqual([
+      'attachment://plan-2026-10-14.png',
+    ]);
+    expect(v.files?.map((f) => [f.name, f.attachment])).toEqual([
+      ['plan-2026-10-14.png', png],
+    ]);
+    const text = allText(v);
+    expect(text).toContain('Plan — śr 14.10');
+    expect(text).toContain('Zajęcia: 2 · Moje grupy: tak');
+    expect(text).not.toContain('08:00–09:30');
+    // Same navigation as the text view.
+    expect(customIds(v)).toEqual(customIds(planDay(two, day, true, WEB)));
+    expect(buttons(v).find((b) => b.url).url).toBe(
+      `${WEB}/s/plan?week=2026-W42`,
+    );
+  });
+
+  it('week: the image and the count, keeping the hint without groups', () => {
+    const v = planWeek(two, week, false, WEB, undefined, png);
+    expectValid(v);
+    expect(gallery(v)[0].items[0].media.url).toBe(
+      'attachment://plan-2026-W42.png',
+    );
+    expect(v.files?.map((f) => f.name)).toEqual(['plan-2026-W42.png']);
+    const text = allText(v);
+    expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
+    expect(text).toContain('Ustaw Moje grupy');
+    expect(customIds(v)).toEqual(customIds(planWeek(two, week, false, WEB)));
+  });
+
+  it('without an image: the text list and no files', () => {
+    const v = planDay(two, day, true, WEB, null);
+    expect(gallery(v)).toHaveLength(0);
+    expect(v.files).toEqual([]);
+    expect(allText(v)).toContain('08:00–09:30');
+    expect(planWeek(two, week, true, WEB).files).toEqual([]);
+  });
+
+  it('an empty day or week says "Brak zajęć" and has no image', () => {
+    for (const v of [
+      planDay([], day, true, WEB, png),
+      planWeek([], week, true, WEB, undefined, png),
+    ]) {
+      expect(gallery(v)).toHaveLength(0);
+      expect(v.files).toEqual([]);
+      expect(allText(v)).toContain('Brak zajęć');
+    }
+  });
+});
+
 describe('groupsView', () => {
   const opt = (
     classId: number,

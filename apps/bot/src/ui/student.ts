@@ -23,6 +23,7 @@ import {
   sendLoginDm,
 } from '../commands/student.js';
 import { toDiscordUser } from '../discord/map.js';
+import { renderDayImage, renderWeekImage } from './plan-image.js';
 import {
   groupSubjects,
   groupsView,
@@ -126,6 +127,19 @@ async function planData(ctx: StudentContext, week: IsoWeek) {
   };
 }
 
+/** The rendered plan image; null (the text list) when rendering fails. */
+async function tryRender(
+  what: string,
+  render: () => Promise<Buffer | null>,
+): Promise<Buffer | null> {
+  try {
+    return await render();
+  } catch (err) {
+    console.error(`plan image (${what}) failed, sending text`, err);
+    return null;
+  }
+}
+
 async function showGroups(
   ctx: StudentContext,
   pick: (
@@ -150,14 +164,18 @@ export async function runStudentAction(
     case 'planDay': {
       const day = a.day ?? nowWall();
       const { sessions, hasGroups } = await planData(ctx, isoWeekOf(day));
-      await ctx.show(planDay(sessions, day, hasGroups, base));
+      const image = await tryRender('day', () => renderDayImage(sessions, day));
+      await ctx.show(planDay(sessions, day, hasGroups, base, image));
       return;
     }
     case 'planWeek': {
       const today = nowWall();
       const week = a.week ?? isoWeekOf(today);
       const { sessions, hasGroups } = await planData(ctx, week);
-      await ctx.show(planWeek(sessions, week, hasGroups, base, today));
+      const image = await tryRender('week', () =>
+        renderWeekImage(sessions, week, today),
+      );
+      await ctx.show(planWeek(sessions, week, hasGroups, base, today, image));
       return;
     }
     case 'groupsOpen':
