@@ -28,6 +28,23 @@ import {
 // biome-ignore lint/suspicious/noExplicitAny: walking raw component JSON
 type Json = any;
 
+/** Flip `on` to make the plan renderer fail. */
+const renderFail = vi.hoisted(() => ({ on: false }));
+vi.mock('../src/ui/plan-image.js', async (importOriginal) => {
+  const m = await importOriginal<typeof import('../src/ui/plan-image.js')>();
+  const wrap =
+    <A extends unknown[], R>(f: (...a: A) => Promise<R>) =>
+    async (...a: A) => {
+      if (renderFail.on) throw new Error('canvas broke');
+      return f(...a);
+    };
+  return {
+    ...m,
+    renderDayImage: wrap(m.renderDayImage),
+    renderWeekImage: wrap(m.renderWeekImage),
+  };
+});
+
 let db: Db;
 let pool: RouterDeps['pool'];
 const id: Record<string, number> = {};
@@ -76,6 +93,8 @@ beforeEach(async () => {
 });
 afterEach(() => {
   vi.useRealTimers();
+  vi.restoreAllMocks();
+  renderFail.on = false;
 });
 afterAll(async () => {
   await closeTestDb(db);
@@ -190,18 +209,29 @@ describe('handleUi', () => {
     }
   });
 
-  it('plan day from the pinned message: ephemeral deferReply, then the day view', async () => {
+  const gallery = (payload: Json) =>
+    nodes(payload).filter((n) => n.type === 12);
+  const fileNames = (payload: Json) =>
+    (payload.files ?? []).map((f: Json) => f.name);
+  const isPng = (payload: Json) =>
+    [...(payload.files[0].attachment as Buffer).subarray(0, 4)].join() ===
+    '137,80,78,71';
+
+  it('plan day from the pinned message: ephemeral deferReply, then the day image', async () => {
     const i = component('v1:stu:plan:day');
     await handler()(i);
     expect(i.calls).toEqual(['deferReply', 'editReply']);
     expect(i.deferReply.mock.calls[0][0].flags).toBe(MessageFlags.Ephemeral);
     const view = i.editReply.mock.calls[0][0];
     expect(view.flags & MessageFlags.IsComponentsV2).toBeTruthy();
+    expect(fileNames(view)).toEqual(['plan-2026-10-14.png']);
+    expect(isPng(view)).toBe(true);
+    expect(gallery(view)[0].items[0].media.url).toBe(
+      'attachment://plan-2026-10-14.png',
+    );
     const text = textOf(view);
     expect(text).toContain('Plan — śr 14.10');
-    expect(text).toContain('08:00–09:30');
-    expect(text).toContain('10:00–11:30');
-    expect(text).toContain('12:00–13:30');
+    expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
     expect(text).toContain('Ustaw Moje grupy');
   });
 
@@ -217,10 +247,57 @@ describe('handleUi', () => {
     await handler()(i);
     expect(i.calls).toEqual(['deferUpdate', 'editReply']);
     const text = textOf(i.editReply.mock.calls[0][0]);
-    expect(text).toContain('08:00–09:30');
-    expect(text).not.toContain('10:00–11:30');
-    expect(text).toContain('12:00–13:30');
+    expect(text).toContain('Zajęcia: 2 · Moje grupy: tak');
     expect(text).not.toContain('Ustaw Moje grupy');
+  });
+
+  it('◀/▶ swap the image in place: new files, previous attachments dropped', async () => {
+    for (const cid of [
+      'v1:stu:plan:day:2026-10-13',
+      'v1:stu:plan:day:2026-10-14',
+      'v1:stu:plan:week:2026-W43',
+      'v1:stu:plan:week:2026-W42',
+    ]) {
+      const i = component(cid, { ephemeral: true });
+      await handler()(i);
+      expect(i.calls).toEqual(['deferUpdate', 'editReply']);
+      const payload = i.editReply.mock.calls[0][0];
+      expect(payload.attachments).toEqual([]);
+      expect(Array.isArray(payload.files)).toBe(true);
+    }
+    const week = component('v1:stu:plan:week:2026-W42', { ephemeral: true });
+    await handler()(week);
+    expect(fileNames(week.editReply.mock.calls[0][0])).toEqual([
+      'plan-2026-W42.png',
+    ]);
+  });
+
+  it('an empty day renders no image and says "Brak zajęć"', async () => {
+    const i = component('v1:stu:plan:day:2026-10-13', { ephemeral: true });
+    await handler()(i);
+    const payload = i.editReply.mock.calls[0][0];
+    expect(payload.files).toEqual([]);
+    expect(gallery(payload)).toHaveLength(0);
+    expect(textOf(payload)).toContain('Brak zajęć');
+  });
+
+  it('falls back to the text list when rendering fails', async () => {
+    renderFail.on = true;
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    for (const cid of ['v1:stu:plan:day:2026-10-14', 'v1:stu:plan:week']) {
+      const i = component(cid, { ephemeral: true });
+      await handler()(i);
+      expect(i.calls).toEqual(['deferUpdate', 'editReply']);
+      const payload = i.editReply.mock.calls[0][0];
+      expect(payload.files).toEqual([]);
+      expect(gallery(payload)).toHaveLength(0);
+      const text = textOf(payload);
+      expect(text).toContain('08:00–09:30');
+      expect(text).toContain('10:00–11:30');
+      expect(text).toContain('12:00–13:30');
+    }
+    expect(err).toHaveBeenCalledTimes(2);
+    expect(String(err.mock.calls[0])).toContain('canvas broke');
   });
 
   it('ignores a saved group that is no longer a group of its class (like the web)', async () => {
@@ -243,9 +320,7 @@ describe('handleUi', () => {
     const i = component('v1:stu:plan:day:2026-10-14', { ephemeral: true });
     await handler()(i);
     const text = textOf(i.editReply.mock.calls[0][0]);
-    expect(text).toContain('08:00–09:30');
-    expect(text).toContain('10:00–11:30');
-    expect(text).toContain('12:00–13:30');
+    expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
   });
 
   it('plan week: the Dzień button targets today in the current week', async () => {

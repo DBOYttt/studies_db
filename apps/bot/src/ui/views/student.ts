@@ -5,6 +5,7 @@
  * everything here reads UTC fields only and never converts time zones.
  */
 import type { MyGroups } from '@studies/db';
+import { CLASS_NAMES } from '@studies/db/constants';
 import {
   formatIsoWeek,
   type IsoWeek,
@@ -16,9 +17,12 @@ import {
 } from '@studies/db/plan';
 import {
   ActionRowBuilder,
+  AttachmentBuilder,
   type ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  MediaGalleryBuilder,
+  MediaGalleryItemBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
@@ -132,29 +136,96 @@ function heading(title: string, hasGroups: boolean): string {
   return hasGroups ? `## ${title}` : `## ${title}\n-# ${NO_GROUPS_HINT}`;
 }
 
+/** Discord's limit on a media item's description. */
+const MAX_ALT = 1024;
+
+/** A rendered plan: the PNG, its file name and what it shows. */
+interface PlanImage {
+  png: Buffer;
+  name: string;
+  title: string;
+  /** Shown sessions, in order. */
+  sessions: PlanSession[];
+  /** Prefix each session in the alt text with its day (week view). */
+  withDay: boolean;
+  hasGroups: boolean;
+}
+
+/** `HH:MM–HH:MM KOD rodzaj[ grupa][ (odwołane)]` */
+function altSession(s: PlanSession): string {
+  const kind =
+    s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label);
+  return [
+    `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`,
+    s.subjectCode || s.subjectName,
+    kind,
+    s.groupName,
+    s.status === 'cancelled' ? '(odwołane)' : null,
+  ]
+    .filter((p): p is string => !!p)
+    .join(' ');
+}
+
+/** The image's alt text: the title, then every session; at most 1024 chars. */
+function altText(image: PlanImage): string {
+  const items = image.sessions.map((s) =>
+    image.withDay ? `${dayLabel(s.startsAt)} ${altSession(s)}` : altSession(s),
+  );
+  return clip(`${image.title}: ${items.join('; ')}`, MAX_ALT);
+}
+
+/** `Zajęcia: N[ (odwołane: k)] · Moje grupy: tak|nie`; N counts active ones. */
+function countLine(image: PlanImage): string {
+  const cancelled = image.sessions.filter(
+    (s) => s.status === 'cancelled',
+  ).length;
+  const active = image.sessions.length - cancelled;
+  const off = cancelled > 0 ? ` (odwołane: ${cancelled})` : '';
+  return `-# Zajęcia: ${active}${off} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`;
+}
+
 /**
- * Plan layout: heading, divider, body blocks (or "Brak zajęć"), overflow
- * line, divider, navigation row.
+ * Plan layout: heading, divider, then the image with a count line, or the
+ * body blocks (or "Brak zajęć") with an overflow line; divider, navigation
+ * row.
  */
 function planView(
   head: string,
   bodies: string[],
   rest: number,
   nav: ButtonBuilder[],
+  image: PlanImage | null,
 ): View {
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text(head))
     .addSeparatorComponents(divider());
-  if (bodies.length === 0 && rest === 0) {
-    container.addTextDisplayComponents(text(EMPTY_DAY));
-  }
-  for (const b of bodies) container.addTextDisplayComponents(text(b));
-  if (rest > 0) container.addTextDisplayComponents(text(`-# ${more(rest)}`));
-  return view(
+  const files: AttachmentBuilder[] = [];
+  if (image) {
+    files.push(new AttachmentBuilder(image.png, { name: image.name }));
     container
-      .addSeparatorComponents(divider())
-      .addActionRowComponents(row(...nav)),
-  );
+      .addMediaGalleryComponents(
+        new MediaGalleryBuilder().addItems(
+          new MediaGalleryItemBuilder()
+            .setURL(`attachment://${image.name}`)
+            .setDescription(altText(image)),
+        ),
+      )
+      .addTextDisplayComponents(text(countLine(image)));
+  } else {
+    if (bodies.length === 0 && rest === 0) {
+      container.addTextDisplayComponents(text(EMPTY_DAY));
+    }
+    for (const b of bodies) container.addTextDisplayComponents(text(b));
+    if (rest > 0) container.addTextDisplayComponents(text(`-# ${more(rest)}`));
+  }
+  return {
+    ...view(
+      container
+        .addSeparatorComponents(divider())
+        .addActionRowComponents(row(...nav)),
+    ),
+    files,
+  };
 }
 
 /** Components of planView besides the body: container, heading, 2 dividers, row. */
@@ -165,19 +236,24 @@ const byStart = (a: PlanSession, b: PlanSession) =>
   a.endsAt.getTime() - b.endsAt.getTime() ||
   a.id - b.id;
 
-/** One day; each session is its own text block. `day` is a wall Date. */
+/**
+ * One day (`day` is a wall Date): the rendered `image` of it, or without one
+ * each session as its own text block.
+ */
 export function planDay(
   sessions: PlanSession[],
   day: Date,
   hasGroups: boolean,
   webBaseUrl: string,
+  image: Buffer | null = null,
 ): View {
   const d = midnight(day);
   const key = dayKey(d);
-  const lines = sessions
+  const daySessions = sessions
     .filter((s) => dayKey(s.startsAt) === key)
-    .sort(byStart)
-    .map(sessionLine);
+    .sort(byStart);
+  const lines = daySessions.map(sessionLine);
+  const title = `Plan — ${dayLabel(d)}`;
   const week = isoWeekOf(d);
   const nav = [
     button(
@@ -192,19 +268,30 @@ export function planDay(
     button(encodeId('stu', 'plan', 'week', formatIsoWeek(week)), 'Tydzień'),
     linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
   ];
-  const head = heading(`Plan — ${dayLabel(d)}`, hasGroups);
+  const head = heading(title, hasGroups);
+  if (image && lines.length > 0) {
+    return planView(head, [], 0, nav, {
+      png: image,
+      name: `plan-${key}.png`,
+      title,
+      sessions: daySessions,
+      withDay: false,
+      hasGroups,
+    });
+  }
   const { shown, rest } = takeFitting(
     lines,
     (l) => l.length,
     MAX_TEXT - head.length,
     MAX_COMPONENTS - planChrome(nav),
   );
-  return planView(head, shown, rest, nav);
+  return planView(head, shown, rest, nav, null);
 }
 
 /**
- * One ISO week; one text block per day with a line per session. "Dzień"
- * opens `today` (a wall Date) when it falls in the week, else the Monday.
+ * One ISO week: the rendered `image` of it, or without one a text block per
+ * day with a line per session. "Dzień" opens `today` (a wall Date) when it
+ * falls in the week, else the Monday.
  */
 export function planWeek(
   sessions: PlanSession[],
@@ -212,23 +299,22 @@ export function planWeek(
   hasGroups: boolean,
   webBaseUrl: string,
   today?: Date,
+  image: Buffer | null = null,
 ): View {
   const monday = weekStart(week);
   const sunday = new Date(monday.getTime() + 6 * DAY_MS);
   const wanted = formatIsoWeek(week);
   // Each line carries its day; the first line of a day pays for the day title.
-  const lines = sessions
+  const weekSessions = sessions
     .filter((s) => formatIsoWeek(isoWeekOf(s.startsAt)) === wanted)
-    .sort(byStart)
-    .map((s, i, all) => ({
-      day: dayLabel(s.startsAt),
-      line: sessionLine(s),
-      first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
-    }));
-  const head = heading(
-    `Plan — tydzień ${ddmm(monday)}–${ddmm(sunday)}`,
-    hasGroups,
-  );
+    .sort(byStart);
+  const lines = weekSessions.map((s, i, all) => ({
+    day: dayLabel(s.startsAt),
+    line: sessionLine(s),
+    first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
+  }));
+  const title = `Plan — tydzień ${ddmm(monday)}–${ddmm(sunday)}`;
+  const head = heading(title, hasGroups);
   // At most 7 day blocks, far below the component limit; text decides.
   const { shown, rest } = takeFitting(
     lines,
@@ -255,7 +341,17 @@ export function planWeek(
     button(encodeId('stu', 'plan', 'day', dayKey(dayTarget)), 'Dzień'),
     linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
   ];
-  return planView(head, blocks, rest, nav);
+  if (image && lines.length > 0) {
+    return planView(head, [], 0, nav, {
+      png: image,
+      name: `plan-${wanted}.png`,
+      title,
+      sessions: weekSessions,
+      withDay: true,
+      hasGroups,
+    });
+  }
+  return planView(head, blocks, rest, nav, null);
 }
 
 /* ---------- Moje grupy ---------- */

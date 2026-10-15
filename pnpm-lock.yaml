@@ -175,6 +175,9 @@ importers:
 
   apps/bot:
     dependencies:
+      '@napi-rs/canvas':
+        specifier: 1.0.10
+        version: 1.0.10
       '@studies/db':
         specifier: workspace:*
         version: link:../../packages/db
@@ -3039,7 +3042,6 @@ snapshots:
       '@napi-rs/canvas-linux-x64-musl': 1.0.10
       '@napi-rs/canvas-win32-arm64-msvc': 1.0.10
       '@napi-rs/canvas-win32-x64-msvc': 1.0.10
-    optional: true
 
   '@next/env@16.4.0': {}
 

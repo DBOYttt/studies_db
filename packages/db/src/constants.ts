@@ -26,6 +26,36 @@ export const CLASS_NAMES: Record<ClassKind, string> = {
   wf: 'WF',
 };
 
+/**
+ * Plan block colours per class kind: a muted fill (`bg`) and its ink (`fg`,
+ * >= 4.5:1 on bg), for the light and dark themes. Copies of the
+ * `--kind-*-bg/fg` variables in apps/web/app/globals.css (the web's source;
+ * a web test keeps them equal), used by the bot's plan image.
+ */
+export const KIND_COLORS: Record<
+  'light' | 'dark',
+  Record<ClassKind, { bg: string; fg: string }>
+> = {
+  light: {
+    wyklad: { bg: '#e3eef8', fg: '#1d4f78' },
+    laboratorium: { bg: '#e4f1e6', fg: '#275c32' },
+    cwiczenia: { bg: '#faf0d4', fg: '#7a4f00' },
+    projekt: { bg: '#eee8f7', fg: '#533788' },
+    seminarium: { bg: '#ddf1ef', fg: '#175a55' },
+    praktyczne: { bg: '#f9e7e8', fg: '#8c2e32' },
+    wf: { bg: '#f6e8dc', fg: '#7f4119' },
+  },
+  dark: {
+    wyklad: { bg: '#142536', fg: '#9cc6ea' },
+    laboratorium: { bg: '#13271a', fg: '#9dd3a7' },
+    cwiczenia: { bg: '#2a2109', fg: '#ecca78' },
+    projekt: { bg: '#211a33', fg: '#c6b2ec' },
+    seminarium: { bg: '#0f2725', fg: '#8dd3cc' },
+    praktyczne: { bg: '#2f1619', fg: '#eea6aa' },
+    wf: { bg: '#2c1c10', fg: '#eab68a' },
+  },
+};
+
 export const ASSESSMENTS = [
   'egzamin',
   'kolokwium',

@@ -3,6 +3,7 @@
  */
 import {
   ActionRowBuilder,
+  type AttachmentBuilder,
   ButtonBuilder,
   ButtonStyle,
   type ContainerBuilder,
@@ -18,6 +19,8 @@ export type ViewComponent = ContainerBuilder | TextDisplayBuilder;
 export interface View {
   components: ViewComponent[];
   flags: MessageFlags.IsComponentsV2;
+  /** Files the components show (`attachment://<name>`). */
+  files?: AttachmentBuilder[];
 }
 
 export const view = (...components: ViewComponent[]): View => ({
