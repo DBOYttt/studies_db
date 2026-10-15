@@ -1,7 +1,7 @@
 {
   "version": "5",
   "dialect": "mysql",
-  "id": "3c527334-b390-47ef-8738-402d126cae12",
+  "id": "7cdc92d3-bb5c-4c21-9c91-d719011ceea2",
   "prevId": "fcef58d5-beec-46ca-adcb-43b28802aae0",
   "tables": {
     "admin_audit": {
@@ -836,7 +836,7 @@
           "tableTo": "subjects",
           "columnsFrom": ["subject_id"],
           "columnsTo": ["id"],
-          "onDelete": "no action",
+          "onDelete": "cascade",
           "onUpdate": "no action"
         },
         "events_class_id_classes_id_fk": {

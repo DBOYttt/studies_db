@@ -352,7 +352,9 @@ export const events = mysqlTable(
     id: int('id').autoincrement().primaryKey(),
     kind: mysqlEnum('kind', EVENT_KIND_KEYS).notNull(),
     title: varchar('title', { length: 100 }).notNull(),
-    subjectId: int('subject_id').references(() => subjects.id),
+    subjectId: int('subject_id').references(() => subjects.id, {
+      onDelete: 'cascade',
+    }),
     classId: int('class_id').references(() => classes.id, {
       onDelete: 'set null',
     }),

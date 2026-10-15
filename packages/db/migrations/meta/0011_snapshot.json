@@ -1,6 +1,6 @@
 {
-  "id": "8ac92346-fcf1-4c76-9421-fdef2d630126",
-  "prevId": "3c527334-b390-47ef-8738-402d126cae12",
+  "id": "513553a1-2818-4fa2-87e0-615f34d750b1",
+  "prevId": "7cdc92d3-bb5c-4c21-9c91-d719011ceea2",
   "version": "5",
   "dialect": "mysql",
   "tables": {
@@ -837,7 +837,7 @@
           "tableTo": "subjects",
           "columnsTo": ["id"],
           "onUpdate": "no action",
-          "onDelete": "no action"
+          "onDelete": "cascade"
         },
         "events_class_id_classes_id_fk": {
           "name": "events_class_id_classes_id_fk",

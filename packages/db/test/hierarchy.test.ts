@@ -169,4 +169,14 @@ describe('backfillTopicHierarchy', () => {
     expect(count).toBe(1);
     expect(await backfillTopicHierarchy(db)).toBe(0);
   });
+
+  it('skips a topic with subject_id NULL', async () => {
+    const [t] = await db
+      .insert(topics)
+      .values({ title: 'Bez przedmiotu', discordThreadId: 'null-subj-1' })
+      .$returningId();
+    expect(await backfillTopicHierarchy(db)).toBe(0);
+    const [row] = await db.select().from(topics).where(eq(topics.id, t.id));
+    expect(row.classId).toBeNull();
+  });
 });
