@@ -1,0 +1,184 @@
+import {
+  consumeLoginToken,
+  createLoginToken,
+  type Db,
+  events,
+  eventTopics,
+  subjects,
+  topics,
+  upsertUser,
+  users,
+} from '@studies/db';
+import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import { eq } from 'drizzle-orm';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+
+let db: Db;
+vi.mock('@/lib/db', () => ({ getDb: () => db }));
+
+let cookieSid: string | undefined;
+vi.mock('next/headers', () => ({
+  cookies: async () => ({
+    get: (n: string) =>
+      n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
+  }),
+}));
+vi.mock('next/navigation', () => ({
+  redirect: (to: string) => {
+    throw new Error(`redirect:${to}`);
+  },
+  notFound: () => {
+    throw new Error('notFound');
+  },
+}));
+vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+vi.mock('react', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('react')>()),
+  cache: <T>(fn: T) => fn,
+}));
+
+const A = await import('../lib/event-actions');
+
+async function login(discordUserId: string) {
+  const id = await upsertUser(db, {
+    discordUserId,
+    displayName: discordUserId,
+    avatarUrl: null,
+  });
+  const r = await consumeLoginToken(db, await createLoginToken(db, id));
+  return { id, sid: (r as { sessionToken: string }).sessionToken };
+}
+
+const future = () => {
+  const d = new Date(Date.now() + 5 * 86_400_000);
+  return d.toISOString().slice(0, 10);
+};
+function form(o: Record<string, string> = {}) {
+  const f = new FormData();
+  const base: Record<string, string> = {
+    kind: 'kolokwium',
+    title: 'Kolokwium z fizyki',
+    date: future(),
+    start: '10:00',
+    end: '11:30',
+    place: 'C-12',
+    ...o,
+  };
+  for (const [k, v] of Object.entries(base)) f.set(k, v);
+  return f;
+}
+
+let alice: { id: number; sid: string };
+let admin: { id: number; sid: string };
+let banned: { id: number; sid: string };
+let subjectId: number;
+let topicId: number;
+
+beforeAll(async () => {
+  db = await resetTestDb();
+  [{ id: subjectId }] = await db
+    .insert(subjects)
+    .values({ name: 'Alfa', code: 'ALF', semester: 1, ects: 1 })
+    .$returningId();
+  alice = await login('alice');
+  admin = await login('admin');
+  banned = await login('banned');
+  await db.update(users).set({ isAdmin: true }).where(eq(users.id, admin.id));
+  [{ id: topicId }] = await db
+    .insert(topics)
+    .values({ subjectId, title: 'Zadania z tarcia', discordThreadId: 't1' })
+    .$returningId();
+  await db
+    .insert(topics)
+    .values({ subjectId, title: 'Inny temat', discordThreadId: 't2' });
+});
+afterAll(() => closeTestDb(db));
+
+const eventRows = () => db.select().from(events);
+
+describe('event actions', () => {
+  it('every action requires a session', async () => {
+    cookieSid = undefined;
+    await expect(A.createEventAction(form())).rejects.toThrow('redirect');
+    await expect(A.updateEventAction(1, form())).rejects.toThrow('redirect');
+    await expect(A.deleteEventAction(1)).rejects.toThrow('redirect');
+    await expect(A.linkTopicAction(1, 1)).rejects.toThrow('redirect');
+    await expect(A.unlinkTopicAction(1, 1)).rejects.toThrow('redirect');
+    await expect(A.searchTopicsAction(null, 'a')).rejects.toThrow('redirect');
+    expect(await eventRows()).toHaveLength(0);
+  });
+
+  it('a banned user writes nothing', async () => {
+    await db
+      .update(users)
+      .set({ isBanned: true })
+      .where(eq(users.id, banned.id));
+    cookieSid = banned.sid;
+    let r: unknown;
+    try {
+      r = await A.createEventAction(form());
+    } catch (e) {
+      r = String(e);
+    }
+    expect(JSON.stringify(r)).not.toContain('redirect:/s/wydarzenia');
+    expect(await eventRows()).toHaveLength(0);
+  });
+
+  it('returns the Polish message for invalid input', async () => {
+    cookieSid = alice.sid;
+    expect(await A.createEventAction(form({ title: '  ' }))).toEqual({
+      ok: false,
+      message: 'Tytuł musi mieć od 1 do 100 znaków.',
+    });
+    expect(await A.createEventAction(form({ date: '' }))).toEqual({
+      ok: false,
+      message: 'Podaj datę wydarzenia.',
+    });
+    expect(
+      await A.createEventAction(form({ start: '', end: '11:00' })),
+    ).toEqual({ ok: false, message: 'Podaj godzinę rozpoczęcia.' });
+    expect(await eventRows()).toHaveLength(0);
+  });
+
+  it('creates, edits, links, deletes; restore is admin only', async () => {
+    cookieSid = alice.sid;
+    await expect(
+      A.createEventAction(
+        form({ subjectId: String(subjectId), base: 'advanced' }),
+      ),
+    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+/);
+    const [ev] = await eventRows();
+    expect(ev.title).toBe('Kolokwium z fizyki');
+    expect(ev.createdBy).toBe(alice.id);
+
+    await expect(
+      A.updateEventAction(ev.id, form({ title: 'Nowy tytuł' })),
+    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}`);
+    expect((await eventRows())[0].title).toBe('Nowy tytuł');
+
+    expect((await A.linkTopicAction(ev.id, topicId)).ok).toBe(true);
+    expect(await db.select().from(eventTopics)).toHaveLength(1);
+    expect((await A.unlinkTopicAction(ev.id, topicId)).ok).toBe(true);
+    expect(await db.select().from(eventTopics)).toHaveLength(0);
+    expect((await A.linkTopicAction(ev.id, -1)).ok).toBe(false);
+
+    await expect(A.deleteEventAction(ev.id)).rejects.toThrow(
+      'redirect:/s/plan',
+    );
+    expect((await eventRows())[0].deletedAt).not.toBeNull();
+
+    await expect(A.restoreEventAction(ev.id)).rejects.toThrow('notFound');
+    expect((await eventRows())[0].deletedAt).not.toBeNull();
+    cookieSid = admin.sid;
+    expect((await A.restoreEventAction(ev.id)).ok).toBe(true);
+    expect((await eventRows())[0].deletedAt).toBeNull();
+  });
+
+  it('searches posts by title within the subject, at most 20', async () => {
+    cookieSid = alice.sid;
+    const r = await A.searchTopicsAction(subjectId, 'tarc');
+    expect(r.map((t) => t.title)).toEqual(['Zadania z tarcia']);
+    expect(await A.searchTopicsAction(null, '')).toHaveLength(2);
+    expect(await A.searchTopicsAction(subjectId, '%')).toHaveLength(0);
+  });
+});

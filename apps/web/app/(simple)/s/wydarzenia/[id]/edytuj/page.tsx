@@ -1,0 +1,52 @@
+import { EventForm } from '@/components/events/EventForm';
+import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
+import { SimpleShell } from '@/components/simple/SimpleShell';
+import { getDb } from '@/lib/db';
+import { loadEventForm } from '@/lib/event-form-page';
+import { parseEventId } from '@/lib/event-page';
+import { listEventSubjectOptions } from '@/lib/event-queries';
+import { requireUser } from '@/lib/session';
+import { navSubjects } from '@/lib/simple-page';
+import { listSubjectCards } from '@/lib/simple-queries';
+
+export const dynamic = 'force-dynamic';
+
+export default async function SimpleEditEvent({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const user = await requireUser();
+  const id = parseEventId((await params).id);
+  const db = getDb();
+  const [initial, cards, options] = await Promise.all([
+    loadEventForm(id),
+    listSubjectCards(db),
+    listEventSubjectOptions(db),
+  ]);
+  return (
+    <SimpleShell
+      subjects={navSubjects(cards)}
+      active={{ screen: 'plan' }}
+      crumbs={[
+        { label: 'Start', href: '/s' },
+        { label: 'Plan zajęć', href: '/s/plan' },
+        { label: initial.title, href: `/s/wydarzenia/${id}` },
+        { label: 'Edytuj' },
+      ]}
+      user={user}
+      adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
+    >
+      <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
+        Edytuj wydarzenie
+      </h1>
+      <EventForm
+        options={options}
+        base="simple"
+        initial={initial}
+        eventId={id}
+        cancelHref={`/s/wydarzenia/${id}`}
+      />
+    </SimpleShell>
+  );
+}

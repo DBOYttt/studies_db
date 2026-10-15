@@ -52,11 +52,24 @@ export async function writeAudit(
 
 export async function listAudit(
   db: DbExecutor,
-  o: { limit: number; offset: number; userId?: number; action?: string },
+  o: {
+    limit: number;
+    offset: number;
+    userId?: number;
+    action?: string;
+    /** Actions starting with this text, e.g. `event.`. */
+    actionPrefix?: string;
+    target?: string;
+  },
 ): Promise<{ rows: AuditRow[]; total: number }> {
   const conds: SQL[] = [];
   if (o.userId !== undefined) conds.push(eq(adminAudit.userId, o.userId));
   if (o.action !== undefined) conds.push(eq(adminAudit.action, o.action));
+  if (o.target !== undefined) conds.push(eq(adminAudit.target, o.target));
+  if (o.actionPrefix !== undefined) {
+    const esc = o.actionPrefix.replace(/[\\%_]/g, '\\$&');
+    conds.push(sql`${adminAudit.action} LIKE ${`${esc}%`}`);
+  }
   const where = conds.length ? and(...conds) : undefined;
   const rows = await db
     .select(auditColumns)
