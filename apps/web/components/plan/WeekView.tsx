@@ -20,11 +20,10 @@ import {
   filterMyGroups,
   type IsoWeek,
   layoutDay,
+  type MyGroups,
   type PlanSession,
   SLOT_MIN,
-  sanitizeMyGroups,
   slotRange,
-  type ValidGroups,
 } from '@/lib/plan';
 import {
   dayHeader,
@@ -36,7 +35,8 @@ import {
   weekHeading,
 } from '@/lib/plan-view';
 import { SessionPanel } from './SessionPanel';
-import { useMyGroups } from './useMyGroups';
+
+const EMPTY_GROUPS: MyGroups = {};
 
 /** Height of one 15-minute grid row (px). */
 const ROW = 14;
@@ -67,8 +67,8 @@ export interface WeekViewProps {
   today: string | null;
   /** Apply the stored "Moje grupy" choice (only on /plan). */
   myGroupsFilter: boolean;
-  /** Valid group ids per class id, to ignore stale "Moje grupy" entries. */
-  validGroups?: ValidGroups;
+  /** The user's saved "Moje grupy" (already sanitized by the server). */
+  myGroups?: MyGroups;
   /** Simple view: the session panel hides the SQL link. */
   simple?: boolean;
 }
@@ -97,14 +97,9 @@ export function WeekView({
   nav,
   today,
   myGroupsFilter,
-  validGroups,
+  myGroups = EMPTY_GROUPS,
   simple = false,
 }: WeekViewProps) {
-  const stored = useMyGroups();
-  const myGroups = useMemo(
-    () => (validGroups ? sanitizeMyGroups(stored, validGroups) : stored),
-    [stored, validGroups],
-  );
   const filterOn = myGroupsFilter && Object.keys(myGroups).length > 0;
 
   const all = useMemo(() => raw.map(fromWeekSession), [raw]);

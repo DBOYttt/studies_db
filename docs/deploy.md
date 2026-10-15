@@ -94,6 +94,17 @@ existing deployment picks this up on its next `migrate` run (with the password s
 deleting a subject also deletes its classes, groups, class lecturers and plan sessions, deleting a material
 deletes its jobs (prefer setting `deleted_at`).
 
+### Upgrading to the Discord panels (migration 0009, `user_groups`)
+
+1. `pnpm db:migrate` (or let the `migrate` container run on `compose up`); 0009 adds `user_groups`
+   ("Moje grupy", shared by the web and the bot).
+2. Re-register slash commands: `pnpm --filter @studies/bot register` (new `/panel` and `/admin`).
+3. Grant the bot's existing role **Pin Messages** (Server Settings → Roles) before running `/setup`; without it
+   Discord refuses to create `#panel` and `#admin-panel` (their overwrites grant Pin Messages to the bot).
+4. Run `/setup` once; it creates both channels and pins the panels.
+
+Details (admin command visibility, panel channels) are in `apps/bot/README.md`.
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these

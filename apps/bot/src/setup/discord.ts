@@ -4,9 +4,14 @@ import {
   type AnyThreadChannel,
   ChannelFlags,
   ChannelType,
+  DiscordAPIError,
   type ForumChannel,
   type Guild,
+  type Message,
+  OverwriteType,
   PermissionFlagsBits,
+  RESTJSONErrorCodes,
+  type TextChannel,
 } from 'discord.js';
 import type { SetupGuild } from './apply.js';
 import { INFO_TITLE } from './info.js';
@@ -16,10 +21,11 @@ import type {
   InfoPostSnapshot,
 } from './types.js';
 
+/** The live guild; the stored panel ids come from bot_settings (load.ts). */
 export async function snapshotGuild(
   guild: Guild,
   callerId: string,
-): Promise<GuildSnapshot> {
+): Promise<Omit<GuildSnapshot, 'panelChannels' | 'panelMessages'>> {
   const channels = [...(await guild.channels.fetch()).values()].filter(
     (c) => c !== null,
   );
@@ -54,6 +60,20 @@ export async function snapshotGuild(
     callerId,
     callerRoleIds: [...member.roles.cache.keys()],
     unreadableForums,
+    textChannels: channels
+      .filter((c) => c.type === ChannelType.GuildText)
+      .map((c) => ({
+        id: c.id,
+        name: c.name,
+        parentId: c.parentId,
+        everyoneCanView:
+          c.permissionsFor(guild.roles.everyone)?.has(ViewChannel) ?? false,
+        viewRoleIds: [...c.permissionOverwrites.cache.values()]
+          .filter(
+            (o) => o.type === OverwriteType.Role && o.allow.has(ViewChannel),
+          )
+          .map((o) => o.id),
+      })),
   };
 }
 
@@ -155,6 +175,90 @@ async function openThread(guild: Guild, id: string): Promise<AnyThreadChannel> {
   return t;
 }
 
+async function textChannel(guild: Guild, id: string): Promise<TextChannel> {
+  const c = await guild.channels.fetch(id);
+  if (c?.type !== ChannelType.GuildText)
+    throw new Error(`${id} nie jest kanałem tekstowym`);
+  return c;
+}
+
+/** Pins a panel message; false (logged) when Discord refuses. */
+async function pin(msg: Message): Promise<boolean> {
+  try {
+    await msg.pin('/setup');
+    return true;
+  } catch (err) {
+    console.error(`/setup: cannot pin the panel in ${msg.channelId}`, err);
+    return false;
+  }
+}
+
+/** The panel message or its channel was deleted. */
+const isGone = (err: unknown) =>
+  err instanceof DiscordAPIError &&
+  (err.code === RESTJSONErrorCodes.UnknownMessage ||
+    err.code === RESTJSONErrorCodes.UnknownChannel);
+
+const {
+  AddReactions,
+  CreatePrivateThreads,
+  CreatePublicThreads,
+  PinMessages,
+  ReadMessageHistory,
+  SendMessages,
+  SendMessagesInThreads,
+  ViewChannel,
+} = PermissionFlagsBits;
+
+/**
+ * #panel: everyone reads, only the bot posts (no reactions or threads either).
+ * #admin-panel: only the admin role and the bot see it, and the role cannot
+ * post. The bot pins the panel (Pin Messages; Manage Messages no longer
+ * covers pinning).
+ */
+function panelOverwrites(
+  everyoneId: string,
+  botId: string,
+  o: { private: boolean; adminRoleId: string | null },
+) {
+  const bot = {
+    id: botId,
+    type: OverwriteType.Member,
+    allow: [ViewChannel, SendMessages, PinMessages],
+  };
+  if (!o.private) {
+    return [
+      {
+        id: everyoneId,
+        type: OverwriteType.Role,
+        allow: [ViewChannel, ReadMessageHistory],
+        deny: [
+          SendMessages,
+          AddReactions,
+          CreatePublicThreads,
+          CreatePrivateThreads,
+          SendMessagesInThreads,
+        ],
+      },
+      bot,
+    ];
+  }
+  if (o.adminRoleId === null) throw new Error('brak roli admina');
+  return [
+    { id: everyoneId, type: OverwriteType.Role, deny: [ViewChannel] },
+    adminOverwrite(o.adminRoleId),
+    bot,
+  ];
+}
+
+/** #admin-panel: the admin role reads the panel but cannot post. */
+const adminOverwrite = (roleId: string) => ({
+  id: roleId,
+  type: OverwriteType.Role,
+  allow: [ViewChannel, ReadMessageHistory],
+  deny: [SendMessages],
+});
+
 const tagList = (c: ForumChannel) =>
   c.availableTags.map((t) => ({ id: t.id, name: t.name }));
 
@@ -236,6 +340,57 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
     },
     async pinThread(threadId) {
       await (await openThread(guild, threadId)).pin('/setup');
+    },
+    async createTextChannel({ name, parentId, ...o }) {
+      const c = await guild.channels.create({
+        name,
+        type: ChannelType.GuildText,
+        parent: parentId,
+        permissionOverwrites: panelOverwrites(
+          guild.roles.everyone.id,
+          guild.client.user.id,
+          o,
+        ),
+        reason: '/setup',
+      });
+      return c.id;
+    },
+    async syncAdminPanelPerms(channelId, roleId) {
+      // Touch only the overwrites that change: re-sending the rest could hit
+      // permissions the bot cannot grant.
+      const c = await textChannel(guild, channelId);
+      const roles = await guild.roles.fetch();
+      for (const o of [...c.permissionOverwrites.cache.values()]) {
+        if (o.type === OverwriteType.Role && !roles.has(o.id)) {
+          await c.permissionOverwrites.delete(o.id, '/setup');
+        }
+      }
+      await c.permissionOverwrites.edit(
+        roleId,
+        { ViewChannel: true, ReadMessageHistory: true, SendMessages: false },
+        { type: OverwriteType.Role, reason: '/setup' },
+      );
+    },
+    async postPanel(channelId, view) {
+      const msg = await (await textChannel(guild, channelId)).send({
+        components: view.components,
+        flags: view.flags,
+        allowedMentions: { parse: [] },
+      });
+      // The message exists now: never throw, or a re-run would post it again.
+      return { id: msg.id, pinned: await pin(msg) };
+    },
+    async editPanel(channelId, messageId, view) {
+      let msg: Message;
+      try {
+        const c = await textChannel(guild, channelId);
+        msg = await c.messages.fetch(messageId);
+        await msg.edit({ components: view.components, flags: view.flags });
+      } catch (err) {
+        if (isGone(err)) return false;
+        throw err;
+      }
+      return { pinned: msg.pinned || (await pin(msg)) };
     },
   };
 }

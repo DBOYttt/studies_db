@@ -7,6 +7,7 @@
     ".": "./src/index.ts",
     "./admin": "./src/admin.ts",
     "./constants": "./src/constants.ts",
+    "./plan": "./src/plan.ts",
     "./testing": "./src/testing.ts",
     "./unitime": "./src/unitime/index.ts"
   },

@@ -3,20 +3,11 @@ import {
   DAY_END_MIN,
   DAY_START_MIN,
   defaultWeek,
-  filterMyGroups,
-  formatIsoWeek,
-  isoWeekOf,
   layoutDay,
-  nowWall,
   type PlanSession,
-  parseIsoWeek,
-  parseMyGroups,
   SLOT_MIN,
-  sanitizeMyGroups,
-  shiftWeek,
   slotRange,
   weekDays,
-  weekStart,
 } from '../lib/plan';
 
 /** Wall Date: UTC fields equal the Warsaw wall clock. */
@@ -46,65 +37,6 @@ const S = (
   label: 'W',
   status: 'confirmed',
   ...o,
-});
-
-describe('ISO weeks', () => {
-  it('isoWeekOf around the year end', () => {
-    expect(isoWeekOf(W(2026, 12, 31))).toEqual({ year: 2026, week: 53 });
-    expect(isoWeekOf(W(2027, 1, 3, 23, 59))).toEqual({ year: 2026, week: 53 });
-    expect(isoWeekOf(W(2027, 1, 4))).toEqual({ year: 2027, week: 1 });
-    expect(isoWeekOf(W(2026, 1, 1))).toEqual({ year: 2026, week: 1 });
-    expect(isoWeekOf(W(2026, 10, 12, 8))).toEqual({ year: 2026, week: 42 });
-  });
-
-  it('parse / format', () => {
-    expect(parseIsoWeek('2026-W42')).toEqual({ year: 2026, week: 42 });
-    expect(parseIsoWeek('2026-W53')).toEqual({ year: 2026, week: 53 });
-    expect(parseIsoWeek('2026-W54')).toBeNull();
-    expect(parseIsoWeek('2027-W53')).toBeNull();
-    expect(parseIsoWeek('2026-W00')).toBeNull();
-    expect(parseIsoWeek('2026-W5')).toBeNull();
-    expect(parseIsoWeek(' 2026-W42')).toBeNull();
-    expect(parseIsoWeek(undefined)).toBeNull();
-    expect(formatIsoWeek({ year: 2026, week: 42 })).toBe('2026-W42');
-    expect(formatIsoWeek({ year: 2027, week: 1 })).toBe('2027-W01');
-  });
-
-  it('weekStart is the wall Monday 00:00', () => {
-    expect(weekStart({ year: 2026, week: 42 })).toEqual(W(2026, 10, 12));
-    expect(weekStart({ year: 2026, week: 53 })).toEqual(W(2026, 12, 28));
-    expect(weekStart({ year: 2027, week: 1 })).toEqual(W(2027, 1, 4));
-    expect(weekStart({ year: 2026, week: 1 })).toEqual(W(2025, 12, 29));
-  });
-
-  it('shiftWeek crosses the year end both ways', () => {
-    expect(shiftWeek({ year: 2026, week: 53 }, 1)).toEqual({
-      year: 2027,
-      week: 1,
-    });
-    expect(shiftWeek({ year: 2027, week: 1 }, -1)).toEqual({
-      year: 2026,
-      week: 53,
-    });
-    expect(shiftWeek({ year: 2026, week: 52 }, 3)).toEqual({
-      year: 2027,
-      week: 2,
-    });
-    expect(shiftWeek({ year: 2026, week: 42 }, 0)).toEqual({
-      year: 2026,
-      week: 42,
-    });
-  });
-
-  it('nowWall converts a UTC instant to the Warsaw wall clock', () => {
-    // CEST (UTC+2) and CET (UTC+1).
-    expect(nowWall(new Date('2026-10-12T06:30:00Z'))).toEqual(
-      W(2026, 10, 12, 8, 30),
-    );
-    expect(nowWall(new Date('2026-12-31T23:30:00Z'))).toEqual(
-      W(2027, 1, 1, 0, 30),
-    );
-  });
 });
 
 describe('defaultWeek', () => {
@@ -236,66 +168,5 @@ describe('weekDays', () => {
     // A Saturday of another week does not count.
     const otherSat = S(W(2026, 10, 24, 9), W(2026, 10, 24, 10));
     expect(weekDays([otherSat], w)).toHaveLength(5);
-  });
-});
-
-describe('my groups', () => {
-  it('parseMyGroups keeps numeric keys with integer values', () => {
-    expect(parseMyGroups('{"3":7,"x":1,"4":"a"}')).toEqual({ '3': 7 });
-    expect(parseMyGroups('nope')).toEqual({});
-    expect(parseMyGroups(null)).toEqual({});
-    expect(parseMyGroups('[1,2]')).toEqual({});
-    expect(parseMyGroups('null')).toEqual({});
-    expect(parseMyGroups('{"5":1.5,"6":-1,"7":0,"08":2,"9":3}')).toEqual({
-      '9': 3,
-    });
-  });
-  it('filterMyGroups keeps lectures, unknown classes and my group only', () => {
-    const lecture = S(W(2026, 10, 12, 8), W(2026, 10, 12, 9), {
-      classId: 1,
-      groupId: null,
-    });
-    const mine = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 7,
-    });
-    const other = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 8,
-    });
-    const unknown = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 4,
-      groupId: 9,
-    });
-    const noClass = S(W(2026, 10, 12, 11), W(2026, 10, 12, 12));
-    const all = [lecture, mine, other, unknown, noClass];
-    expect(filterMyGroups(all, { '3': 7 })).toEqual([
-      lecture,
-      mine,
-      unknown,
-      noClass,
-    ]);
-    expect(filterMyGroups(all, {})).toEqual(all);
-  });
-  it('ignores stale group ids, keeps valid ones and unknown classes', () => {
-    const a = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 7,
-    });
-    const b = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 3,
-      groupId: 8,
-    });
-    const u = S(W(2026, 10, 12, 9), W(2026, 10, 12, 10), {
-      classId: 4,
-      groupId: 9,
-    });
-    const valid = { '3': [7, 8] };
-    // stale id 99: class shown
-    expect(filterMyGroups([a, b, u], { '3': 99 }, valid)).toEqual([a, b, u]);
-    // valid id still filters
-    expect(filterMyGroups([a, b, u], { '3': 7 }, valid)).toEqual([a, u]);
-    expect(sanitizeMyGroups({ '3': 99, '4': 5 }, valid)).toEqual({ '4': 5 });
-    expect(sanitizeMyGroups({ '3': 8 }, valid)).toEqual({ '3': 8 });
   });
 });

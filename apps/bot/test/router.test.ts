@@ -1,7 +1,9 @@
 import {
+  adminAudit,
   botSettings,
   getSetting,
   insertMaterial,
+  lecturers,
   setSetting,
   subjects,
   topics,
@@ -16,6 +18,7 @@ import {
   createInteractionHandler,
   isAdmin,
 } from '../src/commands/router.js';
+import { withSetupLock } from '../src/ops.js';
 
 let db: Awaited<ReturnType<typeof resetTestDb>>;
 beforeEach(async () => {
@@ -108,6 +111,7 @@ describe('router', () => {
     const handler = createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -130,6 +134,7 @@ describe('router', () => {
       await createInteractionHandler({
         ingest: { db, storageDir: '', fetchBody: vi.fn() },
         client: {} as never,
+        pool: {} as never,
         config,
       })(asI(i));
       const [u] = await db
@@ -153,6 +158,7 @@ describe('router', () => {
     await createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     })(asI(i));
     expect(err).toHaveBeenCalledWith(
@@ -161,6 +167,80 @@ describe('router', () => {
     );
     expect(i.reply).toHaveBeenCalledTimes(1);
     err.mockRestore();
+  });
+
+  describe('audit', () => {
+    const run = async (patch: Record<string, unknown>) => {
+      await db
+        .insert(subjects)
+        .values({ code: 'ALG', name: 'Algebra', semester: 1, ects: 5 });
+      const i = mkInteraction({
+        commandName: 'subject',
+        user: {
+          id: 'adm',
+          username: 'adm',
+          globalName: null,
+          displayAvatarURL: () => 'a',
+        },
+        options: {
+          getSubcommand: () => 'edit',
+          getString: (n: string) => (n === 'code' ? 'alg' : (patch[n] ?? null)),
+          getInteger: () => null,
+        },
+      });
+      await createInteractionHandler({
+        ingest: { db, storageDir: '', fetchBody: vi.fn() },
+        client: {} as never,
+        pool: {} as never,
+        config,
+      })(asI(i));
+      return db.select().from(adminAudit);
+    };
+    it('a successful /subject edit writes one discord audit row', async () => {
+      const rows = await run({ name: 'Algebra 2' });
+      expect(rows).toHaveLength(1);
+      const [adm] = await db
+        .select()
+        .from(users)
+        .where(eq(users.discordUserId, 'adm'));
+      expect(rows[0]).toMatchObject({
+        action: 'subject.edit',
+        target: 'ALG',
+        userId: adm?.id,
+      });
+      expect(rows[0]?.details).toMatchObject({ source: 'discord' });
+    });
+    it('/lecturer add audits lecturer.add with the new id as target', async () => {
+      const i = mkInteraction({
+        commandName: 'lecturer',
+        user: {
+          id: 'adm',
+          username: 'adm',
+          globalName: null,
+          displayAvatarURL: () => 'a',
+        },
+        options: {
+          getSubcommand: () => 'add',
+          getString: (n: string) => (n === 'name' ? 'Jan Kowalski' : null),
+        },
+      });
+      await createInteractionHandler({
+        ingest: { db, storageDir: '', fetchBody: vi.fn() },
+        client: {} as never,
+        pool: {} as never,
+        config,
+      })(asI(i));
+      const [l] = await db.select().from(lecturers);
+      const rows = await db.select().from(adminAudit);
+      expect(rows).toHaveLength(1);
+      expect(rows[0]).toMatchObject({
+        action: 'lecturer.add',
+        target: String(l?.id),
+      });
+    });
+    it('a refused /subject edit writes none', async () => {
+      expect(await run({ platform_url: 'ftp://x' })).toHaveLength(0);
+    });
   });
 
   it('/ban upserts a never-seen user so the ban takes effect', async () => {
@@ -178,6 +258,7 @@ describe('router', () => {
     const handler = createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -208,6 +289,7 @@ describe('router', () => {
       client: {
         channels: { fetch: vi.fn().mockRejectedValue(new Error('Missing')) },
       } as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -236,6 +318,7 @@ describe('router', () => {
     const handler = createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
     await handler(asI(i));
@@ -251,18 +334,65 @@ describe('router', () => {
   });
 });
 
+describe('/resync', () => {
+  it('refuses while /setup holds the lock', async () => {
+    let release = () => {};
+    const held = withSetupLock(
+      () =>
+        new Promise<void>((r) => {
+          release = r;
+        }),
+    );
+    const deferReply = vi.fn().mockResolvedValue(undefined);
+    const i = {
+      ...mkInteraction({ commandName: 'resync', user: { id: 'u1' } }),
+      deferReply,
+    };
+    const handler = createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      pool: {} as never,
+      config,
+    });
+    await handler(asI(i));
+    release();
+    await held;
+    expect(deferReply).not.toHaveBeenCalled();
+    expect(i.reply.mock.calls[0]?.[0]).toMatchObject({
+      content: '/setup już trwa — spróbuj za chwilę.',
+      flags: MessageFlags.Ephemeral,
+    });
+  });
+});
+
 describe('/setup', () => {
   const handlerFor = () =>
     createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: {} as never,
+      pool: {} as never,
       config,
     });
+  /** The #panel / #admin-panel channel /setup creates and posts into. */
+  const panelText = {
+    type: ChannelType.GuildText,
+    send: vi.fn(async () => ({ id: 'pm', pin: async () => {} })),
+  };
+  const createChannel = async (o: { name: string }) => ({
+    id: `text-${o.name}`,
+  });
   const setupGuild = {
     ...guild,
     client: { user: { id: 'bot' } },
-    roles: { ...guild.roles, fetch: async () => guild.roles.cache },
-    channels: { fetch: async () => new Collection() },
+    roles: {
+      ...guild.roles,
+      everyone: { id: 'everyone' },
+      fetch: async () => guild.roles.cache,
+    },
+    channels: {
+      fetch: async (id?: string) => (id ? panelText : new Collection()),
+      create: createChannel,
+    },
     members: {
       me: { id: 'bot' },
       fetch: async () => ({ roles: { cache: new Collection() } }),
@@ -743,9 +873,12 @@ describe('/setup', () => {
         fetch: async (id?: string) =>
           id === 'th'
             ? infoThread
-            : id
-              ? forum
-              : new Collection([[forum.id, forum]]),
+            : id?.startsWith('text-')
+              ? panelText
+              : id
+                ? forum
+                : new Collection([[forum.id, forum]]),
+        create: createChannel,
       },
       members: {
         me: { id: 'bot' },
@@ -765,6 +898,7 @@ describe('/setup', () => {
     await createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: { channels: { fetch: clientFetch } } as never,
+      pool: {} as never,
       config,
     })(asI(i));
     const [s] = await db.select().from(subjects);
@@ -802,11 +936,19 @@ describe('/setup', () => {
     await createInteractionHandler({
       ingest: { db, storageDir: '', fetchBody: vi.fn() },
       client: { channels: { fetch: clientFetch } } as never,
+      pool: {} as never,
       config,
     })(asI(i));
     expect(clientFetch).not.toHaveBeenCalled();
+    // Only the panels (created on the first run).
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(
-      'Wszystko jest aktualne.',
+      [
+        '**Utworzono**',
+        '- kanał #panel',
+        '- kanał #admin-panel',
+        '- panel w #panel',
+        '- panel w #admin-panel',
+      ].join('\n'),
     );
   });
 });

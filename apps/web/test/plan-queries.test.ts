@@ -11,7 +11,6 @@ import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
 import {
-  listMyGroupOptions,
   listWeekSessions,
   planListPage,
   sessionRange,
@@ -256,28 +255,6 @@ describe('sessionRange', () => {
   });
   it('null when there are no sessions', async () => {
     expect(await sessionRange(ro, { subjectId: id.mat })).toBeNull();
-  });
-});
-
-describe('listMyGroupOptions', () => {
-  it('classes with sessions and groups, by subject name then kind', async () => {
-    expect(await listMyGroupOptions(ro)).toEqual([
-      {
-        classId: id.algC,
-        subjectName: 'Algebra',
-        className: 'Ćwiczenia',
-        groups: [{ id: id.algC1, name: 'Gr. 1' }],
-      },
-      {
-        classId: id.fizC,
-        subjectName: 'Fizyka',
-        className: 'Ćwiczenia',
-        groups: [
-          { id: id.fizC1, name: 'Gr. 1' },
-          { id: id.fizC2, name: 'Gr. 2' },
-        ],
-      },
-    ]);
   });
 });
 

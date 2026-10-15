@@ -16,6 +16,7 @@ import type {
   ForumSnapshot,
   GuildSnapshot,
   MaterialSpec,
+  PanelWhich,
   PostFile,
   PostMessage,
   SubjectSpec,
@@ -256,36 +257,146 @@ export function needsSecondPass(actions: Action[]): boolean {
   );
 }
 
+const PANEL_ACTIONS = new Set<Action['type']>([
+  'ensurePanelChannel',
+  'syncAdminPanelPerms',
+  'ensurePanelMessage',
+]);
+
+/**
+ * The second plan, minus what the first pass handled: the panels, and
+ * warnings it already reported.
+ */
+export function secondPassActions(first: Action[], second: Action[]): Action[] {
+  const warned = new Set(
+    first.flatMap((a) =>
+      a.type === 'warn' ? [`${a.code}\n${a.message}`] : [],
+    ),
+  );
+  return second.filter(
+    (a) =>
+      !PANEL_ACTIONS.has(a.type) &&
+      !(a.type === 'warn' && warned.has(`${a.code}\n${a.message}`)),
+  );
+}
+
 /**
  * Admin role by stored id; else the only role with the configured name is
  * adopted, or a new one created. Several roles with that name: warn only.
+ * roleId is the admin role after these actions: null for the role created
+ * in this run, undefined when there is none (ambiguous name).
  */
-function planRole(role: AdminRole, g: GuildSnapshot): Action[] {
+function planRole(
+  role: AdminRole,
+  g: GuildSnapshot,
+): { actions: Action[]; roleId: string | null | undefined } {
   const { name } = role;
   const assign = (roleId: string | null): Action[] =>
     roleId !== null && g.callerRoleIds.includes(roleId)
       ? []
       : [{ type: 'assignRole', roleName: name, roleId, userId: g.callerId }];
   if (role.storedId !== null && g.roles.some((r) => r.id === role.storedId)) {
-    return assign(role.storedId);
+    return { actions: assign(role.storedId), roleId: role.storedId };
   }
   const named = g.roles.filter((r) => r.name === name);
   if (named.length === 0) {
-    return [{ type: 'createRole', name }, ...assign(null)];
+    return {
+      actions: [{ type: 'createRole', name }, ...assign(null)],
+      roleId: null,
+    };
   }
   if (named.length === 1) {
-    return [
-      { type: 'adoptRole', roleId: named[0].id, name },
-      ...assign(named[0].id),
-    ];
+    return {
+      actions: [
+        { type: 'adoptRole', roleId: named[0].id, name },
+        ...assign(named[0].id),
+      ],
+      roleId: named[0].id,
+    };
   }
-  return [
-    {
-      type: 'warn',
-      code: null,
-      message: `jest kilka ról o nazwie „${name}” — rola admina nie została ustawiona; zostaw jedną (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
-    },
-  ];
+  return {
+    actions: [
+      {
+        type: 'warn',
+        code: null,
+        message: `jest kilka ról o nazwie „${name}” — rola admina nie została ustawiona; zostaw jedną (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+      },
+    ],
+    roleId: undefined,
+  };
+}
+
+export const PANEL_CHANNEL_NAMES = {
+  panel: 'panel',
+  admin: 'admin-panel',
+} as const satisfies Record<PanelWhich, string>;
+
+/**
+ * The #panel and #admin-panel channels and their permanent messages. A stored
+ * channel that still exists is kept; otherwise the only text channel with the
+ * name is adopted, or a new one created (several with the name: warn only).
+ * A kept or adopted #admin-panel that does not let the current admin role
+ * view it gets its permissions synced. The message is always planned: apply
+ * edits it in place, or posts it when it is gone.
+ */
+function planPanels(
+  ordered: SubjectSpec[],
+  g: GuildSnapshot,
+  adminRoleId: string | null | undefined,
+): Action[] {
+  const forums = new Map(g.forums.map((f) => [f.id, f]));
+  const first = ordered.find((s) => s.channelId && forums.has(s.channelId));
+  const parentId = first?.channelId
+    ? (forums.get(first.channelId)?.parentId ?? null)
+    : null;
+  const channels: Action[] = [];
+  const perms: Action[] = [];
+  const messages: Action[] = [];
+  const syncPerms = (channelId: string) => {
+    if (adminRoleId === undefined) return;
+    const c = g.textChannels.find((x) => x.id === channelId);
+    if (adminRoleId !== null && c?.viewRoleIds.includes(adminRoleId)) return;
+    perms.push({ type: 'syncAdminPanelPerms', channelId, roleId: adminRoleId });
+  };
+  for (const which of ['panel', 'admin'] as const) {
+    const name = PANEL_CHANNEL_NAMES[which];
+    const stored = g.panelChannels[which];
+    if (stored !== null && g.textChannels.some((c) => c.id === stored)) {
+      if (which === 'admin') syncPerms(stored);
+      messages.push({
+        type: 'ensurePanelMessage',
+        which,
+        channelId: stored,
+        messageId: g.panelMessages[which],
+      });
+      continue;
+    }
+    const named = g.textChannels.filter((c) => c.name === name);
+    if (named.length > 1) {
+      channels.push({
+        type: 'warn',
+        code: null,
+        message: `jest kilka kanałów tekstowych o nazwie #${name} — panel nie został utworzony; zostaw jeden (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+      });
+      continue;
+    }
+    const existingId = named.length === 1 ? named[0].id : null;
+    channels.push({
+      type: 'ensurePanelChannel',
+      which,
+      name,
+      existingId,
+      parentId,
+    });
+    if (which === 'admin' && existingId !== null) syncPerms(existingId);
+    messages.push({
+      type: 'ensurePanelMessage',
+      which,
+      channelId: null,
+      messageId: null,
+    });
+  }
+  return [...channels, ...perms, ...messages];
 }
 
 export function planSetup(
@@ -295,13 +406,15 @@ export function planSetup(
   render: (s: SubjectSpec) => string,
   opts?: { webBaseUrl: string },
 ): Action[] {
-  const actions: Action[] = planRole(role, g);
+  const { actions, roleId: adminRoleId } = planRole(role, g);
 
   const categories = new Set(g.categories.map((c) => c.name));
   const forums = new Map(g.forums.map((f) => [f.id, f]));
   const ordered = [...subjects].sort(
     (a, b) => a.semester - b.semester || a.code.localeCompare(b.code),
   );
+  // Right after the role: #admin-panel needs the admin role id.
+  actions.push(...planPanels(ordered, g, adminRoleId));
 
   for (const s of ordered) {
     const wanted = desiredTags(s);

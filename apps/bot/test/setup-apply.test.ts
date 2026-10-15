@@ -23,7 +23,8 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { applySetup, type SetupGuild } from '../src/setup/apply.js';
 import { INFO_TITLE } from '../src/setup/info.js';
-import { loadSubjectSpecs } from '../src/setup/load.js';
+import { loadPanelSettings, loadSubjectSpecs } from '../src/setup/load.js';
+import { planSetup } from '../src/setup/plan.js';
 import { formatPlan, formatReport } from '../src/setup/report.js';
 import type { Action, GuildSnapshot } from '../src/setup/types.js';
 
@@ -47,13 +48,29 @@ afterAll(async () => {
 });
 
 type Call = [string, ...unknown[]];
-function fakeGuild(failForum?: string): SetupGuild & { calls: Call[] } {
+function fakeGuild(failForum?: string): SetupGuild & {
+  calls: Call[];
+  /** Panel messages that exist on the fake server. */
+  panelMessages: Set<string>;
+  /** Pinned panel messages. */
+  pinned: Set<string>;
+  /** Discord refuses pins (no Pin Messages). */
+  refusePin: boolean;
+  textChannels: GuildSnapshot['textChannels'];
+} {
   const calls: Call[] = [];
+  const panelMessages = new Set<string>();
+  const pinned = new Set<string>();
+  const textChannels: GuildSnapshot['textChannels'] = [];
   let n = 0;
   const tagsOf = (names: string[]) =>
     names.map((name) => ({ id: `t-${name}`, name }));
   return {
     calls,
+    panelMessages,
+    pinned,
+    refusePin: false,
+    textChannels,
     async createRole(name) {
       calls.push(['createRole', name]);
       return 'role-new';
@@ -100,6 +117,34 @@ function fakeGuild(failForum?: string): SetupGuild & { calls: Call[] } {
     async pinThread(threadId) {
       calls.push(['pinThread', threadId]);
     },
+    async createTextChannel(o) {
+      calls.push(['createTextChannel', o]);
+      const id = `text-${++n}`;
+      textChannels.push({
+        id,
+        name: o.name,
+        parentId: o.parentId,
+        everyoneCanView: !o.private,
+        viewRoleIds: o.private && o.adminRoleId ? [o.adminRoleId] : [],
+      });
+      return id;
+    },
+    async postPanel(channelId) {
+      calls.push(['postPanel', channelId]);
+      const id = `panel-msg-${++n}`;
+      panelMessages.add(id);
+      if (!this.refusePin) pinned.add(id);
+      return { id, pinned: pinned.has(id) };
+    },
+    async syncAdminPanelPerms(channelId, roleId) {
+      calls.push(['syncAdminPanelPerms', channelId, roleId]);
+    },
+    async editPanel(channelId, messageId) {
+      calls.push(['editPanel', channelId, messageId]);
+      if (!panelMessages.has(messageId)) return false;
+      if (!this.refusePin) pinned.add(messageId);
+      return { pinned: pinned.has(messageId) };
+    },
   };
 }
 
@@ -110,6 +155,9 @@ const snapshot: GuildSnapshot = {
   callerId: 'u1',
   callerRoleIds: [],
   unreadableForums: [],
+  textChannels: [],
+  panelChannels: { panel: null, admin: null },
+  panelMessages: { panel: null, admin: null },
 };
 const forum = (subjectId: number, code: string): Action => ({
   type: 'createForum',
@@ -968,5 +1016,358 @@ describe('format', () => {
     const text = formatPlan(many);
     expect(text.startsWith('Plan (bez zmian):')).toBe(true);
     expect(text.length).toBeLessThanOrEqual(2000);
+  });
+});
+
+describe('applySetup: panels', () => {
+  const ROLE = { name: 'Studies Admin', storedId: null };
+  const newChannel = (which: 'panel' | 'admin') => ({
+    type: 'ensurePanelChannel' as const,
+    which,
+    name: which === 'panel' ? ('panel' as const) : ('admin-panel' as const),
+    existingId: null as string | null,
+    parentId: 'c3',
+  });
+  const message = (
+    which: 'panel' | 'admin',
+    channelId: string | null,
+    messageId: string | null,
+  ): Action => ({ type: 'ensurePanelMessage', which, channelId, messageId });
+  const createdChannels = (g: { calls: Call[] }) =>
+    g.calls.filter((c) => c[0] === 'createTextChannel').map((c) => c[1]);
+
+  it('creates #admin-panel with the admin role created earlier in the run', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        { type: 'createRole', name: 'Studies Admin' },
+        newChannel('panel'),
+        newChannel('admin'),
+      ],
+      snapshot,
+    );
+    expect(r.failures).toEqual([]);
+    expect(createdChannels(g)).toEqual([
+      { name: 'panel', parentId: 'c3', private: false, adminRoleId: null },
+      {
+        name: 'admin-panel',
+        parentId: 'c3',
+        private: true,
+        adminRoleId: 'role-new',
+      },
+    ]);
+    expect(await getSetting(db, 'panel_channel_id')).toBe('text-1');
+    expect(await getSetting(db, 'admin_panel_channel_id')).toBe('text-2');
+  });
+
+  it('uses the stored admin role and refuses #admin-panel without one', async () => {
+    const g = fakeGuild();
+    const r1 = await applySetup(db, g, [newChannel('admin')], snapshot);
+    expect(r1.failures).toHaveLength(1);
+    expect(r1.failures[0]).toContain('#admin-panel');
+    expect(createdChannels(g)).toEqual([]);
+    await setSetting(db, 'admin_role_id', 'r7');
+    await applySetup(db, g, [newChannel('admin')], snapshot);
+    expect(createdChannels(g)).toEqual([
+      { name: 'admin-panel', parentId: 'c3', private: true, adminRoleId: 'r7' },
+    ]);
+  });
+
+  it('adopts an existing channel without creating one', async () => {
+    const g = fakeGuild();
+    await applySetup(
+      db,
+      g,
+      [{ ...newChannel('panel'), existingId: 'x1' }],
+      snapshot,
+    );
+    expect(createdChannels(g)).toEqual([]);
+    expect(await getSetting(db, 'panel_channel_id')).toBe('x1');
+  });
+
+  it('edits a panel message that still exists and never re-posts it', async () => {
+    const g = fakeGuild();
+    g.panelMessages.add('m-p');
+    const r = await applySetup(
+      db,
+      g,
+      [message('panel', 'ch-p', 'm-p')],
+      snapshot,
+    );
+    expect(g.calls.map((c) => c[0])).toEqual(['editPanel']);
+    expect(r.updated.join('\n')).toContain('#panel');
+    expect(await getSetting(db, 'panel_message_id')).toBeNull();
+  });
+
+  it('re-posts a panel message that is gone and stores the new id', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [message('admin', 'ch-a', 'm-gone')],
+      snapshot,
+    );
+    expect(g.calls).toEqual([
+      ['editPanel', 'ch-a', 'm-gone'],
+      ['postPanel', 'ch-a'],
+    ]);
+    expect(await getSetting(db, 'admin_panel_message_id')).toBe('panel-msg-1');
+    expect(r.created.join('\n')).toContain('#admin-panel');
+  });
+
+  it('posts into the channel created earlier in the run', async () => {
+    const g = fakeGuild();
+    await setSetting(db, 'admin_role_id', 'r7');
+    await applySetup(
+      db,
+      g,
+      [newChannel('panel'), message('panel', null, null)],
+      snapshot,
+    );
+    expect(g.calls.map((c) => c.slice(0, 2))).toEqual([
+      ['createTextChannel', expect.anything()],
+      ['postPanel', 'text-1'],
+    ]);
+    expect(await getSetting(db, 'panel_message_id')).toBe('panel-msg-2');
+  });
+
+  it('reports a failed edit without posting a duplicate', async () => {
+    const g = fakeGuild();
+    g.editPanel = async () => {
+      throw new Error('Service Unavailable');
+    };
+    const r = await applySetup(
+      db,
+      g,
+      [message('panel', 'ch-p', 'm-p')],
+      snapshot,
+    );
+    expect(g.calls).toEqual([]);
+    expect(r.failures[0]).toContain('Service Unavailable');
+  });
+
+  it('posts each panel once over two runs', async () => {
+    const g = fakeGuild();
+    const run = async () => {
+      const snap: GuildSnapshot = {
+        ...snapshot,
+        roles: [{ id: 'role-new', name: 'Studies Admin' }],
+        callerRoleIds: ['role-new'],
+        textChannels: [...g.textChannels],
+        ...(await loadPanelSettings(db)),
+      };
+      const stored = await getSetting(db, 'admin_role_id');
+      const actions = planSetup(
+        [],
+        snap,
+        { ...ROLE, storedId: stored },
+        () => '',
+      );
+      const r = await applySetup(db, g, actions, snap);
+      expect(r.failures).toEqual([]);
+    };
+    await setSetting(db, 'admin_role_id', 'role-new');
+    await run();
+    await run();
+    expect(g.calls.filter((c) => c[0] === 'createTextChannel')).toHaveLength(2);
+    expect(g.calls.filter((c) => c[0] === 'postPanel')).toHaveLength(2);
+    expect(g.calls.filter((c) => c[0] === 'editPanel')).toHaveLength(2);
+  });
+});
+
+describe('applySetup: panel pins and adopted channels', () => {
+  const message = (messageId: string | null): Action => ({
+    type: 'ensurePanelMessage',
+    which: 'panel',
+    channelId: 'ch-p',
+    messageId,
+  });
+
+  it('warns when a new panel cannot be pinned', async () => {
+    const g = fakeGuild();
+    g.refusePin = true;
+    const r = await applySetup(db, g, [message(null)], snapshot);
+    expect(r.failures).toEqual([]);
+    expect(r.created).toEqual(['panel w #panel']);
+    expect(r.warnings).toEqual([
+      'nie udało się przypiąć panelu w #panel (bot potrzebuje uprawnienia Pin Messages)',
+    ]);
+    expect(await getSetting(db, 'panel_message_id')).toBe('panel-msg-1');
+  });
+
+  it('pins an existing unpinned panel on edit, and warns when that is refused', async () => {
+    const g = fakeGuild();
+    g.panelMessages.add('m-p');
+    const r1 = await applySetup(db, g, [message('m-p')], snapshot);
+    expect(g.pinned.has('m-p')).toBe(true);
+    expect(r1.warnings).toEqual([]);
+    const h = fakeGuild();
+    h.panelMessages.add('m-p');
+    h.refusePin = true;
+    const r2 = await applySetup(db, h, [message('m-p')], snapshot);
+    expect(h.calls.map((c) => c[0])).toEqual(['editPanel']);
+    expect(r2.warnings[0]).toContain('nie udało się przypiąć panelu w #panel');
+  });
+
+  it('warns when an adopted #admin-panel is visible to everyone', async () => {
+    const adopt = (which: 'panel' | 'admin', id: string): Action => ({
+      type: 'ensurePanelChannel',
+      which,
+      name: which === 'panel' ? 'panel' : 'admin-panel',
+      existingId: id,
+      parentId: null,
+    });
+    const snap: GuildSnapshot = {
+      ...snapshot,
+      textChannels: [
+        {
+          id: 'x1',
+          name: 'panel',
+          parentId: null,
+          everyoneCanView: true,
+          viewRoleIds: [],
+        },
+        {
+          id: 'x2',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: true,
+          viewRoleIds: [],
+        },
+        {
+          id: 'x3',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+          viewRoleIds: [],
+        },
+      ],
+    };
+    const open = await applySetup(
+      db,
+      fakeGuild(),
+      [adopt('panel', 'x1'), adopt('admin', 'x2')],
+      snap,
+    );
+    expect(open.warnings).toEqual([
+      'kanał #admin-panel widzą wszyscy — ogranicz go do roli admina',
+    ]);
+    const hidden = await applySetup(
+      db,
+      fakeGuild(),
+      [adopt('admin', 'x3')],
+      snap,
+    );
+    expect(hidden.warnings).toEqual([]);
+  });
+});
+
+describe('applySetup: #admin-panel permissions', () => {
+  const sync = (roleId: string | null): Action => ({
+    type: 'syncAdminPanelPerms',
+    channelId: 'ch-a',
+    roleId,
+  });
+
+  it('grants the role created earlier in the run', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [{ type: 'createRole', name: 'Studies Admin' }, sync(null)],
+      snapshot,
+    );
+    expect(g.calls).toEqual([
+      ['createRole', 'Studies Admin'],
+      ['syncAdminPanelPerms', 'ch-a', 'role-new'],
+    ]);
+    expect(r.updated).toEqual([
+      'kanał #admin-panel: uprawnienia dla roli admina',
+    ]);
+    expect(r.failures).toEqual([]);
+  });
+
+  it('grants an existing role by id', async () => {
+    const g = fakeGuild();
+    await applySetup(db, g, [sync('r2')], snapshot);
+    expect(g.calls).toEqual([['syncAdminPanelPerms', 'ch-a', 'r2']]);
+  });
+
+  it('fails when the role was not created', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(db, g, [sync(null)], snapshot);
+    expect(g.calls).toEqual([]);
+    expect(r.failures).toEqual(['#admin-panel: brak roli admina']);
+  });
+
+  it('re-grants a kept #admin-panel after the admin role was replaced', async () => {
+    await setSetting(db, 'admin_role_id', 'r-old');
+    await setSetting(db, 'admin_panel_channel_id', 'ch-a');
+    const g = fakeGuild();
+    const snap: GuildSnapshot = {
+      ...snapshot,
+      textChannels: [
+        {
+          id: 'ch-a',
+          name: 'admin-panel',
+          parentId: null,
+          everyoneCanView: false,
+          viewRoleIds: ['r-old'],
+        },
+      ],
+      ...(await loadPanelSettings(db)),
+    };
+    const actions = planSetup(
+      [],
+      snap,
+      { name: 'Studies Admin', storedId: 'r-old' },
+      () => '',
+    );
+    const r = await applySetup(db, g, actions, snap);
+    expect(g.calls).toContainEqual(['syncAdminPanelPerms', 'ch-a', 'role-new']);
+    expect(r.updated).toContain(
+      'kanał #admin-panel: uprawnienia dla roli admina',
+    );
+  });
+});
+
+describe('formatPlan: #admin-panel permissions', () => {
+  it('lists the permission sync in a dry run', () => {
+    expect(
+      formatPlan([
+        { type: 'syncAdminPanelPerms', channelId: 'c', roleId: null },
+      ]),
+    ).toContain('ustaw uprawnienia #admin-panel dla roli admina');
+  });
+});
+
+describe('formatPlan: panels', () => {
+  it('lists the panel actions in a dry run', () => {
+    const text = formatPlan([
+      {
+        type: 'ensurePanelChannel',
+        which: 'admin',
+        name: 'admin-panel',
+        existingId: null,
+        parentId: null,
+      },
+      {
+        type: 'ensurePanelMessage',
+        which: 'admin',
+        channelId: null,
+        messageId: null,
+      },
+      {
+        type: 'ensurePanelMessage',
+        which: 'panel',
+        channelId: 'c',
+        messageId: 'm',
+      },
+    ]);
+    expect(text).toContain('utwórz kanał #admin-panel');
+    expect(text).toContain('opublikuj panel w #admin-panel');
+    expect(text).toContain('odśwież panel w #panel');
   });
 });

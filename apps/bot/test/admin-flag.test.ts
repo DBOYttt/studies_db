@@ -21,7 +21,7 @@ const flag = async () =>
 describe('syncAdminFlag', () => {
   it('sets the flag when the stored role is held', async () => {
     await setSetting(db, 'admin_role_id', 'r');
-    expect(await syncAdminFlag(db, u, ['x', 'r'])).toEqual({
+    expect(await syncAdminFlag(db, u, ['x', 'r'])).toMatchObject({
       isAdmin: true,
       roleId: 'r',
     });
@@ -34,7 +34,7 @@ describe('syncAdminFlag', () => {
     expect(await flag()).toBe(false);
   });
   it('is false when no role id is stored', async () => {
-    expect(await syncAdminFlag(db, u, ['r'])).toEqual({
+    expect(await syncAdminFlag(db, u, ['r'])).toMatchObject({
       isAdmin: false,
       roleId: null,
     });
@@ -63,6 +63,23 @@ describe('syncAdminFlag', () => {
       isAdmin: true,
     });
     expect(await getSetting(db, 'admin_role_id')).toBe('r');
+  });
+});
+
+describe('syncAdminFlag userId', () => {
+  const idOf = async (d: string) =>
+    (await db.select().from(users).where(eq(users.discordUserId, d)))[0]?.id;
+  it('returns users.id on both the insert and the update path', async () => {
+    await db.insert(users).values({ discordUserId: 'pad', displayName: 'P' });
+    const first = await syncAdminFlag(db, u, []);
+    expect(first.userId).toBe(await idOf('u1'));
+    const again = await syncAdminFlag(db, { ...u, displayName: 'Z' }, []);
+    expect(again.userId).toBe(first.userId);
+    const same = await syncAdminFlag(db, { ...u, displayName: 'Z' }, []);
+    expect(same.userId).toBe(first.userId);
+    const other = await syncAdminFlag(db, { ...u, discordUserId: 'u2' }, []);
+    expect(other.userId).toBe(await idOf('u2'));
+    expect(other.userId).not.toBe(first.userId);
   });
 });
 

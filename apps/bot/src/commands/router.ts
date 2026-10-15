@@ -1,8 +1,18 @@
 import {
+  type ActionResult,
   type Assessment,
+  addLecturer,
+  addSubject,
+  assignLecturer,
+  banUser,
   type ClassKind,
+  type createDb,
+  editClass,
+  editLecturer,
+  editSubject,
   getSetting,
   lecturers,
+  listSubjects,
   subjects,
   upsertUser,
 } from '@studies/db';
@@ -17,35 +27,38 @@ import {
 } from 'discord.js';
 import { like, or } from 'drizzle-orm';
 import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
-import { catchUp, discordForumSource } from '../catchup.js';
+import { auditDiscord } from '../audit.js';
+import { discordForumSource } from '../catchup.js';
 import { ADMIN_ROLE_SETTING, type BotConfig } from '../config.js';
 import { toDiscordUser } from '../discord/map.js';
 import type { IngestDeps } from '../ingest.js';
-import { applySetup } from '../setup/apply.js';
-import { discordSetupGuild, snapshotGuild } from '../setup/discord.js';
-import { renderGuidelines } from '../setup/guidelines.js';
-import { loadSubjectSpecs } from '../setup/load.js';
-import { needsSecondPass, planSetup } from '../setup/plan.js';
-import { formatPlan, formatReport, mergeReports } from '../setup/report.js';
-import { findSubjectByChannel, syncForumTags } from '../sync.js';
 import {
-  addLecturer,
-  addSubject,
-  assignLecturer,
-  banReply,
-  editClass,
-  editLecturer,
-  editSubject,
-  listSubjects,
-} from './admin.js';
+  type Audit,
+  BUSY_TEXT,
+  runResync,
+  runSetup,
+  withSetupLock,
+} from '../ops.js';
+import { findSubjectByChannel, syncForumTags } from '../sync.js';
+import { handleUi, openAdminPanel, openStudentPanel } from '../ui/router.js';
+import { notice } from '../ui/views/student.js';
 import { planStatusReply, planSyncReply } from './plan.js';
 import { replyOptions } from './reply.js';
-import { linkFor, searchReply } from './student.js';
+import {
+  LINK_BANNED,
+  LINK_DM_CLOSED,
+  LINK_SENT,
+  linkFor,
+  searchReply,
+  sendLoginDm,
+} from './student.js';
 
 export type RouterDeps = {
   ingest: IngestDeps;
   client: Client;
   config: BotConfig;
+  /** Raw pool for the shared plan queries (`@studies/db/plan`). */
+  pool: ReturnType<typeof createDb>['pool'];
 };
 
 const ADMIN_COMMANDS = new Set([
@@ -56,13 +69,22 @@ const ADMIN_COMMANDS = new Set([
   'ban',
   'unban',
   'resync',
+  'admin',
 ]);
 const ERROR_TEXT = 'Wystąpił błąd. Spróbuj ponownie później.';
 const FORUM_VISIBILITY_WARNING =
   'Uwaga: bot nie widzi tego forum — sprawdź uprawnienia (View Channel, Read Message History).';
 const MAX_LEN = 2000;
 
-let setupRunning = false;
+/** A V2 text notice (no `content`), for editing a deferred V2 response. */
+const uiNotice = (text: string) => {
+  const v = notice(text);
+  return {
+    components: v.components,
+    flags: v.flags,
+    allowedMentions: { parse: [] as never[] },
+  };
+};
 
 const truncate = (s: string) =>
   s.length <= MAX_LEN ? s : `${s.slice(0, MAX_LEN - 1)}…`;
@@ -130,80 +152,6 @@ async function autocomplete(
 const callerOf = (i: ChatInputCommandInteraction) =>
   toDiscordUser(i.user, i.member as GuildMember | null);
 
-/** /setup: plan, apply, and a second pass for new or imported forums. */
-async function runSetup(
-  deps: RouterDeps,
-  i: ChatInputCommandInteraction,
-): Promise<void> {
-  const { db } = deps.ingest;
-  const eph = { flags: MessageFlags.Ephemeral } as const;
-  await i.deferReply(eph);
-  if (!i.guild) throw new Error('/setup outside a guild');
-  const guild = i.guild;
-  const plan = async () => {
-    const snapshot = await snapshotGuild(guild, i.user.id);
-    const actions = planSetup(
-      await loadSubjectSpecs(db),
-      snapshot,
-      {
-        name: deps.config.adminRoleName,
-        storedId: await getSetting(db, ADMIN_ROLE_SETTING),
-      },
-      renderGuidelines,
-      { webBaseUrl: deps.config.webBaseUrl },
-    );
-    return { snapshot, actions };
-  };
-  const first = await plan();
-  if (i.options.getBoolean('dry_run')) {
-    await i.editReply(replyOptions(formatPlan(first.actions)));
-    return;
-  }
-  const setupGuild = discordSetupGuild(guild);
-  const storageDir = deps.ingest.storageDir;
-  let report = await applySetup(
-    db,
-    setupGuild,
-    first.actions,
-    first.snapshot,
-    storageDir,
-  );
-  if (first.actions.some((a) => a.type === 'importForum')) {
-    // Pull posts from the imported forums before planning what to add.
-    const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-      ignoreWatermark: true,
-    });
-    report.updated.push(
-      `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
-    );
-  }
-  if (needsSecondPass(first.actions)) {
-    // New/imported forums: tags, guidelines, topic posts and info post.
-    const second = await plan();
-    report = mergeReports(
-      report,
-      await applySetup(
-        db,
-        setupGuild,
-        second.actions,
-        second.snapshot,
-        storageDir,
-      ),
-    );
-  }
-  // The stored role may have just been created, adopted or replaced (which
-  // clears every flag): mirror it for the caller, counting a role this run
-  // assigned, which the interaction's member roles don't include yet.
-  try {
-    const roles = memberRoleIds(i);
-    if (report.assignedRoleId) roles.push(report.assignedRoleId);
-    await syncAdminFlag(db, callerOf(i), roles);
-  } catch (err) {
-    console.error('admin flag sync after /setup failed', err);
-  }
-  await i.editReply(replyOptions(formatReport(report)));
-}
-
 async function runCommand(
   deps: RouterDeps,
   i: ChatInputCommandInteraction,
@@ -216,8 +164,9 @@ async function runCommand(
   // The sync also yields the stored admin role id; read it directly only if
   // the sync failed and this command needs it.
   let synced: string | null | undefined;
+  let callerId: number | undefined;
   try {
-    ({ roleId: synced } = await syncAdminFlag(
+    ({ roleId: synced, userId: callerId } = await syncAdminFlag(
       db,
       callerOf(i),
       memberRoleIds(i),
@@ -225,6 +174,26 @@ async function runCommand(
   } catch (err) {
     console.error('admin flag sync failed', err);
   }
+
+  // Audit an applied admin change. If the flag sync failed, resolve the
+  // caller's id with a plain upsert; failures are logged, never thrown.
+  const audit: Audit = async (action, target, details) => {
+    try {
+      callerId ??= await upsertUser(db, callerOf(i));
+    } catch (err) {
+      console.error('audit: caller lookup failed', action, err);
+      return;
+    }
+    await auditDiscord(db, callerId, action, target, details);
+  };
+  const auditResult = async (
+    r: ActionResult,
+    action: string,
+    target: string | null,
+    details: object = {},
+  ) => {
+    if (r.ok) await audit(action, target, details);
+  };
 
   const needsAdmin = name === 'setup' || ADMIN_COMMANDS.has(name);
   const roleId = !needsAdmin
@@ -244,19 +213,24 @@ async function runCommand(
   switch (name) {
     case 'subject': {
       const sub = i.options.getSubcommand();
-      if (sub === 'list') return void (await reply(await listSubjects(db)));
+      if (sub === 'list')
+        return void (await reply((await listSubjects(db)).message));
       if (sub === 'add') {
         const channel = i.options.getChannel('channel', true);
-        const text = await addSubject(db, {
+        const code = i.options.getString('code', true);
+        const result = await addSubject(db, {
           channelId: channel.id,
           name: i.options.getString('name', true),
-          code: i.options.getString('code', true),
+          code,
           semester: i.options.getInteger('semester', true) as 1 | 2,
           ects: i.options.getInteger('ects', true),
           description: i.options.getString('description') ?? undefined,
         });
-        await reply(text);
-        if (text.startsWith('Dodano') || text.startsWith('Połączono')) {
+        await reply(result.message);
+        await auditResult(result, 'subject.add', code.trim().toUpperCase(), {
+          channelId: channel.id,
+        });
+        if (result.ok) {
           try {
             const subject = await findSubjectByChannel(db, channel.id);
             if (subject) {
@@ -275,28 +249,40 @@ async function runCommand(
       }
       const semester = i.options.getInteger('semester');
       const ects = i.options.getInteger('ects');
-      await reply(
-        await editSubject(db, i.options.getString('code', true), {
-          name: i.options.getString('name') ?? undefined,
-          semester: semester === null ? undefined : (semester as 1 | 2),
-          ects: ects === null ? undefined : ects,
-          description: i.options.getString('description') ?? undefined,
-          platformUrl: i.options.getString('platform_url') ?? undefined,
-        }),
-      );
+      const code = i.options.getString('code', true);
+      const patch = {
+        name: i.options.getString('name') ?? undefined,
+        semester: semester === null ? undefined : (semester as 1 | 2),
+        ects: ects === null ? undefined : ects,
+        description: i.options.getString('description') ?? undefined,
+        platformUrl: i.options.getString('platform_url') ?? undefined,
+      };
+      const result = await editSubject(db, code, patch);
+      await reply(result.message);
+      await auditResult(result, 'subject.edit', code.trim().toUpperCase(), {
+        fields: Object.keys(patch).filter(
+          (k) => patch[k as keyof typeof patch] !== undefined,
+        ),
+      });
       return;
     }
     case 'lecturer': {
       const lsub = i.options.getSubcommand();
       if (lsub === 'add') {
-        await reply(
-          await addLecturer(db, {
-            name: i.options.getString('name', true),
-            title: i.options.getString('title') ?? undefined,
-            email: i.options.getString('email') ?? undefined,
-            officeHours: i.options.getString('office_hours') ?? undefined,
-            room: i.options.getString('room') ?? undefined,
-          }),
+        const name = i.options.getString('name', true);
+        const result = await addLecturer(db, {
+          name,
+          title: i.options.getString('title') ?? undefined,
+          email: i.options.getString('email') ?? undefined,
+          officeHours: i.options.getString('office_hours') ?? undefined,
+          room: i.options.getString('room') ?? undefined,
+        });
+        await reply(result.message);
+        await auditResult(
+          result,
+          'lecturer.add',
+          result.id === undefined ? null : String(result.id),
+          { name },
         );
         return;
       }
@@ -306,15 +292,20 @@ async function runCommand(
           await reply('Wybierz prowadzącego z listy podpowiedzi.');
           return;
         }
-        await reply(
-          await editLecturer(db, id, {
-            name: i.options.getString('name') ?? undefined,
-            title: i.options.getString('title') ?? undefined,
-            email: i.options.getString('email') ?? undefined,
-            officeHours: i.options.getString('office_hours') ?? undefined,
-            room: i.options.getString('room') ?? undefined,
-          }),
-        );
+        const patch = {
+          name: i.options.getString('name') ?? undefined,
+          title: i.options.getString('title') ?? undefined,
+          email: i.options.getString('email') ?? undefined,
+          officeHours: i.options.getString('office_hours') ?? undefined,
+          room: i.options.getString('room') ?? undefined,
+        };
+        const result = await editLecturer(db, id, patch);
+        await reply(result.message);
+        await auditResult(result, 'lecturer.edit', String(id), {
+          fields: Object.keys(patch).filter(
+            (k) => patch[k as keyof typeof patch] !== undefined,
+          ),
+        });
         return;
       }
       const lecturerId = Number(i.options.getString('lecturer', true));
@@ -322,37 +313,57 @@ async function runCommand(
         await reply('Wybierz prowadzącego z listy podpowiedzi.');
         return;
       }
-      await reply(
-        await assignLecturer(db, {
-          subjectCode: i.options.getString('subject', true),
-          lecturerId,
-          classKind: i.options.getString('class', true) as ClassKind,
-          groupNumber: i.options.getInteger('group') ?? undefined,
-        }),
+      const subjectCode = i.options.getString('subject', true);
+      const classKind = i.options.getString('class', true) as ClassKind;
+      const groupNumber = i.options.getInteger('group') ?? undefined;
+      const result = await assignLecturer(db, {
+        subjectCode,
+        lecturerId,
+        classKind,
+        groupNumber,
+      });
+      await reply(result.message);
+      await auditResult(
+        result,
+        'lecturer.assign',
+        subjectCode.trim().toUpperCase(),
+        { lecturerId, classKind, groupNumber },
       );
       return;
     }
     case 'class': {
-      await reply(
-        await editClass(db, {
-          subjectCode: i.options.getString('subject', true),
-          kind: i.options.getString('kind', true) as ClassKind,
-          assessment:
-            (i.options.getString('assessment') as Assessment | 'brak' | null) ??
-            undefined,
-          note: i.options.getString('note') ?? undefined,
-          platformUrl: i.options.getString('platform_url') ?? undefined,
-        }),
+      const subjectCode = i.options.getString('subject', true);
+      const kind = i.options.getString('kind', true) as ClassKind;
+      const input = {
+        assessment:
+          (i.options.getString('assessment') as Assessment | 'brak' | null) ??
+          undefined,
+        note: i.options.getString('note') ?? undefined,
+        platformUrl: i.options.getString('platform_url') ?? undefined,
+      };
+      const result = await editClass(db, { subjectCode, kind, ...input });
+      await reply(result.message);
+      await auditResult(
+        result,
+        'class.edit',
+        subjectCode.trim().toUpperCase(),
+        {
+          kind,
+          fields: Object.keys(input).filter(
+            (k) => input[k as keyof typeof input] !== undefined,
+          ),
+        },
       );
       return;
     }
     case 'plan': {
       const now = new Date();
-      await reply(
-        i.options.getSubcommand() === 'sync'
-          ? await planSyncReply(db, now)
-          : await planStatusReply(db, now),
-      );
+      if (i.options.getSubcommand() === 'sync') {
+        await reply(await planSyncReply(db, now));
+        await audit('plan.sync', null, {});
+      } else {
+        await reply(await planStatusReply(db, now));
+      }
       return;
     }
     case 'ban':
@@ -361,33 +372,42 @@ async function runCommand(
       // Make sure the user row exists so the ban applies even if they never
       // used the bot.
       await upsertUser(db, toDiscordUser(target));
-      await reply(await banReply(db, target.id, name === 'ban'));
+      const result = await banUser(db, target.id, name === 'ban');
+      await reply(result.message);
+      await auditResult(
+        result,
+        name === 'ban' ? 'user.ban' : 'user.unban',
+        target.id,
+      );
       return;
     }
     case 'setup': {
-      // One run at a time: two concurrent runs could both create a forum.
-      if (setupRunning) {
-        await reply('/setup już trwa — spróbuj za chwilę.');
-        return;
-      }
-      setupRunning = true;
-      try {
-        await runSetup(deps, i);
-      } finally {
-        setupRunning = false;
-      }
+      const result = await withSetupLock(async () => {
+        await i.deferReply(eph);
+        if (!i.guild) throw new Error('/setup outside a guild');
+        const text = await runSetup(
+          deps,
+          i.guild,
+          i.user.id,
+          i.options.getBoolean('dry_run') === true,
+          audit,
+        );
+        await i.editReply(replyOptions(text));
+      });
+      if (result === 'busy') await reply(BUSY_TEXT);
       return;
     }
     case 'resync': {
-      await i.deferReply(eph);
-      const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-        ignoreWatermark: true,
+      // Under the /setup lock: a catch-up during /setup could race it.
+      const result = await withSetupLock(async () => {
+        await i.deferReply(eph);
+        await i.editReply(replyOptions(await runResync(deps, audit)));
       });
-      await i.editReply(
-        replyOptions(
-          `Zsynchronizowano: ${r.topics} tematów, ${r.created} nowych plików, ${r.failed} błędów.`,
-        ),
-      );
+      if (result === 'busy') await reply(BUSY_TEXT);
+      return;
+    }
+    case 'admin': {
+      await openAdminPanel(i);
       return;
     }
     case 'link': {
@@ -397,28 +417,16 @@ async function runCommand(
         toDiscordUser(i.user, i.member as never),
       );
       if (!res.ok) {
-        await reply('Twój dostęp do strony jest zablokowany.');
+        await reply(LINK_BANNED);
         return;
       }
       await i.deferReply(eph);
-      try {
-        // <url> + SuppressEmbeds: no link preview, so Discord's crawler
-        // never fetches the one-time URL.
-        await i.user.send({
-          content: `Twój link do Studies DB (ważny 15 minut, jednorazowy): <${res.url}>`,
-          flags: MessageFlags.SuppressEmbeds,
-        });
-      } catch {
-        await i.editReply(
-          replyOptions(
-            'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.',
-          ),
-        );
-        return;
-      }
-      await i.editReply(
-        replyOptions('Wysłałem Ci link w wiadomości prywatnej.'),
-      );
+      const sent = await sendLoginDm(i.user, res.url);
+      await i.editReply(replyOptions(sent ? LINK_SENT : LINK_DM_CLOSED));
+      return;
+    }
+    case 'panel': {
+      await openStudentPanel(i);
       return;
     }
     case 'search': {
@@ -446,13 +454,34 @@ export function createInteractionHandler(deps: RouterDeps) {
         await autocomplete(deps, interaction);
       } else if (interaction.isChatInputCommand()) {
         await runCommand(deps, interaction);
+      } else if (
+        interaction.isButton() ||
+        interaction.isStringSelectMenu() ||
+        interaction.isUserSelectMenu() ||
+        interaction.isModalSubmit()
+      ) {
+        await handleUi(deps, interaction);
       }
     } catch (err) {
       console.error('interaction failed', err);
       if (interaction.isAutocomplete() || !interaction.isRepliable()) return;
       try {
         const content = ERROR_TEXT;
-        if (interaction.deferred)
+        // A deferred UI response is a V2 view (or a pending ephemeral
+        // reply): replace it with a V2 notice, since `content` can't be set
+        // on a V2 message. Fall back to a separate ephemeral notice.
+        const isUi = !interaction.isChatInputCommand();
+        if (interaction.deferred && isUi) {
+          try {
+            await interaction.editReply(uiNotice(content));
+          } catch (err3) {
+            console.error('failed to edit the deferred response', err3);
+            await interaction.followUp({
+              ...uiNotice(content),
+              flags: MessageFlags.IsComponentsV2 | MessageFlags.Ephemeral,
+            });
+          }
+        } else if (interaction.deferred)
           await interaction.editReply(replyOptions(content));
         else if (interaction.replied) {
           await interaction.followUp(replyOptions(content, true));

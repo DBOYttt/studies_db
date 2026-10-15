@@ -28,6 +28,9 @@ pattern as `/plan sync` uses with the worker.
 
 ## 1. Shared admin actions (`packages/db`)
 
+> Shipped in the Discord GUI round (`docs/superpowers/specs/2026-10-14-discord-gui-design.md`): the actions live in
+> `packages/db/src/admin-actions.ts` and back both the slash commands and the `#admin-panel` UI.
+
 - Move the command logic from `apps/bot/src/commands/admin.ts` into `packages/db/src/admin-actions.ts`:
   `addSubject`, `editSubject`, `listSubjects`, `addLecturer`, `editLecturer`, `editClass`, `assignLecturer`,
   plus the field helpers (`textOrNull`, `urlOrNull`, `emailOrNull`) and the plan-sync reply text.

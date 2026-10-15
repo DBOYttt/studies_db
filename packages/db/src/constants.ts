@@ -14,6 +14,8 @@ export const CLASS_KINDS = [
   'wf',
 ] as const;
 export type ClassKind = (typeof CLASS_KINDS)[number];
+/** Class kinds in display order, plus the "none" bucket. */
+export const KIND_ORDER: (ClassKind | 'none')[] = [...CLASS_KINDS, 'none'];
 export const CLASS_NAMES: Record<ClassKind, string> = {
   wyklad: 'Wykład',
   laboratorium: 'Laboratorium',

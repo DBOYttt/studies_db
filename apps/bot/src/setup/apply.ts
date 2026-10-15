@@ -15,11 +15,15 @@ import {
   users,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
-import { ADMIN_ROLE_SETTING } from '../config.js';
+import { ADMIN_ROLE_SETTING, PANEL_SETTINGS } from '../config.js';
 import { syncForumTags } from '../sync.js';
 import type { ForumTag } from '../types.js';
+import { adminPanel } from '../ui/views/admin.js';
+import type { View } from '../ui/views/parts.js';
+import { studentPanel } from '../ui/views/student.js';
 import { INFO_TITLE } from './info.js';
-import type { Action, GuildSnapshot, PostFile } from './types.js';
+import { PANEL_CHANNEL_NAMES } from './plan.js';
+import type { Action, GuildSnapshot, PanelWhich, PostFile } from './types.js';
 
 export type UploadFile = { path: string; name: string };
 export type SentMessage = { messageId: string; attachmentIds: string[] };
@@ -53,7 +57,41 @@ export interface SetupGuild {
     content: string,
   ): Promise<void>;
   pinThread(threadId: string): Promise<void>;
+  /**
+   * New text channel. private false: everyone reads, nobody but the bot
+   * writes. private true: only the bot and the admin role see it.
+   */
+  createTextChannel(o: {
+    name: string;
+    parentId: string | null;
+    private: boolean;
+    adminRoleId: string | null;
+  }): Promise<string>;
+  /**
+   * Lets the admin role view #admin-panel without posting (as on creation)
+   * and removes overwrites of roles that no longer exist.
+   */
+  syncAdminPanelPerms(channelId: string, roleId: string): Promise<void>;
+  /** Posts and pins the panel; pinned false when pinning was refused. */
+  postPanel(
+    channelId: string,
+    view: View,
+  ): Promise<{ id: string; pinned: boolean }>;
+  /**
+   * Edits the panel in place and pins it if it isn't pinned. False when the
+   * message (or its channel) is gone; other errors throw.
+   */
+  editPanel(
+    channelId: string,
+    messageId: string,
+    view: View,
+  ): Promise<false | { pinned: boolean }>;
 }
+
+const PANEL_VIEWS: Record<PanelWhich, () => View> = {
+  panel: studentPanel,
+  admin: adminPanel,
+};
 
 export type SetupReport = {
   created: string[];
@@ -139,10 +177,19 @@ export async function applySetup(
   let createdRoleId: string | null = null;
   const categories = new Map(snapshot.categories.map((c) => [c.name, c.id]));
   const failedSubjects = new Set<number>();
+  /** Panel channels created or adopted in this run. */
+  const panelChannels: Partial<Record<PanelWhich, string>> = {};
 
   for (const a of actions) {
     if ('subjectId' in a && failedSubjects.has(a.subjectId)) continue;
-    const label = 'code' in a && a.code ? a.code : '';
+    const label =
+      'code' in a && a.code
+        ? a.code
+        : 'which' in a
+          ? `#${PANEL_CHANNEL_NAMES[a.which]}`
+          : a.type === 'syncAdminPanelPerms'
+            ? `#${PANEL_CHANNEL_NAMES.admin}`
+            : '';
     try {
       switch (a.type) {
         case 'createRole':
@@ -307,6 +354,79 @@ export async function applySetup(
           }
           await guild.editMessage(e.threadId, e.messageId, a.content);
           report.updated.push(`${a.code}: post informacyjny`);
+          break;
+        }
+        case 'ensurePanelChannel': {
+          const keys = PANEL_SETTINGS[a.which];
+          if (a.existingId !== null) {
+            await setSetting(db, keys.channel, a.existingId);
+            panelChannels[a.which] = a.existingId;
+            report.updated.push(
+              `kanał #${a.name} zapisany jako kanał panelu (uprawnienia bez zmian)`,
+            );
+            const adopted = snapshot.textChannels.find(
+              (c) => c.id === a.existingId,
+            );
+            if (a.which === 'admin' && adopted?.everyoneCanView) {
+              // Not a leak (every adm interaction re-checks the role), but
+              // the admin panel is meant to be hidden.
+              report.warnings.push(
+                `kanał #${a.name} widzą wszyscy — ogranicz go do roli admina`,
+              );
+            }
+            break;
+          }
+          const adminRoleId =
+            a.which === 'admin'
+              ? (createdRoleId ?? (await getSetting(db, ADMIN_ROLE_SETTING)))
+              : null;
+          if (a.which === 'admin' && adminRoleId === null) {
+            throw new Error('brak roli admina — kanał nie został utworzony');
+          }
+          const id = await guild.createTextChannel({
+            name: a.name,
+            parentId: a.parentId,
+            private: a.which === 'admin',
+            adminRoleId,
+          });
+          await setSetting(db, keys.channel, id);
+          panelChannels[a.which] = id;
+          report.created.push(`kanał #${a.name}`);
+          break;
+        }
+        case 'syncAdminPanelPerms': {
+          const roleId = a.roleId ?? createdRoleId;
+          if (!roleId) throw new Error('brak roli admina');
+          await guild.syncAdminPanelPerms(a.channelId, roleId);
+          report.updated.push(
+            `kanał #${PANEL_CHANNEL_NAMES.admin}: uprawnienia dla roli admina`,
+          );
+          break;
+        }
+        case 'ensurePanelMessage': {
+          const keys = PANEL_SETTINGS[a.which];
+          const name = PANEL_CHANNEL_NAMES[a.which];
+          const channelId = a.channelId ?? panelChannels[a.which];
+          if (!channelId) throw new Error('brak kanału panelu');
+          const view = PANEL_VIEWS[a.which]();
+          const notPinned = () =>
+            report.warnings.push(
+              `nie udało się przypiąć panelu w #${name} (bot potrzebuje uprawnienia Pin Messages)`,
+            );
+          const edited =
+            a.messageId !== null &&
+            (await guild.editPanel(channelId, a.messageId, view));
+          if (edited) {
+            report.updated.push(`panel w #${name}`);
+            if (!edited.pinned) notPinned();
+            break;
+          }
+          const posted = await guild.postPanel(channelId, view);
+          // Accepted risk: if storing the id fails, the next run cannot find
+          // this message and posts a second panel.
+          await setSetting(db, keys.message, posted.id);
+          report.created.push(`panel w #${name}`);
+          if (!posted.pinned) notPinned();
           break;
         }
         case 'warn':

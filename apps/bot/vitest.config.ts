@@ -6,7 +6,8 @@ const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
 
 export default defineConfig(({ mode }) => ({
   test: {
-    env: loadEnv(mode, repoRoot, ''),
+    // Warsaw local time, so a local-getter slip in wall-time code shows up.
+    env: { ...loadEnv(mode, repoRoot, ''), TZ: 'Europe/Warsaw' },
     fileParallelism: false,
   },
 }));

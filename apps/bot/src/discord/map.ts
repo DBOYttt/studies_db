@@ -1,5 +1,7 @@
 import {
   type AnyThreadChannel,
+  type APIGuildMember,
+  type APIInteractionGuildMember,
   ChannelType,
   type GuildMember,
   type Message,
@@ -22,13 +24,19 @@ export function toThreadInfo(thread: AnyThreadChannel): ThreadInfo | null {
   };
 }
 
+/** Server nickname of a cached member (`nickname`) or a raw API one (`nick`). */
+type AnyMember = GuildMember | APIInteractionGuildMember | APIGuildMember;
+
+const nickOf = (m: AnyMember | null | undefined) =>
+  !m ? null : 'nickname' in m ? m.nickname : (m.nick ?? null);
+
 export function toDiscordUser(
   user: User,
-  member?: GuildMember | null,
+  member?: AnyMember | null,
 ): DiscordUser {
   return {
     discordUserId: user.id,
-    displayName: member?.nickname ?? user.globalName ?? user.username,
+    displayName: nickOf(member) ?? user.globalName ?? user.username,
     avatarUrl: user.displayAvatarURL(),
   };
 }

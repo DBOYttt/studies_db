@@ -21,14 +21,19 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    new role get it back on their next command (the caller of `/setup` right away).
 4. Invite the bot with scopes `bot applications.commands` and permissions: View Channels, Read Message History,
    Add Reactions, Send Messages, Send Messages in Threads, Attach Files, Manage Channels, Manage Threads (to pin
-   the info post), Manage Roles:
-   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=292326313040`
+   the info post), Pin Messages (to pin the panels), Manage Roles:
+   `https://discord.com/oauth2/authorize?client_id=<DISCORD_CLIENT_ID>&scope=bot%20applications.commands&permissions=2252092139998288`
+   A bot invited earlier without Pin Messages: grant it to the bot's role first, otherwise `/setup` cannot create
+   `#panel` and `#admin-panel` (Discord refuses channel permission overwrites that grant a permission the bot
+   doesn't have itself) and cannot pin the panels.
    In Server Settings → Roles, keep the bot's role above the admin role (Discord only lets a bot assign roles below its own).
 5. Forum channels and their tags are created by `/setup` (step 9). Created by hand instead, each subject forum needs
    the tags Wykład, Laboratorium, Ćwiczenia, Projekt, Seminarium and Gr. 1 … Gr. N (one per group). A post tagged
    e.g. Laboratorium + Gr. 3 lands under that class/group; other tags (Kolokwium, Egzamin, ...) stay plain tags.
 6. Fill the bot variables in `.env` (see `.env.example`), start the DB (`pnpm db:up && pnpm db:migrate`).
-7. Register slash commands: `pnpm --filter @studies/bot register`.
+7. Register slash commands: `pnpm --filter @studies/bot register`. Re-run it after every change to the command
+   definitions (`src/commands/definitions.ts`), e.g. after upgrading to a version with `/panel` and `/admin`.
+   Run `pnpm db:migrate` first when upgrading (the panels use the `user_groups` table).
 8. Run: `pnpm dev:bot` (watch mode) or `pnpm --filter @studies/bot start`.
 9. In Discord, run `/setup dry_run:true` to preview, then `/setup`. Anyone with Manage Server (or the admin role)
    may run it. For every subject without a forum it creates a `Semestr N` category and a forum
@@ -46,6 +51,22 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
    Each forum also gets a pinned `ℹ️ Informacje o przedmiocie` post (classes, lecturers with contacts, weekly
    plan for the next 14 days) that `/setup` refreshes on every run. Threads started by the bot are never
    turned into topics on their own.
+   `/setup` also creates two text channels (inside the category of the first subject's forum, if any) with one pinned
+   panel message each: `#panel` for students (everyone reads; only the bot posts, no reactions or threads; buttons for today's plan, the
+   week, "Moje grupy" and the web login) and `#admin-panel` (only the admin role and the bot see it; status and
+   sync, subjects, lecturers, users). Each run edits the panel message in place (and pins it if it isn't); a deleted
+   message (or channel) is posted (created) again, never duplicated. A panel that can't be pinned is reported
+   as a warning. The ids are kept in `bot_settings`. Everything the panels show
+   is also available privately through `/panel` and `/admin`, and every admin change is checked against the admin
+   role and written to the audit log.
+   When the admin role changes (deleted, then created or adopted again by `/setup`) or an adopted `#admin-panel`
+   doesn't let the admin role see it, `/setup` gives the current admin role view access (no posting) to
+   `#admin-panel` and removes the overwrites of deleted roles. With several text channels named `panel` or
+   `admin-panel` and none stored, `/setup` warns and creates nothing for that panel; keep one and run it again.
+   The admin slash commands (`/setup`, `/admin`, `/subject`, `/lecturer`, `/resync`, ...) are shown by default only to
+   members with Manage Server; the bot itself checks the admin role. Admins without Manage Server won't see them
+   unless the server owner allows the `Studies Admin` role under Server Settings → Integrations → the bot. The pinned
+   `#admin-panel` works regardless.
 
 A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
 
@@ -71,7 +92,8 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
     forums; nothing changes.
 13. `/setup` -> role created and assigned to you, `Semestr N` categories, one forum per subject with tags and
     guidelines; `subjects.discord_channel_id` set.
-14. `/setup` again -> "Wszystko jest aktualne."
+14. `/setup` again -> only "panel w #panel" / "panel w #admin-panel" under Zaktualizowano (the panels are
+    refreshed on every run); delete the `#panel` message and run `/setup` -> it is posted again, once.
 15. Post in a created forum tagged Laboratorium + Gr. 1 with a PDF -> it lands under that class/group on the site.
 16. Create a forum `fiz-fizyka` by hand with a tag Seminarium and one post with a PDF, run `/setup` -> subject FIZ
     with class Seminarium, the post and file are in the DB, the forum gets Kolokwium/Egzamin tags and guidelines.
