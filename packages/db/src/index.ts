@@ -1,7 +1,9 @@
 export * from './admin-actions.js';
 export * from './audit.js';
 export * from './auth.js';
+export * from './bot-requests.js';
 export { createDb, type Db, type DbExecutor } from './client.js';
+export * from './events.js';
 export * from './files.js';
 export * from './hierarchy.js';
 export { insertMaterial, type NewMaterial } from './materials.js';

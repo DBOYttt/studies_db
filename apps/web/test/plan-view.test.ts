@@ -19,6 +19,7 @@ const W = (y: number, m: number, d: number, h = 0, mi = 0) =>
   new Date(Date.UTC(y, m - 1, d, h, mi));
 
 const session: PlanSession = {
+  type: 'class',
   id: 7,
   startsAt: W(2026, 10, 13, 8, 0),
   endsAt: W(2026, 10, 13, 9, 30),

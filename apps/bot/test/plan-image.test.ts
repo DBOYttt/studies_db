@@ -19,6 +19,7 @@ function session(
   over: Partial<PlanSession> = {},
 ): PlanSession {
   return {
+    type: 'class',
     id: nextId++,
     startsAt: wall(start),
     endsAt: wall(end),
