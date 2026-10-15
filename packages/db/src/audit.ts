@@ -60,12 +60,15 @@ export async function listAudit(
     /** Actions starting with this text, e.g. `event.`. */
     actionPrefix?: string;
     target?: string;
+    /** Only rows written by users who are currently admins. */
+    adminsOnly?: boolean;
   },
 ): Promise<{ rows: AuditRow[]; total: number }> {
   const conds: SQL[] = [];
   if (o.userId !== undefined) conds.push(eq(adminAudit.userId, o.userId));
   if (o.action !== undefined) conds.push(eq(adminAudit.action, o.action));
   if (o.target !== undefined) conds.push(eq(adminAudit.target, o.target));
+  if (o.adminsOnly) conds.push(eq(users.isAdmin, true));
   if (o.actionPrefix !== undefined) {
     const esc = o.actionPrefix.replace(/[\\%_]/g, '\\$&');
     conds.push(sql`${adminAudit.action} LIKE ${`${esc}%`}`);
@@ -82,6 +85,7 @@ export async function listAudit(
   const [count] = await db
     .select({ n: sql<number>`count(*)` })
     .from(adminAudit)
+    .innerJoin(users, eq(users.id, adminAudit.userId))
     .where(where);
   return { rows, total: Number(count.n) };
 }

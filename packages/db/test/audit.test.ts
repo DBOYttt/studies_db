@@ -105,6 +105,14 @@ describe('audit', () => {
     expect(both.total).toBe(1);
   });
 
+  it('listAudit adminsOnly keeps rows of current admins', async () => {
+    await db.update(users).set({ isAdmin: true }).where(eq(users.id, a));
+    const res = await listAudit(db, { limit: 10, offset: 0, adminsOnly: true });
+    expect(res.total).toBe(3);
+    expect(res.rows.every((r) => r.userId === a)).toBe(true);
+    await db.update(users).set({ isAdmin: false }).where(eq(users.id, a));
+  });
+
   it('listAdmins lists only flagged, non-banned users', async () => {
     const c = await upsertUser(db, {
       discordUserId: 'c',

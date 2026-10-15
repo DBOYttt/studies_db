@@ -40,11 +40,13 @@ export default async function AdminAuditPage({
       offset: (q.page - 1) * AUDIT_PAGE_SIZE,
       userId: q.userId,
       action: q.action,
+      adminsOnly: q.adminsOnly,
     }),
     listAdmins(db),
   ]);
   const pageCount = Math.max(1, Math.ceil(total / AUDIT_PAGE_SIZE));
-  const filtered = q.userId !== undefined || q.action !== undefined;
+  const filtered =
+    q.userId !== undefined || q.action !== undefined || q.adminsOnly === true;
   // A filtered user who is no longer an admin still needs an option.
   const userKnown =
     q.userId === undefined || admins.some((a) => a.id === q.userId);
@@ -56,12 +58,44 @@ export default async function AdminAuditPage({
         tabs={adminTabs('audit')}
       />
       <div className="flex flex-col gap-3">
+        <nav
+          aria-label="Zakres dziennika"
+          className="flex w-fit overflow-hidden rounded-md border border-line-strong"
+        >
+          {(
+            [
+              ['Wszyscy', false],
+              ['Admini', true],
+            ] as const
+          ).map(([label, only], i) => {
+            const active = (q.adminsOnly === true) === only;
+            return (
+              <Link
+                key={label}
+                href={auditHref({
+                  ...q,
+                  adminsOnly: only || undefined,
+                  page: 1,
+                })}
+                aria-current={active ? 'page' : undefined}
+                className={`px-3 py-[5px] ${i > 0 ? 'border-l border-line-strong' : ''} ${
+                  active
+                    ? 'bg-selected font-semibold text-fg'
+                    : 'bg-panel text-accent-ink hover:bg-list-hover hover:underline'
+                }`}
+              >
+                {label}
+              </Link>
+            );
+          })}
+        </nav>
         <form
           method="get"
           action="/admin/audit"
           aria-label="Filtry dziennika"
           className="flex flex-wrap items-end gap-3 rounded-md border border-line-strong bg-bar px-3 py-2.5"
         >
+          {q.adminsOnly && <input type="hidden" name="who" value="admins" />}
           <label className="flex flex-col gap-1">
             <span className="text-xs text-muted">Admin</span>
             <select

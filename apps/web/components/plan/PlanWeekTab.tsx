@@ -1,4 +1,4 @@
-import { getMyGroups } from '@studies/db';
+import { getMyGroups, listEventsInRange } from '@studies/db';
 import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
 import { getDb, getRoPool } from '@/lib/db';
@@ -9,8 +9,11 @@ import {
   nowWall,
   parseIsoWeek,
   sanitizeMyGroups,
+  shiftWeek,
   weekDays,
+  weekStart,
 } from '@/lib/plan';
+import { eventsForFilter, newEventHref } from '@/lib/plan-events';
 import {
   listMyGroupOptions,
   listWeekSessions,
@@ -53,13 +56,22 @@ export async function PlanWeekTab({
   try {
     const week =
       parseIsoWeek(raw) ?? defaultWeek(now, await sessionRange(pool, filter));
-    const [{ rows }, links, options, stored] = await Promise.all([
-      listWeekSessions(pool, week, filter),
-      // Without the lookups blocks link to the subject only.
-      loadLinkContext(getDb()).catch(() => undefined),
-      myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
-      user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
-    ]);
+    const [{ rows: classRows }, events, links, options, stored] =
+      await Promise.all([
+        listWeekSessions(pool, week, filter),
+        listEventsInRange(
+          pool,
+          weekStart(week),
+          weekStart(shiftWeek(week, 1)),
+        ).then((e) => eventsForFilter(e, filter)),
+        // Without the lookups blocks link to the subject only.
+        loadLinkContext(getDb()).catch(() => undefined),
+        myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
+        user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
+      ]);
+    const rows = [...classRows, ...events].sort(
+      (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+    );
     const validGroups = options
       ? Object.fromEntries(
           options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
@@ -82,6 +94,13 @@ export async function PlanWeekTab({
           myGroupsFilter={myGroupsFilter}
           myGroups={myGroups}
           simple={simple}
+          newEventHref={newEventHref(
+            week,
+            now,
+            isoWeekOf(now),
+            simple,
+            filter.subjectId,
+          )}
         />
       </>
     );

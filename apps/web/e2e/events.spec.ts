@@ -38,6 +38,43 @@ test('add an event; its page says the Discord post is being prepared', async ({
   await expect(page.getByText('Dodano wydarzenie')).toBeVisible();
 });
 
+function isoWeekParam(iso: string): string {
+  const d = new Date(`${iso}T00:00:00Z`);
+  const day = (d.getUTCDay() + 6) % 7;
+  d.setUTCDate(d.getUTCDate() - day + 3);
+  const year = d.getUTCFullYear();
+  const jan4 = new Date(Date.UTC(year, 0, 4));
+  const week =
+    1 +
+    Math.round(
+      ((d.getTime() - jan4.getTime()) / 86_400_000 -
+        3 +
+        ((jan4.getUTCDay() + 6) % 7)) /
+        7,
+    );
+  return `${year}-W${String(week).padStart(2, '0')}`;
+}
+
+test('the event shows in the plan week and on the start page', async ({
+  page,
+}) => {
+  await page.goto(`/s/plan?week=${isoWeekParam(dateIn(7))}`);
+  const block = page
+    .getByTestId('plan-event')
+    .filter({ hasText: 'Kolokwium z tarcia' });
+  await expect(block).toBeVisible();
+  await expect(page.getByRole('link', { name: /Wydarzenie$/ })).toHaveAttribute(
+    'href',
+    /^\/s\/wydarzenia\/nowe\?date=\d{4}-\d{2}-\d{2}/,
+  );
+
+  await page.goto('/s');
+  const card = page.getByRole('region', { name: 'Nadchodzące wydarzenia' });
+  await expect(card.getByText('Kolokwium z tarcia')).toBeVisible();
+  await card.getByRole('link', { name: /Kolokwium z tarcia/ }).click();
+  await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+});
+
 test('an invalid form shows the Polish message', async ({ page }) => {
   await page.goto('/s/wydarzenia/nowe');
   await page.getByLabel('Tytuł').fill('Coś');

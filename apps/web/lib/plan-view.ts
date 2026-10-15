@@ -48,6 +48,14 @@ export function sessionLinks(
   ctx?: LinkContext,
   simple = false,
 ): SessionLinks {
+  if (s.type === 'event') {
+    // Events open their own page; `subject` carries that link.
+    return {
+      subject: `${simple ? '/s' : ''}/wydarzenia/${s.id}`,
+      lecturer: null,
+      sql: sqlHref('/sql', `SELECT * FROM v_events WHERE id = ${s.id}`),
+    };
+  }
   if (simple) {
     const q = new URLSearchParams();
     const number =
