@@ -11,9 +11,6 @@ const config: NextConfig = {
   // e2e / side-by-side dev servers set NEXT_DIST_DIR so they don't fight over the .next lock.
   distDir: process.env.NEXT_DIST_DIR || '.next',
   output: 'standalone',
-  // The proxy buffers request bodies (default 10 MB, silently truncating).
-  // Event uploads are up to 10 files x 10 MB plus multipart overhead.
-  experimental: { proxyClientMaxBodySize: '102mb' },
   transpilePackages: ['@studies/db'],
   serverExternalPackages: ['mysql2'],
   // packages/db imports its own TS files with `.js` extensions (NodeNext style).

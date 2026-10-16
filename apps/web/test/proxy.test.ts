@@ -19,6 +19,8 @@ describe('proxy', () => {
       '/files/1/original',
       '/api/sql',
       '/api/schema',
+      '/api/wydarzenia/12/pliki/x',
+      '/api/wydarzenia/12',
       '/login-infox',
     ]) {
       expect(matches(u), u).toBe(true);
@@ -34,6 +36,7 @@ describe('proxy', () => {
       '/_next/static/chunks/main.js',
       '/favicon.ico',
       '/pdf.worker.min.mjs',
+      '/api/wydarzenia/12/pliki',
     ]) {
       expect(matches(u), u).toBe(false);
     }

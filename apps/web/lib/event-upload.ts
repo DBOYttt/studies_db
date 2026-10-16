@@ -67,20 +67,36 @@ export function sanitizeFilename(raw: string): string {
     // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping them is the point
     .replace(/[\u0000-\u001f\u007f-\u009f‪-‮⁦-⁩]/g, '')
     .trim();
-  const name = Array.from(clean).slice(0, MAX_NAME).join('').trim();
+  const chars = Array.from(clean);
+  let name = clean;
+  if (chars.length > MAX_NAME) {
+    // Shorten the stem, keep the extension (when it looks like one).
+    const ext = /(\.[^.\s]{1,15})$/.exec(clean)?.[1] ?? '';
+    const extLen = Array.from(ext).length;
+    name = `${chars
+      .slice(0, MAX_NAME - extLen)
+      .join('')
+      .trim()}${ext}`;
+  }
   return name === '' || name === '.' || name === '..' ? 'plik' : name;
 }
 
 type Saved = { rel: string; abs: string; name: string; size: number };
 type Failure = { status: number; error: string };
 
-/** Users with an upload in flight: one at a time keeps the hourly limit exact. */
+/**
+ * Users with an upload in flight: one at a time keeps the hourly limit exact.
+ * Per process: assumes a single web container (a second one would need a DB
+ * lock instead).
+ */
 const inFlight = new Set<number>();
 
 /** Streams the multipart body to disk. On any failure nothing is left behind. */
 async function receiveFiles(
   req: Request,
   root: string,
+  maxFiles: number,
+  quotaBound: boolean,
 ): Promise<{ files: Saved[] } | Failure> {
   const contentType = req.headers.get('content-type') ?? '';
   if (!/^multipart\/form-data/i.test(contentType) || !req.body) {
@@ -92,7 +108,7 @@ async function receiveFiles(
       headers: { 'content-type': contentType },
       defParamCharset: 'utf8',
       limits: {
-        files: MAX_UPLOAD_FILES,
+        files: maxFiles,
         // busboy flags a file when it REACHES this size, so +1 allows exactly 10 MB.
         fileSize: MAX_UPLOAD_BYTES + 1,
         fields: 5,
@@ -183,7 +199,11 @@ async function receiveFiles(
       stream.pipe(ws);
     });
     bb.on('filesLimit', () =>
-      abort({ status: 400, error: UPLOAD_ERRORS.count }),
+      abort(
+        quotaBound
+          ? { status: 429, error: UPLOAD_ERRORS.rate }
+          : { status: 400, error: UPLOAD_ERRORS.count },
+      ),
     );
     bb.on('fieldsLimit', () =>
       abort({ status: 400, error: UPLOAD_ERRORS.bad }),
@@ -236,7 +256,12 @@ export async function handleEventUpload(
     const before = await uploadedFilesLastHour(db, user.id);
     if (before >= MAX_UPLOADS_PER_HOUR) return fail(429, UPLOAD_ERRORS.rate);
 
-    const got = await receiveFiles(req, storageRoot);
+    const got = await receiveFiles(
+      req,
+      storageRoot,
+      Math.min(MAX_UPLOAD_FILES, MAX_UPLOADS_PER_HOUR - before),
+      MAX_UPLOADS_PER_HOUR - before < MAX_UPLOAD_FILES,
+    );
     if (!('files' in got)) return fail(got.status, got.error);
     const files = got.files;
     const discard = () => Promise.allSettled(files.map((f) => unlink(f.abs)));

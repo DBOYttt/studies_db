@@ -272,7 +272,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
       'x.pdf',
       'y.pdf',
       'ąę ł.pdf',
-      'z'.repeat(200),
+      `${'z'.repeat(196)}.pdf`,
     ]);
     for (const r of rows)
       expect(r.storagePath).toMatch(/^uploads\/[0-9a-f-]{36}$/);

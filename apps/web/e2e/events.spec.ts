@@ -131,6 +131,24 @@ test('uploading a file shows it as wysyłanie… (no bot in e2e)', async ({
   await expect(page.getByText('wysyłanie…')).toBeVisible();
 });
 
+test('a large upload (2 x 7.5 MB) succeeds', async ({ page }) => {
+  await page.goto(eventUrl);
+  const big = (name: string) => ({
+    name,
+    mimeType: 'application/octet-stream',
+    buffer: Buffer.alloc(7.5 * 1024 * 1024, 1),
+  });
+  await page
+    .getByLabel('Pliki do dodania')
+    .setInputFiles([big('duzy1.bin'), big('duzy2.bin')]);
+  await page.getByRole('button', { name: 'Dodaj pliki' }).click();
+  await expect(page.getByText('duzy1.bin')).toBeVisible();
+  await expect(page.getByText('duzy2.bin')).toBeVisible();
+  await expect(page.getByText(/Nie udało|za duży|Nieprawidłowe/)).toHaveCount(
+    0,
+  );
+});
+
 test('delete the event; an admin sees it with Przywróć', async ({
   page,
   browser,

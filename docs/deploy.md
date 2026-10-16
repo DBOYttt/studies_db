@@ -25,6 +25,12 @@ Fill in: `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
 `STORAGE_DIR` is forced to `/data/storage` by compose; it must be absolute in production
 (the apps throw at startup otherwise).
 
+Website uploads for events are written by the `web` container (user `node`, uid 1000) to
+`$STORAGE_DIR/uploads`. The `storage` volume is created by root, so the one-shot `migrate` service
+creates that directory on every `compose up`, owned by uid 1000 with mode 0750 (the bot runs as root and
+can read and delete the files). Without it every upload answers 503. If you run the apps outside compose,
+create `uploads/` yourself with an owner that matches the web process.
+
 The `worker` service does not load `.env` as a whole: compose passes it only `DATABASE_URL`,
 `UNITIME_ICAL_URL` and the optional `WORKER_CONCURRENCY` / `SOFFICE_BIN` / `PDFTOTEXT_BIN` (and forces
 `STORAGE_DIR`). It opens files named by DB rows, so it should not hold the Discord token or other secrets.

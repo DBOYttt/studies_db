@@ -38,6 +38,20 @@ services:
     env_file: .env
     environment:
       DATABASE_ADMIN_URL: mysql://root:${MARIADB_ROOT_PASSWORD}@mariadb:3306/studies
+      STORAGE_DIR: /data/storage
+    volumes:
+      - storage:/data/storage
+    # Runs as root. First make the upload dir the web container (user `node`,
+    # uid 1000) can write: owned by uid 1000, mode 0750 (the bot runs as root
+    # and reads/deletes the files). Then migrate as before.
+    command:
+      - sh
+      - -c
+      - >-
+        mkdir -p /data/storage/uploads
+        && chown 1000:1000 /data/storage/uploads
+        && chmod 0750 /data/storage/uploads
+        && exec node --import tsx src/cli/migrate.ts
     depends_on:
       mariadb:
         condition: service_healthy
