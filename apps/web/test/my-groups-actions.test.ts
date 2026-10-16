@@ -3,9 +3,11 @@ import {
   consumeLoginToken,
   createLoginToken,
   type Db,
+  disableReminders,
   ensureClass,
   ensureGroup,
   getMyGroups,
+  getReminderPrefs,
   setMyGroup,
   subjects,
   upsertUser,
@@ -37,8 +39,12 @@ vi.mock('react', async (importOriginal) => ({
   cache: <T>(fn: T) => fn,
 }));
 
-const { saveMyGroupAction, clearMyGroupsAction, importMyGroupsAction } =
-  await import('../lib/my-groups-actions');
+const {
+  saveMyGroupAction,
+  clearMyGroupsAction,
+  importMyGroupsAction,
+  saveRemindersAction,
+} = await import('../lib/my-groups-actions');
 
 let aliceId: number;
 let aliceSid: string;
@@ -91,6 +97,8 @@ describe('my-groups actions', () => {
     await expect(saveMyGroupAction(classA, grA1)).rejects.toThrow('redirect');
     await expect(clearMyGroupsAction()).rejects.toThrow('redirect');
     await expect(importMyGroupsAction({})).rejects.toThrow('redirect');
+    await expect(saveRemindersAction(true, true)).rejects.toThrow('redirect');
+    expect((await getReminderPrefs(db, aliceId)).dayBefore).toBe(false);
     expect(await getMyGroups(db, aliceId)).toEqual({});
   });
 
@@ -182,5 +190,27 @@ describe('my-groups actions', () => {
     expect(await importMyGroupsAction({ [classA]: grA1 })).toBe(false);
     expect(await getMyGroups(db, aliceId)).toEqual({ [classA]: grA2 });
     expect(await importMyGroupsAction(null as never)).toBe(false);
+  });
+});
+
+describe('reminders action', () => {
+  it('saves the toggles for the session user and clears the DM-closed reason', async () => {
+    cookieSid = aliceSid;
+    await disableReminders(db, aliceId, 'DM zamknięte');
+    expect(await saveRemindersAction(true, false)).toEqual({ ok: true });
+    expect(await getReminderPrefs(db, aliceId)).toEqual({
+      dayBefore: true,
+      hourBefore: false,
+      disabledReason: null,
+    });
+    expect((await getReminderPrefs(db, bobId)).dayBefore).toBe(false);
+  });
+
+  it('rejects non-boolean arguments', async () => {
+    cookieSid = aliceSid;
+    expect(
+      await saveRemindersAction('yes' as never, undefined as never),
+    ).toEqual({ ok: false });
+    expect((await getReminderPrefs(db, aliceId)).dayBefore).toBe(true);
   });
 });

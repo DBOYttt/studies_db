@@ -1,8 +1,11 @@
 import {
+  adminAudit,
   classes,
   classGroups,
   classSessions,
   type Db,
+  disableReminders,
+  getReminderPrefs,
   setSetting,
   subjects,
   userGroups,
@@ -410,6 +413,88 @@ describe('handleUi', () => {
     expect(await db.select().from(userGroups)).toEqual([]);
   });
 
+  it('rem toggles persist per kind, audit as discord and keep the subject open', async () => {
+    const [u] = await db
+      .insert(users)
+      .values({ discordUserId: 'stud', displayName: 'stud' })
+      .$returningId();
+    const day = component('v1:stu:rem:day:0', { ephemeral: true });
+    await handler()(day);
+    expect(day.calls).toEqual(['deferUpdate', 'editReply']);
+    expect(await getReminderPrefs(db, u.id)).toMatchObject({
+      dayBefore: true,
+      hourBefore: false,
+    });
+    const view = day.editReply.mock.calls[0][0];
+    const ids = nodes(view).map((n) => n.custom_id);
+    expect(ids).toContain(`v1:stu:groups:set:${id.cls}`);
+    expect(
+      nodes(view)
+        .filter((n) => n.type === 2)
+        .map((n) => n.label),
+    ).toContain('Przypomnienie 24 h: wł.');
+    await handler()(component('v1:stu:rem:hour', { ephemeral: true }));
+    await handler()(component('v1:stu:rem:day', { ephemeral: true }));
+    expect(await getReminderPrefs(db, u.id)).toMatchObject({
+      dayBefore: false,
+      hourBefore: true,
+    });
+    const [a] = await db
+      .select()
+      .from(adminAudit)
+      .where(eq(adminAudit.action, 'reminders.update'))
+      .limit(1);
+    expect((a.details as { source: string }).source).toBe('discord');
+  });
+
+  it('shows the closed-DM notice once, then clears the reason but keeps prefs off', async () => {
+    const [u] = await db
+      .insert(users)
+      .values({ discordUserId: 'stud', displayName: 'stud' })
+      .$returningId();
+    await disableReminders(db, u.id, 'DM zamknięte');
+    const first = component('v1:stu:plan:day', { ephemeral: true });
+    await handler()(first);
+    expect(first.calls).toEqual(['deferUpdate', 'editReply', 'followUp']);
+    expect(textOf(first.followUp.mock.calls[0][0])).toContain(
+      'Przypomnienia wyłączone: DM zamknięte',
+    );
+    expect(await getReminderPrefs(db, u.id)).toEqual({
+      dayBefore: false,
+      hourBefore: false,
+      disabledReason: null,
+    });
+    const second = component('v1:stu:plan:day', { ephemeral: true });
+    await handler()(second);
+    expect(second.calls).not.toContain('followUp');
+  });
+
+  it('/panel shows the closed-DM notice once as a follow-up', async () => {
+    const [u] = await db
+      .insert(users)
+      .values({ discordUserId: 'stud', displayName: 'stud' })
+      .$returningId();
+    await disableReminders(db, u.id, 'DM zamknięte');
+    const mk = (): Json => ({
+      commandName: 'panel',
+      user: user(),
+      member: { roles: [] },
+      deferred: false,
+      replied: false,
+      isAutocomplete: () => false,
+      isChatInputCommand: () => true,
+      isRepliable: () => true,
+      reply: vi.fn().mockResolvedValue(undefined),
+      followUp: vi.fn().mockResolvedValue(undefined),
+    });
+    const a = mk();
+    await handler()(a);
+    expect(a.followUp).toHaveBeenCalledTimes(1);
+    const b = mk();
+    await handler()(b);
+    expect(b.followUp).not.toHaveBeenCalled();
+  });
+
   it('login DMs the one-time link in a new ephemeral reply', async () => {
     const i = component('v1:stu:login', { ephemeral: true });
     await handler()(i);
@@ -442,6 +527,7 @@ describe('handleUi', () => {
       'v1:stu:login',
       'v1:stu:plan:day',
       'v1:stu:groups:open',
+      'v1:stu:rem:day',
     ]) {
       const i = component(cid);
       await handler()(i);

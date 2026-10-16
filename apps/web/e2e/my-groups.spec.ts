@@ -98,3 +98,19 @@ test('a stale localStorage key never resurrects cleared groups', async ({
     await page.evaluate((key) => localStorage.getItem(key), KEY),
   ).toBeNull();
 });
+
+test('Przypomnienia checkboxes persist', async ({ page }) => {
+  await page.goto(GROUPS);
+  const day = page.getByLabel('24 h przed');
+  const hour = page.getByLabel('1 h przed');
+  await expect(day).not.toBeChecked();
+  const saved = page.waitForResponse((r) => r.request().method() === 'POST');
+  await day.check();
+  await saved;
+  await page.reload();
+  await expect(page.getByLabel('24 h przed')).toBeChecked();
+  await expect(hour).not.toBeChecked();
+  const undone = page.waitForResponse((r) => r.request().method() === 'POST');
+  await page.getByLabel('24 h przed').uncheck();
+  await undone;
+});

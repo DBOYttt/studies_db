@@ -42,6 +42,10 @@ import {
 
 export { notice, type View, type ViewComponent } from './parts.js';
 
+export type RemindersState = { dayBefore: boolean; hourBefore: boolean };
+export const REMINDERS_OFF_NOTICE =
+  'Przypomnienia wyłączone: DM zamknięte — włącz wiadomości prywatne i ustaw je ponownie w Moje grupy.';
+
 export const NO_GROUPS_HINT =
   'Ustaw Moje grupy, aby widzieć tylko swoje zajęcia';
 export const EMPTY_DAY = 'Brak zajęć';
@@ -508,6 +512,7 @@ export function groupsView(
   options: MyGroupOption[],
   selectedSubject: string | null,
   my: MyGroups,
+  rem: RemindersState = { dayBefore: false, hourBefore: false },
 ): View {
   const withGroups = options.filter((o) => o.groups.length > 0);
   const subjects = groupSubjects(options);
@@ -530,6 +535,10 @@ export function groupsView(
     summaryText = [...shown, `-# ${more(rest)}`].join('\n');
   }
 
+  // The toggles carry the selected subject's index so it stays open.
+  const subjIdx =
+    selectedSubject === null ? -1 : subjects.indexOf(selectedSubject);
+  const remArgs = subjIdx >= 0 ? [subjIdx] : [];
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text('## Moje grupy'), text(summaryText))
     .addSeparatorComponents(divider());
@@ -568,9 +577,10 @@ export function groupsView(
   if (classes.length) {
     container.addSeparatorComponents(divider());
     // Used so far: container, 2 texts, divider, 2 per subject select, divider;
-    // still to come: overflow text, divider, row + 2 buttons.
+    // still to come: overflow text, divider, reminders row + 2 buttons,
+    // row + 2 buttons.
     const used = 1 + 2 + 1 + 2 * subjectPages.length + 1;
-    const slots = MAX_COMPONENTS - used - 1 - 1 - 3;
+    const slots = MAX_COMPONENTS - used - 1 - 1 - 3 - 3;
     const fitting = Math.max(0, Math.floor(slots / 3));
     const shown = classes.slice(0, fitting);
     for (const o of shown) {
@@ -592,6 +602,20 @@ export function groupsView(
   return view(
     container
       .addSeparatorComponents(divider())
+      .addActionRowComponents(
+        row(
+          button(
+            encodeId('stu', 'rem', 'day', ...remArgs),
+            `Przypomnienie 24 h: ${rem.dayBefore ? 'wł.' : 'wył.'}`,
+            rem.dayBefore ? ButtonStyle.Success : ButtonStyle.Secondary,
+          ),
+          button(
+            encodeId('stu', 'rem', 'hour', ...remArgs),
+            `Przypomnienie 1 h: ${rem.hourBefore ? 'wł.' : 'wył.'}`,
+            rem.hourBefore ? ButtonStyle.Success : ButtonStyle.Secondary,
+          ),
+        ),
+      )
       .addActionRowComponents(
         row(
           button(encodeId('stu', 'groups', 'clear'), 'Wyczyść'),

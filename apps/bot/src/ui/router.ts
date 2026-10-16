@@ -2,7 +2,7 @@
  * Component and modal interactions (buttons, selects, modal submits) of the
  * panels. Errors propagate to createInteractionHandler, which reports them.
  */
-import { users } from '@studies/db';
+import { clearDisabledReason, getReminderPrefs, users } from '@studies/db';
 import type { ChatInputCommandInteraction } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
@@ -20,7 +20,7 @@ import {
 } from './respond.js';
 import { parseStudentAction, runStudentAction } from './student.js';
 import { adminPanel } from './views/admin.js';
-import { notice, studentPanel } from './views/student.js';
+import { notice, REMINDERS_OFF_NOTICE, studentPanel } from './views/student.js';
 
 export { STALE_TEXT, type UiInteraction } from './respond.js';
 
@@ -29,8 +29,33 @@ export const BANNED_TEXT = 'Twój dostęp do strony jest zablokowany.';
 /** /panel: the student panel, privately. Allowed for banned users too. */
 export async function openStudentPanel(
   i: ChatInputCommandInteraction,
+  deps?: RouterDeps,
+  userId?: number,
 ): Promise<void> {
   await i.reply(ephemeral(studentPanel()));
+  if (deps && userId !== undefined) {
+    await remindersOffNotice(deps, userId, (v) => i.followUp(ephemeral(v)));
+  }
+}
+
+/**
+ * Tells a user once that their reminders were turned off (closed DMs), then
+ * forgets the reason; the prefs themselves stay off. Never throws.
+ */
+async function remindersOffNotice(
+  deps: RouterDeps,
+  userId: number,
+  send: (v: ReturnType<typeof notice>) => Promise<unknown>,
+): Promise<void> {
+  try {
+    const { db } = deps.ingest;
+    const prefs = await getReminderPrefs(db, userId);
+    if (!prefs.disabledReason) return;
+    await clearDisabledReason(db, userId);
+    await send(notice(REMINDERS_OFF_NOTICE));
+  } catch (err) {
+    console.error('reminders notice failed:', err);
+  }
 }
 
 /** /admin: the admin panel, privately (the command router checks the role). */
@@ -87,4 +112,5 @@ export async function handleUi(
     { deps, user: i.user, member, userId, show: (v) => show(i, v) },
     action,
   );
+  await remindersOffNotice(deps, userId, (v) => i.followUp(ephemeral(v)));
 }

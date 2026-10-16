@@ -1,5 +1,5 @@
 import type { MyGroupOption, PlanSession } from '@studies/db';
-import { MessageFlags } from 'discord.js';
+import { ButtonStyle, MessageFlags } from 'discord.js';
 import { describe, expect, it } from 'vitest';
 import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../src/ui/limits.js';
 import { ephemeral } from '../src/ui/respond.js';
@@ -469,6 +469,32 @@ describe('groupsView', () => {
     })),
   });
 
+  it('shows the reminder toggles with their state and the open subject', () => {
+    const options = [opt(1, 'Analiza', 'Laboratorium', 3)];
+    const v = groupsView(
+      options,
+      'Analiza',
+      {},
+      {
+        dayBefore: true,
+        hourBefore: false,
+      },
+    );
+    expectValid(v);
+    const day = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:day:0');
+    const hour = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:hour:0');
+    expect([day?.label, day?.style]).toEqual([
+      'Przypomnienie 24 h: wł.',
+      ButtonStyle.Success,
+    ]);
+    expect([hour?.label, hour?.style]).toEqual([
+      'Przypomnienie 1 h: wył.',
+      ButtonStyle.Secondary,
+    ]);
+    const none = groupsView(options, null, {});
+    expect(customIds(none)).toContain('v1:stu:rem:day');
+  });
+
   it('lists only subjects with groups and marks the current choice', () => {
     const options = [
       opt(1, 'Analiza', 'Laboratorium', 3),
@@ -499,6 +525,8 @@ describe('groupsView', () => {
       expect.objectContaining({ value: '0' }),
     ]);
     expect(buttons(v).map((b) => [b.custom_id, b.label])).toEqual([
+      ['v1:stu:rem:day:0', 'Przypomnienie 24 h: wył.'],
+      ['v1:stu:rem:hour:0', 'Przypomnienie 1 h: wył.'],
       ['v1:stu:groups:clear', 'Wyczyść'],
       ['v1:stu:plan:day', 'Pokaż mój plan'],
     ]);

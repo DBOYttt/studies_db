@@ -256,8 +256,9 @@ export async function dueDms(
 }
 
 /**
- * Tomorrow's events for the channel digest: only from 18:00 to 18:30 and only
- * when none of them has a digest row for its current start.
+ * Tomorrow's events for the channel digest: only from 18:00 to 18:30, and only
+ * those without a digest row for their current start (so an event added later
+ * the same evening still gets announced).
  */
 export async function dueDigest(
   pool: mysql.Pool,
@@ -286,7 +287,16 @@ export async function dueDigest(
   );
   const logged = new Set(rows.map((r) => `${r.event_id}:${r.t}`));
   const wall = (d: Date) => d.toISOString().slice(0, 19).replace('T', ' ');
-  return list.some((e) => logged.has(`${e.id}:${wall(e.startsAt)}`))
-    ? []
-    : list;
+  return list.filter((e) => !logged.has(`${e.id}:${wall(e.startsAt)}`));
+}
+
+/** Forgets the "DM zamknięte" note once it has been shown; prefs stay as they are. */
+export async function clearDisabledReason(
+  db: Db,
+  userId: number,
+): Promise<void> {
+  await db
+    .update(reminderPrefs)
+    .set({ disabledReason: null })
+    .where(eq(reminderPrefs.userId, userId));
 }

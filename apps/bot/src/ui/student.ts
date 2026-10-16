@@ -5,8 +5,10 @@
 import {
   clearMyGroups,
   getMyGroups,
+  getReminderPrefs,
   listEventsInRange,
   setMyGroup,
+  setReminderPrefs,
 } from '@studies/db';
 import {
   filterMyGroups,
@@ -47,6 +49,7 @@ export type StudentAction =
   | { kind: 'groupsSubject'; index: number }
   | { kind: 'groupsSet'; classId: number; groupId: number | null }
   | { kind: 'groupsClear' }
+  | { kind: 'remToggle'; which: 'day' | 'hour'; subject: number | null }
   | { kind: 'login' };
 
 /** `yyyy-mm-dd` → wall midnight, or null when malformed or not a real date. */
@@ -83,6 +86,15 @@ export function parseStudentAction(
       return week ? { kind: 'planWeek', week } : null;
     }
     return null;
+  }
+  if (action === 'rem') {
+    if (sub !== 'day' && sub !== 'hour') return null;
+    if (arg !== undefined && !INDEX_RE.test(arg)) return null;
+    return {
+      kind: 'remToggle',
+      which: sub,
+      subject: arg === undefined ? null : Number(arg),
+    };
   }
   if (action === 'groups') {
     if (sub === 'open') return { kind: 'groupsOpen' };
@@ -168,11 +180,12 @@ async function showGroups(
     options: Awaited<ReturnType<typeof listMyGroupOptions>>,
   ) => string | null,
 ): Promise<void> {
-  const [options, my] = await Promise.all([
+  const [options, my, rem] = await Promise.all([
     listMyGroupOptions(ctx.deps.pool),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
+    getReminderPrefs(ctx.deps.ingest.db, ctx.userId),
   ]);
-  await ctx.show(groupsView(options, pick(options), my));
+  await ctx.show(groupsView(options, pick(options), my, rem));
 }
 
 /** Runs an action after the interaction was acknowledged. */
@@ -222,6 +235,21 @@ export async function runStudentAction(
     case 'groupsClear':
       await clearMyGroups(db, ctx.userId);
       return showGroups(ctx, () => null);
+    case 'remToggle': {
+      const cur = await getReminderPrefs(db, ctx.userId);
+      await setReminderPrefs(
+        db,
+        ctx.userId,
+        {
+          dayBefore: a.which === 'day' ? !cur.dayBefore : cur.dayBefore,
+          hourBefore: a.which === 'hour' ? !cur.hourBefore : cur.hourBefore,
+        },
+        'discord',
+      );
+      return showGroups(ctx, (o) =>
+        a.subject === null ? null : (groupSubjects(o)[a.subject] ?? null),
+      );
+    }
     case 'login': {
       const res = await linkFor(db, base, toDiscordUser(ctx.user, ctx.member));
       if (!res.ok) return ctx.show(notice(LINK_BANNED));

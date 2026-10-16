@@ -10,6 +10,7 @@ import {
   recoverInterruptedRequests,
   startEventPoller,
 } from './events/worker.js';
+import { discordReminderGuild, startReminderTick } from './reminders.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection:', reason);
@@ -47,6 +48,7 @@ client.on(
 );
 
 let eventPoller: ReturnType<typeof startEventPoller> | undefined;
+let reminderTick: ReturnType<typeof startReminderTick> | undefined;
 client.once(Events.ClientReady, async (c) => {
   console.log(`Bot gotowy jako ${c.user.tag}`);
   // Requests left `running` by a previous process will never finish: fail
@@ -60,6 +62,12 @@ client.once(Events.ClientReady, async (c) => {
   eventPoller = startEventPoller({
     db,
     guild: discordEventPostGuild(client),
+    webBaseUrl: config.webBaseUrl,
+  });
+  reminderTick = startReminderTick({
+    db,
+    pool,
+    guild: discordReminderGuild(client),
     webBaseUrl: config.webBaseUrl,
   });
   catchUp(ingest, discordForumSource(client), { ignoreWatermark: false }).then(
@@ -77,6 +85,7 @@ async function shutdown(code: number): Promise<never> {
     shuttingDown = true;
     try {
       await eventPoller?.stop();
+      await reminderTick?.stop();
       await client.destroy();
       await pool.end();
     } catch (err) {

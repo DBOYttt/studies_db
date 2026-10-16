@@ -431,7 +431,7 @@ async function runCommand(
       return;
     }
     case 'panel': {
-      await openStudentPanel(i);
+      await openStudentPanel(i, deps, callerId);
       return;
     }
     case 'search': {

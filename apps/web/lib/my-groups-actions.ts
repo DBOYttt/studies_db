@@ -5,6 +5,7 @@ import {
   importMyGroups,
   type MyGroups,
   setMyGroup,
+  setReminderPrefs,
 } from '@studies/db';
 import { getDb } from './db';
 import { requireUser } from './session';
@@ -45,4 +46,20 @@ export async function importMyGroupsAction(groups: MyGroups): Promise<boolean> {
     if (/^[1-9]\d*$/.test(k) && isId(v)) clean[k] = v;
   }
   return importMyGroups(getDb(), user.id, clean);
+}
+
+/**
+ * Saves the "Przypomnienia" checkboxes (24 h / 1 h before). Banned users have
+ * no session, so `requireUser` already turns them away.
+ */
+export async function saveRemindersAction(
+  dayBefore: boolean,
+  hourBefore: boolean,
+): Promise<{ ok: boolean }> {
+  const user = await requireUser();
+  if (typeof dayBefore !== 'boolean' || typeof hourBefore !== 'boolean') {
+    return { ok: false };
+  }
+  await setReminderPrefs(getDb(), user.id, { dayBefore, hourBefore }, 'web');
+  return { ok: true };
 }

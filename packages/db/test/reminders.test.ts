@@ -241,5 +241,23 @@ describe('reminders', () => {
       );
       expect(await dueDigest(pool, W(2026, 10, 19, 18, 10))).toEqual([]);
     });
+
+    it('returns only events without a digest row for their start', async () => {
+      const e1 = await event(W(2026, 10, 20, 10));
+      const due = await dueDigest(pool, W(2026, 10, 19, 18, 5));
+      await markSent(
+        db,
+        due.map((e) => ({
+          eventId: e.id,
+          userId: 0,
+          kind: 'digest' as const,
+          forStartsAt: e.startsAt,
+        })),
+      );
+      const e2 = await event(W(2026, 10, 20, 12));
+      const again = await dueDigest(pool, W(2026, 10, 19, 18, 10));
+      expect(again.map((e) => e.id)).toEqual([e2]);
+      expect(e1).not.toBe(e2);
+    });
   });
 });
