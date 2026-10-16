@@ -377,7 +377,10 @@ export function eventModal(
           max: 50,
           value: cur?.subjectCode,
         });
-  const placeNote = [cur?.place, cur?.note].filter(Boolean).join('\n');
+  // An empty place keeps its (empty) first line, so the note stays a note.
+  const placeNote = cur?.note
+    ? `${cur.place ?? ''}\n${cur.note}`
+    : (cur?.place ?? '');
   return modal(
     encodeId('evt', 'save', eventId ?? 'new'),
     eventId === null ? 'Dodaj wydarzenie' : 'Edytuj wydarzenie',

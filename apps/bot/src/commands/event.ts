@@ -23,12 +23,15 @@ export async function runEventAdd(
   user: DiscordUser,
 ): Promise<void> {
   const { db } = deps.ingest;
-  const say = (text: string) => i.reply(replyOptions(text, true));
+  const first = (text: string) => i.reply(replyOptions(text, true));
   if (i.options.getSubcommand() !== 'add') return;
   if (i.options.getString('repeat') || i.options.getString('until')) {
-    await say(REPEAT_SOON);
+    await first(REPEAT_SOON);
     return;
   }
+  // Acknowledge first: the lookups below can take a while.
+  await i.deferReply({ flags: MessageFlags.Ephemeral });
+  const say = (text: string) => i.editReply(replyOptions(text));
   const userId = callerId ?? (await upsertUser(db, user));
 
   let subjectId: number | null = null;
@@ -74,7 +77,6 @@ export async function runEventAdd(
     return void (await say('Grupę można wybrać tylko razem z zajęciami.'));
   }
 
-  await i.deferReply({ flags: MessageFlags.Ephemeral });
   const r = await addEvent(
     db,
     userId,

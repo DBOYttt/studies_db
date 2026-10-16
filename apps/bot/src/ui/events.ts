@@ -39,12 +39,20 @@ import {
   eventCard,
   eventModal,
   linkView,
-  MAX_MODAL_SUBJECTS,
   type ModalCurrent,
   placementView,
   SUBJECT_NONE,
+  whenInput,
 } from './views/events.js';
 import { notice, type View } from './views/student.js';
+
+const attempt = <T>(f: () => T): T | null => {
+  try {
+    return f();
+  } catch {
+    return null;
+  }
+};
 
 const ID_RE = /^[1-9]\d*$/;
 const PAGE_RE = /^\d+$/;
@@ -198,7 +206,7 @@ export function splitPlaceNote(s: string): {
   place: string | null;
   note: string | null;
 } {
-  const t = s.replace(/\r\n/g, '\n').trim();
+  const t = s.replace(/\r\n/g, '\n');
   const nl = t.indexOf('\n');
   const place = (nl < 0 ? t : t.slice(0, nl)).trim();
   const note = nl < 0 ? '' : t.slice(nl + 1).trim();
@@ -221,21 +229,18 @@ export async function handleEvent(
   if (!action) return void (await i.reply(ephemeral(notice(STALE_TEXT))));
 
   const { db } = deps.ingest;
-  const { userId } = await syncAdminFlag(
-    db,
-    toDiscordUser(i.user, i.member),
-    memberRoleIds(i),
-  );
-  const [u] = await db
-    .select({ banned: users.isBanned })
-    .from(users)
-    .where(eq(users.id, userId));
-  if (u?.banned) {
-    return void (await i.reply(ephemeral(notice(BANNED_MESSAGE))));
-  }
 
   if (action.kind === 'new' || action.kind === 'edit') {
     if (i.isModalSubmit()) return;
+    // The modal must be the first response: only the ban check and the one
+    // read it needs, no admin-flag sync.
+    const [u] = await db
+      .select({ banned: users.isBanned })
+      .from(users)
+      .where(eq(users.discordUserId, i.user.id));
+    if (u?.banned) {
+      return void (await i.reply(ephemeral(notice(BANNED_MESSAGE))));
+    }
     let cur: ModalCurrent | undefined;
     let id: number | null = null;
     if (action.kind === 'edit') {
@@ -267,6 +272,16 @@ export async function handleEvent(
     action.kind === 'open' || (action.kind === 'save' && !action.id);
   const inPlace = !fresh && fromEphemeral(i);
   await ack(i, fresh);
+  const { userId } = await syncAdminFlag(
+    db,
+    toDiscordUser(i.user, i.member),
+    memberRoleIds(i),
+  );
+  const [u] = await db
+    .select({ banned: users.isBanned })
+    .from(users)
+    .where(eq(users.id, userId));
+  if (u?.banned) return show(i, notice(BANNED_MESSAGE));
   /** An error next to the view that stays, or in place of a fresh reply. */
   const fail = async (message: string) => {
     if (inPlace) await i.followUp(ephemeral(notice(message)));
@@ -285,12 +300,14 @@ export async function handleEvent(
       if (!(EVENT_KIND_KEYS as readonly string[]).includes(kind ?? '')) {
         return fail(STALE_TEXT);
       }
-      const [{ n }] = await db.select({ n: count() }).from(subjects);
       let subjectId: number | null = null;
-      const chosen =
-        n > MAX_MODAL_SUBJECTS
-          ? i.fields.getTextInputValue('subject').trim().toUpperCase() || null
-          : (i.fields.getStringSelectValues('subject')[0] ?? null);
+      // Whichever component the modal had: the select, else the code field.
+      const picked = attempt(() => i.fields.getStringSelectValues('subject'));
+      const chosen = picked?.length
+        ? picked[0]
+        : (attempt(() => i.fields.getTextInputValue('subject')) ?? '')
+            .trim()
+            .toUpperCase() || null;
       if (chosen !== null && chosen !== SUBJECT_NONE) {
         const [s] = await db
           .select({ id: subjects.id })
@@ -315,7 +332,20 @@ export async function handleEvent(
         if (!r.ok || r.id === undefined) return fail(r.message);
         return showCard(r.id);
       }
-      const r = await editEvent(db, userId, action.id, input, 'discord');
+      // Only what differs from the prefilled values: an unchanged "Kiedy" is
+      // not range-checked again, an unchanged submit is a no-op.
+      const e = await getEvent(db, action.id);
+      if (!e || e.deletedAt) return fail(e ? DELETED_TEXT : NOT_FOUND_TEXT);
+      const patch: Partial<typeof input> = {};
+      if (input.kind !== e.kind) patch.kind = input.kind;
+      if (input.title !== e.title) patch.title = input.title;
+      if (input.subjectId !== e.subjectId) patch.subjectId = input.subjectId;
+      if (input.when.trim() !== whenInput(e.startsAt, e.endsAt, e.allDay)) {
+        patch.when = input.when;
+      }
+      if (input.place !== (e.place?.trim() || null)) patch.place = input.place;
+      if (input.note !== (e.note?.trim() || null)) patch.note = input.note;
+      const r = await editEvent(db, userId, action.id, patch, 'discord');
       if (!r.ok) return fail(r.message);
       return showCard(action.id);
     }

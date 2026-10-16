@@ -16,6 +16,7 @@ import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { MessageFlags } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { runEventAdd } from '../src/commands/event.js';
 import {
   createInteractionHandler,
   type RouterDeps,
@@ -233,7 +234,7 @@ describe('evt:save', () => {
       .values({ discordUserId: '1000', displayName: 'x', isBanned: true });
     const i = save('new');
     await handler()(i);
-    expect(textOf(i.reply.mock.calls[0][0])).toBe(BANNED_MESSAGE);
+    expect(textOf(lastEdit(i))).toBe(BANNED_MESSAGE);
     expect(await db.select().from(events)).toHaveLength(0);
   });
 
@@ -359,6 +360,134 @@ describe('card actions', () => {
   });
 });
 
+describe('edit round trip', () => {
+  const insertEvent = async (over: Record<string, unknown>) => {
+    const [r] = await db.insert(events).values({
+      kind: 'inne',
+      title: 'Stare',
+      subjectId,
+      startsAt: new Date('2026-10-20T10:00:00Z'),
+      endsAt: new Date('2026-10-20T11:00:00Z'),
+      allDay: false,
+      ...over,
+    } as never);
+    return r.insertId;
+  };
+  const editAudits = () =>
+    db.select().from(adminAudit).where(eq(adminAudit.action, 'event.edit'));
+
+  it('an unchanged submit of an event with a note and no place changes nothing', async () => {
+    const id = await insertEvent({
+      place: null,
+      note: 'Pierwsza linia\nDruga',
+    });
+    const open = interaction(`v1:evt:edit:${id}`);
+    await handler()(open);
+    const m = open.showModal.mock.calls[0][0].toJSON();
+    const prefilled = m.components[4].component.value;
+    expect(prefilled).toBe('\nPierwsza linia\nDruga');
+    const i = save(
+      String(id),
+      {
+        title: 'Stare',
+        when: m.components[3].component.value,
+        place_note: prefilled,
+      },
+      selects({ kind: ['inne'] }),
+      true,
+    );
+    await handler()(i);
+    const [e] = await db.select().from(events);
+    expect(e.place).toBeNull();
+    expect(e.note).toBe('Pierwsza linia\nDruga');
+    expect(await editAudits()).toHaveLength(0);
+    expect(await upserts()).toHaveLength(0);
+  });
+
+  it('an event older than a month can be edited (only the title changes)', async () => {
+    const old = new Date();
+    old.setUTCDate(old.getUTCDate() - 45);
+    old.setUTCHours(9, 0, 0, 0);
+    const id = await insertEvent({
+      startsAt: old,
+      endsAt: new Date(old.getTime() + 3_600_000),
+    });
+    const open = interaction(`v1:evt:edit:${id}`);
+    await handler()(open);
+    const m = open.showModal.mock.calls[0][0].toJSON();
+    const i = save(
+      String(id),
+      {
+        title: 'Nowe',
+        when: m.components[3].component.value,
+        place_note: '',
+      },
+      selects({ kind: ['inne'] }),
+      true,
+    );
+    await handler()(i);
+    expect((await db.select().from(events))[0].title).toBe('Nowe');
+    expect(await editAudits()).toHaveLength(1);
+    expect(i.calls).toEqual(['deferUpdate', 'editReply']);
+  });
+
+  it('reads the subject from a text field when that is what was submitted', async () => {
+    const i = save('new', fields(), { kind: ['inne'], subject: [] });
+    i.fields.getTextInputValue = (id: string) => {
+      const v: Record<string, string> = { ...fields(), subject: 'asd' };
+      if (!(id in v)) throw new Error(id);
+      return v[id];
+    };
+    await handler()(i);
+    expect((await db.select().from(events))[0].subjectId).toBe(subjectId);
+  });
+});
+
+describe('acknowledges before any database work', () => {
+  it('a button', async () => {
+    const i = interaction('v1:evt:link:1', { ephemeral: true });
+    let usersAtAck = -1;
+    i.deferUpdate = vi.fn(async () => {
+      usersAtAck = (await db.select().from(users)).length;
+    });
+    await handler()(i);
+    expect(usersAtAck).toBe(0);
+  });
+
+  it('a modal submit', async () => {
+    const i = save('new');
+    let at = -1;
+    i.deferReply = vi.fn(async () => {
+      at = (await db.select().from(users)).length;
+    });
+    await handler()(i);
+    expect(at).toBe(0);
+    expect(await db.select().from(events)).toHaveLength(1);
+  });
+
+  it('/event add', async () => {
+    const i = slash({
+      kind: 'egzamin',
+      title: 'Egzamin',
+      when: '25.10.2026 09:00',
+    });
+    let at = [-1, -1];
+    i.deferReply = vi.fn(async () => {
+      at = [
+        (await db.select().from(users)).length,
+        (await db.select().from(events)).length,
+      ];
+    });
+    await runEventAdd({ ingest: { db }, config, pool } as never, i, undefined, {
+      discordUserId: '1000',
+      displayName: 'x',
+      avatarUrl: null,
+    } as never);
+    expect(at).toEqual([0, 0]);
+    expect(await db.select().from(events)).toHaveLength(1);
+  });
+});
+
 /* ---------- /event add ---------- */
 
 function slash(opts: Record<string, string | number>) {
@@ -440,7 +569,7 @@ describe('/event add', () => {
   it('says so for an unknown subject, and for a bad "when"', async () => {
     const a = slash({ ...base, subject: 'ZZZ' });
     await handler()(a);
-    expect(a.reply.mock.calls[0][0].content).toContain('ZZZ');
+    expect(a.editReply.mock.calls[0][0].content).toContain('ZZZ');
     const b = slash({ ...base, when: 'x' });
     await handler()(b);
     expect(b.editReply.mock.calls[0][0].content).toBe(WHEN_FORMAT_MESSAGE);
