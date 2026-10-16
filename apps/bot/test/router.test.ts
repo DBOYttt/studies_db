@@ -378,9 +378,62 @@ describe('/setup', () => {
     type: ChannelType.GuildText,
     send: vi.fn(async () => ({ id: 'pm', pin: async () => {} })),
   };
-  const createChannel = async (o: { name: string }) => ({
-    id: `text-${o.name}`,
-  });
+  /** Forums the fake guild created, so a second /setup pass finds them. */
+  const createdForums = new Collection<string, unknown>();
+  beforeEach(() => createdForums.clear());
+  /** Info posts created in those forums (threads that can be pinned). */
+  const infoThread = {
+    isThread: () => true,
+    archived: false,
+    pin: vi.fn().mockResolvedValue(undefined),
+  };
+  const createChannel = async (o: {
+    name: string;
+    type?: ChannelType;
+    parent?: string | null;
+    topic?: string;
+    availableTags?: { name: string }[];
+  }) => {
+    if (o.type !== ChannelType.GuildForum) return { id: `text-${o.name}` };
+    const id = `forum-${o.name}`;
+    const tagsOf = (names: { id?: string; name: string }[]) =>
+      names.map((t, n) => ({ id: t.id ?? `${id}-t${n}`, name: t.name }));
+    const f = {
+      id,
+      type: ChannelType.GuildForum,
+      permissionsFor: () => ({ has: () => true }),
+      name: o.name,
+      parentId: o.parent ?? null,
+      topic: o.topic ?? null,
+      availableTags: tagsOf(o.availableTags ?? []),
+      setAvailableTags: vi.fn(async (t: { id?: string; name: string }[]) => {
+        f.availableTags = tagsOf(t);
+        return f;
+      }),
+      setTopic: vi.fn().mockResolvedValue(undefined),
+      threads: {
+        fetchActive: async () => ({ threads: new Collection() }),
+        fetchArchived: async () => ({
+          threads: new Collection(),
+          hasMore: false,
+        }),
+        create: vi.fn(async () => ({
+          id: `th-${id}`,
+          fetchStarterMessage: async () => null,
+        })),
+      },
+    };
+    createdForums.set(id, f);
+    return f;
+  };
+  /** The fake guild's channel lookup, falling back to `rest` for other ids. */
+  const fetchChannel =
+    (rest: (id: string) => unknown = () => panelText) =>
+    async (id?: string) =>
+      id
+        ? (createdForums.get(id) ??
+          (id.startsWith('th-forum-') ? infoThread : rest(id)))
+        : new Collection(createdForums);
   const setupGuild = {
     ...guild,
     client: { user: { id: 'bot' } },
@@ -390,7 +443,7 @@ describe('/setup', () => {
       fetch: async () => guild.roles.cache,
     },
     channels: {
-      fetch: async (id?: string) => (id ? panelText : new Collection()),
+      fetch: fetchChannel(),
       create: createChannel,
     },
     members: {
@@ -558,13 +611,16 @@ describe('/setup', () => {
   it('leaves the caller with is_admin after /setup creates the role', async () => {
     await db.delete(botSettings);
     let created = 0;
+    // Like Discord, the role exists once created (a second pass sees it).
+    const roleCache = new Collection<string, unknown>();
     const g = {
       ...setupGuild,
       roles: {
-        cache: new Collection(),
-        fetch: async () => new Collection(),
-        create: async () => {
+        cache: roleCache,
+        fetch: async () => roleCache,
+        create: async (o: { name: string }) => {
           created++;
+          roleCache.set('newrole', { id: 'newrole', name: o.name });
           return { id: 'newrole' };
         },
       },
@@ -862,7 +918,7 @@ describe('/setup', () => {
         })),
       },
     };
-    const infoThread = {
+    const fizInfoThread = {
       isThread: () => true,
       pin: vi.fn().mockResolvedValue(undefined),
     };
@@ -870,14 +926,19 @@ describe('/setup', () => {
     const g = {
       ...setupGuild,
       channels: {
-        fetch: async (id?: string) =>
-          id === 'th'
-            ? infoThread
-            : id?.startsWith('text-')
-              ? panelText
-              : id
-                ? forum
-                : new Collection([[forum.id, forum]]),
+        fetch: async (id?: string) => {
+          if (!id) {
+            return new Collection<string, unknown>([
+              [forum.id, forum],
+              ...createdForums,
+            ]);
+          }
+          if (id === 'th') return fizInfoThread;
+          if (id === forum.id) return forum;
+          return fetchChannel(() =>
+            id.startsWith('text-') ? panelText : forum,
+          )(id);
+        },
         create: createChannel,
       },
       members: {
@@ -906,7 +967,7 @@ describe('/setup', () => {
     expect(clientFetch).toHaveBeenCalled(); // catch-up ran
     expect(forum.setTopic).toHaveBeenCalled(); // second pass ran
     expect(forum.threads.create).toHaveBeenCalled(); // info post created
-    expect(infoThread.pin).toHaveBeenCalled();
+    expect(fizInfoThread.pin).toHaveBeenCalled();
     const text = i.editReply.mock.calls[0]?.[0].content;
     expect(text).toContain('FIZ');
     expect(text).toContain('wytyczne');
@@ -915,7 +976,7 @@ describe('/setup', () => {
     expect(text).not.toContain('Błędy');
   });
 
-  it('skips catch-up and the second pass when nothing was imported', async () => {
+  it('skips catch-up when nothing was imported', async () => {
     const clientFetch = vi.fn();
     const g = {
       ...setupGuild,
@@ -940,7 +1001,7 @@ describe('/setup', () => {
       config,
     })(asI(i));
     expect(clientFetch).not.toHaveBeenCalled();
-    // Only the panels (created on the first run).
+    // The panels and #wydarzenia (its info post comes from the second pass).
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(
       [
         '**Utworzono**',
@@ -948,6 +1009,8 @@ describe('/setup', () => {
         '- kanał #admin-panel',
         '- panel w #panel',
         '- panel w #admin-panel',
+        '- #wydarzenia: forum #wydarzenia',
+        '- #wydarzenia: post informacyjny',
       ].join('\n'),
     );
   });

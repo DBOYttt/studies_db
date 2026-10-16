@@ -1,10 +1,12 @@
-import { createDb, resolveStorageDir } from '@studies/db';
+import { createDb, failStaleBotRequests, resolveStorageDir } from '@studies/db';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { catchUp, discordForumSource } from './catchup.js';
 import { createInteractionHandler } from './commands/router.js';
 import { type BotConfig, loadConfig } from './config.js';
 import { registerEvents } from './discord/events.js';
 import { fetchAttachmentBody } from './discord/map.js';
+import { discordEventPostGuild } from './events/posts.js';
+import { startEventPoller } from './events/worker.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection:', reason);
@@ -41,8 +43,21 @@ client.on(
   (i) => void createInteractionHandler({ ingest, client, config, pool })(i),
 );
 
+let eventPoller: ReturnType<typeof startEventPoller> | undefined;
 client.once(Events.ClientReady, (c) => {
   console.log(`Bot gotowy jako ${c.user.tag}`);
+  // Requests left `running` by a previous process will never finish.
+  failStaleBotRequests(db, new Date()).then(
+    (n) => {
+      if (n > 0) console.log(`Przerwane zlecenia: ${n}.`);
+    },
+    (err) => console.error('failStaleBotRequests:', err),
+  );
+  eventPoller = startEventPoller({
+    db,
+    guild: discordEventPostGuild(client),
+    webBaseUrl: config.webBaseUrl,
+  });
   catchUp(ingest, discordForumSource(client), { ignoreWatermark: false }).then(
     (r) =>
       console.log(
@@ -57,6 +72,7 @@ async function shutdown(code: number): Promise<never> {
   if (!shuttingDown) {
     shuttingDown = true;
     try {
+      await eventPoller?.stop();
       await client.destroy();
       await pool.end();
     } catch (err) {
