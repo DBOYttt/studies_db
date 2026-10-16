@@ -512,7 +512,7 @@ describe('handleUi', () => {
 });
 
 describe('/panel', () => {
-  it('replies ephemeral with the student panel and its 4 buttons', async () => {
+  it('replies ephemeral with the student panel and its 5 buttons', async () => {
     const i: Json = {
       commandName: 'panel',
       user: user(),
@@ -534,6 +534,7 @@ describe('/panel', () => {
       'Ten tydzień',
       'Moje grupy',
       'Zaloguj się na stronie',
+      'Dodaj wydarzenie',
     ]);
   });
 
@@ -555,6 +556,6 @@ describe('/panel', () => {
     await handler()(i);
     expect(
       nodes(i.reply.mock.calls[0][0]).filter((n) => n.type === 2),
-    ).toHaveLength(4);
+    ).toHaveLength(5);
   });
 });

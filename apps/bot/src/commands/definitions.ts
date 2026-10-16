@@ -4,6 +4,7 @@ import {
   CLASS_KINDS,
   CLASS_NAMES,
 } from '@studies/db';
+import { EVENT_KIND_KEYS, EVENT_KINDS } from '@studies/db/constants';
 import {
   ChannelType,
   PermissionFlagsBits,
@@ -297,11 +298,90 @@ const userCmd = (name: string, description: string) =>
       o.setName('user').setDescription('Użytkownik').setRequired(true),
     );
 
+const eventCmd = new SlashCommandBuilder()
+  .setName('event')
+  .setDescription('Wydarzenia: kolokwia, egzaminy, wyjazdy')
+  .addSubcommand((s) =>
+    s
+      .setName('add')
+      .setDescription('Dodaj wydarzenie')
+      .addStringOption((o) =>
+        o
+          .setName('kind')
+          .setDescription('Rodzaj')
+          .addChoices(
+            ...EVENT_KIND_KEYS.map((k) => ({
+              name: EVENT_KINDS[k].label,
+              value: k,
+            })),
+          )
+          .setRequired(true),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('title')
+          .setDescription('Tytuł')
+          .setMinLength(1)
+          .setMaxLength(100)
+          .setRequired(true),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('when')
+          .setDescription('Kiedy: DD.MM[.RRRR] [GG:MM[-GG:MM]]')
+          .setMaxLength(40)
+          .setRequired(true),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('subject')
+          .setDescription('Przedmiot (kod)')
+          .setAutocomplete(true),
+      )
+      .addStringOption((o) =>
+        o.setName('place').setDescription('Miejsce').setMaxLength(100),
+      )
+      .addStringOption((o) =>
+        o.setName('note').setDescription('Notatka').setMaxLength(1000),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('class')
+          .setDescription('Zajęcia przedmiotu')
+          .addChoices(
+            ...CLASS_KINDS.map((k) => ({ name: CLASS_NAMES[k], value: k })),
+          ),
+      )
+      .addIntegerOption((o) =>
+        o
+          .setName('group')
+          .setDescription('Numer grupy')
+          .setMinValue(GROUP_MIN)
+          .setMaxValue(GROUP_MAX),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('repeat')
+          .setDescription('Powtarzanie')
+          .addChoices(
+            { name: 'co tydzień', value: 'weekly' },
+            { name: 'co 2 tygodnie', value: 'biweekly' },
+          ),
+      )
+      .addStringOption((o) =>
+        o
+          .setName('until')
+          .setDescription('Powtarzaj do: DD.MM[.RRRR]')
+          .setMaxLength(20),
+      ),
+  );
+
 export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
   subject,
   lecturer,
   classCmd,
   planCmd,
+  eventCmd,
   userCmd('ban', 'Zablokuj dostęp użytkownika do strony'),
   userCmd('unban', 'Odblokuj dostęp użytkownika do strony'),
   new SlashCommandBuilder()

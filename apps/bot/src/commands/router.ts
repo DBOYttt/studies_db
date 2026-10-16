@@ -42,6 +42,7 @@ import {
 import { findSubjectByChannel, syncForumTags } from '../sync.js';
 import { handleUi, openAdminPanel, openStudentPanel } from '../ui/router.js';
 import { notice } from '../ui/views/student.js';
+import { runEventAdd } from './event.js';
 import { planStatusReply, planSyncReply } from './plan.js';
 import { replyOptions } from './reply.js';
 import {
@@ -423,6 +424,10 @@ async function runCommand(
       await i.deferReply(eph);
       const sent = await sendLoginDm(i.user, res.url);
       await i.editReply(replyOptions(sent ? LINK_SENT : LINK_DM_CLOSED));
+      return;
+    }
+    case 'event': {
+      await runEventAdd(deps, i, callerId, callerOf(i));
       return;
     }
     case 'panel': {

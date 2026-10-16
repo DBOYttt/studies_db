@@ -2,7 +2,12 @@
  * Student panel actions: parsing a decoded `stu` id into an action, and
  * running it once the interaction is acknowledged.
  */
-import { clearMyGroups, getMyGroups, setMyGroup } from '@studies/db';
+import {
+  clearMyGroups,
+  getMyGroups,
+  listEventsInRange,
+  setMyGroup,
+} from '@studies/db';
 import {
   filterMyGroups,
   hiddenByMyGroups,
@@ -13,6 +18,7 @@ import {
   nowWall,
   parseIsoWeek,
   sanitizeMyGroups,
+  weekStart,
 } from '@studies/db/plan';
 import type { APIInteractionGuildMember, GuildMember, User } from 'discord.js';
 import type { RouterDeps } from '../commands/router.js';
@@ -112,14 +118,18 @@ export interface StudentContext {
  * web, saved groups that are no longer groups of their class are ignored.
  */
 async function planData(ctx: StudentContext, week: IsoWeek, day?: Date) {
-  const [sessions, stored, options] = await Promise.all([
+  const from = weekStart(week);
+  const to = new Date(from.getTime() + 7 * 86_400_000);
+  const [classSessions, events, stored, options] = await Promise.all([
     listWeekSessionRows(ctx.deps.pool, week),
+    listEventsInRange(ctx.deps.pool, from, to),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
     listMyGroupOptions(ctx.deps.pool),
   ]);
   const valid = Object.fromEntries(
     options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
   );
+  const sessions = [...classSessions, ...events];
   const my = sanitizeMyGroups(stored, valid);
   const hasGroups = Object.keys(my).length > 0;
   return {

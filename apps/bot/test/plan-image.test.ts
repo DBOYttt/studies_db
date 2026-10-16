@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DAY_IMAGE_WIDTH,
   dayGeometry,
+  EVENT_COLORS,
   renderDayImage,
   renderWeekImage,
   WEEK_IMAGE_WIDTH,
@@ -172,5 +173,78 @@ describe('renderDayImage', () => {
     expect(await pixel(png, b.x + b.w - 6, b.y + b.h - 6)).toBe(
       KIND_COLORS.dark.wyklad.bg,
     );
+  });
+});
+
+describe('events in the plan image', () => {
+  const ev = (
+    start: string,
+    end: string,
+    over: Partial<PlanSession> = {},
+  ): PlanSession =>
+    session(start, end, {
+      type: 'event',
+      subjectId: 0,
+      subjectName: '',
+      subjectCode: '',
+      classId: null,
+      classKind: null,
+      className: null,
+      groupId: null,
+      groupName: null,
+      lecturerId: null,
+      lecturerName: null,
+      room: 'Aula',
+      label: 'Kolokwium z całek',
+      eventKind: 'kolokwium',
+      eventTitle: 'Kolokwium z całek',
+      allDay: false,
+      ...over,
+    });
+  const timed = ev('2026-10-14T10:00:00', '2026-10-14T12:00:00');
+  const allDay = ev('2026-10-15T00:00:00', '2026-10-16T00:00:00', {
+    allDay: true,
+    eventKind: 'wyjazd',
+  });
+
+  it('outlines a timed event in its kind colour and leaves the inside dark', async () => {
+    const png = (await renderWeekImage([timed], W42, null)) as Buffer;
+    expect(png).not.toBeNull();
+    const g = weekGeometry([timed], W42, null);
+    const [b] = g.blocks;
+    expect(g.stripH).toBe(0);
+    expect(await pixel(png, b.x + 1, b.y + b.h / 2)).toBe(
+      EVENT_COLORS.kolokwium,
+    );
+    expect(await pixel(png, b.x + b.w / 2, b.y + 1)).toBe(
+      EVENT_COLORS.kolokwium,
+    );
+    // Inside, bottom-right: the page colour, not a class fill.
+    expect(await pixel(png, b.x + b.w - 8, b.y + b.h - 8)).toBe('#09090b');
+  });
+
+  it('draws all-day events in a strip above the hours', async () => {
+    const g = weekGeometry([timed, allDay], W42, null);
+    expect(g.stripH).toBeGreaterThan(0);
+    expect(g.strip).toHaveLength(1);
+    // Not a timed block, and the grid starts below the strip.
+    expect(g.blocks).toHaveLength(1);
+    const [s] = g.strip;
+    expect(s.y).toBeGreaterThanOrEqual(g.headerH);
+    expect(s.y + s.h).toBeLessThanOrEqual(g.headerH + g.stripH);
+    expect(g.blocks[0].y).toBeGreaterThanOrEqual(g.headerH + g.stripH);
+    const png = (await renderWeekImage([timed, allDay], W42, null)) as Buffer;
+    expect(pngSize(png).height).toBe(g.height);
+    expect(await pixel(png, s.x + 1, s.y + s.h / 2)).toBe(EVENT_COLORS.wyjazd);
+  });
+
+  it('an all-day event alone still renders, in week and day', async () => {
+    expect(await renderWeekImage([allDay], W42, null)).not.toBeNull();
+    expect(
+      await renderDayImage([allDay], wall('2026-10-15T00:00:00')),
+    ).not.toBeNull();
+    expect(
+      dayGeometry([allDay], wall('2026-10-15T00:00:00')).strip,
+    ).toHaveLength(1);
   });
 });

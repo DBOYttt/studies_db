@@ -5,7 +5,7 @@
  * everything here reads UTC fields only and never converts time zones.
  */
 import type { MyGroups } from '@studies/db';
-import { CLASS_NAMES } from '@studies/db/constants';
+import { CLASS_NAMES, EVENT_KINDS } from '@studies/db/constants';
 import {
   formatIsoWeek,
   type IsoWeek,
@@ -66,6 +66,7 @@ const midnight = (d: Date) =>
  * cancelled sessions are struck through and marked "(odwołane)".
  */
 export function sessionLine(s: PlanSession): string {
+  if (s.type === 'event') return eventLine(s);
   const parts = [
     `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`,
     `${s.subjectCode} ${s.subjectName}`.trim(),
@@ -76,6 +77,26 @@ export function sessionLine(s: PlanSession): string {
   ].filter((p): p is string => !!p);
   const line = parts.join(' · ');
   return s.status === 'cancelled' ? `~~${line}~~ (odwołane)` : line;
+}
+
+/** `HH:MM–HH:MM · 📝 Tytuł · <code> <subject> · <class> · <group> · <place>` */
+function eventLine(s: PlanSession): string {
+  const kind = s.eventKind ? EVENT_KINDS[s.eventKind].symbol : '📌';
+  const time = s.allDay
+    ? 'cały dzień'
+    : s.endsAt > s.startsAt
+      ? `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`
+      : hhmm(s.startsAt);
+  return [
+    time,
+    `${kind} ${s.eventTitle ?? s.label}`,
+    `${s.subjectCode} ${s.subjectName}`.trim(),
+    s.className,
+    s.groupName,
+    s.room,
+  ]
+    .filter((p): p is string => !!p)
+    .join(' · ');
 }
 
 const webPlanUrl = (base: string, w: IsoWeek) =>
@@ -113,7 +134,9 @@ export function studentPanel(): View {
     new ContainerBuilder()
       .addTextDisplayComponents(
         text('## 📚 Studies DB'),
-        text('Plan zajęć i Moje grupy. Odpowiedzi widzisz tylko Ty.'),
+        text(
+          'Plan zajęć, wydarzenia i Moje grupy. Odpowiedzi widzisz tylko Ty.',
+        ),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
@@ -126,6 +149,7 @@ export function studentPanel(): View {
           button(encodeId('stu', 'plan', 'week'), 'Ten tydzień'),
           button(encodeId('stu', 'groups', 'open'), 'Moje grupy'),
           button(encodeId('stu', 'login'), 'Zaloguj się na stronie'),
+          button(encodeId('evt', 'new'), 'Dodaj wydarzenie'),
         ),
       ),
   );
@@ -153,6 +177,13 @@ interface PlanImage {
 
 /** `HH:MM–HH:MM KOD rodzaj[ grupa][ (odwołane)]` */
 function altSession(s: PlanSession): string {
+  if (s.type === 'event') {
+    return [
+      s.allDay ? 'cały dzień' : hhmm(s.startsAt),
+      s.eventKind ? EVENT_KINDS[s.eventKind].label : 'Wydarzenie',
+      s.eventTitle ?? s.label,
+    ].join(' ');
+  }
   const kind =
     s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label);
   return [
@@ -176,12 +207,13 @@ function altText(image: PlanImage): string {
 
 /** `Zajęcia: N[ (odwołane: k)] · Moje grupy: tak|nie`; N counts active ones. */
 function countLine(image: PlanImage): string {
-  const cancelled = image.sessions.filter(
-    (s) => s.status === 'cancelled',
-  ).length;
-  const active = image.sessions.length - cancelled;
+  const classes = image.sessions.filter((s) => s.type !== 'event');
+  const events = image.sessions.length - classes.length;
+  const cancelled = classes.filter((s) => s.status === 'cancelled').length;
+  const active = classes.length - cancelled;
   const off = cancelled > 0 ? ` (odwołane: ${cancelled})` : '';
-  return `-# Zajęcia: ${active}${off} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`;
+  const ev = events > 0 ? ` · Wydarzenia: ${events}` : '';
+  return `-# Zajęcia: ${active}${off}${ev} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`;
 }
 
 /** The note under a plan when "Moje grupy" hides sessions; '' for none. */
@@ -203,6 +235,7 @@ function planView(
   nav: ButtonBuilder[],
   image: PlanImage | null,
   hidden = 0,
+  events: PlanSession[] = [],
 ): View {
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text(head))
@@ -227,6 +260,37 @@ function planView(
     if (rest > 0) container.addTextDisplayComponents(text(`-# ${more(rest)}`));
   }
   if (hidden > 0) container.addTextDisplayComponents(text(hiddenNote(hidden)));
+  if (events.length > 0) {
+    const shown = events.slice(0, MAX_OPTIONS);
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(encodeId('evt', 'open'))
+          .setPlaceholder('Wydarzenia')
+          .addOptions(
+            shown.map((e) =>
+              new StringSelectMenuOptionBuilder()
+                .setLabel(
+                  clip(
+                    `${e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌'} ${e.eventTitle ?? e.label}`,
+                  ),
+                )
+                .setValue(String(e.id))
+                .setDescription(
+                  clip(
+                    `${dayLabel(e.startsAt)}${e.allDay ? '' : ` ${hhmm(e.startsAt)}`}`,
+                  ),
+                ),
+            ),
+          ),
+      ),
+    );
+    if (events.length > shown.length) {
+      container.addTextDisplayComponents(
+        text(`-# …i ${events.length - shown.length} więcej`),
+      );
+    }
+  }
   return {
     ...view(
       container
@@ -238,7 +302,12 @@ function planView(
 }
 
 /** Components of planView besides the body: container, heading, 2 dividers, row. */
-const planChrome = (nav: unknown[]) => 1 + 1 + 2 + 1 + nav.length;
+const planChrome = (nav: unknown[], events = 0) =>
+  1 + 1 + 2 + 1 + nav.length + (events > 0 ? 3 : 0);
+
+/** Events of `sessions`, earliest first. */
+const eventsOf = (sessions: PlanSession[]) =>
+  sessions.filter((s) => s.type === 'event').sort(byStart);
 
 const byStart = (a: PlanSession, b: PlanSession) =>
   a.startsAt.getTime() - b.startsAt.getTime() ||
@@ -263,6 +332,7 @@ export function planDay(
     .filter((s) => dayKey(s.startsAt) === key)
     .sort(byStart);
   const lines = daySessions.map(sessionLine);
+  const dayEvents = eventsOf(daySessions);
   const title = `Plan — ${dayLabel(d)}`;
   const week = isoWeekOf(d);
   const nav = [
@@ -294,15 +364,22 @@ export function planDay(
         hasGroups,
       },
       hidden,
+      dayEvents,
     );
   }
   const { shown, rest } = takeFitting(
     lines,
     (l) => l.length,
-    MAX_TEXT - head.length - noteCost(hidden),
-    MAX_COMPONENTS - planChrome(nav) - (hidden > 0 ? 1 : 0),
+    MAX_TEXT -
+      head.length -
+      noteCost(hidden) -
+      (dayEvents.length > 25 ? 30 : 0),
+    MAX_COMPONENTS -
+      planChrome(nav, dayEvents.length) -
+      (hidden > 0 ? 1 : 0) -
+      (dayEvents.length > MAX_OPTIONS ? 1 : 0),
   );
-  return planView(head, shown, rest, nav, null, hidden);
+  return planView(head, shown, rest, nav, null, hidden, dayEvents);
 }
 
 /**
@@ -326,6 +403,7 @@ export function planWeek(
   const weekSessions = sessions
     .filter((s) => formatIsoWeek(isoWeekOf(s.startsAt)) === wanted)
     .sort(byStart);
+  const weekEvents = eventsOf(weekSessions);
   const lines = weekSessions.map((s, i, all) => ({
     day: dayLabel(s.startsAt),
     line: sessionLine(s),
@@ -337,7 +415,10 @@ export function planWeek(
   const { shown, rest } = takeFitting(
     lines,
     (l) => l.line.length + 1 + (l.first ? l.day.length + 5 : 0),
-    MAX_TEXT - head.length - noteCost(hidden),
+    MAX_TEXT -
+      head.length -
+      noteCost(hidden) -
+      (weekEvents.length > 25 ? 30 : 0),
     Number.POSITIVE_INFINITY,
   );
   const blocks: string[] = [];
@@ -374,9 +455,10 @@ export function planWeek(
         hasGroups,
       },
       hidden,
+      weekEvents,
     );
   }
-  return planView(head, blocks, rest, nav, null, hidden);
+  return planView(head, blocks, rest, nav, null, hidden, weekEvents);
 }
 
 /* ---------- Moje grupy ---------- */

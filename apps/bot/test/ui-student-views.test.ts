@@ -87,7 +87,7 @@ function session(
 }
 
 describe('studentPanel', () => {
-  it('offers the four student actions', () => {
+  it('offers the five student actions', () => {
     const v = studentPanel();
     expectValid(v);
     const b = buttons(v);
@@ -96,6 +96,7 @@ describe('studentPanel', () => {
       ['v1:stu:plan:week', 'Ten tydzień'],
       ['v1:stu:groups:open', 'Moje grupy'],
       ['v1:stu:login', 'Zaloguj się na stronie'],
+      ['v1:evt:new', 'Dodaj wydarzenie'],
     ]);
     expect(allText(v)).toContain('Studies DB');
   });

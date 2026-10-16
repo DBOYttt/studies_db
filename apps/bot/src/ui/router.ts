@@ -9,6 +9,7 @@ import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import type { RouterDeps } from '../commands/router.js';
 import { toDiscordUser } from '../discord/map.js';
 import { handleAdmin } from './admin.js';
+import { handleEvent } from './events.js';
 import { decodeId } from './ids.js';
 import {
   ack,
@@ -54,6 +55,10 @@ export async function handleUi(
   const id = decodeId(i.customId);
   if (id?.area === 'adm') {
     await handleAdmin(deps, i, id.action, id.args);
+    return;
+  }
+  if (id?.area === 'evt') {
+    await handleEvent(deps, i, id.action, id.args);
     return;
   }
   const values = i.isStringSelectMenu() ? i.values : [];
