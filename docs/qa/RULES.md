@@ -34,7 +34,10 @@ The UI is Polish. It has two modes: simple (`/s/...`, the default) and advanced 
 
 ## Browser
 
-The Playwright MCP browser is shared between agents, so only one browser persona runs at a time.
+Each persona has its own isolated headless browser: the MCP server `pw_<persona>`, with its tools named
+`mcp__pw_<persona>__browser_*`. Personas can therefore run in parallel without sharing cookies or tabs.
+- The other personas use the same sandbox at the same time. Data they create (events, uploads) may appear on your
+  screens; treat it as normal content, not as a bug, unless it is clearly broken.
 - Use `browser_snapshot` to read the page and `browser_take_screenshot` for evidence.
 - Save screenshots to `.qa/screens/<run>/<agent>-<n>.png` and give their paths in the report.
 - Close the browser (`browser_close`) when you're done.
