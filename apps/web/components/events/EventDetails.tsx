@@ -7,6 +7,7 @@ import { formatDate } from '@/lib/format';
 import { isoFiles } from '@/lib/simple-page';
 import type { SimpleFile } from '@/lib/simple-queries';
 import { EventButtons } from './EventButtons';
+import { EventUploads, type UploadItem } from './EventUploads';
 import { LinkedPosts } from './LinkedPosts';
 
 export type EventPageData = {
@@ -30,6 +31,7 @@ export type EventPageData = {
   files: SimpleFile[];
   linked: LinkedTopic[];
   history: AuditRow[];
+  uploads: UploadItem[];
 };
 
 const h2 = 'mt-3 mb-0 text-base font-semibold';
@@ -120,6 +122,8 @@ export function EventDetails({
       />
       {!e.deleted && (
         <>
+          <h2 className={h2}>Dodaj pliki</h2>
+          <EventUploads eventId={e.id} initial={e.uploads} />
           <h2 className={h2}>Powiąż posty</h2>
           <LinkedPosts
             eventId={e.id}

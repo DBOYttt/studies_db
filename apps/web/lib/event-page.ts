@@ -1,4 +1,9 @@
-import { getEvent, lastBotRequest, toWall } from '@studies/db';
+import {
+  getEvent,
+  lastBotRequest,
+  listEventUploads,
+  toWall,
+} from '@studies/db';
 import { notFound } from 'next/navigation';
 import type { EventPageData } from '@/components/events/EventDetails';
 import { getDb } from './db';
@@ -24,13 +29,14 @@ export async function loadEventPage(
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) notFound();
   const postTopicId = ev.series ? ev.series.topicId : ev.topicId;
   const reqTarget = ev.series ? `series:${ev.series.id}` : `event:${id}`;
-  const [files, linked, history, req] = await Promise.all([
+  const [files, linked, history, req, uploads] = await Promise.all([
     eventFileRows(db, id),
     listTopicsByIds(db, ev.linkedTopicIds),
     eventHistory(db, id),
     postTopicId === null
       ? lastBotRequest(db, 'event_post_upsert', reqTarget)
       : Promise.resolve(null),
+    listEventUploads(db, id),
   ]);
   const postLine =
     postTopicId !== null
@@ -58,5 +64,6 @@ export async function loadEventPage(
     files,
     linked,
     history,
+    uploads,
   };
 }

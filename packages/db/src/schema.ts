@@ -480,3 +480,33 @@ export const botRequests = mysqlTable(
   },
   (t) => [index('idx_bot_requests_status').on(t.status, t.createdAt)],
 );
+
+// Files a user uploaded on the website for an event. The bot posts them into
+// the event's Discord thread. `storage_path` is a temp path under
+// STORAGE_DIR/uploads/ (never user-controlled); `original_filename` is for
+// display only.
+export const webUploads = mysqlTable(
+  'web_uploads',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    eventId: int('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id),
+    storagePath: varchar('storage_path', { length: 255 }).notNull(),
+    originalFilename: varchar('original_filename', { length: 255 }).notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    status: mysqlEnum('status', ['queued', 'posting', 'done', 'failed'])
+      .notNull()
+      .default('queued'),
+    error: varchar('error', { length: 500 }),
+    createdAt: now(),
+    finishedAt: datetime('finished_at'),
+  },
+  (t) => [
+    index('idx_web_uploads_event').on(t.eventId, t.id),
+    index('idx_web_uploads_status').on(t.status, t.createdAt),
+  ],
+);

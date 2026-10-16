@@ -113,6 +113,24 @@ test('link a seeded post; its files appear under Materiały', async ({
   await expect(page.getByText('Brak materiałów')).toBeVisible();
 });
 
+test('uploading a file shows it as wysyłanie… (no bot in e2e)', async ({
+  page,
+}) => {
+  await page.goto(eventUrl);
+  await page.getByLabel('Pliki do dodania').setInputFiles({
+    name: 'notatki.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('hello'),
+  });
+  await page.getByRole('button', { name: 'Dodaj pliki' }).click();
+  await expect(page.getByText('notatki.txt')).toBeVisible();
+  await expect(page.getByText('wysyłanie…')).toBeVisible();
+  // Survives a reload: the status comes from the DB.
+  await page.reload();
+  await expect(page.getByText('notatki.txt')).toBeVisible();
+  await expect(page.getByText('wysyłanie…')).toBeVisible();
+});
+
 test('delete the event; an admin sees it with Przywróć', async ({
   page,
   browser,

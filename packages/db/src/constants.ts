@@ -141,3 +141,8 @@ export const MATERIAL_FILE_COLUMNS = [
   'sha256',
   'size_bytes',
 ] as const;
+
+/** Website uploads for events (Discord's attachment limit is the cap). */
+export const MAX_UPLOAD_FILES = 10;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_UPLOADS_PER_HOUR = 30;

@@ -15,3 +15,4 @@ export * from './schema.js';
 export * from './search.js';
 export * from './settings.js';
 export * from './unitime/index.js';
+export * from './web-uploads.js';
