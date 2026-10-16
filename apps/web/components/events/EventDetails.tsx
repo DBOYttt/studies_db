@@ -32,6 +32,8 @@ export type EventPageData = {
   linked: LinkedTopic[];
   history: AuditRow[];
   uploads: UploadItem[];
+  /** Some failed upload still has its file: "Spróbuj ponownie". */
+  canRetryUploads: boolean;
 };
 
 const h2 = 'mt-3 mb-0 text-base font-semibold';
@@ -123,7 +125,11 @@ export function EventDetails({
       {!e.deleted && (
         <>
           <h2 className={h2}>Dodaj pliki</h2>
-          <EventUploads eventId={e.id} initial={e.uploads} />
+          <EventUploads
+            eventId={e.id}
+            initial={e.uploads}
+            canRetry={e.canRetryUploads}
+          />
           <h2 className={h2}>Powiąż posty</h2>
           <LinkedPosts
             eventId={e.id}

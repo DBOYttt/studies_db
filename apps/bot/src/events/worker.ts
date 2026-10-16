@@ -397,13 +397,13 @@ export async function recoverInterruptedRequests(db: Db): Promise<number> {
 async function ensureThread(
   deps: EventPostDeps,
   e: EventDetails,
-): Promise<string> {
+): Promise<{ threadId: string; topicId: number }> {
   const { db, guild } = deps;
   const topicOfEvent = async (ev: EventDetails) =>
     topicOf(db, ev.series ? ev.series.topicId : ev.topicId);
   let t = await topicOfEvent(e);
   if (t && !t.deletedAt && (await guild.postExists(t.discordThreadId))) {
-    return t.discordThreadId;
+    return { threadId: t.discordThreadId, topicId: t.id };
   }
   try {
     if (e.seriesId !== null) await upsertSeriesPost(deps, e.seriesId);
@@ -415,7 +415,7 @@ async function ensureThread(
   const fresh = await getEvent(db, e.id);
   t = fresh ? await topicOfEvent(fresh) : undefined;
   if (!t || t.deletedAt) throw new UploadError(failureMessage(null));
-  return t.discordThreadId;
+  return { threadId: t.discordThreadId, topicId: t.id };
 }
 
 const UPLOAD_TARGET = /^upload:\d+$/;

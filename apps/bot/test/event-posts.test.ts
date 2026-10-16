@@ -84,7 +84,9 @@ function fakeGuild(delayMs = 0) {
       if (!p) throw new Error('Unknown Channel');
       Object.assign(p, { content, archived: true, locked: true });
     },
-    async sendFiles() {},
+    async sendFiles() {
+      return [];
+    },
     async postExists(threadId: string) {
       return posts.has(threadId);
     },

@@ -1,4 +1,10 @@
-import { existsSync, mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  unlinkSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -34,6 +40,7 @@ vi.mock('next/navigation', () => ({
     throw new Error('notFound');
   },
 }));
+vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   cache: <T>(fn: T) => fn,
@@ -330,5 +337,79 @@ describe('GET /api/wydarzenia/[id]/pliki', () => {
         params: Promise.resolve({ id: String(eventId) }),
       }),
     ).rejects.toThrow('redirect:');
+  });
+});
+
+describe('retryUploadsAction', () => {
+  const retryUploadsAction = async (id: number) =>
+    (await import('../lib/event-actions')).retryUploadsAction(id);
+
+  async function failedUpload(withFile: boolean) {
+    const res = await post(one('r.pdf'));
+    const { uploads } = (await res.json()) as { uploads: { id: number }[] };
+    const [row] = await db
+      .select()
+      .from(webUploads)
+      .where(eq(webUploads.id, uploads[0].id));
+    await db
+      .update(webUploads)
+      .set({
+        status: 'failed',
+        error: 'Nie udało się wysłać pliku na Discorda.',
+      })
+      .where(eq(webUploads.id, row.id));
+    if (!withFile) unlinkSync(join(storage, row.storagePath));
+    return row.id;
+  }
+
+  it('requeues failed uploads whose file remains and enqueues a request', async () => {
+    const uid = await login();
+    const keep = await failedUpload(true);
+    const lost = await failedUpload(false);
+    await db.delete(botRequests);
+    const r = await retryUploadsAction(eventId);
+    expect(r.ok).toBe(true);
+    const [a] = await db
+      .select()
+      .from(webUploads)
+      .where(eq(webUploads.id, keep));
+    const [b] = await db
+      .select()
+      .from(webUploads)
+      .where(eq(webUploads.id, lost));
+    expect(a).toMatchObject({ status: 'queued', error: null });
+    expect(b.status).toBe('failed');
+    const reqs = await db.select().from(botRequests);
+    expect(reqs).toHaveLength(1);
+    expect(reqs[0]).toMatchObject({
+      kind: 'event_upload',
+      target: `upload:${keep}`,
+      status: 'queued',
+    });
+    expect(reqs[0].payload).toEqual({
+      eventId,
+      uploadIds: [keep],
+    });
+    expect(uid).toBeGreaterThan(0);
+  });
+
+  it('says so when nothing can be retried', async () => {
+    await login();
+    await db.delete(webUploads);
+    const r = await retryUploadsAction(eventId);
+    expect(r).toMatchObject({
+      ok: false,
+      message: 'Brak plików do ponowienia.',
+    });
+  });
+
+  it('refuses a banned user', async () => {
+    const uid = await login();
+    await failedUpload(true);
+    await db.update(users).set({ isBanned: true }).where(eq(users.id, uid));
+    await db.delete(botRequests);
+    const r = await retryUploadsAction(eventId).catch(() => null);
+    expect(r?.ok ?? false).toBe(false);
+    expect(await db.select().from(botRequests)).toHaveLength(0);
   });
 });

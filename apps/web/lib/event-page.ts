@@ -2,6 +2,7 @@ import {
   getEvent,
   lastBotRequest,
   listEventUploads,
+  retryableUploadIds,
   toWall,
 } from '@studies/db';
 import { notFound } from 'next/navigation';
@@ -9,6 +10,7 @@ import type { EventPageData } from '@/components/events/EventDetails';
 import { getDb } from './db';
 import { eventFileRows, eventHistory, listTopicsByIds } from './event-queries';
 import type { SessionUser } from './session';
+import { uploadFileExists } from './storage';
 
 /** Parses the `[id]` segment; 404 for anything but a positive integer. */
 export function parseEventId(raw: string): number {
@@ -29,7 +31,7 @@ export async function loadEventPage(
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) notFound();
   const postTopicId = ev.series ? ev.series.topicId : ev.topicId;
   const reqTarget = ev.series ? `series:${ev.series.id}` : `event:${id}`;
-  const [files, linked, history, req, uploads] = await Promise.all([
+  const [files, linked, history, req, uploads, retryable] = await Promise.all([
     eventFileRows(db, id),
     listTopicsByIds(db, ev.linkedTopicIds),
     eventHistory(db, id),
@@ -37,6 +39,7 @@ export async function loadEventPage(
       ? lastBotRequest(db, 'event_post_upsert', reqTarget)
       : Promise.resolve(null),
     listEventUploads(db, id),
+    retryableUploadIds(db, id, uploadFileExists),
   ]);
   const postLine =
     postTopicId !== null
@@ -65,5 +68,6 @@ export async function loadEventPage(
     linked,
     history,
     uploads,
+    canRetryUploads: retryable.length > 0,
   };
 }

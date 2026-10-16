@@ -11,6 +11,7 @@ import {
   getEvent,
   linkTopic,
   restoreEvent,
+  retryFailedUploads,
   toWall,
   unlinkTopic,
 } from '@studies/db';
@@ -22,6 +23,7 @@ import { getDb } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
 import { requireAdmin, requireUser } from './session';
+import { uploadFileExists } from './storage';
 
 /**
  * Server Actions of the event pages. They are reachable by direct POST, so
@@ -219,4 +221,13 @@ export async function searchTopicsAction(
   if (subjectId !== null && !isId(subjectId)) return [];
   if (typeof q !== 'string') return [];
   return searchTopics(getDb(), subjectId, q);
+}
+
+/** "Spróbuj ponownie": requeues the event's failed uploads whose files remain. */
+export async function retryUploadsAction(id: number): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  const r = await retryFailedUploads(getDb(), user.id, id, uploadFileExists);
+  if (r.ok) refresh(id);
+  return r;
 }

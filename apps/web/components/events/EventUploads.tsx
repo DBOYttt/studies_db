@@ -2,7 +2,9 @@
 
 import { UploadSimple } from '@phosphor-icons/react';
 import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from '@studies/db/constants';
+import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
+import { retryUploadsAction } from '@/lib/event-actions';
 
 export type UploadItem = {
   id: number;
@@ -26,10 +28,13 @@ const btn =
 export function EventUploads({
   eventId,
   initial,
+  canRetry,
 }: {
   eventId: number;
   initial: UploadItem[];
+  canRetry: boolean;
 }) {
+  const router = useRouter();
   const [items, setItems] = useState<UploadItem[]>(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -53,6 +58,25 @@ export function EventUploads({
     }, POLL_MS);
     return () => clearInterval(timer);
   }, [active, url]);
+
+  async function retry() {
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await retryUploadsAction(eventId);
+      if (!r.ok) return setError(r.message);
+      setItems((cur) =>
+        cur.map((i) =>
+          i.status === 'failed' ? { ...i, status: 'queued', error: null } : i,
+        ),
+      );
+      router.refresh();
+    } catch {
+      setError('Nie udało się ponowić wysyłania.');
+    } finally {
+      setBusy(false);
+    }
+  }
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -115,6 +139,11 @@ export function EventUploads({
         <span role="alert" className="text-err-fg">
           {error}
         </span>
+      )}
+      {canRetry && items.some((i) => i.status === 'failed') && (
+        <button type="button" onClick={retry} disabled={busy} className={btn}>
+          Spróbuj ponownie
+        </button>
       )}
       {items.length > 0 && (
         <ul

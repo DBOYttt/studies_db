@@ -4,21 +4,25 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
   addEvent,
+  adminAudit,
   botRequests,
   botSettings,
   type Db,
   deleteEvent,
   enqueueBotRequest,
+  eventMaterials,
   eventSeries,
   events,
   eventTopics,
+  materials,
   subjects,
   topics,
   users,
   webUploads,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import { eq, sql } from 'drizzle-orm';
+import { DiscordAPIError } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import {
   afterAll,
   beforeAll,
@@ -37,6 +41,7 @@ function fakeGuild() {
     posts: new Map<string, EventPostFields>(),
     sent: [] as { threadId: string; content: string; names: string[] }[],
     failSend: null as Error | null,
+    aid: 0,
     n: 0,
     async createPost(_f: string, post: EventPostFields) {
       const id = `th-${++g.n}`;
@@ -55,6 +60,16 @@ function fakeGuild() {
     ) {
       if (g.failSend) throw g.failSend;
       g.sent.push({ threadId, content, names: files.map((f) => f.name) });
+      const mid = `m-${g.sent.length}`;
+      return files.map((f) => ({
+        id: `a-${++g.aid}`,
+        messageId: mid,
+        url: `https://cdn/${f.name}`,
+        name: f.name,
+        contentType: null,
+        size: 4,
+        postedAt: new Date(),
+      }));
     },
   };
   return g;
@@ -97,6 +112,8 @@ beforeEach(async () => {
   log.mockClear();
   dir = mkdtempSync(join(tmpdir(), 'uploads-'));
   await mkdir(join(dir, 'uploads'));
+  await db.delete(adminAudit);
+  await db.delete(materials);
   await db.delete(webUploads);
   await db.delete(botRequests);
   await db.delete(eventTopics);
@@ -167,6 +184,104 @@ describe('event uploads', () => {
     const [req] = await db.select().from(botRequests);
     expect(req.status).toBe('done');
     expect(ids).toHaveLength(2);
+  });
+
+  it('ingests the sent attachments as materials of the event post, by the uploader', async () => {
+    const id = await mkEvent();
+    await drain();
+    await queueUploads(id, ['a.pdf', 'b.png']);
+    await drain();
+    const [e] = await db.select().from(events).where(eq(events.id, id));
+    const mats = await db.select().from(materials).orderBy(materials.id);
+    expect(mats.map((m) => m.originalFilename)).toEqual(['a.pdf', 'b.png']);
+    expect(mats.every((m) => m.topicId === e.topicId)).toBe(true);
+    expect(mats.every((m) => m.uploaderId === userId)).toBe(true);
+    expect(mats.map((m) => m.discordAttachmentId)).toEqual(['a-1', 'a-2']);
+    expect(
+      (await eventMaterials(db, id)).map((m) => m.filename).sort(),
+    ).toEqual(['a.pdf', 'b.png']);
+  });
+
+  it('a row pointing outside uploads/ is neither sent nor deleted', async () => {
+    const id = await mkEvent();
+    await drain();
+    await mkdir(join(dir, 'materials'));
+    await writeFile(join(dir, 'materials/x.pdf'), 'keep');
+    const [{ id: rowId }] = await db
+      .insert(webUploads)
+      .values({
+        eventId: id,
+        userId,
+        storagePath: 'materials/x.pdf',
+        originalFilename: 'x.pdf',
+        sizeBytes: 4,
+      })
+      .$returningId();
+    await enqueueBotRequest(db, 'event_upload', `upload:${rowId}`, {
+      eventId: id,
+      uploadIds: [rowId],
+    });
+    await drain();
+    const [r] = await rows();
+    expect(r).toMatchObject({
+      status: 'failed',
+      error: 'Plik nie istnieje na serwerze.',
+    });
+    expect(guild.sent).toEqual([]);
+    expect(await readdir(join(dir, 'materials'))).toEqual(['x.pdf']);
+    await cleanupUploads(db, dir, new Date(Date.now() + 48 * 3_600_000));
+    expect(await readdir(join(dir, 'materials'))).toEqual(['x.pdf']);
+  });
+
+  it('packs files by bytes: 5 x 8 MB make 5 messages', async () => {
+    const id = await mkEvent();
+    await drain();
+    const ids = await queueUploads(id, ['1', '2', '3', '4', '5']);
+    for (const r of await rows()) {
+      await writeFile(join(dir, r.storagePath), Buffer.alloc(8 * 1024 * 1024));
+    }
+    await drain();
+    expect(guild.sent.map((s) => s.names.length)).toEqual([1, 1, 1, 1, 1]);
+    expect((await rows()).every((r) => r.status === 'done')).toBe(true);
+    expect(ids).toHaveLength(5);
+  });
+
+  it('maps a Discord 413 to a clear message', async () => {
+    const id = await mkEvent();
+    await drain();
+    guild.failSend = new DiscordAPIError(
+      { code: 40005, message: 'Request entity too large' },
+      40005,
+      413,
+      'POST',
+      'x',
+      {},
+    );
+    await queueUploads(id, ['a.pdf']);
+    await drain();
+    const [r] = await rows();
+    expect(r.error).toBe('Pliki są za duże dla serwera Discord.');
+  });
+
+  it('a retried failed row is picked up again', async () => {
+    const id = await mkEvent();
+    await drain();
+    guild.failSend = new Error('boom');
+    const [rowId] = await queueUploads(id, ['a.pdf']);
+    await drain();
+    expect((await rows())[0].status).toBe('failed');
+    guild.failSend = null;
+    await db
+      .update(webUploads)
+      .set({ status: 'queued', error: null, finishedAt: null })
+      .where(eq(webUploads.id, rowId));
+    await enqueueBotRequest(db, 'event_upload', `upload:${rowId}`, {
+      eventId: id,
+      uploadIds: [rowId],
+    });
+    await drain();
+    expect((await rows())[0].status).toBe('done');
+    expect(guild.sent).toHaveLength(1);
   });
 
   it('splits more than 10 files into several messages', async () => {
@@ -289,6 +404,5 @@ describe('cleanupUploads', () => {
       'uploads/new-failed',
       'uploads/old-done',
     ]);
-    void sql;
   });
 });

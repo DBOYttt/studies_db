@@ -4,7 +4,10 @@
  * the files to the event's Discord thread and marks the rows done or failed.
  */
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
-import type { DbExecutor } from './client.js';
+import type { ActionResult } from './admin-actions.js';
+import { enqueueBotRequest } from './bot-requests.js';
+import type { Db, DbExecutor } from './client.js';
+import { checkUser, getEvent, isRefusal, refused } from './events.js';
 import { webUploads } from './schema.js';
 
 export type WebUploadStatus = 'queued' | 'posting' | 'done' | 'failed';
@@ -61,4 +64,58 @@ export async function listEventUploads(
 export async function getUploadsByIds(db: DbExecutor, ids: number[]) {
   if (ids.length === 0) return [];
   return db.select().from(webUploads).where(inArray(webUploads.id, ids));
+}
+
+/**
+ * Failed uploads of the last 24 h for `eventId` whose temp file still exists
+ * (`fileExists` gets the storage-relative path): the ones a retry can resend.
+ */
+export async function retryableUploadIds(
+  db: DbExecutor,
+  eventId: number,
+  fileExists: (rel: string) => Promise<boolean>,
+): Promise<number[]> {
+  const rows = await db
+    .select({ id: webUploads.id, path: webUploads.storagePath })
+    .from(webUploads)
+    .where(
+      and(
+        eq(webUploads.eventId, eventId),
+        eq(webUploads.status, 'failed'),
+        gt(webUploads.createdAt, sql`DATE_SUB(NOW(), INTERVAL 24 HOUR)`),
+      ),
+    )
+    .orderBy(webUploads.id);
+  const out: number[] = [];
+  for (const r of rows) if (await fileExists(r.path)) out.push(r.id);
+  return out;
+}
+
+/**
+ * Puts the event's retryable failed uploads back to `queued` and queues a new
+ * `event_upload` request (target `upload:<first retried id>`).
+ */
+export async function retryFailedUploads(
+  db: Db,
+  userId: number,
+  eventId: number,
+  fileExists: (rel: string) => Promise<boolean>,
+): Promise<ActionResult> {
+  const who = await checkUser(db, userId);
+  if (isRefusal(who)) return who;
+  const e = await getEvent(db, eventId);
+  if (!e || e.deletedAt) return refused('Nie znaleziono wydarzenia.');
+  const ids = await retryableUploadIds(db, eventId, fileExists);
+  if (ids.length === 0) return refused('Brak plików do ponowienia.');
+  await db.transaction(async (tx) => {
+    await tx
+      .update(webUploads)
+      .set({ status: 'queued', error: null, finishedAt: null })
+      .where(and(inArray(webUploads.id, ids), eq(webUploads.status, 'failed')));
+    await enqueueBotRequest(tx, 'event_upload', `upload:${ids[0]}`, {
+      eventId,
+      uploadIds: ids,
+    });
+  });
+  return { ok: true, message: 'Ponawiam wysyłanie.' };
 }

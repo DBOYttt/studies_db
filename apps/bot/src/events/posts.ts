@@ -263,11 +263,20 @@ export function discordEventPostGuild(client: Client): EventPostGuild {
     async sendFiles(threadId, content, files) {
       const t = await threadOf(threadId);
       if (t.archived) await t.setArchived(false, 'wydarzenie');
-      await t.send({
+      const msg = await t.send({
         content,
         files: files.map((f) => ({ attachment: f.path, name: f.name })),
         allowedMentions: { parse: [] },
       });
+      return [...msg.attachments.values()].map((a) => ({
+        id: a.id,
+        messageId: msg.id,
+        url: a.url,
+        name: a.name,
+        contentType: a.contentType ?? null,
+        size: a.size,
+        postedAt: msg.createdAt,
+      }));
     },
     async postExists(threadId) {
       try {
