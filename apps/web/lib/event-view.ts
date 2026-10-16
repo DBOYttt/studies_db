@@ -82,6 +82,8 @@ export const AUDIT_LABELS: Record<string, string> = {
   'event.link': 'Powiązano post',
   'event.unlink': 'Usunięto powiązanie z postem',
   'event.upload': 'Dodano pliki',
+  'event.upload_retry': 'Ponowiono wysyłanie plików',
+  'event.post_retry': 'Ponowiono post na Discordzie',
 };
 
 const FIELD_LABELS: Record<string, string> = {

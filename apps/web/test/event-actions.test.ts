@@ -302,3 +302,24 @@ describe('retryPostAction', () => {
     expect(page.canRetryPost).toBe(false);
   });
 });
+
+describe('eventHistory', () => {
+  it('includes the rows of the event and of its series', async () => {
+    const { eventHistory } = await import('../lib/event-queries');
+    const { writeAudit } = await import('@studies/db');
+    const row = (target: string, action: string) =>
+      writeAudit(db, { userId: alice.id, action, target, details: {} });
+    await row('9001', 'event.edit');
+    await row('series:77', 'event.upload_retry');
+    await row('series:78', 'event.edit');
+    await row('9002', 'event.edit');
+    const h = await eventHistory(db, 9001, 77);
+    expect(h.map((r) => [r.target, r.action])).toEqual([
+      ['series:77', 'event.upload_retry'],
+      ['9001', 'event.edit'],
+    ]);
+    expect((await eventHistory(db, 9001, null)).map((r) => r.target)).toEqual([
+      '9001',
+    ]);
+  });
+});

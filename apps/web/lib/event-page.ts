@@ -34,7 +34,7 @@ export async function loadEventPage(
   const [files, linked, history, req, uploads, retryable] = await Promise.all([
     eventFileRows(db, id),
     listTopicsByIds(db, ev.linkedTopicIds),
-    eventHistory(db, id),
+    eventHistory(db, id, ev.seriesId),
     postTopicId === null
       ? lastBotRequest(db, 'event_post_upsert', reqTarget)
       : Promise.resolve(null),

@@ -161,13 +161,22 @@ export async function searchTopics(
     .limit(TOPIC_SEARCH_LIMIT);
 }
 
-/** Audit rows of one event (newest first). */
-export async function eventHistory(db: Db, eventId: number) {
+/**
+ * Audit rows of one event and of its series (`series:<id>`), newest first.
+ */
+export async function eventHistory(
+  db: Db,
+  eventId: number,
+  seriesId: number | null,
+) {
   return (
     await listAudit(db, {
       limit: 50,
       offset: 0,
-      target: String(eventId),
+      target:
+        seriesId === null
+          ? String(eventId)
+          : [String(eventId), `series:${seriesId}`],
       actionPrefix: 'event.',
     })
   ).rows;

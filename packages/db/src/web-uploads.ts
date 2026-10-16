@@ -5,6 +5,7 @@
  */
 import { and, desc, eq, gt, inArray, sql } from 'drizzle-orm';
 import type { ActionResult } from './admin-actions.js';
+import { writeAudit } from './audit.js';
 import { enqueueBotRequest } from './bot-requests.js';
 import type { Db, DbExecutor } from './client.js';
 import { checkUser, getEvent, isRefusal, refused } from './events.js';
@@ -115,6 +116,12 @@ export async function retryFailedUploads(
     await enqueueBotRequest(tx, 'event_upload', `upload:${ids[0]}`, {
       eventId,
       uploadIds: ids,
+    });
+    await writeAudit(tx, {
+      userId,
+      action: 'event.upload_retry',
+      target: String(eventId),
+      details: { source: 'web', count: ids.length, uploadIds: ids },
     });
   });
   return { ok: true, message: 'Ponawiam wysyłanie.' };
