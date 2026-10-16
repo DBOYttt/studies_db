@@ -25,6 +25,12 @@ Fill in: `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
 `STORAGE_DIR` is forced to `/data/storage` by compose; it must be absolute in production
 (the apps throw at startup otherwise).
 
+Website uploads for events are written by the `web` container (user `node`, uid 1000) to
+`$STORAGE_DIR/uploads`. The `storage` volume is created by root, so the one-shot `migrate` service
+creates that directory on every `compose up`, owned by uid 1000 with mode 0750 (the bot runs as root and
+can read and delete the files). Without it every upload answers 503. If you run the apps outside compose,
+create `uploads/` yourself with an owner that matches the web process.
+
 The `worker` service does not load `.env` as a whole: compose passes it only `DATABASE_URL`,
 `UNITIME_ICAL_URL` and the optional `WORKER_CONCURRENCY` / `SOFFICE_BIN` / `PDFTOTEXT_BIN` (and forces
 `STORAGE_DIR`). It opens files named by DB rows, so it should not hold the Discord token or other secrets.
@@ -104,6 +110,17 @@ deletes its jobs (prefer setting `deleted_at`).
 4. Run `/setup` once; it creates both channels and pins the panels.
 
 Details (admin command visibility, panel channels) are in `apps/bot/README.md`.
+
+### Upgrading to schedule events (migrations 0010-0016)
+
+1. `scripts/backup.sh`, then `pnpm db:migrate` (or let the `migrate` container run on `compose up`). The migrations
+   add events and their links to topics (and make `topics.subject_id` nullable), the `v_events` view, recurring
+   series, reminder preferences and logs, and `web_uploads`.
+2. Re-register slash commands: `pnpm --filter @studies/bot register` (new `/event`).
+3. Restart the bot, then run `/setup` once: it creates the `#wydarzenia` forum and adds the event type tags to the
+   subject forums. Permissions the bot needs are listed in `apps/bot/README.md`.
+4. Website uploads write to `$STORAGE_DIR/uploads`, which the `migrate` service prepares with the right owner
+   (see Configure above). The bot removes sent files and cleans up anything older than 24 h.
 
 ## Tagi forum
 

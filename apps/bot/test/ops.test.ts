@@ -1,4 +1,11 @@
-import { type Db, setSetting, subjects, users } from '@studies/db';
+import {
+  botRequests,
+  type Db,
+  events,
+  setSetting,
+  subjects,
+  users,
+} from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { ChannelType, Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
@@ -38,7 +45,10 @@ const guild = (callerRoles: string[]) =>
     roles: { cache: roles, everyone: { id: 'e' }, fetch: async () => roles },
     channels: {
       fetch: async (id?: string) => (id ? panelText : new Collection()),
-      create: async (o: { name: string }) => ({ id: `text-${o.name}` }),
+      create: async (o: { name: string }) => ({
+        id: `text-${o.name}`,
+        availableTags: [],
+      }),
     },
     members: {
       me: { id: 'bot' },
@@ -76,12 +86,29 @@ describe('runSetup', () => {
       .from(users)
       .where(eq(users.discordUserId, 'u1'));
     expect(u.isAdmin).toBe(true);
-    // The two panel channels and their messages.
+    // The two panel channels and their messages, #wydarzenia and its info post.
     expect(audit).toHaveBeenCalledWith('bot.setup', null, {
-      created: 4,
+      created: 6,
       updated: 0,
       failures: 0,
     });
+  });
+});
+
+describe('runSetup re-queues missing event posts', () => {
+  it('after a real run, not after a dry run', async () => {
+    const [{ id }] = await db
+      .insert(events)
+      .values({ kind: 'inne', title: 'x', startsAt: new Date() })
+      .$returningId();
+    const audit = vi.fn().mockResolvedValue(undefined);
+    await runSetup(deps(), guild(['r']), 'u1', true, audit);
+    expect(await db.select().from(botRequests)).toEqual([]);
+    await runSetup(deps(), guild(['r']), 'u1', false, audit);
+    const reqs = await db.select().from(botRequests);
+    expect(reqs.map((r) => [r.kind, r.target])).toEqual([
+      ['event_post_upsert', `event:${id}`],
+    ]);
   });
 });
 

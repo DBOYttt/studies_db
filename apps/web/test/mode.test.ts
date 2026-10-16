@@ -123,3 +123,24 @@ describe('modeTarget advanced -> simple', () => {
     expect(t('/subjects/A%20B%2FC')).toBe('/s/subjects/A%20B%2FC');
   });
 });
+
+describe('modeTarget event pages', () => {
+  it('maps between /s/wydarzenia and /wydarzenia', () => {
+    expect(modeTarget('advanced', '/s/wydarzenia/nowe')).toBe(
+      '/wydarzenia/nowe',
+    );
+    expect(modeTarget('advanced', '/s/wydarzenia/12')).toBe('/wydarzenia/12');
+    expect(modeTarget('advanced', '/s/wydarzenia/12/edytuj')).toBe(
+      '/wydarzenia/12/edytuj',
+    );
+    expect(modeTarget('simple', '/wydarzenia/12')).toBe('/s/wydarzenia/12');
+    expect(modeTarget('simple', '/wydarzenia/nowe')).toBe('/s/wydarzenia/nowe');
+    expect(modeTarget('simple', '/wydarzenia/12/edytuj')).toBe(
+      '/s/wydarzenia/12/edytuj',
+    );
+  });
+  it('falls back for unknown event paths', () => {
+    expect(modeTarget('advanced', '/s/wydarzenia/x/y')).toBe('/');
+    expect(modeTarget('simple', '/wydarzenia/abc')).toBe('/s');
+  });
+});

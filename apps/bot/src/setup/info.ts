@@ -8,6 +8,21 @@ import type {
 } from './types.js';
 
 export const INFO_TITLE = 'ℹ️ Informacje o przedmiocie';
+export const EVENTS_INFO_TITLE = 'ℹ️ Wydarzenia';
+export const EVENTS_FORUM_NAME = 'wydarzenia';
+export const EVENTS_FORUM_TOPIC =
+  'Kolokwia, egzaminy, wyjazdy i inne wydarzenia bez przedmiotu. Każde wydarzenie ma tu swój post, a pliki dodane w poście trafiają na stronę.';
+
+/** The pinned post of #wydarzenia. */
+export function renderEventsInfoPost(webBaseUrl: string): string {
+  return [
+    '**Wydarzenia** — kolokwia, egzaminy, wyjazdy i zajęcia dodatkowe.',
+    'Wydarzenia przedmiotów mają posty w forum swojego przedmiotu, a wydarzenia bez przedmiotu tutaj. Posty zakłada i aktualizuje bot — nie edytuj ich ręcznie.',
+    'Pliki dodane w poście wydarzenia (np. zakres materiału) trafiają do materiałów wydarzenia na stronie.',
+    `Dodaj wydarzenie: ${webBaseUrl}/s/wydarzenia/nowe`,
+    `Plan zajęć: ${webBaseUrl}/s/plan`,
+  ].join('\n\n');
+}
 const MAX_MESSAGE = 2000;
 const WEEKDAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
 

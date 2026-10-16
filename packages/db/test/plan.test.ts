@@ -53,6 +53,7 @@ const S = (
   room: null,
   label: 'W',
   status: 'confirmed',
+  type: 'class',
   ...o,
 });
 
@@ -171,6 +172,40 @@ describe('my groups', () => {
   });
 });
 
+describe('my groups with events', () => {
+  const ev = (classId: number | null, groupId: number | null) =>
+    S(W(2026, 10, 13, 10), W(2026, 10, 13, 11), {
+      type: 'event',
+      eventKind: 'kolokwium',
+      eventTitle: 'Kolokwium',
+      allDay: false,
+      classId,
+      groupId,
+    });
+  it('an event with a group is filtered like a class; one without a group is shown', () => {
+    const mine = ev(3, 7);
+    const other = ev(3, 8);
+    const unpickedClass = ev(4, 9);
+    const wholeClass = ev(3, null);
+    const noClass = ev(null, null);
+    const all = [mine, other, unpickedClass, wholeClass, noClass];
+    expect(filterMyGroups(all, { '3': 7 })).toEqual([
+      mine,
+      wholeClass,
+      noClass,
+    ]);
+  });
+  it('hidden events count towards the hidden total', () => {
+    const cls = S(W(2026, 10, 13, 8), W(2026, 10, 13, 9), {
+      classId: 3,
+      groupId: 8,
+    });
+    const all = [cls, ev(3, 8), ev(3, 7), ev(null, null)];
+    expect(hiddenByMyGroups(all, { '3': 7 })).toBe(2);
+    expect(hiddenByMyGroups(all, {})).toBe(0);
+  });
+});
+
 describe('weekSessionsQuery', () => {
   it('binds the week bounds and optional filters', () => {
     const q = weekSessionsQuery({ year: 2026, week: 42 });
@@ -275,6 +310,7 @@ describe('DB queries', () => {
       subjectCode: 'FIZ',
       classId: null,
       status: 'confirmed',
+      type: 'class',
     });
     expect(rows[1]).toMatchObject({
       groupName: 'Gr. 1',

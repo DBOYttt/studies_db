@@ -80,6 +80,14 @@ function describeAction(a: Action): string {
       return a.messageId
         ? `odśwież panel w #${PANEL_CHANNEL_NAMES[a.which]} (albo opublikuj go ponownie, jeśli zniknął)`
         : `opublikuj panel w #${PANEL_CHANNEL_NAMES[a.which]}`;
+    case 'ensureEventsForum':
+      return a.existingId
+        ? `${a.code}: zapisz istniejące forum jako forum wydarzeń`
+        : `${a.code}: utwórz forum #${a.name} z tagami ${a.tags.join(', ')}`;
+    case 'addEventsTags':
+      return `${a.code}: dodaj tagi ${a.tags.join(', ')}`;
+    case 'upsertEventsInfoPost':
+      return `${a.code}: ${a.existing ? 'zaktualizuj' : 'utwórz'} post informacyjny`;
     case 'warn':
       return `uwaga — ${a.code ? `${a.code}: ` : ''}${a.message}`;
   }

@@ -17,6 +17,7 @@ import {
 } from '../ingest.js';
 import {
   findSubjectByChannel,
+  resolveForum,
   softDeleteMessage,
   softDeleteMissingAttachments,
   softDeleteTopic,
@@ -61,7 +62,7 @@ export function handleThreadCreate(
   return guarded('threadCreate', async () => {
     const info = toThreadInfo(thread);
     if (!info) return;
-    if (!(await findSubjectByChannel(deps.db, info.forumChannelId))) return;
+    if (!(await resolveForum(deps.db, info.forumChannelId))) return;
     await syncParentTags(deps.db, thread);
     let owner: DiscordUser | null = null;
     try {
@@ -90,7 +91,7 @@ export function handleThreadUpdate(
   return guarded('threadUpdate', async () => {
     const info = toThreadInfo(thread);
     if (!info) return;
-    if (!(await findSubjectByChannel(deps.db, info.forumChannelId))) return;
+    if (!(await resolveForum(deps.db, info.forumChannelId))) return;
     await syncParentTags(deps.db, thread);
     await upsertTopic(deps.db, info, null);
   });

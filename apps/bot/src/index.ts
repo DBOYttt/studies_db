@@ -1,10 +1,20 @@
-import { createDb, resolveStorageDir } from '@studies/db';
+import {
+  createDb,
+  enqueueMissingEventPosts,
+  resolveStorageDir,
+} from '@studies/db';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { catchUp, discordForumSource } from './catchup.js';
 import { createInteractionHandler } from './commands/router.js';
 import { type BotConfig, loadConfig } from './config.js';
 import { registerEvents } from './discord/events.js';
 import { fetchAttachmentBody } from './discord/map.js';
+import { discordEventPostGuild, eventForumCheck } from './events/posts.js';
+import {
+  recoverInterruptedRequests,
+  startEventPoller,
+} from './events/worker.js';
+import { discordReminderGuild, startReminderTick } from './reminders.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection:', reason);
@@ -41,8 +51,37 @@ client.on(
   (i) => void createInteractionHandler({ ingest, client, config, pool })(i),
 );
 
-client.once(Events.ClientReady, (c) => {
+let eventPoller: ReturnType<typeof startEventPoller> | undefined;
+let reminderTick: ReturnType<typeof startReminderTick> | undefined;
+client.once(Events.ClientReady, async (c) => {
   console.log(`Bot gotowy jako ${c.user.tag}`);
+  // Requests left `running` by a previous process will never finish: fail
+  // them before the poller starts.
+  try {
+    const n = await recoverInterruptedRequests(db);
+    if (n > 0) console.log(`Przerwane zlecenia: ${n}.`);
+  } catch (err) {
+    console.error('recoverInterruptedRequests:', err);
+  }
+  // Failed or interrupted post requests are never retried on their own.
+  try {
+    const n = await enqueueMissingEventPosts(db);
+    if (n > 0) console.log(`Brakujące posty wydarzeń: ${n}.`);
+  } catch (err) {
+    console.error('enqueueMissingEventPosts:', err);
+  }
+  eventPoller = startEventPoller({
+    db,
+    guild: discordEventPostGuild(client, eventForumCheck(db)),
+    webBaseUrl: config.webBaseUrl,
+    storageDir: ingest.storageDir,
+  });
+  reminderTick = startReminderTick({
+    db,
+    pool,
+    guild: discordReminderGuild(client),
+    webBaseUrl: config.webBaseUrl,
+  });
   catchUp(ingest, discordForumSource(client), { ignoreWatermark: false }).then(
     (r) =>
       console.log(
@@ -52,11 +91,23 @@ client.once(Events.ClientReady, (c) => {
   );
 });
 
+const STOP_TIMEOUT_MS = 8_000;
 let shuttingDown = false;
 async function shutdown(code: number): Promise<never> {
   if (!shuttingDown) {
     shuttingDown = true;
     try {
+      // Both loops stop between steps; don't let a slow Discord call hold
+      // the shutdown past the container's grace period.
+      const stopped = Promise.all([eventPoller?.stop(), reminderTick?.stop()]);
+      const timedOut = await Promise.race([
+        stopped.then(() => false),
+        new Promise<boolean>((r) =>
+          setTimeout(() => r(true), STOP_TIMEOUT_MS).unref(),
+        ),
+      ]);
+      if (timedOut)
+        console.error('Zamykanie: zadania nie skończyły się w czasie.');
       await client.destroy();
       await pool.end();
     } catch (err) {

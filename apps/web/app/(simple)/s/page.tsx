@@ -3,10 +3,13 @@ import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
-import { getDb } from '@/lib/db';
+import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
+import { getDb, getRoPool } from '@/lib/db';
+import { nowWall } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles, listSubjectCards } from '@/lib/simple-queries';
+import { upcomingForUser } from '@/lib/upcoming-events';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,10 +24,12 @@ export default async function SimpleStart({
   const sp = await searchParams;
   const db = getDb();
   const cardsP = listSubjectCards(db);
-  const [cards, recent, preview] = await Promise.all([
+  const [cards, recent, preview, upcoming] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5 }),
     loadSimplePreview(db, sp, cardsP),
+    // Events are optional on the start page: a failure leaves the card empty.
+    upcomingForUser(db, getRoPool(), user.id, nowWall()).catch(() => []),
   ]);
   return (
     <SimpleShell
@@ -52,6 +57,7 @@ export default async function SimpleStart({
         </p>
       </div>
       <SubjectCards cards={cards} />
+      <UpcomingEvents events={upcoming} />
       <h2 className="mt-3 mb-0 text-base font-semibold">Ostatnio dodane</h2>
       <FileList
         files={isoFiles(recent.rows)}

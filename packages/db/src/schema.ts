@@ -1,8 +1,11 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyMySqlColumn,
   bigint,
   boolean,
   char,
+  check,
+  date,
   datetime,
   index,
   int,
@@ -17,7 +20,7 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
-import { ASSESSMENTS, CLASS_KINDS } from './constants.js';
+import { ASSESSMENTS, CLASS_KINDS, EVENT_KIND_KEYS } from './constants.js';
 import type { JobType, PreviewKind } from './files.js';
 
 export {
@@ -27,6 +30,8 @@ export {
   CLASS_KINDS,
   CLASS_NAMES,
   type ClassKind,
+  EVENT_KINDS,
+  type EventKind,
   PUBLIC_VIEWS,
   type PublicView,
 } from './constants.js';
@@ -147,9 +152,7 @@ export const topics = mysqlTable(
   'topics',
   {
     id: int('id').autoincrement().primaryKey(),
-    subjectId: int('subject_id')
-      .notNull()
-      .references(() => subjects.id),
+    subjectId: int('subject_id').references(() => subjects.id),
     title: varchar('title', { length: 300 }).notNull(),
     discordThreadId: varchar('discord_thread_id', { length: 32 })
       .notNull()
@@ -343,3 +346,176 @@ export const botSettings = mysqlTable('bot_settings', {
   value: varchar('value', { length: 200 }).notNull(),
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
+
+// A recurring event. Its occurrences are `events` rows with `series_id`; the
+// series has ONE forum post (`topic_id`), set by the bot. Soft-deleted.
+export const eventSeries = mysqlTable('event_series', {
+  id: int('id').autoincrement().primaryKey(),
+  rule: mysqlEnum('rule', ['weekly', 'biweekly']).notNull(),
+  until: date('until', { mode: 'string' }).notNull(),
+  topicId: int('topic_id').references(() => topics.id, {
+    onDelete: 'set null',
+  }),
+  // Root of the split lineage ("To i następne"): series of one lineage share
+  // one forum post, even before `topic_id` is set.
+  parentId: int('parent_id').references((): AnyMySqlColumn => eventSeries.id, {
+    onDelete: 'set null',
+  }),
+  createdBy: int('created_by').references(() => users.id),
+  createdAt: now(),
+  deletedAt: datetime('deleted_at'),
+});
+
+// One row per event occurrence (kolokwium, wyjazd, ...). Times are Europe/Warsaw
+// wall time like class_sessions.
+export const events = mysqlTable(
+  'events',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    kind: mysqlEnum('kind', EVENT_KIND_KEYS).notNull(),
+    title: varchar('title', { length: 100 }).notNull(),
+    subjectId: int('subject_id').references(() => subjects.id, {
+      onDelete: 'cascade',
+    }),
+    classId: int('class_id').references(() => classes.id, {
+      onDelete: 'set null',
+    }),
+    groupId: int('group_id').references(() => classGroups.id, {
+      onDelete: 'set null',
+    }),
+    startsAt: datetime('starts_at').notNull(),
+    endsAt: datetime('ends_at'),
+    allDay: boolean('all_day').notNull().default(false),
+    place: varchar('place', { length: 100 }),
+    note: varchar('note', { length: 1000 }),
+    seriesId: int('series_id').references(() => eventSeries.id),
+    topicId: int('topic_id').references(() => topics.id, {
+      onDelete: 'set null',
+    }),
+    createdBy: int('created_by').references(() => users.id),
+    updatedBy: int('updated_by').references(() => users.id),
+    createdAt: now(),
+    updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    deletedAt: datetime('deleted_at'),
+  },
+  (t) => [
+    index('idx_events_starts').on(t.startsAt),
+    index('idx_events_subject_starts').on(t.subjectId, t.startsAt),
+  ],
+);
+
+// Existing forum posts linked to an event or to a whole series (exactly one
+// owner is set, enforced by the CHECK). `id` is a surrogate key.
+export const eventTopics = mysqlTable(
+  'event_topics',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    eventId: int('event_id').references(() => events.id, {
+      onDelete: 'cascade',
+    }),
+    seriesId: int('series_id').references(() => eventSeries.id, {
+      onDelete: 'cascade',
+    }),
+    topicId: int('topic_id')
+      .notNull()
+      .references(() => topics.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    unique('uq_event_topics').on(t.eventId, t.topicId),
+    unique('uq_event_topics_series').on(t.seriesId, t.topicId),
+    check(
+      'chk_event_topics_owner',
+      sql`(${t.eventId} IS NULL) <> (${t.seriesId} IS NULL)`,
+    ),
+  ],
+);
+
+// Opt-in event reminders per user. `disabled_reason` is set when the bot
+// could not DM the user (for example "DM zamknięte").
+export const reminderPrefs = mysqlTable('reminder_prefs', {
+  userId: int('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  dayBefore: boolean('day_before').notNull().default(false),
+  hourBefore: boolean('hour_before').notNull().default(false),
+  disabledReason: varchar('disabled_reason', { length: 100 }),
+});
+
+// What was already sent. `user_id` 0 is the channel digest (NOT NULL with a
+// sentinel because MariaDB treats NULLs as distinct inside a UNIQUE key, so
+// NULL could not dedupe the digest). `for_starts_at` is the event's wall
+// start at send time, so moving an event re-arms its reminders.
+export const reminderLog = mysqlTable(
+  'reminder_log',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    eventId: int('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: int('user_id').notNull().default(0),
+    kind: mysqlEnum('kind', ['day', 'hour', 'digest']).notNull(),
+    forStartsAt: datetime('for_starts_at').notNull(),
+    sentAt: datetime('sent_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    unique('uq_reminder_log').on(t.eventId, t.userId, t.kind, t.forStartsAt),
+  ],
+);
+
+// Generic DB queue the web/worker use to ask the bot to do things.
+export const botRequests = mysqlTable(
+  'bot_requests',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    kind: varchar('kind', { length: 40 }).notNull(),
+    target: varchar('target', { length: 100 }).notNull(),
+    status: mysqlEnum('status', ['queued', 'running', 'done', 'failed'])
+      .notNull()
+      .default('queued'),
+    payload: json('payload'),
+    error: varchar('error', { length: 500 }),
+    createdAt: now(),
+    startedAt: datetime('started_at'),
+    finishedAt: datetime('finished_at'),
+  },
+  (t) => [index('idx_bot_requests_status').on(t.status, t.createdAt)],
+);
+
+// Files a user uploaded on the website for an event. The bot posts them into
+// the event's Discord thread. `storage_path` is a temp path under
+// STORAGE_DIR/uploads/ (never user-controlled); `original_filename` is for
+// display only.
+export const webUploads = mysqlTable(
+  'web_uploads',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    eventId: int('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: int('user_id')
+      .notNull()
+      .references(() => users.id),
+    storagePath: varchar('storage_path', { length: 255 }).notNull(),
+    originalFilename: varchar('original_filename', { length: 255 }).notNull(),
+    sizeBytes: bigint('size_bytes', { mode: 'number' }).notNull(),
+    status: mysqlEnum('status', ['queued', 'posting', 'done', 'failed'])
+      .notNull()
+      .default('queued'),
+    error: varchar('error', { length: 500 }),
+    /**
+     * Set by the bot right after Discord accepted the file, before ingest: a
+     * retry then only re-runs ingest, so the file is never posted twice.
+     */
+    sentMessageId: varchar('sent_message_id', { length: 32 }),
+    sentAttachmentId: varchar('sent_attachment_id', { length: 32 }),
+    sentUrl: varchar('sent_url', { length: 1000 }),
+    sentContentType: varchar('sent_content_type', { length: 150 }),
+    sentAt: datetime('sent_at'),
+    createdAt: now(),
+    finishedAt: datetime('finished_at'),
+  },
+  (t) => [
+    index('idx_web_uploads_event').on(t.eventId, t.id),
+    index('idx_web_uploads_status').on(t.status, t.createdAt),
+  ],
+);

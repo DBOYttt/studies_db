@@ -1,11 +1,12 @@
 import { CLASS_KINDS, CLASS_NAMES, classifyTags, groupName } from '@studies/db';
 import { describe, expect, it } from 'vitest';
+import { renderEventsInfoPost } from '../src/setup/info.js';
 import {
   desiredTags,
   forumSlug,
   needsSecondPass,
   parseForumName,
-  planSetup as planWithPanels,
+  planSetup as planAll,
   secondPassActions,
 } from '../src/setup/plan.js';
 import type {
@@ -48,6 +49,15 @@ const BD: SubjectSpec = {
 };
 
 const render = (s: SubjectSpec) => `G:${s.code}`;
+
+const isEvents = (a: Action) =>
+  a.type === 'ensureEventsForum' ||
+  a.type === 'addEventsTags' ||
+  a.type === 'upsertEventsInfoPost' ||
+  (a.type === 'warn' && a.code === '#wydarzenia');
+/** The plan without the #wydarzenia actions (covered in 'planSetup: #wydarzenia'). */
+const planWithPanels: typeof planAll = (...args) =>
+  planAll(...args).filter((a) => !isEvents(a));
 
 const isPanel = (a: Action) =>
   a.type === 'ensurePanelChannel' ||
@@ -95,7 +105,7 @@ describe('forumSlug', () => {
 });
 
 describe('desiredTags', () => {
-  it('lists class tags, groups up to the max, then fixed tags', () => {
+  it('lists class tags, groups up to the max, then fixed and event tags', () => {
     expect(desiredTags(ASD)).toEqual([
       'Wykład',
       'Laboratorium',
@@ -104,12 +114,18 @@ describe('desiredTags', () => {
       'Gr. 3',
       'Kolokwium',
       'Egzamin',
+      'Wyjazd',
+      'Zajęcia dodatkowe',
+      'Inne',
     ]);
   });
   it('has only fixed tags for a subject without classes', () => {
     expect(desiredTags({ ...ASD, classes: [] })).toEqual([
       'Kolokwium',
       'Egzamin',
+      'Wyjazd',
+      'Zajęcia dodatkowe',
+      'Inne',
     ]);
   });
   it('generates tags that classify back to the same class and group', () => {
@@ -230,7 +246,7 @@ describe('planSetup', () => {
         subjectId: 2,
         code: 'BD',
         channelId: 'f-bd',
-        tags: ['Kolokwium', 'Egzamin'],
+        tags: ['Kolokwium', 'Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'],
       },
       {
         type: 'setGuidelines',
@@ -1129,5 +1145,137 @@ describe('planSetup: panels', () => {
       (a) => a.type === 'ensurePanelChannel',
     );
     expect(channels.map((a) => a.parentId)).toEqual(['c3', 'c3']);
+  });
+});
+
+describe('renderEventsInfoPost', () => {
+  it('links the new-event page and the plan', () => {
+    const t = renderEventsInfoPost('https://x.pl');
+    expect(t).toContain('Dodaj wydarzenie: https://x.pl/s/wydarzenia/nowe');
+    expect(t).toContain('Plan zajęć: https://x.pl/s/plan');
+    expect(t).not.toMatch(/s\/wydarzenia(\s|$)/);
+  });
+});
+
+describe('planSetup: #wydarzenia', () => {
+  const only = (actions: Action[]) => actions.filter(isEvents);
+  const KINDS = ['Kolokwium', 'Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'];
+  const eventsForum = (
+    over: Partial<GuildSnapshot['forums'][number]> = {},
+  ) => ({
+    id: 'f-ev',
+    name: 'wydarzenia',
+    parentId: 'c3',
+    tags: KINDS.map((name) => ({ id: `t-${name}`, name })),
+    topic: null,
+    ...over,
+  });
+  const opts = { webBaseUrl: 'https://x.pl' };
+
+  it('creates the forum with the five kind tags in the first subject category', () => {
+    const g = withRole({
+      forums: [
+        { id: 'f-bd', name: 'bd', parentId: 'c3', tags: [], topic: null },
+      ],
+    });
+    expect(only(planAll([BD], g, ROLE, render, opts))).toEqual([
+      expect.objectContaining({
+        type: 'ensureEventsForum',
+        code: '#wydarzenia',
+        name: 'wydarzenia',
+        existingId: null,
+        parentId: 'c3',
+        tags: KINDS,
+      }),
+    ]);
+    expect(needsSecondPass(only(planAll([BD], g, ROLE, render, opts)))).toBe(
+      true,
+    );
+  });
+
+  it('adopts the only forum with that name and adds missing tags and the info post', () => {
+    const g = withRole({
+      forums: [eventsForum({ tags: [{ id: 't1', name: 'kolokwium' }] })],
+    });
+    const actions = only(planAll([], g, ROLE, render, opts));
+    expect(actions.map((a) => a.type)).toEqual([
+      'ensureEventsForum',
+      'addEventsTags',
+      'upsertEventsInfoPost',
+    ]);
+    expect(actions[0]).toMatchObject({ existingId: 'f-ev' });
+    expect(actions[1]).toMatchObject({
+      tags: ['Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'],
+    });
+    expect(actions[2]).toMatchObject({ existing: null, pin: true });
+    expect(needsSecondPass(actions)).toBe(false);
+  });
+
+  it('is a no-op once forum, tags and info post exist (idempotent)', () => {
+    const content = renderEventsInfoPost(opts.webBaseUrl);
+    const g = withRole({
+      eventsForumId: 'f-ev',
+      forums: [
+        eventsForum({
+          infoPost: { threadId: 'th', messageId: 'th', content },
+          pinnedThreadId: 'th',
+        }),
+      ],
+    });
+    expect(only(planAll([], g, ROLE, render, opts))).toEqual([]);
+  });
+
+  it('edits a stale info post and never unpins another pinned post', () => {
+    const stale = withRole({
+      eventsForumId: 'f-ev',
+      forums: [
+        eventsForum({
+          infoPost: { threadId: 'th', messageId: 'th', content: 'old' },
+        }),
+      ],
+    });
+    expect(only(planAll([], stale, ROLE, render, opts))).toEqual([
+      expect.objectContaining({
+        type: 'upsertEventsInfoPost',
+        existing: { threadId: 'th', messageId: 'th' },
+        pin: false,
+      }),
+    ]);
+    const pinned = withRole({
+      eventsForumId: 'f-ev',
+      forums: [eventsForum({ pinnedThreadId: 'other' })],
+    });
+    const out = only(planAll([], pinned, ROLE, render, opts));
+    expect(out[0]).toMatchObject({ existing: null, pin: false });
+    expect(out[1]).toMatchObject({ type: 'warn' });
+  });
+
+  it('warns when the forum is full and does not import it as a subject', () => {
+    const full = Array.from({ length: 20 }, (_, i) => ({
+      id: `x${i}`,
+      name: `x${i}`,
+    }));
+    const g = withRole({
+      eventsForumId: 'f-ev',
+      forums: [eventsForum({ tags: full })],
+    });
+    const all = planAll([], g, ROLE, render);
+    expect(all.some((a) => a.type === 'importForum')).toBe(false);
+    expect(only(all)).toEqual([
+      expect.objectContaining({
+        type: 'warn',
+        code: '#wydarzenia',
+        message: expect.stringContaining('limit 20'),
+      }),
+    ]);
+  });
+
+  it('warns and picks none when several forums are named wydarzenia', () => {
+    const g = withRole({
+      forums: [eventsForum(), eventsForum({ id: 'f-ev2' })],
+    });
+    const all = planAll([], g, ROLE, render);
+    expect(only(all)).toHaveLength(1);
+    expect(all.some((a) => a.type === 'importForum')).toBe(false);
   });
 });

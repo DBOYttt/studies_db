@@ -372,6 +372,7 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_SIMPLE_LANDING = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_SCHEMA = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_NONADMIN = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_EVENTS = await createLoginToken(db, userId);
 
     // Moje grupy stored per user (my-groups.spec.ts): its own user, so the
     // saved choice cannot leak into the other specs.
@@ -390,6 +391,7 @@ export default async function globalSetup() {
     });
     await db.update(users).set({ isAdmin: true }).where(eq(users.id, adminId));
     process.env.E2E_TOKEN_ADMIN = await createLoginToken(db, adminId);
+    process.env.E2E_TOKEN_EVENTS_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_ADMIN_SIMPLE = await createLoginToken(db, adminId);
   } finally {
     await closeTestDb(db);

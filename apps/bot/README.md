@@ -73,6 +73,22 @@ A relative `STORAGE_DIR` is resolved against the repo root (not the current dire
 Missing env vars make the process exit with `Missing env: ...`; a login failure logs
 `Nie udało się zalogować bota: ...` and exits with code 1.
 
+## Upgrading to schedule events
+
+Students can add events (kolokwia, egzaminy, wyjazdy, zajęcia dodatkowe) from `#panel` / `/event` and the web; the
+bot keeps one forum post per event (a series shares one), sends reminders and posts files uploaded on the website.
+
+1. `pnpm db:migrate` (migrations 0010-0016: events, series, reminders, web uploads).
+2. Re-register slash commands: `pnpm --filter @studies/bot register` (new `/event`).
+3. Make sure the bot's role has Attach Files, Send Messages in Threads, Manage Threads (it archives, locks and
+   renames event posts) and Create Public Threads in the subject forums and `#wydarzenia`. Reminders also need
+   users to allow DMs from server members.
+4. Restart the bot, then run `/setup` once: it creates the `#wydarzenia` forum (events without a subject, the daily
+   digest and a pinned info post) and adds the event type tags (Kolokwium, Egzamin, Wyjazd, Zajęcia dodatkowe,
+   Inne) to every subject forum.
+5. Website uploads need `STORAGE_DIR/uploads` writable by the web process; the bot reads and deletes the files
+   (see `docs/deploy.md`).
+
 ## Manual end-to-end checklist (private test server)
 
 > **Not verified live.** The bot has only been tested against fakes and the test DB; this checklist is the first real run on a live server.

@@ -1,10 +1,11 @@
-import { getMyGroups } from '@studies/db';
+import { getMyGroups, getReminderPrefs } from '@studies/db';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { listMyGroupOptions } from '@/lib/plan-queries';
 import { requireUser } from '@/lib/session';
 import { MyGroupsForm } from './MyGroupsForm';
 import { MyGroupsImport } from './MyGroupsImport';
+import { RemindersForm } from './RemindersForm';
 
 export const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
@@ -13,9 +14,10 @@ export const errBox =
 export async function GroupsTab({ weekHref }: { weekHref: string }) {
   const user = await requireUser();
   try {
-    const [options, stored] = await Promise.all([
+    const [options, stored, reminders] = await Promise.all([
       listMyGroupOptions(getRoPool()),
       getMyGroups(getDb(), user.id),
+      getReminderPrefs(getDb(), user.id),
     ]);
     return (
       <>
@@ -26,6 +28,11 @@ export async function GroupsTab({ weekHref }: { weekHref: string }) {
           options={options}
           initialGroups={stored}
           weekHref={weekHref}
+        />
+        <RemindersForm
+          dayBefore={reminders.dayBefore}
+          hourBefore={reminders.hourBefore}
+          disabledReason={reminders.disabledReason}
         />
       </>
     );

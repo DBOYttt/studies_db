@@ -10,7 +10,7 @@
  * `@studies/db/plan`); mysql2 is used for types only.
  */
 import type mysql from 'mysql2/promise';
-import { type ClassKind, KIND_ORDER } from './constants.js';
+import { type ClassKind, type EventKind, KIND_ORDER } from './constants.js';
 import type { MyGroups } from './my-groups.js';
 
 export type IsoWeek = { year: number; week: number };
@@ -85,7 +85,92 @@ export function nowWall(now: Date = new Date()): Date {
   );
 }
 
+/* ---------- "Kiedy": event date/time text ---------- */
+
+export type WhenResult =
+  | { ok: true; startsAt: Date; endsAt: Date | null; allDay: boolean }
+  | { ok: false; message: string };
+
+export const WHEN_FORMAT_MESSAGE =
+  'Nieprawidłowy format daty. Użyj DD.MM[.RRRR] [GG:MM[-GG:MM]], np. 20.10 10:00-11:30.';
+const WHEN_RE =
+  /^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?(?:\s+(\d{1,2}):(\d{2})(?:\s*[-–—]\s*(\d{1,2}):(\d{2}))?)?$/;
+const MIN_MS = 60_000;
+
+/**
+ * Parses `DD.MM[.RRRR] [HH:MM[-HH:MM]]` (wall clock). `now` is a wall Date
+ * (`nowWall()`). Without a year the date nearest to `now` is used (05.01 typed
+ * in December is next January; 10.09 typed mid-October is this September, so
+ * it is refused as too old rather than moved a year ahead). A date alone is
+ * all-day (00:00, no end). Accepted: now − 1 month … now + 1 year.
+ */
+export function parseWhen(text: string, now: Date): WhenResult {
+  const fail = (message: string): WhenResult => ({ ok: false, message });
+  const m = WHEN_RE.exec(text.trim());
+  if (!m) return fail(WHEN_FORMAT_MESSAGE);
+  const day = Number(m[1]);
+  const month = Number(m[2]);
+  const dateAt = (y: number) => {
+    const d = new Date(Date.UTC(y, month - 1, day));
+    return d.getUTCMonth() === month - 1 && d.getUTCDate() === day ? d : null;
+  };
+  const minutes = (h?: string, mi?: string) => {
+    if (h === undefined || mi === undefined) return null;
+    const hh = Number(h);
+    const mm = Number(mi);
+    return hh < 24 && mm < 60 ? hh * 60 + mm : Number.NaN;
+  };
+  const startMin = minutes(m[4], m[5]);
+  const endMin = minutes(m[6], m[7]);
+  if (Number.isNaN(startMin) || Number.isNaN(endMin)) {
+    return fail('Nieprawidłowa godzina.');
+  }
+  const offset = (startMin ?? 0) * MIN_MS;
+  let date: Date | null = null;
+  if (m[3] !== undefined) {
+    date = dateAt(Number(m[3]));
+  } else {
+    const y = now.getUTCFullYear();
+    for (const cand of [y + 1, y, y - 1]) {
+      const d = dateAt(cand);
+      if (!d) continue;
+      const dist = Math.abs(d.getTime() + offset - now.getTime());
+      if (!date || dist < Math.abs(date.getTime() + offset - now.getTime())) {
+        date = d;
+      }
+    }
+  }
+  if (!date) return fail('Nieprawidłowa data.');
+  const startsAt = new Date(date.getTime() + offset);
+  let endsAt: Date | null = null;
+  if (endMin !== null) {
+    endsAt = new Date(date.getTime() + endMin * MIN_MS);
+    if (endsAt <= startsAt) return fail('Koniec musi być po początku.');
+  }
+  const lo = new Date(now);
+  lo.setUTCMonth(lo.getUTCMonth() - 1);
+  const hi = new Date(now);
+  hi.setUTCFullYear(hi.getUTCFullYear() + 1);
+  if (startsAt < lo) {
+    return fail('Data nie może być więcej niż miesiąc wstecz.');
+  }
+  if (startsAt > hi) {
+    return fail('Data nie może być więcej niż rok naprzód.');
+  }
+  return { ok: true, startsAt, endsAt, allDay: startMin === null };
+}
+
+/**
+ * A class session (`type: 'class'`) or an event (`type: 'event'`). `id` is
+ * the row id of its own table, so it is only unique together with `type`.
+ *
+ * Events: an event without a subject has `subjectId` 0 and empty
+ * `subjectName` / `subjectCode`; `room` is the place, `label` the title,
+ * `lecturerId`/`lecturerName` are null and `status` is 'confirmed'. An all-day
+ * event ends at the next midnight, one without an end time ends at its start.
+ */
 export interface PlanSession {
+  type: 'class' | 'event';
   id: number;
   /** Wall Dates. */
   startsAt: Date;
@@ -103,6 +188,10 @@ export interface PlanSession {
   room: string | null;
   label: string;
   status: 'confirmed' | 'cancelled';
+  /** Events only. */
+  eventKind?: EventKind;
+  eventTitle?: string;
+  allDay?: boolean;
 }
 
 const isId = (n: unknown): n is number =>
@@ -148,8 +237,10 @@ export function sanitizeMyGroups(
  * Sessions of my groups. With no saved (valid) group nothing is filtered.
  * Otherwise: anything without a class or group (lectures) and only the picked
  * group of each picked class; sessions with a group in a class without a pick
- * are hidden. With `validByClass`, stale picks are ignored (so a class whose
- * only pick is stale counts as not picked).
+ * are hidden. Events follow the same rule: one with a group shows only when
+ * that group is picked, one without a group always shows. With
+ * `validByClass`, stale picks are ignored (so a class whose only pick is
+ * stale counts as not picked).
  */
 export function filterMyGroups(
   sessions: PlanSession[],
@@ -284,6 +375,7 @@ const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 const strOrNull = (v: unknown) => (v == null ? null : String(v));
 
 export const toPlanSession = (r: mysql.RowDataPacket): PlanSession => ({
+  type: 'class',
   id: Number(r.id),
   startsAt: toWall(r.starts_at),
   endsAt: toWall(r.ends_at),

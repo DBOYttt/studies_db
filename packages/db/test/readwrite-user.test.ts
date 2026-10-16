@@ -34,6 +34,17 @@ describe('studies_rw grants', () => {
     });
   });
 
+  it('may update events but not read bot_requests', async () => {
+    await asRw(async (c) => {
+      await c.query('UPDATE events SET title = title');
+      await c.query('SELECT * FROM v_events');
+      await c.query('SELECT * FROM event_topics');
+      await expect(c.query('SELECT * FROM bot_requests')).rejects.toMatchObject(
+        { errno: 1142 },
+      );
+    });
+  });
+
   const denied = [
     'SELECT * FROM users',
     'SELECT * FROM sessions',
@@ -84,6 +95,54 @@ describe('studies_rw grants', () => {
           "UPDATE materials SET original_filename = 'x', status = 'ready', preview_kind = 'none' WHERE id = -1",
         );
         await c.query('DELETE FROM materials WHERE id = -1');
+      });
+    });
+  });
+
+  // The bot posts into and edits the thread these columns point at.
+  describe('events and event_series', () => {
+    const deniedEvents = [
+      'UPDATE events SET topic_id = 1',
+      'UPDATE events SET series_id = 1',
+      'UPDATE events SET created_by = 1',
+      'UPDATE events SET updated_by = 1',
+      'UPDATE event_series SET topic_id = 1',
+      'UPDATE event_series SET parent_id = 1',
+      'UPDATE event_series SET created_by = 1',
+      `INSERT INTO events (kind, title, starts_at, topic_id)
+       VALUES ('inne', 'x', '2026-01-01 10:00:00', 1)`,
+      `INSERT INTO event_series (rule, until, topic_id)
+       VALUES ('weekly', '2026-02-01', 1)`,
+      `INSERT INTO event_series (rule, until, parent_id)
+       VALUES ('weekly', '2026-02-01', 1)`,
+      "REPLACE INTO events (id, kind, title, starts_at, topic_id) VALUES (1, 'inne', 'x', '2026-01-01', 1)",
+    ];
+    it.each(deniedEvents)('refuses: %s', async (sql) => {
+      await asRw(async (c) => {
+        await expect(c.query(sql)).rejects.toMatchObject({
+          errno: expect.toSatisfy((n: number) => [1142, 1143].includes(n)),
+        });
+      });
+    });
+
+    it('may read, edit other columns, insert and delete', async () => {
+      await asRw(async (c) => {
+        await c.query('SELECT topic_id, series_id, created_by FROM events');
+        await c.query('SELECT topic_id, parent_id FROM event_series');
+        await c.query(
+          "UPDATE events SET title = 'x', place = NULL, deleted_at = NOW() WHERE id = -1",
+        );
+        await c.query(
+          "UPDATE event_series SET until = '2026-02-01' WHERE id = -1",
+        );
+        await c.query(
+          "INSERT INTO event_series (rule, until) VALUES ('weekly', '2026-02-01')",
+        );
+        await c.query(
+          "INSERT INTO events (kind, title, starts_at) VALUES ('inne', 'x', '2026-01-01 10:00:00')",
+        );
+        await c.query("DELETE FROM events WHERE title = 'x'");
+        await c.query("DELETE FROM event_series WHERE until = '2026-02-01'");
       });
     });
   });

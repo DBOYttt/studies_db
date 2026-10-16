@@ -11,8 +11,11 @@ export function proxy(req: NextRequest) {
   return NextResponse.redirect(new URL('/login-info', req.url));
 }
 
+// The upload route is excluded on purpose: when the proxy runs, Next buffers
+// the whole request body in memory before the route sees it. The route calls
+// requireUser() itself.
 export const config = {
   matcher: [
-    '/((?!login-info(?:/|$)|auth/|_next/|favicon\\.ico$|pdf\\.worker\\.min\\.mjs$).*)',
+    '/((?!login-info(?:/|$)|auth/|_next/|favicon\\.ico$|api/wydarzenia/[^/]+/pliki$|pdf\\.worker\\.min\\.mjs$).*)',
   ],
 };

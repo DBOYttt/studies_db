@@ -2,7 +2,14 @@
  * Student panel actions: parsing a decoded `stu` id into an action, and
  * running it once the interaction is acknowledged.
  */
-import { clearMyGroups, getMyGroups, setMyGroup } from '@studies/db';
+import {
+  clearMyGroups,
+  getMyGroups,
+  getReminderPrefs,
+  listEventsInRange,
+  setMyGroup,
+  setReminderPrefs,
+} from '@studies/db';
 import {
   filterMyGroups,
   hiddenByMyGroups,
@@ -13,6 +20,7 @@ import {
   nowWall,
   parseIsoWeek,
   sanitizeMyGroups,
+  weekStart,
 } from '@studies/db/plan';
 import type { APIInteractionGuildMember, GuildMember, User } from 'discord.js';
 import type { RouterDeps } from '../commands/router.js';
@@ -41,6 +49,12 @@ export type StudentAction =
   | { kind: 'groupsSubject'; index: number }
   | { kind: 'groupsSet'; classId: number; groupId: number | null }
   | { kind: 'groupsClear' }
+  | {
+      kind: 'remToggle';
+      which: 'day' | 'hour';
+      on: boolean;
+      subject: number | null;
+    }
   | { kind: 'login' };
 
 /** `yyyy-mm-dd` → wall midnight, or null when malformed or not a real date. */
@@ -78,6 +92,18 @@ export function parseStudentAction(
     }
     return null;
   }
+  if (action === 'rem') {
+    if (sub !== 'day' && sub !== 'hour') return null;
+    const subj = args[2];
+    if (arg !== '0' && arg !== '1') return null;
+    if (subj !== undefined && !INDEX_RE.test(subj)) return null;
+    return {
+      kind: 'remToggle',
+      which: sub,
+      on: arg === '1',
+      subject: subj === undefined ? null : Number(subj),
+    };
+  }
   if (action === 'groups') {
     if (sub === 'open') return { kind: 'groupsOpen' };
     if (sub === 'clear') return { kind: 'groupsClear' };
@@ -112,14 +138,18 @@ export interface StudentContext {
  * web, saved groups that are no longer groups of their class are ignored.
  */
 async function planData(ctx: StudentContext, week: IsoWeek, day?: Date) {
-  const [sessions, stored, options] = await Promise.all([
+  const from = weekStart(week);
+  const to = new Date(from.getTime() + 7 * 86_400_000);
+  const [classSessions, events, stored, options] = await Promise.all([
     listWeekSessionRows(ctx.deps.pool, week),
+    listEventsInRange(ctx.deps.pool, from, to),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
     listMyGroupOptions(ctx.deps.pool),
   ]);
   const valid = Object.fromEntries(
     options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
   );
+  const sessions = [...classSessions, ...events];
   const my = sanitizeMyGroups(stored, valid);
   const hasGroups = Object.keys(my).length > 0;
   return {
@@ -158,11 +188,12 @@ async function showGroups(
     options: Awaited<ReturnType<typeof listMyGroupOptions>>,
   ) => string | null,
 ): Promise<void> {
-  const [options, my] = await Promise.all([
+  const [options, my, rem] = await Promise.all([
     listMyGroupOptions(ctx.deps.pool),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
+    getReminderPrefs(ctx.deps.ingest.db, ctx.userId),
   ]);
-  await ctx.show(groupsView(options, pick(options), my));
+  await ctx.show(groupsView(options, pick(options), my, rem));
 }
 
 /** Runs an action after the interaction was acknowledged. */
@@ -212,6 +243,21 @@ export async function runStudentAction(
     case 'groupsClear':
       await clearMyGroups(db, ctx.userId);
       return showGroups(ctx, () => null);
+    case 'remToggle': {
+      const cur = await getReminderPrefs(db, ctx.userId);
+      await setReminderPrefs(
+        db,
+        ctx.userId,
+        {
+          dayBefore: a.which === 'day' ? a.on : cur.dayBefore,
+          hourBefore: a.which === 'hour' ? a.on : cur.hourBefore,
+        },
+        'discord',
+      );
+      return showGroups(ctx, (o) =>
+        a.subject === null ? null : (groupSubjects(o)[a.subject] ?? null),
+      );
+    }
     case 'login': {
       const res = await linkFor(db, base, toDiscordUser(ctx.user, ctx.member));
       if (!res.ok) return ctx.show(notice(LINK_BANNED));

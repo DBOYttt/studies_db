@@ -3,7 +3,14 @@ import { mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { type Db, jobs, materials, subjects, topics } from '@studies/db';
+import {
+  type Db,
+  jobs,
+  materials,
+  setSetting,
+  subjects,
+  topics,
+} from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import {
@@ -83,6 +90,44 @@ const deps = (fetchBody = streamOf(fixture)) => ({
 });
 
 describe('ingestAttachment', () => {
+  it('a file in #wydarzenia becomes a material of a topic with no subject', async () => {
+    await setSetting(db, 'events_forum_id', 'events-forum');
+    const r = await ingestAttachment(
+      deps(),
+      input({
+        thread: {
+          threadId: 'et1',
+          forumChannelId: 'events-forum',
+          title: 'Kolokwium',
+          ownerDiscordId: 'u1',
+          tagIds: ['some-tag'],
+        },
+      }),
+    );
+    expect(r).toBe('created');
+    const [t] = await db.select().from(topics);
+    expect(t.subjectId).toBeNull();
+    expect(t.discordThreadId).toBe('et1');
+    const [m] = await db.select().from(materials);
+    expect(m.topicId).toBe(t.id);
+  });
+
+  it('ignores files in a forum that is neither a subject nor #wydarzenia', async () => {
+    const r = await ingestAttachment(
+      deps(),
+      input({
+        thread: {
+          threadId: 'x1',
+          forumChannelId: 'other-forum',
+          title: 'T',
+          ownerDiscordId: 'u1',
+          tagIds: [],
+        },
+      }),
+    );
+    expect(r).toBe('ignored');
+  });
+
   it('sets topics.created_by from threadOwner (starter message)', async () => {
     expect(await ingestAttachment(deps(), input())).toBe('created');
     const [t] = await db.select().from(topics);

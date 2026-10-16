@@ -1,6 +1,7 @@
-import { botState, subjects } from '@studies/db';
+import { botState, getSetting, setSetting, subjects } from '@studies/db';
 import { ChannelType, type Client, type Message } from 'discord.js';
 import { eq } from 'drizzle-orm';
+import { EVENTS_FORUM_SETTING } from './config.js';
 import { toAttachmentInputs, toThreadInfo } from './discord/map.js';
 import {
   type AttachmentInput,
@@ -46,23 +47,13 @@ export async function catchUp(
         subject.id,
         await source.listTags(subject.discordChannelId),
       );
-      const threads = await source.listThreads(subject.discordChannelId);
-      for (const t of threads) {
-        try {
-          await upsertTopic(db, t, null);
-          result.topics++;
-          for await (const msg of source.listMessages(t.threadId, after)) {
-            for (const a of msg.attachments) {
-              const r = await ingestAttachment(deps, a);
-              if (r === 'created' || r === 'duplicate') result.created++;
-              else if (r === 'failed') subjectFailed++;
-            }
-          }
-        } catch (err) {
-          console.error(`catch-up failed for thread ${t.threadId}`, err);
-          subjectFailed++;
-        }
-      }
+      subjectFailed += await catchUpForum(
+        deps,
+        source,
+        subject.discordChannelId,
+        after,
+        result,
+      );
     } catch (err) {
       console.error(`catch-up failed for subject ${subject.id}`, err);
       subjectFailed++;
@@ -76,7 +67,67 @@ export async function catchUp(
         .onDuplicateKeyUpdate({ set: { lastSyncedAt } });
     }
   }
+  await catchUpEventsForum(deps, source, opts, now, result);
   return result;
+}
+
+/** Topics and files of one forum; returns how many things failed. */
+async function catchUpForum(
+  deps: IngestDeps,
+  source: ForumSource,
+  forumChannelId: string,
+  after: Date | null,
+  result: CatchUpResult,
+): Promise<number> {
+  let failed = 0;
+  const threads = await source.listThreads(forumChannelId);
+  for (const t of threads) {
+    try {
+      await upsertTopic(deps.db, t, null);
+      result.topics++;
+      for await (const msg of source.listMessages(t.threadId, after)) {
+        for (const a of msg.attachments) {
+          const r = await ingestAttachment(deps, a);
+          if (r === 'created' || r === 'duplicate') result.created++;
+          else if (r === 'failed') failed++;
+        }
+      }
+    } catch (err) {
+      console.error(`catch-up failed for thread ${t.threadId}`, err);
+      failed++;
+    }
+  }
+  return failed;
+}
+
+const EVENTS_SYNCED_SETTING = 'events_forum_synced_at';
+
+/** The shared #wydarzenia forum (topics without a subject), if /setup made it. */
+async function catchUpEventsForum(
+  deps: IngestDeps,
+  source: ForumSource,
+  opts: { ignoreWatermark: boolean },
+  now: Date,
+  result: CatchUpResult,
+): Promise<void> {
+  const { db } = deps;
+  const forumId = await getSetting(db, EVENTS_FORUM_SETTING);
+  if (!forumId) return;
+  try {
+    const stored = opts.ignoreWatermark
+      ? null
+      : await getSetting(db, EVENTS_SYNCED_SETTING);
+    const after = stored ? new Date(stored) : null;
+    const failed = await catchUpForum(deps, source, forumId, after, result);
+    result.failed += failed;
+    if (failed === 0) {
+      const at = new Date(now.getTime() - MARGIN_MS);
+      await setSetting(db, EVENTS_SYNCED_SETTING, at.toISOString());
+    }
+  } catch (err) {
+    console.error('catch-up failed for #wydarzenia', err);
+    result.failed++;
+  }
 }
 
 export type Page<T> = { items: T[]; hasMore: boolean; cursor: number | null };

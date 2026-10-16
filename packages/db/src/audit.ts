@@ -1,4 +1,4 @@
-import { and, desc, eq, type SQL, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, type SQL, sql } from 'drizzle-orm';
 import type { DbExecutor } from './client.js';
 import { adminAudit, users } from './schema.js';
 
@@ -52,11 +52,34 @@ export async function writeAudit(
 
 export async function listAudit(
   db: DbExecutor,
-  o: { limit: number; offset: number; userId?: number; action?: string },
+  o: {
+    limit: number;
+    offset: number;
+    userId?: number;
+    action?: string;
+    /** Actions starting with this text, e.g. `event.`. */
+    actionPrefix?: string;
+    /** One target, or any of several. */
+    target?: string | string[];
+    /** Only rows written by users who are currently admins. */
+    adminsOnly?: boolean;
+  },
 ): Promise<{ rows: AuditRow[]; total: number }> {
   const conds: SQL[] = [];
   if (o.userId !== undefined) conds.push(eq(adminAudit.userId, o.userId));
   if (o.action !== undefined) conds.push(eq(adminAudit.action, o.action));
+  if (typeof o.target === 'string') {
+    conds.push(eq(adminAudit.target, o.target));
+  } else if (o.target !== undefined) {
+    conds.push(
+      o.target.length > 0 ? inArray(adminAudit.target, o.target) : sql`FALSE`,
+    );
+  }
+  if (o.adminsOnly) conds.push(eq(users.isAdmin, true));
+  if (o.actionPrefix !== undefined) {
+    const esc = o.actionPrefix.replace(/[\\%_]/g, '\\$&');
+    conds.push(sql`${adminAudit.action} LIKE ${`${esc}%`}`);
+  }
   const where = conds.length ? and(...conds) : undefined;
   const rows = await db
     .select(auditColumns)
@@ -69,6 +92,7 @@ export async function listAudit(
   const [count] = await db
     .select({ n: sql<number>`count(*)` })
     .from(adminAudit)
+    .innerJoin(users, eq(users.id, adminAudit.userId))
     .where(where);
   return { rows, total: Number(count.n) };
 }

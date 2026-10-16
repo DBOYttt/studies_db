@@ -174,6 +174,7 @@ describe('listWeekSessions', () => {
   it('maps every field; times stay wall time', async () => {
     const { rows } = await listWeekSessions(ro, W42);
     expect(rows.find((r) => r.id === id.lecture)).toEqual({
+      type: 'class',
       id: id.lecture,
       startsAt: W(2026, 10, 12, 8),
       endsAt: W(2026, 10, 12, 9, 30),

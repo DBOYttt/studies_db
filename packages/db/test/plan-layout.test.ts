@@ -35,6 +35,7 @@ const S = (
   room: null,
   label: 'W',
   status: 'confirmed',
+  type: 'class',
   ...o,
 });
 

@@ -2,7 +2,15 @@ import { mkdtemp, readFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { botState, type Db, materials, subjects, topics } from '@studies/db';
+import {
+  botSettings,
+  botState,
+  type Db,
+  materials,
+  setSetting,
+  subjects,
+  topics,
+} from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import {
@@ -149,6 +157,37 @@ describe('catchUp', () => {
     expect(
       await db.select().from(botState).where(eq(botState.subjectId, s2.id)),
     ).toHaveLength(0);
+  });
+});
+
+describe('catchUp #wydarzenia', () => {
+  it('ingests the events forum as subject-less topics', async () => {
+    await setSetting(db, 'events_forum_id', 'fe');
+    try {
+      const te = thread('te', 'fe');
+      const source: ForumSource = {
+        listTags: async () => [],
+        listThreads: async (forum) => (forum === 'fe' ? [te] : []),
+        listMessages: async function* (id) {
+          if (id === 'te') {
+            yield { messageId: 'mte', attachments: [att('ae', te)] };
+          }
+        },
+      };
+      const r = await catchUp(mkDeps(), source, {
+        ignoreWatermark: false,
+        now,
+      });
+      expect(r).toEqual({ topics: 1, created: 1, failed: 0 });
+      const [t] = await db
+        .select()
+        .from(topics)
+        .where(eq(topics.discordThreadId, 'te'));
+      expect(t.subjectId).toBeNull();
+      expect(await db.select().from(materials)).toHaveLength(1);
+    } finally {
+      await db.delete(botSettings);
+    }
   });
 });
 

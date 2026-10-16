@@ -3,7 +3,7 @@
  * panel: /setup and the forum re-sync, plus the lock that keeps /setup to one
  * run at a time.
  */
-import { getSetting, users } from '@studies/db';
+import { enqueueMissingEventPosts, getSetting, users } from '@studies/db';
 import type { Guild } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { catchUp, discordForumSource } from './catchup.js';
@@ -139,6 +139,12 @@ export async function runSetup(
     await refreshAdminFlag(deps, callerId, roles);
   } catch (err) {
     console.error('admin flag sync after /setup failed', err);
+  }
+  // Forums may exist now that didn't before: retry the posts that are missing.
+  try {
+    await enqueueMissingEventPosts(db);
+  } catch (err) {
+    console.error('re-queueing event posts after /setup failed', err);
   }
   await audit('bot.setup', null, {
     created: report.created.length,

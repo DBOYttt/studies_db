@@ -30,7 +30,7 @@ import {
 import { encodeId } from '../ids.js';
 import type { LecturerCardData, SubjectCardData } from './admin.js';
 
-interface FieldSpec {
+export interface FieldSpec {
   id: string;
   label: string;
   max: number;
@@ -54,7 +54,7 @@ export function prefill(value: string | null | undefined, max: number): string {
   return out;
 }
 
-function field(f: FieldSpec): LabelBuilder {
+export function field(f: FieldSpec): LabelBuilder {
   const input = new TextInputBuilder()
     .setCustomId(f.id)
     .setStyle(f.long ? TextInputStyle.Paragraph : TextInputStyle.Short)
@@ -66,7 +66,7 @@ function field(f: FieldSpec): LabelBuilder {
   return new LabelBuilder().setLabel(f.label).setTextInputComponent(input);
 }
 
-const modal = (id: string, title: string, fields: LabelBuilder[]) =>
+export const modal = (id: string, title: string, fields: LabelBuilder[]) =>
   new ModalBuilder().setCustomId(id).setTitle(title).addLabelComponents(fields);
 
 /** `adm:subj:save:<code|new>`. */

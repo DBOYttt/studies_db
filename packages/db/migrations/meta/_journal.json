@@ -71,6 +71,55 @@
       "when": 1792012059736,
       "tag": "0009_user_groups",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "5",
+      "when": 1792082658807,
+      "tag": "0010_dapper_shadowcat",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "5",
+      "when": 1792082659118,
+      "tag": "0011_events_view",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "5",
+      "when": 1792164206320,
+      "tag": "0012_event_series",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1792165461439,
+      "tag": "0013_event_series_parent",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "5",
+      "when": 1792165786230,
+      "tag": "0014_reminders",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "5",
+      "when": 1792166952387,
+      "tag": "0015_web_uploads",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "5",
+      "when": 1792178790738,
+      "tag": "0016_web_uploads_sent",
+      "breakpoints": true
     }
   ]
 }

@@ -15,7 +15,7 @@ import {
   upsertUser,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
-import { findSubjectByChannel, upsertTopic } from './sync.js';
+import { resolveForum, upsertTopic } from './sync.js';
 import type { DiscordUser, ThreadInfo } from './types.js';
 
 export type AttachmentInput = {
@@ -29,6 +29,11 @@ export type AttachmentInput = {
   uploader: DiscordUser;
   thread: ThreadInfo;
   threadOwner: DiscordUser | null;
+  /**
+   * Known topic (files the bot itself posts for web uploads): the forum and
+   * topic lookups are skipped and the material goes to this topic.
+   */
+  topicId?: number;
 };
 
 export type IngestDeps = {
@@ -57,7 +62,10 @@ export async function ingestAttachment(
   const { db, storageDir } = deps;
   let tmpPath: string | null = null;
   try {
-    if (!(await findSubjectByChannel(db, a.thread.forumChannelId))) {
+    if (
+      a.topicId === undefined &&
+      !(await resolveForum(db, a.thread.forumChannelId))
+    ) {
       return 'ignored';
     }
     const [dup] = await db
@@ -101,7 +109,8 @@ export async function ingestAttachment(
       tmpPath = null;
     }
 
-    const topicId = await upsertTopic(db, a.thread, a.threadOwner);
+    const topicId =
+      a.topicId ?? (await upsertTopic(db, a.thread, a.threadOwner));
     if (topicId === null) return 'ignored';
     const uploaderId = await upsertUser(db, a.uploader);
     const mime = a.contentType ?? 'application/octet-stream';

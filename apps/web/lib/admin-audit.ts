@@ -16,6 +16,8 @@ export interface AuditQuery {
   page: number;
   userId?: number;
   action?: AuditAction;
+  /** `?who=admins`: only rows of current admins (default: everyone). */
+  adminsOnly?: boolean;
 }
 
 type SP = Record<string, string | string[] | undefined>;
@@ -33,6 +35,7 @@ export function parseAuditQuery(sp: SP): AuditQuery {
   const action = one(sp.action);
   if (AUDIT_ACTIONS.includes(action as AuditAction))
     q.action = action as AuditAction;
+  if (one(sp.who) === 'admins') q.adminsOnly = true;
   return q;
 }
 
@@ -40,6 +43,7 @@ export function auditHref(q: AuditQuery): string {
   const p = new URLSearchParams();
   if (q.userId !== undefined) p.set('user', String(q.userId));
   if (q.action) p.set('action', q.action);
+  if (q.adminsOnly) p.set('who', 'admins');
   if (q.page > 1) p.set('page', String(q.page));
   const s = p.toString();
   return s ? `/admin/audit?${s}` : '/admin/audit';

@@ -4,10 +4,10 @@
  */
 import { MAX_ID } from './limits.js';
 
-export type Area = 'stu' | 'adm';
+export type Area = 'stu' | 'adm' | 'evt';
 
 const VERSION = 'v1';
-const AREAS: readonly string[] = ['stu', 'adm'] satisfies Area[];
+const AREAS: readonly string[] = ['stu', 'adm', 'evt'] satisfies Area[];
 
 export function encodeId(
   area: Area,

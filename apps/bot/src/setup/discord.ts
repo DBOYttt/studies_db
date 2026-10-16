@@ -14,7 +14,7 @@ import {
   type TextChannel,
 } from 'discord.js';
 import type { SetupGuild } from './apply.js';
-import { INFO_TITLE } from './info.js';
+import { EVENTS_INFO_TITLE, INFO_TITLE } from './info.js';
 import type {
   ForumSnapshot,
   GuildSnapshot,
@@ -144,7 +144,11 @@ async function infoPostOf(
   threads: AnyThreadChannel[],
   botId: string,
 ): Promise<InfoPostSnapshot | null> {
-  const t = threads.find((x) => x.ownerId === botId && x.name === INFO_TITLE);
+  const t = threads.find(
+    (x) =>
+      x.ownerId === botId &&
+      (x.name === INFO_TITLE || x.name === EVENTS_INFO_TITLE),
+  );
   if (!t) return null;
   const starter = await t.fetchStarterMessage().catch(() => null);
   if (!starter) return null;

@@ -133,6 +133,7 @@ describe('hierarchy schema', () => {
       'v_files',
       'v_users',
       'v_class_sessions',
+      'v_events',
     ]);
   });
 

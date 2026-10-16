@@ -72,6 +72,25 @@ export const ASSESSMENT_NAMES: Record<Assessment, string> = {
   zaliczenie: 'Zaliczenie',
 };
 
+export const EVENT_KIND_KEYS = [
+  'kolokwium',
+  'egzamin',
+  'wyjazd',
+  'zajecia_dodatkowe',
+  'inne',
+] as const;
+export type EventKind = (typeof EVENT_KIND_KEYS)[number];
+export const EVENT_KINDS: Record<EventKind, { label: string; symbol: string }> =
+  {
+    kolokwium: { label: 'Kolokwium', symbol: '📝' },
+    egzamin: { label: 'Egzamin', symbol: '🎓' },
+    wyjazd: { label: 'Wyjazd', symbol: '🚌' },
+    zajecia_dodatkowe: { label: 'Zajęcia dodatkowe', symbol: '➕' },
+    inne: { label: 'Inne', symbol: '📌' },
+  };
+/** Symbol for a recurring series. */
+export const SERIES_SYMBOL = '🔁';
+
 export const PUBLIC_VIEWS = [
   'v_subjects',
   'v_lecturers',
@@ -85,13 +104,14 @@ export const PUBLIC_VIEWS = [
   'v_files',
   'v_users',
   'v_class_sessions',
+  'v_events',
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];
 
 /**
  * Tables the admin SQL console's read-write user may SELECT/INSERT/UPDATE/DELETE,
- * except `materials`, see MATERIAL_FILE_COLUMNS.
+ * except some columns, see MATERIAL_FILE_COLUMNS and EVENT_LINK_COLUMNS.
  */
 export const CONTENT_TABLES = [
   'subjects',
@@ -105,6 +125,9 @@ export const CONTENT_TABLES = [
   'topic_tags',
   'materials',
   'jobs',
+  'events',
+  'event_series',
+  'event_topics',
 ] as const;
 
 /**
@@ -118,3 +141,27 @@ export const MATERIAL_FILE_COLUMNS = [
   'sha256',
   'size_bytes',
 ] as const;
+
+/**
+ * `events` / `event_series` columns that point the bot at a Discord thread or
+ * at owners. The console's read-write user may neither INSERT nor UPDATE them:
+ * the bot unlocks, renames and posts into the thread they lead to.
+ */
+export const EVENT_LINK_COLUMNS = [
+  'topic_id',
+  'series_id',
+  'created_by',
+  'updated_by',
+] as const;
+export const EVENT_SERIES_LINK_COLUMNS = [
+  'topic_id',
+  'parent_id',
+  'created_by',
+] as const;
+
+/** Website uploads for events (Discord's attachment limit is the cap). */
+export const MAX_UPLOAD_FILES = 10;
+export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
+export const MAX_UPLOADS_PER_HOUR = 30;
+/** All files of one upload request (Cloudflare refuses bodies over 100 MB). */
+export const MAX_UPLOAD_TOTAL_BYTES = 95 * 1024 * 1024;

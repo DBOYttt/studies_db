@@ -1,10 +1,11 @@
 'use client';
 
-import { Funnel } from '@phosphor-icons/react';
+import { Funnel, Plus } from '@phosphor-icons/react';
 import {
   CLASS_KINDS,
   CLASS_NAMES,
   type ClassKind,
+  EVENT_KINDS,
 } from '@studies/db/constants';
 import Link from 'next/link';
 import {
@@ -20,18 +21,17 @@ import {
   filterMyGroups,
   hiddenByMyGroups,
   type IsoWeek,
-  layoutDay,
   type MyGroups,
   type PlanSession,
   SLOT_MIN,
   slotRange,
 } from '@/lib/plan';
+import { dayColumns, eventPageHref, sessionKey } from '@/lib/plan-events';
 import {
   dayHeader,
   fromWeekSession,
   type SessionLinks,
   type WeekSession,
-  wallDateKey,
   wallTime,
   weekHeading,
 } from '@/lib/plan-view';
@@ -72,6 +72,8 @@ export interface WeekViewProps {
   myGroups?: MyGroups;
   /** Simple view: the session panel hides the SQL link. */
   simple?: boolean;
+  /** Link of the "+ Wydarzenie" button (the event form, prefilled). */
+  newEventHref?: string;
 }
 
 const kindStyle = (k: ClassKind | null): CSSProperties =>
@@ -100,6 +102,7 @@ export function WeekView({
   myGroupsFilter,
   myGroups = EMPTY_GROUPS,
   simple = false,
+  newEventHref,
 }: WeekViewProps) {
   const filterOn = myGroupsFilter && Object.keys(myGroups).length > 0;
 
@@ -113,28 +116,19 @@ export function WeekView({
     [all, filterOn, myGroups],
   );
   const days = useMemo(() => dayIsos.map((d) => new Date(d)), [dayIsos]);
-  const columns = useMemo(
-    () =>
-      days.map((d) => {
-        const key = wallDateKey(d);
-        return {
-          key,
-          day: d,
-          blocks: layoutDay(
-            shown.filter((s) => wallDateKey(s.startsAt) === key),
-          ) as { session: Session; col: number; cols: number }[],
-        };
-      }),
-    [days, shown],
-  );
+  const columns = useMemo(() => dayColumns(days, shown), [days, shown]);
+  const hasAllDay = columns.some((c) => c.allDay.length > 0);
+  const hasEvents = shown.some((s) => s.type === 'event');
   const kinds = useMemo(() => {
-    const used = new Set(shown.map((s) => s.classKind));
+    const used = new Set(
+      shown.filter((s) => s.type === 'class').map((s) => s.classKind),
+    );
     return CLASS_KINDS.filter((k) => used.has(k));
   }, [shown]);
 
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const selected = shown.find((s) => s.id === selectedId) ?? null;
-  const blockRefs = useRef(new Map<number, HTMLButtonElement>());
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const selected = shown.find((s) => sessionKey(s) === selectedId) ?? null;
+  const blockRefs = useRef(new Map<string, HTMLButtonElement>());
   const close = useCallback(() => {
     setSelectedId((id) => {
       if (id !== null) blockRefs.current.get(id)?.focus();
@@ -160,6 +154,15 @@ export function WeekView({
           <Link href={nav.next} className={navBtn} scroll={false}>
             Następny ›
           </Link>
+          {newEventHref && (
+            <Link
+              href={newEventHref}
+              className="ml-1 inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px"
+            >
+              <Plus size={13} weight="bold" aria-hidden />
+              Wydarzenie
+            </Link>
+          )}
         </nav>
       </div>
 
@@ -221,6 +224,27 @@ export function WeekView({
                   );
                 })}
 
+                {hasAllDay && (
+                  <>
+                    <div className="sticky left-0 z-[2] border-b border-line-strong bg-surface px-1.5 py-1 text-right text-[10px] leading-[14px] text-faint">
+                      cały dzień
+                    </div>
+                    {columns.map(({ key, allDay }) => (
+                      <ul
+                        key={key}
+                        aria-label="Wydarzenia całodniowe"
+                        className="m-0 flex list-none flex-col gap-0.5 border-b border-l border-line-strong border-l-line bg-surface p-[3px]"
+                      >
+                        {allDay.map((s) => (
+                          <li key={sessionKey(s)} className="flex min-w-0">
+                            <EventBlock s={s} simple={simple} strip />
+                          </li>
+                        ))}
+                      </ul>
+                    ))}
+                  </>
+                )}
+
                 <div
                   className="sticky left-0 z-[2] bg-page"
                   style={{ height: GRID_H }}
@@ -251,22 +275,32 @@ export function WeekView({
                       backgroundSize: `100% ${HOUR_PX}px`,
                     }}
                   >
-                    {blocks.map(({ session: s, col, cols }) => (
-                      <Block
-                        key={s.id}
-                        s={s}
-                        col={col}
-                        cols={cols}
-                        selected={s.id === selectedId}
-                        onOpen={() => setSelectedId(s.id)}
-                        refMap={blockRefs.current}
-                      />
-                    ))}
+                    {blocks.map(({ session: s, col, cols }) =>
+                      s.type === 'event' ? (
+                        <EventBlock
+                          key={sessionKey(s)}
+                          s={s}
+                          simple={simple}
+                          col={col}
+                          cols={cols}
+                        />
+                      ) : (
+                        <Block
+                          key={sessionKey(s)}
+                          s={s}
+                          col={col}
+                          cols={cols}
+                          selected={sessionKey(s) === selectedId}
+                          onOpen={() => setSelectedId(sessionKey(s))}
+                          refMap={blockRefs.current}
+                        />
+                      ),
+                    )}
                   </div>
                 ))}
               </div>
             </div>
-            {kinds.length > 0 && (
+            {(kinds.length > 0 || hasEvents) && (
               <ul
                 aria-label="Rodzaje zajęć"
                 className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted"
@@ -281,6 +315,15 @@ export function WeekView({
                     {CLASS_NAMES[k]}
                   </li>
                 ))}
+                {hasEvents && (
+                  <li className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="inline-block h-3 w-3 rounded-sm border-[1.5px] border-accent-ink bg-page"
+                    />
+                    Wydarzenia
+                  </li>
+                )}
               </ul>
             )}
           </div>
@@ -312,7 +355,7 @@ function Block({
   cols: number;
   selected: boolean;
   onOpen: () => void;
-  refMap: Map<number, HTMLButtonElement>;
+  refMap: Map<string, HTMLButtonElement>;
 }) {
   const { from, to } = slotRange(s);
   const cancelled = s.status === 'cancelled';
@@ -332,8 +375,8 @@ function Block({
       type="button"
       data-testid="plan-block"
       ref={(el) => {
-        if (el) refMap.set(s.id, el);
-        else refMap.delete(s.id);
+        if (el) refMap.set(sessionKey(s), el);
+        else refMap.delete(sessionKey(s));
       }}
       onClick={onOpen}
       aria-pressed={selected}
@@ -370,5 +413,61 @@ function Block({
         <span className="truncate text-muted">{s.lecturerName}</span>
       )}
     </button>
+  );
+}
+
+/** Event: outlined (no fill), kind symbol + title; links to the event page. */
+function EventBlock({
+  s,
+  simple,
+  col = 0,
+  cols = 1,
+  strip = false,
+}: {
+  s: Session;
+  simple: boolean;
+  col?: number;
+  cols?: number;
+  strip?: boolean;
+}) {
+  const kind = s.eventKind ? EVENT_KINDS[s.eventKind] : null;
+  const title = s.eventTitle ?? s.label;
+  const time = s.allDay ? 'cały dzień' : wallTime(s.startsAt);
+  const tip = [`${time} ${title}`, kind?.label, s.subjectName, s.room]
+    .filter(Boolean)
+    .join('\n');
+  const pos: CSSProperties = strip
+    ? {}
+    : (() => {
+        const { from, to } = slotRange(s);
+        return {
+          top: from * ROW + 1,
+          height: (to - from) * ROW - 2,
+          left: `calc(${(col / cols) * 100}% + 2px)`,
+          width: `calc(${100 / cols}% - 4px)`,
+        };
+      })();
+  return (
+    <Link
+      href={eventPageHref(s.id, simple)}
+      data-testid="plan-event"
+      title={tip}
+      className={`flex min-w-0 overflow-hidden rounded border-[1.5px] border-accent-ink bg-page px-[5px] text-[11px] leading-[14px] text-fg hover:bg-list-hover ${
+        strip ? 'flex-1 items-center gap-1 py-px' : 'absolute flex-col py-[2px]'
+      }`}
+      style={pos}
+    >
+      <span className="sr-only">{time} </span>
+      <span className="truncate font-semibold">
+        <span aria-hidden>{kind?.symbol} </span>
+        {title}
+      </span>
+      {!strip && s.subjectCode && (
+        <span className="truncate text-muted">{s.subjectCode}</span>
+      )}
+      {!strip && s.room && (
+        <span className="truncate text-muted">{s.room}</span>
+      )}
+    </Link>
   );
 }

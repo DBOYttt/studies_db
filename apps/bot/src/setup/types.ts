@@ -119,6 +119,8 @@ export type GuildSnapshot = {
   panelChannels: { panel: string | null; admin: string | null };
   /** Panel message ids stored in bot_settings. */
   panelMessages: { panel: string | null; admin: string | null };
+  /** The #wydarzenia forum id stored in bot_settings (`events_forum_id`). */
+  eventsForumId?: string | null;
 };
 
 export type PanelWhich = 'panel' | 'admin';
@@ -232,4 +234,27 @@ export type Action =
    * created earlier in the same run.
    */
   | { type: 'syncAdminPanelPerms'; channelId: string; roleId: string | null }
+  /**
+   * The shared #wydarzenia forum: creates it (existingId null) or adopts the
+   * only forum with that name, and stores its id as `events_forum_id`.
+   * parentId null: no category to put it in.
+   */
+  | {
+      type: 'ensureEventsForum';
+      code: string;
+      name: string;
+      existingId: string | null;
+      parentId: string | null;
+      tags: string[];
+      topic: string;
+    }
+  | { type: 'addEventsTags'; code: string; channelId: string; tags: string[] }
+  | {
+      type: 'upsertEventsInfoPost';
+      code: string;
+      channelId: string;
+      content: string;
+      existing: { threadId: string; messageId: string } | null;
+      pin: boolean;
+    }
   | { type: 'warn'; code: string | null; message: string };

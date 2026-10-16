@@ -16,6 +16,16 @@ describe('parseAuditQuery', () => {
       parseAuditQuery({ user: '3', action: 'sql.rejected', page: '4' }),
     ).toEqual({ page: 4, userId: 3, action: 'sql.rejected' });
   });
+  it('reads the Admini filter', () => {
+    expect(parseAuditQuery({ who: 'admins' })).toEqual({
+      page: 1,
+      adminsOnly: true,
+    });
+    expect(parseAuditQuery({ who: 'x' })).toEqual({ page: 1 });
+    expect(auditHref({ page: 2, adminsOnly: true })).toBe(
+      '/admin/audit?who=admins&page=2',
+    );
+  });
   it('ignores invalid values', () => {
     expect(parseAuditQuery({ user: 'x', action: 'drop', page: '-2' })).toEqual({
       page: 1,

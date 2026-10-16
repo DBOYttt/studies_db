@@ -63,6 +63,22 @@ function enc(segment: string): string {
   }
 }
 
+/** `nowe`, `<id>` or `<id>/edytuj` below `/wydarzenia`, else null. */
+function eventPath(rest: string[]): string | null {
+  if (
+    rest.length === 1 &&
+    (rest[0] === 'nowe' || /^[1-9]\d{0,9}$/.test(rest[0]))
+  )
+    return `/${rest[0]}`;
+  if (
+    rest.length === 2 &&
+    /^[1-9]\d{0,9}$/.test(rest[0]) &&
+    rest[1] === 'edytuj'
+  )
+    return `/${rest[0]}/edytuj`;
+  return null;
+}
+
 function pick(params: URLSearchParams, keys: string[]): string {
   const out = new URLSearchParams();
   for (const k of keys) {
@@ -99,6 +115,10 @@ export function modeTarget(to: UiMode, next: string | null): string {
       return `/plan${pick(params, ['week'])}`;
     if (seg[1] === 'search' && seg.length === 2)
       return `/search${pick(params, ['q'])}`;
+    if (seg[1] === 'wydarzenia') {
+      const e = eventPath(seg.slice(2));
+      if (e) return `/wydarzenia${e}`;
+    }
     if (seg[1] === 'reports' && seg.length === 2) {
       const r = params.get('r');
       if (r !== null && /^\d+$/.test(r)) {
@@ -115,5 +135,9 @@ export function modeTarget(to: UiMode, next: string | null): string {
     return `/s/plan${pick(params, ['week'])}`;
   if (seg[0] === 'search' && seg.length === 1)
     return `/s/search${pick(params, ['q'])}`;
+  if (seg[0] === 'wydarzenia') {
+    const e = eventPath(seg.slice(1));
+    if (e) return `/s/wydarzenia${e}`;
+  }
   return '/s';
 }
