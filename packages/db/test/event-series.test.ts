@@ -6,7 +6,14 @@ import {
   linkSeriesTopic,
   unlinkSeriesTopic,
 } from '../src/event-series.js';
-import { deleteEvent, editEvent, eventMaterials } from '../src/events.js';
+import {
+  deleteEvent,
+  editEvent,
+  eventMaterials,
+  getEvent,
+  linkTopic,
+  unlinkTopic,
+} from '../src/events.js';
 import {
   adminAudit,
   botRequests,
@@ -488,6 +495,32 @@ describe('event series', () => {
         (x) => x.action === 'event.link' && x.target === `series:${sid}`,
       );
       expect(a).toBeDefined();
+    });
+  });
+
+  describe('getEvent and links of an occurrence', () => {
+    it('exposes the series, and link/unlink act on the series', async () => {
+      const sid = await mkSeries({ rule: 'biweekly' });
+      const [a, b] = await occ(sid);
+      const t = await topic(id.sub);
+      const r = await linkTopic(db, id.u, a.id, t, 'web');
+      expect(r.ok, r.message).toBe(true);
+      const ea = await getEvent(db, a.id);
+      const eb = await getEvent(db, b.id);
+      expect(ea?.series).toMatchObject({ id: sid, rule: 'biweekly' });
+      expect(ea?.linkedTopicIds).toEqual([t]);
+      expect(eb?.linkedTopicIds).toEqual([t]);
+      expect((await requests(`series:${sid}`)).length).toBeGreaterThan(0);
+      expect((await unlinkTopic(db, id.u, b.id, t, 'web')).ok).toBe(true);
+      expect((await getEvent(db, a.id))?.linkedTopicIds).toEqual([]);
+    });
+    it('a plain event has no series', async () => {
+      const [e] = await db
+        .select()
+        .from(events)
+        .where(isNull(events.seriesId))
+        .limit(1);
+      if (e) expect((await getEvent(db, e.id))?.series).toBeNull();
     });
   });
 

@@ -16,13 +16,16 @@ import { EVENT_KINDS, type EventKind } from './constants.js';
 import {
   deleteInSeries,
   editInSeries,
+  linkSeriesTopic,
   reviveSeries,
   seriesTopicIds,
+  unlinkSeriesTopic,
 } from './event-series.js';
 import { nowWall, type PlanSession, parseWhen, toWall } from './plan.js';
 import {
   classes,
   classGroups,
+  eventSeries,
   events,
   eventTopics,
   materials,
@@ -453,6 +456,14 @@ export async function linkTopic(
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
+  // Posts of a series occurrence belong to the whole series.
+  const [own] = await db
+    .select({ seriesId: events.seriesId })
+    .from(events)
+    .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
+  if (own?.seriesId != null) {
+    return linkSeriesTopic(db, userId, own.seriesId, topicId, source);
+  }
   return db.transaction(async (tx) => {
     const [ev] = await tx
       .select({ subjectId: events.subjectId })
@@ -499,6 +510,13 @@ export async function unlinkTopic(
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
+  const [own] = await db
+    .select({ seriesId: events.seriesId })
+    .from(events)
+    .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
+  if (own?.seriesId != null) {
+    return unlinkSeriesTopic(db, userId, own.seriesId, topicId, source);
+  }
   return db.transaction(async (tx) => {
     const [res] = await tx
       .delete(eventTopics)
@@ -523,6 +541,13 @@ export type EventDetails = typeof events.$inferSelect & {
   createdByName: string | null;
   updatedByName: string | null;
   linkedTopicIds: number[];
+  /** The series this occurrence belongs to (links are the series'), or null. */
+  series: {
+    id: number;
+    rule: 'weekly' | 'biweekly';
+    until: string;
+    topicId: number | null;
+  } | null;
 };
 
 /** The event (also a deleted one: `deletedAt` is set) or null. */
@@ -547,10 +572,21 @@ export async function getEvent(
           .select({ code: subjects.code, name: subjects.name })
           .from(subjects)
           .where(eq(subjects.id, row.subjectId));
+  const [series] =
+    row.seriesId === null
+      ? []
+      : await db
+          .select()
+          .from(eventSeries)
+          .where(eq(eventSeries.id, row.seriesId));
   const links = await db
     .select({ topicId: eventTopics.topicId })
     .from(eventTopics)
-    .where(eq(eventTopics.eventId, id))
+    .where(
+      row.seriesId === null
+        ? eq(eventTopics.eventId, id)
+        : eq(eventTopics.seriesId, row.seriesId),
+    )
     .orderBy(eventTopics.id);
   return {
     ...row,
@@ -559,6 +595,14 @@ export async function getEvent(
     createdByName: await nameOf(row.createdBy),
     updatedByName: await nameOf(row.updatedBy),
     linkedTopicIds: links.map((l) => l.topicId),
+    series: series
+      ? {
+          id: series.id,
+          rule: series.rule,
+          until: String(series.until),
+          topicId: series.topicId,
+        }
+      : null,
   };
 }
 

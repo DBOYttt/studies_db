@@ -3,9 +3,11 @@
 import {
   type ActionResult,
   addEvent,
+  addSeries,
   deleteEvent,
   type EventInput,
   editEvent,
+  events,
   getEvent,
   linkTopic,
   restoreEvent,
@@ -13,6 +15,7 @@ import {
   unlinkTopic,
 } from '@studies/db';
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
+import { asc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { getDb } from './db';
@@ -87,11 +90,36 @@ function readForm(form: FormData): EventInput | ActionResult {
 }
 const isResult = (x: EventInput | ActionResult): x is ActionResult => 'ok' in x;
 
-/** Adds an event and opens its page; returns only a refusal. */
+const scopeOf = (v: unknown): 'one' | 'following' =>
+  v === 'following' ? 'following' : 'one';
+
+/** Adds an event (or a series) and opens its page; returns only a refusal. */
 export async function createEventAction(form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const input = readForm(form);
   if (isResult(input)) return input;
+  const repeat = text(form, 'repeat');
+  if (repeat === 'weekly' || repeat === 'biweekly') {
+    const until = text(form, 'until').trim();
+    if (!until) return fail('Podaj, do kiedy powtarzać wydarzenie.');
+    const s = await addSeries(
+      getDb(),
+      user.id,
+      { ...input, rule: repeat, until },
+      'web',
+    );
+    if (!s.ok || s.id === undefined) return s;
+    const [first] = await getDb()
+      .select({ id: events.id })
+      .from(events)
+      .where(eq(events.seriesId, s.id))
+      .orderBy(asc(events.startsAt), asc(events.id))
+      .limit(1);
+    refresh(first?.id);
+    redirect(
+      first ? eventHref(baseOf(form), first.id) : planHref(baseOf(form)),
+    );
+  }
   const r = await addEvent(getDb(), user.id, input, 'web');
   if (!r.ok || r.id === undefined) return r;
   refresh(r.id);
@@ -122,7 +150,14 @@ export async function updateEventAction(
   ) {
     delete patch.when;
   }
-  const r = await editEvent(db, user.id, id, patch, 'web');
+  const r = await editEvent(
+    db,
+    user.id,
+    id,
+    patch,
+    'web',
+    scopeOf(text(form, 'scope')),
+  );
   if (!r.ok) return r;
   refresh(id);
   redirect(eventHref(baseOf(form), id));
@@ -131,10 +166,11 @@ export async function updateEventAction(
 export async function deleteEventAction(
   id: number,
   base: Base = 'simple',
+  scope: 'one' | 'following' = 'one',
 ): Promise<ActionResult> {
   const user = await requireUser();
   if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
-  const r = await deleteEvent(getDb(), user.id, id, 'web');
+  const r = await deleteEvent(getDb(), user.id, id, 'web', scopeOf(scope));
   if (!r.ok) return r;
   refresh(id);
   redirect(planHref(base === 'advanced' ? 'advanced' : 'simple'));

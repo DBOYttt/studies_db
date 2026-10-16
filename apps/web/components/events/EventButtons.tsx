@@ -19,11 +19,13 @@ export function EventButtons({
   base,
   editHref,
   deleted,
+  inSeries = false,
 }: {
   id: number;
   base: 'simple' | 'advanced';
   editHref: string;
   deleted: boolean;
+  inSeries?: boolean;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -70,14 +72,37 @@ export function EventButtons({
         {confirming ? (
           <>
             <span className="text-muted">Usunąć to wydarzenie?</span>
-            <button
-              type="button"
-              disabled={pending}
-              className={`${btn} border-err-fg text-err-fg`}
-              onClick={() => run(() => deleteEventAction(id, base))}
-            >
-              Tak, usuń
-            </button>
+            {inSeries ? (
+              <>
+                <button
+                  type="button"
+                  disabled={pending}
+                  className={`${btn} border-err-fg text-err-fg`}
+                  onClick={() => run(() => deleteEventAction(id, base, 'one'))}
+                >
+                  Tylko to
+                </button>
+                <button
+                  type="button"
+                  disabled={pending}
+                  className={`${btn} border-err-fg text-err-fg`}
+                  onClick={() =>
+                    run(() => deleteEventAction(id, base, 'following'))
+                  }
+                >
+                  To i następne
+                </button>
+              </>
+            ) : (
+              <button
+                type="button"
+                disabled={pending}
+                className={`${btn} border-err-fg text-err-fg`}
+                onClick={() => run(() => deleteEventAction(id, base))}
+              >
+                Tak, usuń
+              </button>
+            )}
             <button
               type="button"
               className={btn}

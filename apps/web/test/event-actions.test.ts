@@ -181,4 +181,55 @@ describe('event actions', () => {
     expect(await A.searchTopicsAction(null, '')).toHaveLength(2);
     expect(await A.searchTopicsAction(subjectId, '%')).toHaveLength(0);
   });
+  it('repeats weekly, then edits and deletes with a scope', async () => {
+    cookieSid = alice.sid;
+    await db.delete(events);
+    const until = new Date(Date.now() + 5 * 86_400_000 + 14 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await expect(
+      A.createEventAction(form({ repeat: 'weekly', until })),
+    ).rejects.toThrow(/redirect:\/s\/wydarzenia\/\d+/);
+    const rows = async () => (await eventRows()).sort((a, b) => a.id - b.id);
+    const all = await rows();
+    expect(all).toHaveLength(3);
+    expect(new Set(all.map((e) => e.seriesId)).size).toBe(1);
+    expect(all[0].seriesId).not.toBeNull();
+
+    // a missing "do" is refused in Polish
+    const bad = await A.createEventAction(form({ repeat: 'weekly' }));
+    expect(bad.ok).toBe(false);
+
+    await expect(
+      A.updateEventAction(
+        all[1].id,
+        form({ title: 'Tylko drugi', scope: 'one' }),
+      ),
+    ).rejects.toThrow('redirect');
+    expect((await rows()).map((e) => e.title)).toEqual([
+      'Kolokwium z fizyki',
+      'Tylko drugi',
+      'Kolokwium z fizyki',
+    ]);
+    await expect(
+      A.updateEventAction(
+        all[1].id,
+        form({ title: 'Od drugiego', scope: 'following' }),
+      ),
+    ).rejects.toThrow('redirect');
+    expect((await rows()).map((e) => e.title)).toEqual([
+      'Kolokwium z fizyki',
+      'Od drugiego',
+      'Od drugiego',
+    ]);
+
+    await expect(
+      A.deleteEventAction(all[1].id, 'simple', 'following'),
+    ).rejects.toThrow('redirect:/s/plan');
+    expect((await rows()).map((e) => e.deletedAt !== null)).toEqual([
+      false,
+      true,
+      true,
+    ]);
+  });
 });

@@ -23,6 +23,8 @@ export type EventPageData = {
   subjectName: string | null;
   createdByName: string | null;
   updatedByName: string | null;
+  /** Part of a series ("Część serii"). */
+  series: { rule: 'weekly' | 'biweekly'; until: string } | null;
   deleted: boolean;
   postLine: string;
   files: SimpleFile[];
@@ -55,6 +57,13 @@ export function EventDetails({
   if (e.subjectCode)
     rows.push(['Przedmiot', `${e.subjectCode} · ${e.subjectName}`]);
   if (e.place) rows.push(['Miejsce', e.place]);
+  if (e.series) {
+    const [y, m, d] = e.series.until.split('-');
+    rows.push([
+      'Część serii',
+      `${e.series.rule === 'weekly' ? 'co tydzień' : 'co 2 tygodnie'} do ${d}.${m}.${y}`,
+    ]);
+  }
   if (e.createdByName) rows.push(['Dodał(a)', e.createdByName]);
   if (e.updatedByName && e.updatedByName !== e.createdByName) {
     rows.push(['Ostatnio zmienił(a)', e.updatedByName]);
@@ -98,6 +107,7 @@ export function EventDetails({
           base={base}
           editHref={editHref}
           deleted={e.deleted}
+          inSeries={e.series !== null}
         />
       )}
       <h2 className={h2}>Materiały</h2>

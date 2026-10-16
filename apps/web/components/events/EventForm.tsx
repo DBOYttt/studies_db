@@ -18,6 +18,8 @@ export type EventFormValues = {
   end: string;
   place: string;
   note: string;
+  /** Set when the event is an occurrence of a series. */
+  inSeries?: boolean;
 };
 
 const input =
@@ -49,6 +51,7 @@ export function EventForm({
   const [subjectId, setSubjectId] = useState(initial.subjectId);
   const [classId, setClassId] = useState(initial.classId);
   const [groupId, setGroupId] = useState(initial.groupId);
+  const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const subject = options.find((s) => s.id === subjectId);
@@ -122,6 +125,44 @@ export function EventForm({
       <p className="m-0 -mt-2 text-xs text-muted">
         Bez godziny wydarzenie trwa cały dzień.
       </p>
+      {eventId === undefined && (
+        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          <label className={label}>
+            Powtarzaj
+            <select
+              name="repeat"
+              value={repeat}
+              onChange={(e) => setRepeat(e.target.value)}
+              className={input}
+            >
+              <option value="">nie</option>
+              <option value="weekly">co tydzień</option>
+              <option value="biweekly">co 2 tygodnie</option>
+            </select>
+          </label>
+          {repeat && (
+            <label className={label}>
+              do
+              <input type="date" name="until" required className={input} />
+            </label>
+          )}
+        </div>
+      )}
+      {initial.inSeries && (
+        <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
+          <legend className="mb-1 p-0 text-[13px] font-semibold text-fg">
+            Zastosuj zmiany do
+          </legend>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="scope" value="one" defaultChecked />
+            Tylko to
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="radio" name="scope" value="following" />
+            To i następne
+          </label>
+        </fieldset>
+      )}
       <label className={label}>
         Przedmiot
         <select

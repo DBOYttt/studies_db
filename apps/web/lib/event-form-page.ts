@@ -47,5 +47,6 @@ export async function loadEventForm(id: number): Promise<EventFormValues> {
     ...w,
     place: ev.place ?? '',
     note: ev.note ?? '',
+    inSeries: ev.series !== null,
   };
 }

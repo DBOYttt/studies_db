@@ -22,16 +22,18 @@ export async function loadEventPage(
   const db = getDb();
   const ev = await getEvent(db, id);
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) notFound();
+  const postTopicId = ev.series ? ev.series.topicId : ev.topicId;
+  const reqTarget = ev.series ? `series:${ev.series.id}` : `event:${id}`;
   const [files, linked, history, req] = await Promise.all([
     eventFileRows(db, id),
     listTopicsByIds(db, ev.linkedTopicIds),
     eventHistory(db, id),
-    ev.topicId === null
-      ? lastBotRequest(db, 'event_post_upsert', `event:${id}`)
+    postTopicId === null
+      ? lastBotRequest(db, 'event_post_upsert', reqTarget)
       : Promise.resolve(null),
   ]);
   const postLine =
-    ev.topicId !== null
+    postTopicId !== null
       ? 'Post na Discordzie: utworzony'
       : req?.status === 'failed'
         ? `Post na Discordzie: błąd${req.error ? ` (${req.error})` : ''}`
@@ -50,6 +52,7 @@ export async function loadEventPage(
     subjectName: ev.subjectName,
     createdByName: ev.createdByName,
     updatedByName: ev.updatedByName,
+    series: ev.series ? { rule: ev.series.rule, until: ev.series.until } : null,
     deleted: ev.deletedAt !== null,
     postLine,
     files,

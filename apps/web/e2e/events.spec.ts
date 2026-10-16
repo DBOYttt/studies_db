@@ -143,3 +143,42 @@ test('delete the event; an admin sees it with Przywróć', async ({
     await admin.close();
   }
 });
+
+test.describe('recurring event', () => {
+  const title = 'Konsultacje cykliczne';
+  const block = (page: import('@playwright/test').Page) =>
+    page.getByTestId('plan-event').filter({ hasText: title });
+
+  test('a weekly event appears in 3 consecutive weeks', async ({ page }) => {
+    await page.goto('/s/wydarzenia/nowe');
+    await page.getByLabel('Rodzaj').selectOption('zajecia_dodatkowe');
+    await page.getByLabel('Tytuł').fill(title);
+    await page.getByLabel('Data').fill(dateIn(7));
+    await page.getByLabel('Od (godz.)').fill('12:00');
+    await page.getByLabel('Do (godz.)').fill('13:00');
+    await page.getByLabel('Powtarzaj').selectOption('weekly');
+    await page.getByLabel('do', { exact: true }).fill(dateIn(21));
+    await page.getByRole('button', { name: 'Dodaj wydarzenie' }).click();
+    await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+    await expect(page.getByText('Część serii')).toBeVisible();
+    for (const days of [7, 14, 21]) {
+      await page.goto(`/s/plan?week=${isoWeekParam(dateIn(days))}`);
+      await expect(block(page)).toHaveCount(1);
+    }
+  });
+
+  test('delete "To i następne" from week 2 leaves week 1', async ({ page }) => {
+    await page.goto(`/s/plan?week=${isoWeekParam(dateIn(14))}`);
+    await block(page).click();
+    await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+    await page.getByRole('button', { name: 'Usuń', exact: true }).click();
+    await page.getByRole('button', { name: 'To i następne' }).click();
+    await expect(page).toHaveURL(/\/s\/plan$/);
+    await page.goto(`/s/plan?week=${isoWeekParam(dateIn(7))}`);
+    await expect(block(page)).toHaveCount(1);
+    for (const days of [14, 21]) {
+      await page.goto(`/s/plan?week=${isoWeekParam(dateIn(days))}`);
+      await expect(block(page)).toHaveCount(0);
+    }
+  });
+});
