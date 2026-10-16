@@ -13,6 +13,7 @@ import {
   ChannelType,
   type Client,
   DiscordAPIError,
+  escapeMarkdown,
   type ForumChannel,
   RESTJSONErrorCodes,
 } from 'discord.js';
@@ -93,9 +94,11 @@ export function seriesPostContent(
     `**${EVENT_KINDS[base.kind].label}**${base.subjectCode ? ` · ${base.subjectCode}${base.subjectName ? ` — ${base.subjectName}` : ''}` : ''}`,
     `Cykl: ${RULE_LABELS[rule]}, ${time}, ${dates.length} wystąpień (${dm(dates[0])} – ${dmy(dates[dates.length - 1])})`,
     `Najbliższe: ${upcoming.map(dm).join(', ')}${later > upcoming.length ? ', …' : ''}`,
-    ...(base.place ? [`Miejsce: ${base.place}`] : []),
-    ...(base.note ? [`Notatka: ${base.note}`] : []),
-    ...(base.createdByName ? [`Dodane przez ${base.createdByName}`] : []),
+    ...(base.place ? [`Miejsce: ${escapeMarkdown(base.place)}`] : []),
+    ...(base.note ? [`Notatka: ${escapeMarkdown(base.note)}`] : []),
+    ...(base.createdByName
+      ? [`Dodane przez ${escapeMarkdown(base.createdByName)}`]
+      : []),
     `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${next.id}`,
   ];
   const full = lines.join('\n');
@@ -122,25 +125,28 @@ export function eventWhenText(e: EventDetails): string {
 /** The first message: details plus the link to the event page. */
 export function eventPostContent(e: EventDetails, webBaseUrl: string): string {
   const link = `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${e.id}`;
+  // User text is escaped so it can't format the post; the link stays raw.
+  const md = (t: string | null) => (t ? escapeMarkdown(t) : t);
   const tail = [
-    ...(e.createdByName ? [`Dodane przez ${e.createdByName}`] : []),
+    ...(e.createdByName ? [`Dodane przez ${md(e.createdByName)}`] : []),
     ...(e.updatedByName && e.updatedByName !== e.createdByName
-      ? [`Ostatnio edytowane przez ${e.updatedByName}`]
+      ? [`Ostatnio edytowane przez ${md(e.updatedByName)}`]
       : []),
     link,
   ];
   const head = [
     `**${EVENT_KINDS[e.kind].label}**${e.subjectCode ? ` · ${e.subjectCode}${e.subjectName ? ` — ${e.subjectName}` : ''}` : ''}`,
     `Kiedy: ${eventWhenText(e)}`,
-    ...(e.place ? [`Miejsce: ${e.place}`] : []),
+    ...(e.place ? [`Miejsce: ${md(e.place)}`] : []),
   ];
   const join = (note: string | null) =>
     [...head, ...(note ? [`Notatka: ${note}`] : []), ...tail].join('\n');
-  const full = join(e.note);
-  if (full.length <= MAX_MESSAGE || !e.note) return full.slice(0, MAX_MESSAGE);
+  const escNote = md(e.note);
+  const full = join(escNote);
+  if (full.length <= MAX_MESSAGE || !escNote) return full.slice(0, MAX_MESSAGE);
   // Too long: trim the note, never the link.
   const room = MAX_MESSAGE - join('').length - 'Notatka: …\n'.length;
-  const note = [...e.note].slice(0, Math.max(0, room - 1)).join('');
+  const note = [...escNote].slice(0, Math.max(0, room - 1)).join('');
   return join(`${note}…`).slice(0, MAX_MESSAGE);
 }
 

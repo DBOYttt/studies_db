@@ -244,7 +244,8 @@ export async function postEventUploads(
   for (const r of rows) {
     try {
       const path = uploadAbs(storageDir, r.storagePath);
-      const st = await stat(path);
+      // lstat: a symlink is not a regular file, never followed.
+      const st = await lstat(path);
       if (!st.isFile()) throw new UploadError(FILE_MISSING);
       ready.push({
         id: r.id,
@@ -341,6 +342,39 @@ export async function postEventUploads(
     }
   }
   return firstError;
+}
+
+/**
+ * After an unexpected error in a request: its rows still `queued` or
+ * `posting` will not finish; fail them (a safe message) so a retry can take
+ * them. A row with Discord ids was sent, so its retry only re-runs ingest.
+ */
+export async function failUnfinishedUploads(
+  db: Db,
+  ids: number[],
+): Promise<void> {
+  if (ids.length === 0) return;
+  const open = await db
+    .select({ id: webUploads.id, sent: webUploads.sentAttachmentId })
+    .from(webUploads)
+    .where(
+      and(
+        inArray(webUploads.id, ids),
+        inArray(webUploads.status, ['queued', 'posting']),
+      ),
+    );
+  await setRows(
+    db,
+    open.filter((r) => r.sent).map((r) => r.id),
+    'failed',
+    NOT_INGESTED,
+  );
+  await setRows(
+    db,
+    open.filter((r) => !r.sent).map((r) => r.id),
+    'failed',
+    SEND_FAILED,
+  );
 }
 
 /**

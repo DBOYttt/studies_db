@@ -15,6 +15,7 @@ import {
   finishBotRequest,
   getEvent,
   getSetting,
+  nowWall,
   subjects,
   topics,
 } from '@studies/db';
@@ -35,6 +36,7 @@ import {
   CLEANUP_INTERVAL_MS,
   cleanupUploads,
   failInterruptedUploads,
+  failUnfinishedUploads,
   postEventUploads,
   UploadError,
 } from './uploads.js';
@@ -247,7 +249,7 @@ export async function upsertSeriesPost(
   const all = group
     .flatMap((g) => g.occ)
     .sort((a, b) => +a.startsAt - +b.startsAt || a.id - b.id);
-  const now = new Date();
+  const now = nowWall();
   const next = all.find((o) => o.startsAt >= now) ?? all[all.length - 1];
   const e = await getEvent(db, next.id);
   const first = await getEvent(db, owner.occ[0].id);
@@ -435,16 +437,24 @@ async function handleUpload(
   ) {
     throw new EventPostError('Nieprawidłowe zlecenie.');
   }
-  const failed = await postEventUploads(
-    {
-      db: deps.db,
-      storageDir: deps.storageDir,
-      guild: deps.guild,
-      ensureThread: (e) => ensureThread(deps, e),
-    },
-    p?.eventId as number,
-    ids,
-  );
+  let failed: string | null;
+  try {
+    failed = await postEventUploads(
+      {
+        db: deps.db,
+        storageDir: deps.storageDir,
+        guild: deps.guild,
+        ensureThread: (e) => ensureThread(deps, e),
+      },
+      p?.eventId as number,
+      ids,
+    );
+  } catch (err) {
+    await failUnfinishedUploads(deps.db, ids).catch((e) =>
+      console.error(`uploads ${ids.join(',')}: cannot mark them failed:`, e),
+    );
+    throw err;
+  }
   if (failed) throw new EventPostError(failed);
 }
 

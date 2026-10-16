@@ -1,5 +1,12 @@
 import { mkdtempSync } from 'node:fs';
-import { mkdir, readdir, utimes, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  readdir,
+  symlink,
+  unlink,
+  utimes,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -351,6 +358,28 @@ describe('event uploads', () => {
     expect((await rows())[0].status).toBe('done');
   });
 
+  it('an unexpected error leaves no row queued or posting: all retryable', async () => {
+    const id = await mkEvent();
+    await drain();
+    await queueUploads(
+      id,
+      Array.from({ length: 12 }, (_, i) => `f${i}.txt`),
+    );
+    const spy = vi
+      .spyOn(ingestMod, 'ingestAttachment')
+      .mockRejectedValueOnce(new Error('db down'));
+    await drain();
+    spy.mockRestore();
+    const all = await rows();
+    expect(all.filter((r) => r.status === 'failed')).toHaveLength(12);
+    expect(all.filter((r) => r.sentAttachmentId).map((r) => r.error)).toEqual(
+      Array(10).fill('Plik jest na Discordzie, ale nie trafił do materiałów.'),
+    );
+    expect(all.filter((r) => !r.sentAttachmentId).map((r) => r.error)).toEqual(
+      Array(2).fill('Nie udało się wysłać pliku na Discorda.'),
+    );
+  });
+
   it('splits more than 10 files into several messages', async () => {
     const id = await mkEvent();
     await drain();
@@ -402,6 +431,24 @@ describe('event uploads', () => {
     expect(r.status).toBe('failed');
     expect(r.error).toBe('Wydarzenie zostało usunięte.');
     expect(await readdir(join(dir, 'uploads'))).toEqual([]);
+    expect(guild.sent).toEqual([]);
+  });
+
+  it('a symlink in uploads/ is never sent', async () => {
+    const id = await mkEvent();
+    await drain();
+    const [rowId] = await queueUploads(id, ['a.pdf']);
+    const [r] = await rows();
+    await writeFile(join(dir, 'secret'), 'secret');
+    await unlink(join(dir, r.storagePath));
+    await symlink(join(dir, 'secret'), join(dir, r.storagePath));
+    await drain();
+    const [after] = await rows();
+    expect(after).toMatchObject({
+      id: rowId,
+      status: 'failed',
+      error: 'Plik nie istnieje na serwerze.',
+    });
     expect(guild.sent).toEqual([]);
   });
 

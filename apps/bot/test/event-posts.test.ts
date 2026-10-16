@@ -40,6 +40,7 @@ import {
   eventPostContent,
   eventPostTitle,
   PostGoneError,
+  seriesPostContent,
   seriesPostTitle,
 } from '../src/events/posts.js';
 import {
@@ -466,6 +467,32 @@ describe('event post fixes', () => {
     ).toContain('Notatka: krótka\n');
   });
 
+  it('escapes markdown in place, note and names, not in the link', async () => {
+    const id = await add({ place: '*sala*', note: '__ważne__ `x`' });
+    const e = await getEvent(db, id);
+    if (!e) throw new Error('no event');
+    const c = eventPostContent(
+      { ...e, createdByName: 'A_b_', updatedByName: '~~c~~' },
+      'https://x.pl',
+    );
+    expect(c).toContain('Miejsce: \\*sala\\*');
+    expect(c).toContain('Notatka: \\_\\_ważne\\_\\_ \\`x\\`');
+    expect(c).toContain('Dodane przez A\\_b\\_');
+    expect(c).toContain('Ostatnio edytowane przez \\~\\~c\\~\\~');
+    expect(
+      c.endsWith(`Szczegóły i pliki: https://x.pl/s/wydarzenia/${id}`),
+    ).toBe(true);
+    const sc = seriesPostContent(
+      { ...e, createdByName: 'A_b_' },
+      e,
+      'weekly',
+      [e.startsAt],
+      'https://x.pl',
+    );
+    expect(sc).toContain('Miejsce: \\*sala\\*');
+    expect(sc).toContain('Dodane przez A\\_b\\_');
+  });
+
   it('boot recovery fails interrupted event requests, then the poller proceeds', async () => {
     const id = await add();
     await db.delete(botRequests);
@@ -593,6 +620,19 @@ describe('series posts', () => {
     await enqueueBotRequest(db, 'event_post_upsert', `series:${sid}`);
     await drain();
     expect(guild.posts.size).toBe(1);
+  });
+
+  it('"Najbliższe" counts from the Warsaw wall clock, not UTC', async () => {
+    const sid = await mk();
+    const [first, second] = await occ(sid);
+    // Wall time 10 minutes after the UTC clock: already past in Warsaw.
+    await db
+      .update(events)
+      .set({ startsAt: new Date(Date.now() + 10 * 60_000), endsAt: null })
+      .where(eq(events.id, first.id));
+    await drain();
+    const p = [...guild.posts.values()][0];
+    expect(p.content).toContain(`/s/wydarzenia/${second.id}`);
   });
 
   it('a split shares one post; no second post, archived only when nothing is left', async () => {
