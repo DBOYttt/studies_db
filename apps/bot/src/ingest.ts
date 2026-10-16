@@ -15,7 +15,7 @@ import {
   upsertUser,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
-import { findSubjectByChannel, upsertTopic } from './sync.js';
+import { resolveForum, upsertTopic } from './sync.js';
 import type { DiscordUser, ThreadInfo } from './types.js';
 
 export type AttachmentInput = {
@@ -57,7 +57,7 @@ export async function ingestAttachment(
   const { db, storageDir } = deps;
   let tmpPath: string | null = null;
   try {
-    if (!(await findSubjectByChannel(db, a.thread.forumChannelId))) {
+    if (!(await resolveForum(db, a.thread.forumChannelId))) {
       return 'ignored';
     }
     const [dup] = await db

@@ -23,6 +23,8 @@ const VARS = [
 export const DEFAULT_ADMIN_ROLE_NAME = 'Studies Admin';
 /** bot_settings key holding the admin role id pinned by /setup. */
 export const ADMIN_ROLE_SETTING = 'admin_role_id';
+/** bot_settings key holding the id of the shared #wydarzenia forum. */
+export const EVENTS_FORUM_SETTING = 'events_forum_id';
 /** bot_settings keys of the #panel / #admin-panel channels and messages. */
 export const PANEL_SETTINGS = {
   panel: { channel: 'panel_channel_id', message: 'panel_message_id' },

@@ -1,6 +1,7 @@
 import {
   assignTopicHierarchy,
   type DbExecutor,
+  getSetting,
   materials,
   subjects,
   tags,
@@ -9,6 +10,7 @@ import {
   upsertUser,
 } from '@studies/db';
 import { and, eq, inArray, isNull, notInArray, sql } from 'drizzle-orm';
+import { EVENTS_FORUM_SETTING } from './config.js';
 import type { DiscordUser, ForumTag, ThreadInfo } from './types.js';
 
 export async function findSubjectByChannel(
@@ -21,6 +23,22 @@ export async function findSubjectByChannel(
     .where(eq(subjects.discordChannelId, forumChannelId))
     .limit(1);
   return row ?? null;
+}
+
+/**
+ * What a forum channel is for: a subject's forum, or the shared #wydarzenia
+ * forum (subjectId null: topics there belong to no subject). Null: not ours.
+ */
+export async function resolveForum(
+  db: DbExecutor,
+  forumChannelId: string,
+): Promise<{ subjectId: number | null } | null> {
+  const subject = await findSubjectByChannel(db, forumChannelId);
+  if (subject) return { subjectId: subject.id };
+  if ((await getSetting(db, EVENTS_FORUM_SETTING)) === forumChannelId) {
+    return { subjectId: null };
+  }
+  return null;
 }
 
 export async function syncForumTags(
@@ -53,8 +71,9 @@ export async function upsertTopic(
   t: ThreadInfo,
   owner: DiscordUser | null,
 ): Promise<number | null> {
-  const subject = await findSubjectByChannel(db, t.forumChannelId);
-  if (!subject) return null;
+  const forum = await resolveForum(db, t.forumChannelId);
+  if (!forum) return null;
+  const subjectId = forum.subjectId;
   if (t.ownerIsBot) {
     // /setup links its own threads; a bot thread alone never makes a topic.
     const [linked] = await db
@@ -68,7 +87,7 @@ export async function upsertTopic(
   await db
     .insert(topics)
     .values({
-      subjectId: subject.id,
+      subjectId,
       title: t.title,
       discordThreadId: t.threadId,
       createdBy,
@@ -86,6 +105,8 @@ export async function upsertTopic(
     .where(eq(topics.discordThreadId, t.threadId))
     .limit(1);
   if (!row) throw new Error(`topic ${t.threadId} missing after upsert`);
+  // Topics without a subject have no tags rows (tags belong to subjects).
+  if (subjectId === null) return row.id;
   const wanted =
     t.tagIds.length > 0
       ? await db
@@ -97,7 +118,7 @@ export async function upsertTopic(
           .from(tags)
           .where(
             and(
-              eq(tags.subjectId, subject.id),
+              eq(tags.subjectId, subjectId),
               inArray(tags.discordTagId, t.tagIds),
             ),
           )
@@ -126,7 +147,7 @@ export async function upsertTopic(
     const n = nameByDiscordId.get(id);
     return n === undefined ? [] : [n];
   });
-  await assignTopicHierarchy(db, row.id, subject.id, orderedNames);
+  await assignTopicHierarchy(db, row.id, subjectId, orderedNames);
   return row.id;
 }
 
