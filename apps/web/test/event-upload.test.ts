@@ -274,7 +274,8 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     const rows = await db
       .select()
       .from(webUploads)
-      .where(eq(webUploads.userId, uid));
+      .where(eq(webUploads.userId, uid))
+      .orderBy(webUploads.id);
     expect(rows.map((r) => r.originalFilename)).toEqual([
       'x.pdf',
       'y.pdf',
@@ -283,6 +284,88 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     ]);
     for (const r of rows)
       expect(r.storagePath).toMatch(/^uploads\/[0-9a-f-]{36}$/);
+  });
+
+  it('keeps the selection order even when a later file finishes first', async () => {
+    const uid = await login();
+    const res = await post([
+      file(9 * MB, 'big.bin'),
+      file(3, 'small.txt'),
+      file(2 * MB, 'mid.bin'),
+    ]);
+    expect(res.status).toBe(200);
+    expect(
+      (await res.json()).uploads.map((u: { name: string }) => u.name),
+    ).toEqual(['big.bin', 'small.txt', 'mid.bin']);
+    const rows = await db
+      .select()
+      .from(webUploads)
+      .where(eq(webUploads.userId, uid))
+      .orderBy(webUploads.id);
+    expect(rows.map((r) => r.originalFilename)).toEqual([
+      'big.bin',
+      'small.txt',
+      'mid.bin',
+    ]);
+  });
+
+  /** The multipart body sent chunked: no Content-Length. */
+  async function chunked(
+    prefixBytes: number,
+    files: (readonly [Uint8Array, string])[],
+  ) {
+    const r = new Response(body(files));
+    const type = r.headers.get('content-type') as string;
+    const bytes = new Uint8Array(await r.arrayBuffer());
+    let sentPrefix = 0;
+    let sentBody = false;
+    const stream = new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (sentPrefix < prefixBytes) {
+          const n = Math.min(MB, prefixBytes - sentPrefix);
+          sentPrefix += n;
+          c.enqueue(new Uint8Array(n).fill(65));
+        } else if (!sentBody) {
+          sentBody = true;
+          c.enqueue(bytes);
+        } else c.close();
+      },
+    });
+    return POST(
+      new Request(`http://x/api/wydarzenia/${eventId}/pliki`, {
+        method: 'POST',
+        body: stream,
+        headers: { 'content-type': type },
+        duplex: 'half',
+      } as RequestInit),
+      { params: Promise.resolve({ id: String(eventId) }) },
+    );
+  }
+
+  it('counts the bytes of a chunked body and stops above the limit', async () => {
+    await login();
+    const before = stored().length;
+    const res = await chunked(97 * MB, one());
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe('Łącznie maks. 95 MB na raz.');
+    expect(stored().length).toBe(before);
+  });
+
+  it('accepts a small chunked body', async () => {
+    await login();
+    expect((await chunked(0, one())).status).toBe(200);
+  });
+
+  it('caps the total of one request at 95 MB', async () => {
+    await login();
+    const before = stored().length;
+    const res = await chunked(
+      0,
+      Array.from({ length: 10 }, (_, i) => file(9.6 * MB, `f${i}.bin`)),
+    );
+    expect(res.status).toBe(413);
+    expect((await res.json()).error).toBe('Łącznie maks. 95 MB na raz.');
+    expect(stored().length).toBe(before);
   });
 
   it('404 for a deleted, unknown or malformed event id', async () => {
@@ -391,6 +474,12 @@ describe('retryUploadsAction', () => {
       uploadIds: [keep],
     });
     expect(uid).toBeGreaterThan(0);
+    const audit = (await db.select().from(adminAudit)).filter(
+      (x) => x.action === 'event.upload_retry',
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0]).toMatchObject({ userId: uid, target: String(eventId) });
+    expect(audit[0].details).toMatchObject({ source: 'web', count: 1 });
   });
 
   it('says so when nothing can be retried', async () => {

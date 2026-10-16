@@ -163,3 +163,5 @@ export const EVENT_SERIES_LINK_COLUMNS = [
 export const MAX_UPLOAD_FILES = 10;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_UPLOADS_PER_HOUR = 30;
+/** All files of one upload request (Cloudflare refuses bodies over 100 MB). */
+export const MAX_UPLOAD_TOTAL_BYTES = 95 * 1024 * 1024;

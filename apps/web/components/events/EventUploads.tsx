@@ -1,7 +1,11 @@
 'use client';
 
 import { UploadSimple } from '@phosphor-icons/react';
-import { MAX_UPLOAD_BYTES, MAX_UPLOAD_FILES } from '@studies/db/constants';
+import {
+  MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_FILES,
+  MAX_UPLOAD_TOTAL_BYTES,
+} from '@studies/db/constants';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 import { retryUploadsAction } from '@/lib/event-actions';
@@ -93,6 +97,11 @@ export function EventUploads({
         `Plik jest za duży (maks. ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`,
       );
     }
+    if (files.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_TOTAL_BYTES) {
+      return setError(
+        `Łącznie maks. ${MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB na raz.`,
+      );
+    }
     const form = new FormData();
     for (const f of files) form.append('files', f);
     setBusy(true);
@@ -133,7 +142,8 @@ export function EventUploads({
       </form>
       <p className="m-0 text-xs text-faint">
         Do {MAX_UPLOAD_FILES} plików, każdy do {MAX_UPLOAD_BYTES / 1024 / 1024}{' '}
-        MB. Trafią do wątku wydarzenia na Discordzie.
+        MB, łącznie do {MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB. Trafią do
+        wątku wydarzenia na Discordzie.
       </p>
       {error && (
         <span role="alert" className="text-err-fg">

@@ -30,6 +30,7 @@ import {
 import {
   MAX_UPLOAD_BYTES,
   MAX_UPLOAD_FILES,
+  MAX_UPLOAD_TOTAL_BYTES,
   MAX_UPLOADS_PER_HOUR,
 } from '@studies/db/constants';
 import busboy from 'busboy';
@@ -42,6 +43,7 @@ export const UPLOAD_ERRORS = {
   none: 'Nie wybrano plików.',
   count: `Możesz wysłać najwyżej ${MAX_UPLOAD_FILES} plików naraz.`,
   size: `Plik jest za duży (maks. ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`,
+  total: `Łącznie maks. ${MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB na raz.`,
   empty: 'Plik jest pusty.',
   bad: 'Nieprawidłowe żądanie.',
   rate: `Limit ${MAX_UPLOADS_PER_HOUR} plików na godzinę. Spróbuj później.`,
@@ -55,6 +57,13 @@ const fail = (status: number, error: string) =>
 
 /** Body overhead allowed on top of the file bytes (boundaries, headers). */
 const BODY_OVERHEAD = 1024 * 1024;
+/**
+ * Bytes one request body may have, counted on the stream itself (a chunked
+ * body has no Content-Length, and busboy skips bytes outside the parts).
+ */
+const MAX_BODY_BYTES =
+  Math.min(MAX_UPLOAD_FILES * MAX_UPLOAD_BYTES, MAX_UPLOAD_TOTAL_BYTES) +
+  BODY_OVERHEAD;
 const MAX_NAME = 200;
 
 /**
@@ -128,7 +137,11 @@ async function receiveFiles(
   }
 
   const created: string[] = [];
-  const saved: Saved[] = [];
+  // One slot per file, reserved when its part starts: the selection order,
+  // whichever file finishes writing first.
+  const saved: (Saved | null)[] = [];
+  let bodyBytes = 0;
+  let fileBytes = 0;
   const writes: Promise<void>[] = [];
   const active = new Set<ReturnType<typeof createWriteStream>>();
   let failure: Failure | null = null;
@@ -142,10 +155,13 @@ async function receiveFiles(
       if (failure) {
         await Promise.allSettled(created.map((p) => unlink(p)));
         resolve(failure);
-      } else if (saved.length === 0) {
-        resolve({ status: 400, error: UPLOAD_ERRORS.none });
       } else {
-        resolve({ files: saved });
+        const files = saved.filter((f): f is Saved => f !== null);
+        resolve(
+          files.length === 0
+            ? { status: 400, error: UPLOAD_ERRORS.none }
+            : { files },
+        );
       }
     };
     const abort = (f: Failure) => {
@@ -162,6 +178,7 @@ async function receiveFiles(
         stream.resume();
         return;
       }
+      const slot = saved.push(null) - 1;
       const displayName = sanitizeFilename(info.filename);
       const rel = `uploads/${randomUUID()}`;
       const abs = resolveInStorage(root, rel);
@@ -171,6 +188,10 @@ async function receiveFiles(
       let size = 0;
       stream.on('data', (c: Buffer) => {
         size += c.length;
+        fileBytes += c.length;
+        if (fileBytes > MAX_UPLOAD_TOTAL_BYTES) {
+          abort({ status: 413, error: UPLOAD_ERRORS.total });
+        }
       });
       stream.on('limit', () =>
         abort({ status: 400, error: UPLOAD_ERRORS.size }),
@@ -184,12 +205,7 @@ async function receiveFiles(
               if (size === 0) {
                 abort({ status: 400, error: UPLOAD_ERRORS.empty });
               } else {
-                saved.push({
-                  rel,
-                  abs,
-                  name: displayName,
-                  size,
-                });
+                saved[slot] = { rel, abs, name: displayName, size };
               }
             }
             done();
@@ -212,6 +228,12 @@ async function receiveFiles(
     bb.on('error', () => abort({ status: 400, error: UPLOAD_ERRORS.bad }));
     bb.on('close', () => void finish());
     src.on('error', () => abort({ status: 400, error: UPLOAD_ERRORS.bad }));
+    src.on('data', (c: Buffer) => {
+      bodyBytes += c.length;
+      if (bodyBytes > MAX_BODY_BYTES) {
+        abort({ status: 413, error: UPLOAD_ERRORS.total });
+      }
+    });
     src.pipe(bb);
   });
 }
@@ -243,11 +265,8 @@ export async function handleEventUpload(
   if (!storageRoot) return fail(503, UPLOAD_ERRORS.storage);
 
   const declared = Number(req.headers.get('content-length'));
-  if (
-    Number.isFinite(declared) &&
-    declared > MAX_UPLOAD_FILES * MAX_UPLOAD_BYTES + BODY_OVERHEAD
-  ) {
-    return fail(400, UPLOAD_ERRORS.size);
+  if (Number.isFinite(declared) && declared > MAX_BODY_BYTES) {
+    return fail(413, UPLOAD_ERRORS.total);
   }
 
   if (inFlight.has(user.id)) return fail(429, UPLOAD_ERRORS.busy);
