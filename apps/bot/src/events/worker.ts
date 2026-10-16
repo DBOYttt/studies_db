@@ -10,6 +10,7 @@ import {
   type EventDetails,
   events,
   eventTopics,
+  failStaleBotRequests,
   finishBotRequest,
   getEvent,
   getSetting,
@@ -25,6 +26,7 @@ import {
   type EventPostGuild,
   eventPostContent,
   eventPostTitle,
+  PostGoneError,
 } from './posts.js';
 
 export const EVENT_REQUEST_KINDS = [
@@ -109,17 +111,23 @@ export async function upsertEventPost(
     tagName: EVENT_KINDS[e.kind].label,
   };
   const topic = await topicOf(db, e.topicId);
-  const alive =
-    topic &&
+  let alive =
+    !!topic &&
     !topic.deletedAt &&
     (await guild.postExists(topic.discordThreadId));
   if (topic && alive && topic.subjectId === e.subjectId) {
-    await guild.editFirstMessage(topic.discordThreadId, post);
-    await db
-      .update(topics)
-      .set({ title: post.title })
-      .where(eq(topics.id, topic.id));
-    return;
+    try {
+      await guild.editFirstMessage(topic.discordThreadId, post);
+      await db
+        .update(topics)
+        .set({ title: post.title })
+        .where(eq(topics.id, topic.id));
+      return;
+    } catch (err) {
+      // The post or its first message vanished: make a new post below.
+      if (!(err instanceof PostGoneError)) throw err;
+      alive = false;
+    }
   }
   // No post, the post is gone, or the subject changed: a new post.
   const threadId = await guild.createPost(forumId, post);
@@ -160,7 +168,21 @@ export async function archiveEventPost(
   const topic = await topicOf(db, e.topicId);
   if (!topic || topic.deletedAt) return;
   if (!(await guild.postExists(topic.discordThreadId))) return;
-  await guild.archivePost(topic.discordThreadId, DELETED_TEXT);
+  try {
+    await guild.archivePost(topic.discordThreadId, DELETED_TEXT);
+  } catch (err) {
+    // Gone while archiving: nothing left to archive.
+    if (!(err instanceof PostGoneError)) throw err;
+  }
+}
+
+/**
+ * At boot: fails every `running` event request. This process is their only
+ * consumer, so whatever is still `running` was interrupted by a crash or
+ * deploy. Awaited before the poller starts. Returns how many were failed.
+ */
+export function recoverInterruptedRequests(db: Db): Promise<number> {
+  return failStaleBotRequests(db, new Date(), 0, [...EVENT_REQUEST_KINDS]);
 }
 
 /** Processes queued requests one by one until none are left. */

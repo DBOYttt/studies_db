@@ -32,9 +32,15 @@ import {
   DELETED_TEXT,
   type EventPostFields,
   type EventPostGuild,
+  eventPostContent,
   eventPostTitle,
+  PostGoneError,
 } from '../src/events/posts.js';
-import { drainEventRequests, startEventPoller } from '../src/events/worker.js';
+import {
+  drainEventRequests,
+  recoverInterruptedRequests,
+  startEventPoller,
+} from '../src/events/worker.js';
 
 type FakePost = EventPostFields & {
   forumId: string;
@@ -50,6 +56,7 @@ function fakeGuild(delayMs = 0) {
     posts,
     maxActive: 0,
     failCreate: null as Error | null,
+    goneOnEdit: false,
     async createPost(forumId: string, post: EventPostFields) {
       active++;
       g.maxActive = Math.max(g.maxActive, active);
@@ -66,6 +73,7 @@ function fakeGuild(delayMs = 0) {
     async editFirstMessage(threadId: string, post: EventPostFields) {
       const p = posts.get(threadId);
       if (!p) throw new Error('Unknown Channel');
+      if (g.goneOnEdit) throw new PostGoneError('Unknown Message');
       Object.assign(p, post, { archived: false, locked: false });
     },
     async archivePost(threadId: string, content: string) {
@@ -362,6 +370,86 @@ describe('event posts', () => {
   });
 });
 
+describe('event post fixes', () => {
+  it('a vanished first message recreates the post instead of failing', async () => {
+    const id = await add();
+    await drain();
+    const [oldThread] = [...guild.posts.keys()];
+    guild.goneOnEdit = true;
+    await editEvent(db, userId, id, { place: 'sala 2' }, 'web');
+    await drain();
+    guild.goneOnEdit = false;
+    expect((await requests()).every((r) => r.status === 'done')).toBe(true);
+    const e = await eventRow(id);
+    const [t] = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.id, e.topicId as number));
+    expect(t.discordThreadId).not.toBe(oldThread);
+    expect(guild.posts.get(t.discordThreadId)?.content).toContain('sala 2');
+  });
+
+  it('keeps the link when a long note must be trimmed', async () => {
+    const id = await add({
+      title: 'T'.repeat(100),
+      place: 'P'.repeat(100),
+      note: 'ż'.repeat(1000),
+    });
+    const e = await getEvent(db, id);
+    if (!e) throw new Error('no event');
+    const long = {
+      ...e,
+      subjectName: 'N'.repeat(300),
+      createdByName: 'A'.repeat(500),
+      updatedByName: 'B'.repeat(500),
+    };
+    const link = `Szczegóły i pliki: https://x.pl/s/wydarzenia/${id}`;
+    const c = eventPostContent(long, 'https://x.pl');
+    expect(c.length).toBeLessThanOrEqual(2000);
+    expect(c.endsWith(link)).toBe(true);
+    expect(c).toContain('Notatka: ż');
+    expect(c).toContain('…\n');
+    // A short note is untouched.
+    expect(
+      eventPostContent({ ...e, note: 'krótka' }, 'https://x.pl'),
+    ).toContain('Notatka: krótka\n');
+  });
+
+  it('boot recovery fails interrupted event requests, then the poller proceeds', async () => {
+    const id = await add();
+    await db.delete(botRequests);
+    const old = new Date(Date.now() - 1000);
+    await db.insert(botRequests).values([
+      {
+        kind: 'event_post_upsert',
+        target: `event:${id}`,
+        status: 'running',
+        startedAt: old,
+      },
+      {
+        kind: 'event_upload',
+        target: 'event:9',
+        status: 'running',
+        startedAt: old,
+      },
+    ]);
+    expect(await recoverInterruptedRequests(db)).toBe(1);
+    const rows = await requests();
+    expect(rows[0]).toMatchObject({
+      status: 'failed',
+      error: 'Przerwane: bot został zrestartowany.',
+    });
+    expect(rows[1].status).toBe('running');
+    await enqueueBotRequest(db, 'event_post_upsert', `event:${id}`);
+    const poller = startEventPoller(deps(), 1);
+    await vi.waitFor(async () => {
+      expect((await requests())[2].status).toBe('done');
+    });
+    await poller.stop();
+    expect(guild.posts.size).toBe(1);
+  });
+});
+
 describe('eventPostTitle', () => {
   it('stays within 100 characters', async () => {
     const id = await add({ title: 'x'.repeat(100) });
@@ -369,5 +457,15 @@ describe('eventPostTitle', () => {
     if (!e) throw new Error('no event');
     expect(eventPostTitle(e).length).toBeLessThanOrEqual(100);
     expect(eventPostTitle(e)).toMatch(/ — \d\d\.\d\d$/);
+  });
+
+  it('does not split surrogate pairs when clipping', async () => {
+    const id = await add({ title: '😀'.repeat(50) });
+    const e = await getEvent(db, id);
+    if (!e) throw new Error('no event');
+    const t = eventPostTitle(e);
+    expect([...t].length).toBeLessThanOrEqual(100);
+    expect(t).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/);
+    expect(t).toContain('…');
   });
 });

@@ -113,12 +113,15 @@ export async function finishBotRequest(
 
 /**
  * Fails `running` requests started more than `olderThanMs` before `now`
- * (left behind by a crash or restart). Returns how many were failed.
+ * (left behind by a crash or restart). `kinds` limits it to those kinds (a
+ * consumer recovering its own requests at boot passes `olderThanMs` 0).
+ * Returns how many were failed.
  */
 export async function failStaleBotRequests(
   db: DbExecutor,
   now: Date,
   olderThanMs = 15 * 60_000,
+  kinds?: string[],
 ): Promise<number> {
   const cutoff = new Date(now.getTime() - olderThanMs);
   const [res] = await db
@@ -129,7 +132,11 @@ export async function failStaleBotRequests(
       finishedAt: now,
     })
     .where(
-      and(eq(botRequests.status, 'running'), lt(botRequests.startedAt, cutoff)),
+      and(
+        eq(botRequests.status, 'running'),
+        lt(botRequests.startedAt, cutoff),
+        kinds ? inArray(botRequests.kind, kinds) : undefined,
+      ),
     );
   return res.affectedRows;
 }

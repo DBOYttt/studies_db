@@ -1,4 +1,4 @@
-import { createDb, failStaleBotRequests, resolveStorageDir } from '@studies/db';
+import { createDb, resolveStorageDir } from '@studies/db';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { catchUp, discordForumSource } from './catchup.js';
 import { createInteractionHandler } from './commands/router.js';
@@ -6,7 +6,10 @@ import { type BotConfig, loadConfig } from './config.js';
 import { registerEvents } from './discord/events.js';
 import { fetchAttachmentBody } from './discord/map.js';
 import { discordEventPostGuild } from './events/posts.js';
-import { startEventPoller } from './events/worker.js';
+import {
+  recoverInterruptedRequests,
+  startEventPoller,
+} from './events/worker.js';
 
 process.on('unhandledRejection', (reason) => {
   console.error('unhandledRejection:', reason);
@@ -44,15 +47,16 @@ client.on(
 );
 
 let eventPoller: ReturnType<typeof startEventPoller> | undefined;
-client.once(Events.ClientReady, (c) => {
+client.once(Events.ClientReady, async (c) => {
   console.log(`Bot gotowy jako ${c.user.tag}`);
-  // Requests left `running` by a previous process will never finish.
-  failStaleBotRequests(db, new Date()).then(
-    (n) => {
-      if (n > 0) console.log(`Przerwane zlecenia: ${n}.`);
-    },
-    (err) => console.error('failStaleBotRequests:', err),
-  );
+  // Requests left `running` by a previous process will never finish: fail
+  // them before the poller starts.
+  try {
+    const n = await recoverInterruptedRequests(db);
+    if (n > 0) console.log(`Przerwane zlecenia: ${n}.`);
+  } catch (err) {
+    console.error('recoverInterruptedRequests:', err);
+  }
   eventPoller = startEventPoller({
     db,
     guild: discordEventPostGuild(client),

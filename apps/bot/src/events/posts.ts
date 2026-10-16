@@ -41,19 +41,31 @@ export function eventWhenText(e: EventDetails): string {
 
 /** The first message: details plus the link to the event page. */
 export function eventPostContent(e: EventDetails, webBaseUrl: string): string {
-  const lines = [
-    `**${EVENT_KINDS[e.kind].label}**${e.subjectCode ? ` · ${e.subjectCode}${e.subjectName ? ` — ${e.subjectName}` : ''}` : ''}`,
-    `Kiedy: ${eventWhenText(e)}`,
-    ...(e.place ? [`Miejsce: ${e.place}`] : []),
-    ...(e.note ? [`Notatka: ${e.note}`] : []),
+  const link = `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${e.id}`;
+  const tail = [
     ...(e.createdByName ? [`Dodane przez ${e.createdByName}`] : []),
     ...(e.updatedByName && e.updatedByName !== e.createdByName
       ? [`Ostatnio edytowane przez ${e.updatedByName}`]
       : []),
-    `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${e.id}`,
+    link,
   ];
-  return lines.join('\n').slice(0, MAX_MESSAGE);
+  const head = [
+    `**${EVENT_KINDS[e.kind].label}**${e.subjectCode ? ` · ${e.subjectCode}${e.subjectName ? ` — ${e.subjectName}` : ''}` : ''}`,
+    `Kiedy: ${eventWhenText(e)}`,
+    ...(e.place ? [`Miejsce: ${e.place}`] : []),
+  ];
+  const join = (note: string | null) =>
+    [...head, ...(note ? [`Notatka: ${note}`] : []), ...tail].join('\n');
+  const full = join(e.note);
+  if (full.length <= MAX_MESSAGE || !e.note) return full.slice(0, MAX_MESSAGE);
+  // Too long: trim the note, never the link.
+  const room = MAX_MESSAGE - join('').length - 'Notatka: …\n'.length;
+  const note = [...e.note].slice(0, Math.max(0, room - 1)).join('');
+  return join(`${note}…`).slice(0, MAX_MESSAGE);
 }
+
+/** The post or its starter message no longer exists on Discord. */
+export class PostGoneError extends Error {}
 
 export type EventPostFields = {
   title: string;
@@ -110,16 +122,29 @@ export function discordEventPostGuild(client: Client): EventPostGuild {
     }
     return c;
   };
-  const threadOf = async (id: string): Promise<AnyThreadChannel> => {
-    const c = await client.channels.fetch(id);
-    if (!c?.isThread()) throw new Error(`channel ${id} is not a thread`);
-    return c;
+  /** Runs `fn`, turning "Unknown Channel/Message" into PostGoneError. */
+  const orGone = async <T>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (err) {
+      if (isGone(err)) throw new PostGoneError(String(err));
+      throw err;
+    }
   };
-  const editStarter = async (t: AnyThreadChannel, content: string) => {
-    const starter = await t.fetchStarterMessage();
-    if (!starter) throw new Error(`thread ${t.id} has no starter message`);
-    await starter.edit({ content, allowedMentions: { parse: [] } });
-  };
+  const threadOf = (id: string): Promise<AnyThreadChannel> =>
+    orGone(async () => {
+      const c = await client.channels.fetch(id);
+      if (!c?.isThread())
+        throw new PostGoneError(`channel ${id} is not a thread`);
+      return c;
+    });
+  const editStarter = (t: AnyThreadChannel, content: string) =>
+    orGone(async () => {
+      const starter = await t.fetchStarterMessage();
+      if (!starter)
+        throw new PostGoneError(`thread ${t.id} has no starter message`);
+      await starter.edit({ content, allowedMentions: { parse: [] } });
+    });
   return {
     async createPost(forumId, post) {
       const forum = await forumOf(forumId);
@@ -141,10 +166,19 @@ export function discordEventPostGuild(client: Client): EventPostGuild {
         parent?.type === ChannelType.GuildForum
           ? tagsFor(parent, t.appliedTags, post.tagName)
           : undefined;
-      if (t.name !== post.title) await t.setName(post.title, 'wydarzenie');
-      if (tags && tags.join() !== t.appliedTags.join()) {
-        await t.setAppliedTags(tags, 'wydarzenie');
-      }
+      await orGone(async () => {
+        // Renames are rate limited (about 2 per 10 minutes): only when the
+        // title changed, and a refusal doesn't stop the rest of the edit.
+        if (t.name !== post.title) {
+          await t.setName(post.title, 'wydarzenie').catch((err) => {
+            if (isGone(err)) throw err;
+            console.error(`cannot rename event post ${t.id}:`, err);
+          });
+        }
+        if (tags && tags.join() !== t.appliedTags.join()) {
+          await t.setAppliedTags(tags, 'wydarzenie');
+        }
+      });
       await editStarter(t, post.content);
     },
     async archivePost(threadId, content) {

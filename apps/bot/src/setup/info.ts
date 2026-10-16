@@ -19,8 +19,8 @@ export function renderEventsInfoPost(webBaseUrl: string): string {
     '**Wydarzenia** — kolokwia, egzaminy, wyjazdy i zajęcia dodatkowe.',
     'Wydarzenia przedmiotów mają posty w forum swojego przedmiotu, a wydarzenia bez przedmiotu tutaj. Posty zakłada i aktualizuje bot — nie edytuj ich ręcznie.',
     'Pliki dodane w poście wydarzenia (np. zakres materiału) trafiają do materiałów wydarzenia na stronie.',
-    `Dodawanie i lista wydarzeń: ${webBaseUrl}/s/wydarzenia`,
-    `Plan z wydarzeniami: ${webBaseUrl}/s/plan`,
+    `Dodaj wydarzenie: ${webBaseUrl}/s/wydarzenia/nowe`,
+    `Plan zajęć: ${webBaseUrl}/s/plan`,
   ].join('\n\n');
 }
 const MAX_MESSAGE = 2000;

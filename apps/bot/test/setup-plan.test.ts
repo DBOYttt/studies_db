@@ -1148,6 +1148,15 @@ describe('planSetup: panels', () => {
   });
 });
 
+describe('renderEventsInfoPost', () => {
+  it('links the new-event page and the plan', () => {
+    const t = renderEventsInfoPost('https://x.pl');
+    expect(t).toContain('Dodaj wydarzenie: https://x.pl/s/wydarzenia/nowe');
+    expect(t).toContain('Plan zajęć: https://x.pl/s/plan');
+    expect(t).not.toMatch(/s\/wydarzenia(\s|$)/);
+  });
+});
+
 describe('planSetup: #wydarzenia', () => {
   const only = (actions: Action[]) => actions.filter(isEvents);
   const KINDS = ['Kolokwium', 'Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'];
