@@ -535,10 +535,11 @@ export function groupsView(
     summaryText = [...shown, `-# ${more(rest)}`].join('\n');
   }
 
-  // The toggles carry the selected subject's index so it stays open.
+  // The toggles carry the state they set (1 on / 0 off) and the selected
+  // subject's index so it stays open.
   const subjIdx =
     selectedSubject === null ? -1 : subjects.indexOf(selectedSubject);
-  const remArgs = subjIdx >= 0 ? [subjIdx] : [];
+  const subjArgs = subjIdx >= 0 ? [subjIdx] : [];
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text('## Moje grupy'), text(summaryText))
     .addSeparatorComponents(divider());
@@ -605,12 +606,12 @@ export function groupsView(
       .addActionRowComponents(
         row(
           button(
-            encodeId('stu', 'rem', 'day', ...remArgs),
+            encodeId('stu', 'rem', 'day', rem.dayBefore ? 0 : 1, ...subjArgs),
             `Przypomnienie 24 h: ${rem.dayBefore ? 'wł.' : 'wył.'}`,
             rem.dayBefore ? ButtonStyle.Success : ButtonStyle.Secondary,
           ),
           button(
-            encodeId('stu', 'rem', 'hour', ...remArgs),
+            encodeId('stu', 'rem', 'hour', rem.hourBefore ? 0 : 1, ...subjArgs),
             `Przypomnienie 1 h: ${rem.hourBefore ? 'wł.' : 'wył.'}`,
             rem.hourBefore ? ButtonStyle.Success : ButtonStyle.Secondary,
           ),

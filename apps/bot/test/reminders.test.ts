@@ -14,6 +14,7 @@ import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  createReminderMemory,
   DIGEST_THREAD_SETTING,
   digestText,
   dmText,
@@ -107,6 +108,13 @@ describe('reminder texts', () => {
       ),
     ).toBe('Przypomnienie: 📝 Kolos · jutro (cały dzień)\nu/s/wydarzenia/7');
   });
+  it('escapes markdown in titles and places', () => {
+    const e = { ...base, eventTitle: '*Kolos*', room: '_C_' } as PlanSession;
+    expect(dmText(e, 'day', 'u')).toContain(
+      '\\*Kolos\\* · Bazy · jutro 10:00 · \\_C\\_',
+    );
+    expect(digestText([e])).toContain('\\*Kolos\\*');
+  });
   it('digest: lines, truncated to 2000 characters', () => {
     expect(digestText([base])).toBe('Jutro:\n📝 Kolos · BD · 10:00 · C-12');
     const many = Array.from({ length: 200 }, (_, i) => ({
@@ -120,6 +128,73 @@ describe('reminder texts', () => {
 });
 
 describe('runReminderTick', () => {
+  it('a markSent failure after a delivered DM never re-sends, and others still get theirs', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const [{ id: u2 }] = await db
+      .insert(users)
+      .values({ discordUserId: 'd2', displayName: 'U2' })
+      .$returningId();
+    await setReminderPrefs(
+      db,
+      u2,
+      { dayBefore: true, hourBefore: true },
+      'web',
+    );
+    await event(W(2026, 10, 20, 10));
+    const g = fakeGuild();
+    const memory = createReminderMemory();
+    const spy = vi
+      .spyOn(await import('@studies/db'), 'markSent')
+      .mockRejectedValueOnce(new Error('db blip'));
+    await runReminderTick({ ...deps(g.guild), memory }, W(2026, 10, 19, 10));
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+    await runReminderTick({ ...deps(g.guild), memory }, W(2026, 10, 19, 10, 1));
+    expect(g.dms.map((d) => d.to).sort()).toEqual(['d1', 'd2']);
+    expect(await db.select().from(reminderLog)).toHaveLength(2);
+  });
+
+  it('a failed setSetting after creating the digest thread does not create a second one', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await setSetting(db, 'events_forum_id', 'forum-1');
+    await event(W(2026, 10, 20, 10));
+    const g = fakeGuild();
+    const memory = createReminderMemory();
+    const spy = vi
+      .spyOn(await import('@studies/db'), 'setSetting')
+      .mockRejectedValueOnce(new Error('db blip'));
+    await runReminderTick({ ...deps(g.guild), memory }, W(2026, 10, 19, 18, 1));
+    expect(spy).toHaveBeenCalled();
+    spy.mockRestore();
+    await event(W(2026, 10, 20, 12), { title: 'Nowy' });
+    await runReminderTick({ ...deps(g.guild), memory }, W(2026, 10, 19, 18, 2));
+    expect(g.digests.map((d) => d.thread)).toEqual([null, 'thread-1']);
+    expect(g.digests[1].content).not.toContain('Kolos');
+  });
+
+  it('stops between sends when asked', async () => {
+    await event(W(2026, 10, 20, 10));
+    const g = fakeGuild();
+    await runReminderTick(
+      { ...deps(g.guild), isStopped: () => true },
+      W(2026, 10, 19, 10),
+    );
+    expect(g.dms).toEqual([]);
+  });
+
+  it('an unknown user (10013) is disabled with a reason', async () => {
+    await event(W(2026, 10, 20, 10));
+    const g = fakeGuild();
+    g.guild.sendDm = vi
+      .fn()
+      .mockRejectedValue(Object.assign(new Error('x'), { code: 10013 }));
+    await runReminderTick(deps(g.guild), W(2026, 10, 19, 10));
+    expect((await getReminderPrefs(db, uid)).disabledReason).toBe(
+      'Nieznany użytkownik',
+    );
+    expect(await db.select().from(reminderLog)).toHaveLength(1);
+  });
+
   it('sends one DM per due entry, logs it, and a new tick sends nothing twice', async () => {
     await event(W(2026, 10, 20, 10));
     const a = fakeGuild();

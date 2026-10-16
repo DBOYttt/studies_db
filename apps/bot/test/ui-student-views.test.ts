@@ -481,8 +481,8 @@ describe('groupsView', () => {
       },
     );
     expectValid(v);
-    const day = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:day:0');
-    const hour = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:hour:0');
+    const day = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:day:0:0');
+    const hour = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:hour:1:0');
     expect([day?.label, day?.style]).toEqual([
       'Przypomnienie 24 h: wł.',
       ButtonStyle.Success,
@@ -492,7 +492,7 @@ describe('groupsView', () => {
       ButtonStyle.Secondary,
     ]);
     const none = groupsView(options, null, {});
-    expect(customIds(none)).toContain('v1:stu:rem:day');
+    expect(customIds(none)).toContain('v1:stu:rem:day:1');
   });
 
   it('lists only subjects with groups and marks the current choice', () => {
@@ -525,8 +525,8 @@ describe('groupsView', () => {
       expect.objectContaining({ value: '0' }),
     ]);
     expect(buttons(v).map((b) => [b.custom_id, b.label])).toEqual([
-      ['v1:stu:rem:day:0', 'Przypomnienie 24 h: wył.'],
-      ['v1:stu:rem:hour:0', 'Przypomnienie 1 h: wył.'],
+      ['v1:stu:rem:day:1:0', 'Przypomnienie 24 h: wył.'],
+      ['v1:stu:rem:hour:1:0', 'Przypomnienie 1 h: wył.'],
       ['v1:stu:groups:clear', 'Wyczyść'],
       ['v1:stu:plan:day', 'Pokaż mój plan'],
     ]);

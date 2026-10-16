@@ -19,6 +19,7 @@ import {
   ChannelType,
   type Client,
   DiscordAPIError,
+  escapeMarkdown,
   RESTJSONErrorCodes,
 } from 'discord.js';
 import { EVENTS_FORUM_SETTING } from './config.js';
@@ -46,8 +47,23 @@ export interface ReminderGuild {
   ): Promise<string>;
 }
 
+/** What this process already delivered, so a DB failure never re-sends. */
+export type ReminderMemory = {
+  sent: Set<string>;
+  digestThread: string | null;
+};
+export const createReminderMemory = (): ReminderMemory => ({
+  sent: new Set(),
+  digestThread: null,
+});
+const keyOf = (eventId: number, userId: number, kind: string, t: Date) =>
+  `${eventId}:${userId}:${kind}:${t.getTime()}`;
+
 export type ReminderDeps = {
   db: Db;
+  memory?: ReminderMemory;
+  /** True once the tick is shutting down; checked between sends. */
+  isStopped?: () => boolean;
   pool: Pool;
   guild: ReminderGuild;
   webBaseUrl: string;
@@ -67,10 +83,10 @@ export function dmText(
     : `${kind === 'day' ? 'jutro' : 'dziś'} ${hm(e.startsAt)}`;
   const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
   const head = [
-    `${symbol} ${e.eventTitle ?? e.label}`,
-    e.subjectName || null,
+    `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
+    e.subjectName ? escapeMarkdown(e.subjectName) : null,
     when,
-    e.room || null,
+    e.room ? escapeMarkdown(e.room) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -82,10 +98,10 @@ export function digestText(events: PlanSession[]): string {
   const lines = events.map((e) => {
     const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
     return [
-      `${symbol} ${e.eventTitle ?? e.label}`,
-      e.subjectCode || null,
+      `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
+      e.subjectCode ? escapeMarkdown(e.subjectCode) : null,
       e.allDay ? 'cały dzień' : hm(e.startsAt),
-      e.room || null,
+      e.room ? escapeMarkdown(e.room) : null,
     ]
       .filter(Boolean)
       .join(' · ');
@@ -103,66 +119,116 @@ export function digestText(events: PlanSession[]): string {
   return out;
 }
 
-const isClosedDm = (err: unknown) =>
-  (err as { code?: unknown } | null)?.code ===
-  RESTJSONErrorCodes.CannotSendMessagesToThisUser;
+/** Why a DM can never be delivered to this user; null for transient errors. */
+function undeliverableReason(err: unknown): string | null {
+  const code = (err as { code?: unknown } | null)?.code;
+  if (code === RESTJSONErrorCodes.CannotSendMessagesToThisUser) {
+    return DM_DISABLED_REASON;
+  }
+  if (code === RESTJSONErrorCodes.UnknownUser) return 'Nieznany użytkownik';
+  return null;
+}
 
-async function sendDueDms(deps: ReminderDeps, now: Date): Promise<void> {
+async function record(db: Db, entry: Parameters<typeof markSent>[1][number]) {
+  try {
+    await markSent(db, [entry]);
+  } catch (err) {
+    console.error('reminders: markSent failed (kept in memory):', err);
+  }
+}
+
+async function sendDueDms(
+  deps: ReminderDeps,
+  memory: ReminderMemory,
+  now: Date,
+): Promise<void> {
   const { db, pool, guild, webBaseUrl } = deps;
   const due = await dueDms(db, pool, now);
-  // A user whose DMs are closed gets all their entries marked, not retried.
+  // A user whose DMs can't be delivered gets all their entries marked.
   const closed = new Set<number>();
   for (const d of due) {
+    if (deps.isStopped?.()) return;
     const entry = {
       eventId: d.event.id,
       userId: d.userId,
       kind: d.kind,
       forStartsAt: d.event.startsAt,
     };
+    const key = keyOf(d.event.id, d.userId, d.kind, d.event.startsAt);
+    if (memory.sent.has(key)) {
+      await record(db, entry);
+      continue;
+    }
     if (closed.has(d.userId)) {
-      await markSent(db, [entry]);
+      memory.sent.add(key);
+      await record(db, entry);
       continue;
     }
     try {
       await guild.sendDm(d.discordUserId, dmText(d.event, d.kind, webBaseUrl));
     } catch (err) {
-      if (isClosedDm(err)) {
-        closed.add(d.userId);
-        await disableReminders(db, d.userId, DM_DISABLED_REASON);
-        await markSent(db, [entry]);
-      } else {
+      const reason = undeliverableReason(err);
+      if (reason === null) {
         console.error(
           `reminders: DM to ${d.discordUserId} failed, retrying next tick:`,
           err,
         );
+        continue;
       }
+      closed.add(d.userId);
+      memory.sent.add(key);
+      try {
+        await disableReminders(db, d.userId, reason);
+      } catch (e) {
+        console.error('reminders: disableReminders failed:', e);
+      }
+      await record(db, entry);
       continue;
     }
-    await markSent(db, [entry]);
+    memory.sent.add(key);
+    await record(db, entry);
   }
 }
 
-async function postDigest(deps: ReminderDeps, now: Date): Promise<void> {
+async function postDigest(
+  deps: ReminderDeps,
+  memory: ReminderMemory,
+  now: Date,
+): Promise<void> {
   const { db, pool, guild } = deps;
-  const events = await dueDigest(pool, now);
+  const events = (await dueDigest(pool, now)).filter(
+    (e) => !memory.sent.has(keyOf(e.id, DIGEST_USER_ID, 'digest', e.startsAt)),
+  );
   if (events.length === 0) return;
   const forumId = await getSetting(db, EVENTS_FORUM_SETTING);
   if (!forumId) return;
-  const threadId = await getSetting(db, DIGEST_THREAD_SETTING);
+  const stored = await getSetting(db, DIGEST_THREAD_SETTING);
+  const threadId = stored ?? memory.digestThread;
   const posted = await guild.postDigest(
     forumId,
     threadId ?? null,
     digestText(events),
   );
-  if (posted !== threadId) await setSetting(db, DIGEST_THREAD_SETTING, posted);
-  await markSent(
-    db,
-    events.map((e) => ({
-      eventId: e.id,
-      userId: DIGEST_USER_ID,
-      kind: 'digest' as const,
-      forStartsAt: e.startsAt,
-    })),
+  memory.digestThread = posted;
+  for (const e of events) {
+    memory.sent.add(keyOf(e.id, DIGEST_USER_ID, 'digest', e.startsAt));
+  }
+  if (posted !== stored) {
+    try {
+      await setSetting(db, DIGEST_THREAD_SETTING, posted);
+    } catch (err) {
+      console.error('reminders: saving the digest thread failed:', err);
+    }
+  }
+  await Promise.all(
+    events.map((e) =>
+      record(db, {
+        eventId: e.id,
+        userId: DIGEST_USER_ID,
+        kind: 'digest' as const,
+        forStartsAt: e.startsAt,
+      }),
+    ),
   );
 }
 
@@ -171,13 +237,14 @@ export async function runReminderTick(
   deps: ReminderDeps,
   now: Date = nowWall(),
 ): Promise<void> {
+  const memory = deps.memory ?? createReminderMemory();
   try {
-    await sendDueDms(deps, now);
+    await sendDueDms(deps, memory, now);
   } catch (err) {
     console.error('reminders (DM):', err);
   }
   try {
-    await postDigest(deps, now);
+    await postDigest(deps, memory, now);
   } catch (err) {
     console.error('reminders (digest):', err);
   }
@@ -190,8 +257,13 @@ export function startReminderTick(
   let stopped = false;
   let timer: NodeJS.Timeout | undefined;
   let running: Promise<unknown> = Promise.resolve();
+  const live: ReminderDeps = {
+    ...deps,
+    memory: deps.memory ?? createReminderMemory(),
+    isStopped: () => stopped,
+  };
   const tick = () => {
-    running = runReminderTick(deps).finally(() => {
+    running = runReminderTick(live).finally(() => {
       if (!stopped) timer = setTimeout(tick, intervalMs);
     });
   };

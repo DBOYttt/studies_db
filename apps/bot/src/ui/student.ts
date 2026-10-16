@@ -49,7 +49,12 @@ export type StudentAction =
   | { kind: 'groupsSubject'; index: number }
   | { kind: 'groupsSet'; classId: number; groupId: number | null }
   | { kind: 'groupsClear' }
-  | { kind: 'remToggle'; which: 'day' | 'hour'; subject: number | null }
+  | {
+      kind: 'remToggle';
+      which: 'day' | 'hour';
+      on: boolean;
+      subject: number | null;
+    }
   | { kind: 'login' };
 
 /** `yyyy-mm-dd` → wall midnight, or null when malformed or not a real date. */
@@ -89,11 +94,14 @@ export function parseStudentAction(
   }
   if (action === 'rem') {
     if (sub !== 'day' && sub !== 'hour') return null;
-    if (arg !== undefined && !INDEX_RE.test(arg)) return null;
+    const subj = args[2];
+    if (arg !== '0' && arg !== '1') return null;
+    if (subj !== undefined && !INDEX_RE.test(subj)) return null;
     return {
       kind: 'remToggle',
       which: sub,
-      subject: arg === undefined ? null : Number(arg),
+      on: arg === '1',
+      subject: subj === undefined ? null : Number(subj),
     };
   }
   if (action === 'groups') {
@@ -241,8 +249,8 @@ export async function runStudentAction(
         db,
         ctx.userId,
         {
-          dayBefore: a.which === 'day' ? !cur.dayBefore : cur.dayBefore,
-          hourBefore: a.which === 'hour' ? !cur.hourBefore : cur.hourBefore,
+          dayBefore: a.which === 'day' ? a.on : cur.dayBefore,
+          hourBefore: a.which === 'hour' ? a.on : cur.hourBefore,
         },
         'discord',
       );

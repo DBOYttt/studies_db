@@ -418,7 +418,7 @@ describe('handleUi', () => {
       .insert(users)
       .values({ discordUserId: 'stud', displayName: 'stud' })
       .$returningId();
-    const day = component('v1:stu:rem:day:0', { ephemeral: true });
+    const day = component('v1:stu:rem:day:1:0', { ephemeral: true });
     await handler()(day);
     expect(day.calls).toEqual(['deferUpdate', 'editReply']);
     expect(await getReminderPrefs(db, u.id)).toMatchObject({
@@ -433,8 +433,10 @@ describe('handleUi', () => {
         .filter((n) => n.type === 2)
         .map((n) => n.label),
     ).toContain('Przypomnienie 24 h: wł.');
-    await handler()(component('v1:stu:rem:hour', { ephemeral: true }));
-    await handler()(component('v1:stu:rem:day', { ephemeral: true }));
+    await handler()(component('v1:stu:rem:hour:1', { ephemeral: true }));
+    // A stale or double click sets the state its button showed.
+    await handler()(component('v1:stu:rem:hour:1', { ephemeral: true }));
+    await handler()(component('v1:stu:rem:day:0', { ephemeral: true }));
     expect(await getReminderPrefs(db, u.id)).toMatchObject({
       dayBefore: false,
       hourBefore: true,
@@ -527,7 +529,7 @@ describe('handleUi', () => {
       'v1:stu:login',
       'v1:stu:plan:day',
       'v1:stu:groups:open',
-      'v1:stu:rem:day',
+      'v1:stu:rem:day:1',
     ]) {
       const i = component(cid);
       await handler()(i);
