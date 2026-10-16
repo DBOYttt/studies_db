@@ -111,7 +111,7 @@ export type PublicView = (typeof PUBLIC_VIEWS)[number];
 
 /**
  * Tables the admin SQL console's read-write user may SELECT/INSERT/UPDATE/DELETE,
- * except `materials`, see MATERIAL_FILE_COLUMNS.
+ * except some columns, see MATERIAL_FILE_COLUMNS and EVENT_LINK_COLUMNS.
  */
 export const CONTENT_TABLES = [
   'subjects',
@@ -140,6 +140,23 @@ export const MATERIAL_FILE_COLUMNS = [
   'preview_path',
   'sha256',
   'size_bytes',
+] as const;
+
+/**
+ * `events` / `event_series` columns that point the bot at a Discord thread or
+ * at owners. The console's read-write user may neither INSERT nor UPDATE them:
+ * the bot unlocks, renames and posts into the thread they lead to.
+ */
+export const EVENT_LINK_COLUMNS = [
+  'topic_id',
+  'series_id',
+  'created_by',
+  'updated_by',
+] as const;
+export const EVENT_SERIES_LINK_COLUMNS = [
+  'topic_id',
+  'parent_id',
+  'created_by',
 ] as const;
 
 /** Website uploads for events (Discord's attachment limit is the cap). */

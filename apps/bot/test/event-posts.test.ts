@@ -20,6 +20,7 @@ import {
   users,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import type { Client } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import {
   afterAll,
@@ -32,8 +33,10 @@ import {
 } from 'vitest';
 import {
   DELETED_TEXT,
+  discordEventPostGuild,
   type EventPostFields,
   type EventPostGuild,
+  eventForumCheck,
   eventPostContent,
   eventPostTitle,
   PostGoneError,
@@ -665,4 +668,90 @@ describe('series posts', () => {
     expect(guild.posts.size).toBe(1);
     expect([...guild.posts.values()][0].archived).toBe(false);
   });
+});
+
+describe('discordEventPostGuild only touches its own event posts', () => {
+  type FakeThread = {
+    id: string;
+    ownerId: string;
+    parentId: string;
+    archived: boolean;
+    locked: boolean;
+    name: string;
+    appliedTags: string[];
+    parent: null;
+    isThread(): true;
+    setArchived: ReturnType<typeof vi.fn>;
+    setLocked: ReturnType<typeof vi.fn>;
+    setName: ReturnType<typeof vi.fn>;
+    send: ReturnType<typeof vi.fn>;
+    fetchStarterMessage(): Promise<{ edit: ReturnType<typeof vi.fn> }>;
+  };
+  const thread = (id: string, ownerId: string, parentId: string) => {
+    const edit = vi.fn(async () => undefined);
+    const t: FakeThread = {
+      id,
+      ownerId,
+      parentId,
+      archived: true,
+      locked: true,
+      name: 'x',
+      appliedTags: [],
+      parent: null,
+      isThread: () => true,
+      setArchived: vi.fn(async () => undefined),
+      setLocked: vi.fn(async () => undefined),
+      setName: vi.fn(async () => undefined),
+      send: vi.fn(async () => ({ attachments: new Map(), id: 'm' })),
+      fetchStarterMessage: async () => ({ edit }),
+    };
+    return t;
+  };
+  const threads = new Map<string, FakeThread>();
+  const client = {
+    user: { id: 'bot' },
+    channels: { fetch: async (id: string) => threads.get(id) ?? null },
+  } as unknown as Client;
+  const post = { title: 't', content: 'c', tagName: 'Inne' };
+
+  beforeEach(async () => {
+    threads.clear();
+    await setSetting(db, 'events_forum_id', 'f-events');
+    threads.set('own-ev', thread('own-ev', 'bot', 'f-events'));
+    threads.set('own-bd', thread('own-bd', 'bot', 'f-bd'));
+    threads.set('foreign-owner', thread('foreign-owner', 'u9', 'f-events'));
+    threads.set('foreign-forum', thread('foreign-forum', 'bot', 'f-other'));
+  });
+
+  it('accepts bot threads in #wydarzenia or a subject forum', async () => {
+    const g = discordEventPostGuild(client, eventForumCheck(db));
+    expect(await g.postExists('own-ev')).toBe(true);
+    expect(await g.postExists('own-bd')).toBe(true);
+    await g.editFirstMessage('own-bd', post);
+    expect(threads.get('own-bd')?.setLocked).toHaveBeenCalledWith(
+      false,
+      'wydarzenie',
+    );
+  });
+
+  it.each(['foreign-owner', 'foreign-forum'])(
+    'refuses %s as gone, without touching it',
+    async (id) => {
+      const g = discordEventPostGuild(client, eventForumCheck(db));
+      expect(await g.postExists(id)).toBe(false);
+      await expect(g.editFirstMessage(id, post)).rejects.toBeInstanceOf(
+        PostGoneError,
+      );
+      await expect(g.archivePost(id, 'x')).rejects.toBeInstanceOf(
+        PostGoneError,
+      );
+      await expect(g.sendFiles(id, 'x', [])).rejects.toBeInstanceOf(
+        PostGoneError,
+      );
+      const t = threads.get(id);
+      expect(t?.setArchived).not.toHaveBeenCalled();
+      expect(t?.setLocked).not.toHaveBeenCalled();
+      expect(t?.send).not.toHaveBeenCalled();
+    },
+  );
 });

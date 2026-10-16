@@ -1,7 +1,13 @@
 // Forum posts of events: what they say (pure renderers) and the narrow
 // `EventPostGuild` interface the poller talks to (discord.js implementation
 // below). Times are wall-clock Warsaw time held in UTC fields, never converted.
-import { EVENT_KINDS, type EventDetails } from '@studies/db';
+import {
+  type Db,
+  EVENT_KINDS,
+  type EventDetails,
+  getSetting,
+  subjects,
+} from '@studies/db';
 import {
   type AnyThreadChannel,
   ChannelType,
@@ -10,6 +16,8 @@ import {
   type ForumChannel,
   RESTJSONErrorCodes,
 } from 'discord.js';
+import { eq } from 'drizzle-orm';
+import { EVENTS_FORUM_SETTING } from '../config.js';
 import type { UploadSink } from './uploads.js';
 
 export const DELETED_TEXT = 'Wydarzenie usunięte';
@@ -186,7 +194,31 @@ function tagsFor(
   ];
 }
 
-export function discordEventPostGuild(client: Client): EventPostGuild {
+/** True when `forumId` is #wydarzenia or a subject forum the DB knows. */
+export type EventForumCheck = (forumId: string) => Promise<boolean>;
+
+export function eventForumCheck(db: Db): EventForumCheck {
+  return async (forumId) => {
+    if ((await getSetting(db, EVENTS_FORUM_SETTING)) === forumId) return true;
+    const [s] = await db
+      .select({ id: subjects.id })
+      .from(subjects)
+      .where(eq(subjects.discordChannelId, forumId))
+      .limit(1);
+    return !!s;
+  };
+}
+
+/**
+ * `isEventForum` guards every thread the bot acts on: the thread ids come from
+ * the DB, which the admin SQL console can write, so only the bot's own posts
+ * in an event forum count. Anything else is treated as gone (a fresh post is
+ * made and re-linked).
+ */
+export function discordEventPostGuild(
+  client: Client,
+  isEventForum: EventForumCheck,
+): EventPostGuild {
   const forumOf = async (id: string): Promise<ForumChannel> => {
     const c = await client.channels.fetch(id);
     if (c?.type !== ChannelType.GuildForum) {
@@ -208,6 +240,13 @@ export function discordEventPostGuild(client: Client): EventPostGuild {
       const c = await client.channels.fetch(id);
       if (!c?.isThread())
         throw new PostGoneError(`channel ${id} is not a thread`);
+      if (
+        c.ownerId !== client.user?.id ||
+        !c.parentId ||
+        !(await isEventForum(c.parentId))
+      ) {
+        throw new PostGoneError(`thread ${id} is not an event post of the bot`);
+      }
       return c;
     });
   const editStarter = (t: AnyThreadChannel, content: string) =>
@@ -280,9 +319,10 @@ export function discordEventPostGuild(client: Client): EventPostGuild {
     },
     async postExists(threadId) {
       try {
-        return (await client.channels.fetch(threadId))?.isThread() ?? false;
+        await threadOf(threadId);
+        return true;
       } catch (err) {
-        if (isGone(err)) return false;
+        if (err instanceof PostGoneError) return false;
         throw err;
       }
     },

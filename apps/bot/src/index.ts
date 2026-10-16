@@ -5,7 +5,7 @@ import { createInteractionHandler } from './commands/router.js';
 import { type BotConfig, loadConfig } from './config.js';
 import { registerEvents } from './discord/events.js';
 import { fetchAttachmentBody } from './discord/map.js';
-import { discordEventPostGuild } from './events/posts.js';
+import { discordEventPostGuild, eventForumCheck } from './events/posts.js';
 import {
   recoverInterruptedRequests,
   startEventPoller,
@@ -61,7 +61,7 @@ client.once(Events.ClientReady, async (c) => {
   }
   eventPoller = startEventPoller({
     db,
-    guild: discordEventPostGuild(client),
+    guild: discordEventPostGuild(client, eventForumCheck(db)),
     webBaseUrl: config.webBaseUrl,
     storageDir: ingest.storageDir,
   });
