@@ -38,7 +38,10 @@ const guild = (callerRoles: string[]) =>
     roles: { cache: roles, everyone: { id: 'e' }, fetch: async () => roles },
     channels: {
       fetch: async (id?: string) => (id ? panelText : new Collection()),
-      create: async (o: { name: string }) => ({ id: `text-${o.name}` }),
+      create: async (o: { name: string }) => ({
+        id: `text-${o.name}`,
+        availableTags: [],
+      }),
     },
     members: {
       me: { id: 'bot' },
@@ -76,9 +79,9 @@ describe('runSetup', () => {
       .from(users)
       .where(eq(users.discordUserId, 'u1'));
     expect(u.isAdmin).toBe(true);
-    // The two panel channels and their messages.
+    // The two panel channels and their messages, #wydarzenia and its info post.
     expect(audit).toHaveBeenCalledWith('bot.setup', null, {
-      created: 4,
+      created: 6,
       updated: 0,
       failures: 0,
     });

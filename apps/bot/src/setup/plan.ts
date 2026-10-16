@@ -5,11 +5,17 @@ import {
   CLASS_NAMES,
   type ClassKind,
   classifyTags,
+  EVENT_KINDS,
   groupName,
   stripMarks,
 } from '@studies/db';
 import type { ForumTag } from '../types.js';
-import { renderInfoPost } from './info.js';
+import {
+  EVENTS_FORUM_NAME,
+  EVENTS_FORUM_TOPIC,
+  renderEventsInfoPost,
+  renderInfoPost,
+} from './info.js';
 import type {
   Action,
   AdminRole,
@@ -26,6 +32,10 @@ import type {
 export const MAX_FORUM_TAGS = 20;
 const MAX_CHANNEL_NAME = 100;
 const FIXED_TAGS = ['Kolokwium', 'Egzamin'];
+/** Forum tags for the event kinds (Kolokwium and Egzamin are fixed tags too). */
+export const EVENT_KIND_TAGS = Object.values(EVENT_KINDS).map((k) => k.label);
+/** Label of the #wydarzenia actions in the report. */
+export const EVENTS_LABEL = '#wydarzenia';
 
 export function forumSlug(code: string, name: string): string {
   return stripMarks(`${code}-${name}`)
@@ -46,7 +56,8 @@ export function desiredTags(s: SubjectSpec): string[] {
     ...s.classes.map((c) => CLASS_NAMES[c.kind]),
     ...Array.from({ length: maxGroup }, (_, i) => groupName(i + 1)),
     ...FIXED_TAGS,
-  ];
+    ...EVENT_KIND_TAGS,
+  ].filter((t, i, all) => all.findIndex((x) => tagKey(x) === tagKey(t)) === i);
 }
 
 const categoryName = (s: SubjectSpec) => `Semestr ${s.semester}`;
@@ -253,7 +264,10 @@ function planPosts(
 /** New forums only get posts/info posts on a second plan over the new state. */
 export function needsSecondPass(actions: Action[]): boolean {
   return actions.some(
-    (a) => a.type === 'createForum' || a.type === 'importForum',
+    (a) =>
+      a.type === 'createForum' ||
+      a.type === 'importForum' ||
+      (a.type === 'ensureEventsForum' && a.existingId === null),
   );
 }
 
@@ -399,6 +413,107 @@ function planPanels(
   return [...channels, ...perms, ...messages];
 }
 
+/**
+ * The shared #wydarzenia forum: the stored one if it still exists, else the
+ * only forum with that name is adopted, else a new one is created. It gets
+ * the event kind tags and a pinned info post (a new forum gets its post on
+ * the second pass).
+ */
+function planEventsForum(
+  ordered: SubjectSpec[],
+  g: GuildSnapshot,
+  opts?: { webBaseUrl: string },
+): Action[] {
+  const code = EVENTS_LABEL;
+  const stored = g.eventsForumId ?? null;
+  const linked = new Set(ordered.map((s) => s.channelId));
+  let forum = stored ? g.forums.find((f) => f.id === stored) : undefined;
+  const out: Action[] = [];
+  if (!forum) {
+    const unreadable = g.unreadableForums.find((f) => f.id === stored);
+    if (unreadable) return [unreadableWarn(code, unreadable)];
+    const named = [
+      ...g.forums,
+      ...g.unreadableForums.map((f) => ({ ...f, tags: [] })),
+    ].filter((f) => f.name === EVENTS_FORUM_NAME && !linked.has(f.id));
+    if (named.length > 1) {
+      return [
+        {
+          type: 'warn',
+          code,
+          message: `jest kilka forów o nazwie #${EVENTS_FORUM_NAME} — nie wybrano żadnego; zostaw jedno (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+        },
+      ];
+    }
+    const found = named[0] ? g.forums.find((f) => f.id === named[0].id) : null;
+    if (named[0] && !found) return [unreadableWarn(code, named[0])];
+    if (!found) {
+      const first = ordered.find((s) =>
+        g.forums.some((f) => f.id === s.channelId),
+      );
+      const parentId =
+        g.forums.find((f) => f.id === first?.channelId)?.parentId ?? null;
+      const { fit, dropped } = fitTags(0, EVENT_KIND_TAGS);
+      out.push({
+        type: 'ensureEventsForum',
+        code,
+        name: EVENTS_FORUM_NAME,
+        existingId: null,
+        parentId,
+        tags: fit,
+        topic: EVENTS_FORUM_TOPIC,
+      });
+      if (dropped.length > 0) out.push(tooManyTags(code, dropped));
+      return out;
+    }
+    forum = found;
+    out.push({
+      type: 'ensureEventsForum',
+      code,
+      name: EVENTS_FORUM_NAME,
+      existingId: found.id,
+      parentId: found.parentId,
+      tags: [],
+      topic: EVENTS_FORUM_TOPIC,
+    });
+  }
+  const have = new Set(forum.tags.map((t) => tagKey(t.name)));
+  const missing = EVENT_KIND_TAGS.filter((t) => !have.has(tagKey(t)));
+  const { fit, dropped } = fitTags(forum.tags.length, missing);
+  if (fit.length > 0) {
+    out.push({ type: 'addEventsTags', code, channelId: forum.id, tags: fit });
+  }
+  if (dropped.length > 0) out.push(tooManyTags(code, dropped));
+  if (!opts) return out;
+  const content = renderEventsInfoPost(opts.webBaseUrl);
+  const info = forum.infoPost ?? null;
+  const base = {
+    type: 'upsertEventsInfoPost',
+    code,
+    channelId: forum.id,
+    content,
+  } as const;
+  if (!info) {
+    const pin = !forum.pinnedThreadId;
+    out.push({ ...base, existing: null, pin });
+    if (!pin) {
+      out.push({
+        type: 'warn',
+        code,
+        message:
+          'nie przypięto posta informacyjnego, bo w forum jest już przypięty inny post',
+      });
+    }
+  } else if (info.content !== content) {
+    out.push({
+      ...base,
+      existing: { threadId: info.threadId, messageId: info.messageId },
+      pin: false,
+    });
+  }
+  return out;
+}
+
 export function planSetup(
   subjects: SubjectSpec[],
   g: GuildSnapshot,
@@ -415,6 +530,7 @@ export function planSetup(
   );
   // Right after the role: #admin-panel needs the admin role id.
   actions.push(...planPanels(ordered, g, adminRoleId));
+  actions.push(...planEventsForum(ordered, g, opts));
 
   for (const s of ordered) {
     const wanted = desiredTags(s);
@@ -496,11 +612,14 @@ export function planSetup(
   const linked = new Set(subjects.map((s) => s.channelId));
   const codes = new Set(subjects.map((s) => s.code.toUpperCase()));
   const categoryById = new Map(g.categories.map((c) => [c.id, c.name]));
+  const isEventsForum = (f: { id: string; name: string }) =>
+    f.id === g.eventsForumId || f.name === EVENTS_FORUM_NAME;
   for (const f of g.unreadableForums) {
-    if (!linked.has(f.id)) actions.push(unreadableWarn(null, f));
+    if (!linked.has(f.id) && !isEventsForum(f))
+      actions.push(unreadableWarn(null, f));
   }
   for (const f of g.forums) {
-    if (linked.has(f.id)) continue;
+    if (linked.has(f.id) || isEventsForum(f)) continue;
     const parsed = parseForumName(f.name);
     if (!parsed) {
       actions.push({

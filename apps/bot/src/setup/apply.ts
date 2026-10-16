@@ -15,13 +15,17 @@ import {
   users,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
-import { ADMIN_ROLE_SETTING, PANEL_SETTINGS } from '../config.js';
+import {
+  ADMIN_ROLE_SETTING,
+  EVENTS_FORUM_SETTING,
+  PANEL_SETTINGS,
+} from '../config.js';
 import { syncForumTags } from '../sync.js';
 import type { ForumTag } from '../types.js';
 import { adminPanel } from '../ui/views/admin.js';
 import type { View } from '../ui/views/parts.js';
 import { studentPanel } from '../ui/views/student.js';
-import { INFO_TITLE } from './info.js';
+import { EVENTS_INFO_TITLE, INFO_TITLE } from './info.js';
 import { PANEL_CHANNEL_NAMES } from './plan.js';
 import type { Action, GuildSnapshot, PanelWhich, PostFile } from './types.js';
 
@@ -35,7 +39,8 @@ export interface SetupGuild {
   createCategory(name: string): Promise<string>;
   createForum(o: {
     name: string;
-    parentId: string;
+    /** null: at the top level, outside any category. */
+    parentId: string | null;
     tags: string[];
     topic: string;
   }): Promise<{ id: string; tags: ForumTag[] }>;
@@ -331,11 +336,42 @@ export async function applySetup(
           }
           break;
         }
+        case 'ensureEventsForum': {
+          if (a.existingId !== null) {
+            await setSetting(db, EVENTS_FORUM_SETTING, a.existingId);
+            report.updated.push(
+              `${a.code}: istniejące forum zapisane jako forum wydarzeń`,
+            );
+            break;
+          }
+          const forum = await guild.createForum({
+            name: a.name,
+            parentId: a.parentId,
+            tags: a.tags,
+            topic: a.topic,
+          });
+          try {
+            await setSetting(db, EVENTS_FORUM_SETTING, forum.id);
+          } catch (err) {
+            throw new Error(
+              `utworzono forum #${a.name}, ale nie udało się go zapisać (${errText(err)})`,
+            );
+          }
+          report.created.push(`${a.code}: forum #${a.name}`);
+          break;
+        }
+        case 'addEventsTags':
+          await guild.addForumTags(a.channelId, a.tags);
+          report.updated.push(`${a.code}: tagi ${a.tags.join(', ')}`);
+          break;
+        case 'upsertEventsInfoPost':
         case 'upsertInfoPost': {
+          const title =
+            a.type === 'upsertInfoPost' ? INFO_TITLE : EVENTS_INFO_TITLE;
           const e = a.existing;
           if (!e) {
             const t = await guild.createThread(a.channelId, {
-              name: INFO_TITLE,
+              name: title,
               tagIds: [],
               content: a.content,
               files: [],

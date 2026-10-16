@@ -22,7 +22,7 @@ import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
 import { applySetup, type SetupGuild } from '../src/setup/apply.js';
-import { INFO_TITLE } from '../src/setup/info.js';
+import { EVENTS_INFO_TITLE, INFO_TITLE } from '../src/setup/info.js';
 import { loadPanelSettings, loadSubjectSpecs } from '../src/setup/load.js';
 import { planSetup } from '../src/setup/plan.js';
 import { formatPlan, formatReport } from '../src/setup/report.js';
@@ -1369,5 +1369,81 @@ describe('formatPlan: panels', () => {
     expect(text).toContain('utwórz kanał #admin-panel');
     expect(text).toContain('opublikuj panel w #admin-panel');
     expect(text).toContain('odśwież panel w #panel');
+  });
+});
+
+describe('applySetup: #wydarzenia', () => {
+  it('creates the forum, stores its id and pins the info post', async () => {
+    const g = fakeGuild();
+    const report = await applySetup(
+      db,
+      g,
+      [
+        {
+          type: 'ensureEventsForum',
+          code: '#wydarzenia',
+          name: 'wydarzenia',
+          existingId: null,
+          parentId: null,
+          tags: ['Kolokwium', 'Inne'],
+          topic: 'T',
+        },
+        {
+          type: 'upsertEventsInfoPost',
+          code: '#wydarzenia',
+          channelId: 'forum-1',
+          content: 'info',
+          existing: null,
+          pin: true,
+        },
+      ],
+      snapshot,
+    );
+    expect(report.failures).toEqual([]);
+    expect(await getSetting(db, 'events_forum_id')).toBe('forum-1');
+    expect(g.calls[0]).toEqual([
+      'createForum',
+      {
+        name: 'wydarzenia',
+        parentId: null,
+        tags: ['Kolokwium', 'Inne'],
+        topic: 'T',
+      },
+    ]);
+    expect(g.calls.map((c) => c[0])).toEqual([
+      'createForum',
+      'createThread',
+      'pinThread',
+    ]);
+    expect(g.calls[1][2]).toMatchObject({ name: EVENTS_INFO_TITLE });
+  });
+
+  it('adopting stores the id without touching Discord; tags are added', async () => {
+    const g = fakeGuild();
+    const report = await applySetup(
+      db,
+      g,
+      [
+        {
+          type: 'ensureEventsForum',
+          code: '#wydarzenia',
+          name: 'wydarzenia',
+          existingId: 'f-old',
+          parentId: null,
+          tags: [],
+          topic: 'T',
+        },
+        {
+          type: 'addEventsTags',
+          code: '#wydarzenia',
+          channelId: 'f-old',
+          tags: ['Inne'],
+        },
+      ],
+      snapshot,
+    );
+    expect(report.failures).toEqual([]);
+    expect(await getSetting(db, 'events_forum_id')).toBe('f-old');
+    expect(g.calls).toEqual([['addForumTags', 'f-old', ['Inne']]]);
   });
 });

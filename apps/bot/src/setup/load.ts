@@ -16,7 +16,7 @@ import {
   utcToWarsawWall,
 } from '@studies/db';
 import { and, asc, eq, gte, isNull, lt } from 'drizzle-orm';
-import { PANEL_SETTINGS } from '../config.js';
+import { EVENTS_FORUM_SETTING, PANEL_SETTINGS } from '../config.js';
 import type {
   ClassSpec,
   GuildSnapshot,
@@ -166,9 +166,12 @@ export async function loadSubjectSpecs(
 /** The panel channel and message ids stored by earlier /setup runs. */
 export async function loadPanelSettings(
   db: Db,
-): Promise<Pick<GuildSnapshot, 'panelChannels' | 'panelMessages'>> {
+): Promise<
+  Pick<GuildSnapshot, 'panelChannels' | 'panelMessages' | 'eventsForumId'>
+> {
   const get = (key: string) => getSetting(db, key);
   return {
+    eventsForumId: await get(EVENTS_FORUM_SETTING),
     panelChannels: {
       panel: await get(PANEL_SETTINGS.panel.channel),
       admin: await get(PANEL_SETTINGS.admin.channel),
