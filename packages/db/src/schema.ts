@@ -430,6 +430,38 @@ export const eventTopics = mysqlTable(
   ],
 );
 
+// Opt-in event reminders per user. `disabled_reason` is set when the bot
+// could not DM the user (for example "DM zamknięte").
+export const reminderPrefs = mysqlTable('reminder_prefs', {
+  userId: int('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  dayBefore: boolean('day_before').notNull().default(false),
+  hourBefore: boolean('hour_before').notNull().default(false),
+  disabledReason: varchar('disabled_reason', { length: 100 }),
+});
+
+// What was already sent. `user_id` 0 is the channel digest (NOT NULL with a
+// sentinel because MariaDB treats NULLs as distinct inside a UNIQUE key, so
+// NULL could not dedupe the digest). `for_starts_at` is the event's wall
+// start at send time, so moving an event re-arms its reminders.
+export const reminderLog = mysqlTable(
+  'reminder_log',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    eventId: int('event_id')
+      .notNull()
+      .references(() => events.id, { onDelete: 'cascade' }),
+    userId: int('user_id').notNull().default(0),
+    kind: mysqlEnum('kind', ['day', 'hour', 'digest']).notNull(),
+    forStartsAt: datetime('for_starts_at').notNull(),
+    sentAt: datetime('sent_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+  },
+  (t) => [
+    unique('uq_reminder_log').on(t.eventId, t.userId, t.kind, t.forStartsAt),
+  ],
+);
+
 // Generic DB queue the web/worker use to ask the bot to do things.
 export const botRequests = mysqlTable(
   'bot_requests',
