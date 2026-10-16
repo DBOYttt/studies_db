@@ -63,6 +63,7 @@ client.once(Events.ClientReady, async (c) => {
     db,
     guild: discordEventPostGuild(client),
     webBaseUrl: config.webBaseUrl,
+    storageDir: ingest.storageDir,
   });
   reminderTick = startReminderTick({
     db,

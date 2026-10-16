@@ -84,6 +84,7 @@ function fakeGuild(delayMs = 0) {
       if (!p) throw new Error('Unknown Channel');
       Object.assign(p, { content, archived: true, locked: true });
     },
+    async sendFiles() {},
     async postExists(threadId: string) {
       return posts.has(threadId);
     },
@@ -106,7 +107,12 @@ let fizId: number;
 let bareId: number;
 let guild: ReturnType<typeof fakeGuild>;
 const log = vi.fn();
-const deps = () => ({ db, guild, webBaseUrl: 'https://x.pl' });
+const deps = () => ({
+  db,
+  guild,
+  webBaseUrl: 'https://x.pl',
+  storageDir: '/nonexistent',
+});
 const drain = () => drainEventRequests(deps(), log);
 
 beforeAll(async () => {
@@ -442,13 +448,14 @@ describe('event post fixes', () => {
         startedAt: old,
       },
     ]);
-    expect(await recoverInterruptedRequests(db)).toBe(1);
+    // event_upload is an event kind too: both are failed.
+    expect(await recoverInterruptedRequests(db)).toBe(2);
     const rows = await requests();
     expect(rows[0]).toMatchObject({
       status: 'failed',
       error: 'Przerwane: bot został zrestartowany.',
     });
-    expect(rows[1].status).toBe('running');
+    expect(rows[1].status).toBe('failed');
     await enqueueBotRequest(db, 'event_post_upsert', `event:${id}`);
     const poller = startEventPoller(deps(), 1);
     await vi.waitFor(async () => {

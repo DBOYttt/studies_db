@@ -10,6 +10,7 @@ import {
   type ForumChannel,
   RESTJSONErrorCodes,
 } from 'discord.js';
+import type { UploadSink } from './uploads.js';
 
 export const DELETED_TEXT = 'Wydarzenie usunięte';
 const MAX_THREAD_NAME = 100;
@@ -96,7 +97,7 @@ export function seriesPostContent(
   if (noteAt >= 0) {
     const room = MAX_MESSAGE - (full.length - lines[noteAt].length) - 1;
     lines[noteAt] =
-      [...lines[noteAt]].slice(0, Math.max(10, room - 1)).join('') + '…';
+      `${[...lines[noteAt]].slice(0, Math.max(10, room - 1)).join('')}…`;
   }
   return lines.join('\n').slice(0, MAX_MESSAGE);
 }
@@ -146,7 +147,7 @@ export type EventPostFields = {
 };
 
 /** The Discord operations the poller needs; `discordEventPostGuild` is the real one. */
-export interface EventPostGuild {
+export interface EventPostGuild extends UploadSink {
   /** New post in the forum; returns the thread id. */
   createPost(forumId: string, post: EventPostFields): Promise<string>;
   /** Edits title, first message and kind tag; reopens an archived post. */
@@ -258,6 +259,15 @@ export function discordEventPostGuild(client: Client): EventPostGuild {
       await editStarter(t, content);
       await t.setLocked(true, 'wydarzenie');
       await t.setArchived(true, 'wydarzenie');
+    },
+    async sendFiles(threadId, content, files) {
+      const t = await threadOf(threadId);
+      if (t.archived) await t.setArchived(false, 'wydarzenie');
+      await t.send({
+        content,
+        files: files.map((f) => ({ attachment: f.path, name: f.name })),
+        allowedMentions: { parse: [] },
+      });
     },
     async postExists(threadId) {
       try {

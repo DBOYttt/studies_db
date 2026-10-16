@@ -31,10 +31,18 @@ import {
   seriesPostContent,
   seriesPostTitle,
 } from './posts.js';
+import {
+  CLEANUP_INTERVAL_MS,
+  cleanupUploads,
+  failInterruptedUploads,
+  postEventUploads,
+  UploadError,
+} from './uploads.js';
 
 export const EVENT_REQUEST_KINDS = [
   'event_post_upsert',
   'event_post_archive',
+  'event_upload',
 ] as const;
 export const POLL_INTERVAL_MS = 5_000;
 
@@ -42,6 +50,8 @@ export type EventPostDeps = {
   db: Db;
   guild: EventPostGuild;
   webBaseUrl: string;
+  /** Root of the file volume (uploads/ lives under it). */
+  storageDir: string;
 };
 
 /** A failure whose message is meant for the event page. */
@@ -372,8 +382,70 @@ export async function archiveSeriesPost(
  * consumer, so whatever is still `running` was interrupted by a crash or
  * deploy. Awaited before the poller starts. Returns how many were failed.
  */
-export function recoverInterruptedRequests(db: Db): Promise<number> {
-  return failStaleBotRequests(db, new Date(), 0, [...EVENT_REQUEST_KINDS]);
+export async function recoverInterruptedRequests(db: Db): Promise<number> {
+  const n = await failStaleBotRequests(db, new Date(), 0, [
+    ...EVENT_REQUEST_KINDS,
+  ]);
+  await failInterruptedUploads(db);
+  return n;
+}
+
+/**
+ * The thread of the event's post: a series occurrence uses the series' shared
+ * post. A missing (or vanished) post is created through the upsert path first.
+ */
+async function ensureThread(
+  deps: EventPostDeps,
+  e: EventDetails,
+): Promise<string> {
+  const { db, guild } = deps;
+  const topicOfEvent = async (ev: EventDetails) =>
+    topicOf(db, ev.series ? ev.series.topicId : ev.topicId);
+  let t = await topicOfEvent(e);
+  if (t && !t.deletedAt && (await guild.postExists(t.discordThreadId))) {
+    return t.discordThreadId;
+  }
+  try {
+    if (e.seriesId !== null) await upsertSeriesPost(deps, e.seriesId);
+    else await upsertEventPost(deps, e.id);
+  } catch (err) {
+    if (err instanceof EventPostError) throw new UploadError(err.message);
+    throw err;
+  }
+  const fresh = await getEvent(db, e.id);
+  t = fresh ? await topicOfEvent(fresh) : undefined;
+  if (!t || t.deletedAt) throw new UploadError(failureMessage(null));
+  return t.discordThreadId;
+}
+
+const UPLOAD_TARGET = /^upload:\d+$/;
+
+async function handleUpload(
+  deps: EventPostDeps,
+  req: { target: string; payload: unknown },
+): Promise<void> {
+  const p = req.payload as { eventId?: unknown; uploadIds?: unknown } | null;
+  const ids = Array.isArray(p?.uploadIds)
+    ? p.uploadIds.filter((x): x is number => Number.isInteger(x))
+    : [];
+  if (
+    !UPLOAD_TARGET.test(req.target) ||
+    !Number.isInteger(p?.eventId) ||
+    ids.length === 0
+  ) {
+    throw new EventPostError('Nieprawidłowe zlecenie.');
+  }
+  const failed = await postEventUploads(
+    {
+      db: deps.db,
+      storageDir: deps.storageDir,
+      guild: deps.guild,
+      ensureThread: (e) => ensureThread(deps, e),
+    },
+    p?.eventId as number,
+    ids,
+  );
+  if (failed) throw new EventPostError(failed);
 }
 
 /** Processes queued requests one by one until none are left. */
@@ -388,6 +460,11 @@ export async function drainEventRequests(
     if (!req) return n;
     n++;
     try {
+      if (req.kind === 'event_upload') {
+        await handleUpload(deps, req);
+        await finishBotRequest(db, req.id, 'done');
+        continue;
+      }
       const { type, id } = targetOf(req.target);
       if (req.kind === 'event_post_upsert') {
         if (type === 'series') await upsertSeriesPost(deps, id);
@@ -412,9 +489,20 @@ export function startEventPoller(
   let stopped = false;
   let timer: NodeJS.Timeout | undefined;
   let running: Promise<unknown> = Promise.resolve();
+  let lastCleanup = 0;
+  const cleanup = async () => {
+    if (Date.now() - lastCleanup < CLEANUP_INTERVAL_MS) return;
+    lastCleanup = Date.now();
+    try {
+      await cleanupUploads(deps.db, deps.storageDir);
+    } catch (err) {
+      console.error('upload cleanup:', err);
+    }
+  };
   const tick = () => {
     running = drainEventRequests(deps)
       .catch((err) => console.error('event poller:', err))
+      .then(cleanup)
       .finally(() => {
         if (!stopped) timer = setTimeout(tick, intervalMs);
       });

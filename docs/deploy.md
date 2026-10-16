@@ -111,6 +111,18 @@ deletes its jobs (prefer setting `deleted_at`).
 
 Details (admin command visibility, panel channels) are in `apps/bot/README.md`.
 
+### Upgrading to schedule events (migrations 0010-0015)
+
+1. `scripts/backup.sh`, then `pnpm db:migrate` (or let the `migrate` container run on `compose up`). The migrations
+   add events and their links to topics (and make `topics.subject_id` nullable), the `v_events` view, recurring
+   series, reminder preferences and logs, and `web_uploads`.
+2. Re-register slash commands: `pnpm --filter @studies/bot register` (new `/event`).
+3. Restart the bot, then run `/setup` once: it creates the `#wydarzenia` forum and adds the event type tags to the
+   subject forums. Permissions the bot needs are listed in `apps/bot/README.md`.
+4. Website uploads write to `$STORAGE_DIR/uploads`, which the `migrate` service prepares with the right owner
+   (see Configure above). The bot removes sent files and cleans up anything older than 24 h.
+
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these
