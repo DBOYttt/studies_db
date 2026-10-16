@@ -524,6 +524,41 @@ describe('event series', () => {
     });
   });
 
+  it('a split records the lineage root as parent_id', async () => {
+    const sid = await mkSeries();
+    const [, b] = await occ(sid);
+    expect(
+      (await editEvent(db, id.u, b.id, { title: 'B' }, 'web', 'following')).ok,
+    ).toBe(true);
+    const sidOf = async (eventId: number) =>
+      (await db.select().from(events).where(eq(events.id, eventId)))[0]
+        .seriesId as number;
+    const sb = await sidOf(b.id);
+    expect(sb).not.toBe(sid);
+    const [root] = await db
+      .select()
+      .from(eventSeries)
+      .where(eq(eventSeries.id, sid));
+    const [second] = await db
+      .select()
+      .from(eventSeries)
+      .where(eq(eventSeries.id, sb));
+    expect(root.parentId).toBeNull();
+    expect(second.parentId).toBe(sid);
+    // split the child again: still points at the root
+    const [, c] = await occ(sb);
+    expect(
+      (await editEvent(db, id.u, c.id, { title: 'C' }, 'web', 'following')).ok,
+    ).toBe(true);
+    const sc = await sidOf(c.id);
+    expect(sc).not.toBe(sb);
+    const [third] = await db
+      .select()
+      .from(eventSeries)
+      .where(eq(eventSeries.id, sc));
+    expect(third.parentId).toBe(sid);
+  });
+
   it('the owner CHECK rejects zero or two owners', async () => {
     const sid = await mkSeries();
     const [e] = await occ(sid);

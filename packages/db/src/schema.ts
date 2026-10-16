@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import {
+  type AnyMySqlColumn,
   bigint,
   boolean,
   char,
@@ -353,6 +354,11 @@ export const eventSeries = mysqlTable('event_series', {
   rule: mysqlEnum('rule', ['weekly', 'biweekly']).notNull(),
   until: date('until', { mode: 'string' }).notNull(),
   topicId: int('topic_id').references(() => topics.id, {
+    onDelete: 'set null',
+  }),
+  // Root of the split lineage ("To i następne"): series of one lineage share
+  // one forum post, even before `topic_id` is set.
+  parentId: int('parent_id').references((): AnyMySqlColumn => eventSeries.id, {
     onDelete: 'set null',
   }),
   createdBy: int('created_by').references(() => users.id),

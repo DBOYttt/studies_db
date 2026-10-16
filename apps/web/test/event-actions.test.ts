@@ -196,6 +196,15 @@ describe('event actions', () => {
     expect(new Set(all.map((e) => e.seriesId)).size).toBe(1);
     expect(all[0].seriesId).not.toBeNull();
 
+    // an unknown rule is refused, not turned into a single event
+    const before = (await eventRows()).length;
+    const unknown = await A.createEventAction(form({ repeat: 'daily', until }));
+    expect(unknown).toEqual({
+      ok: false,
+      message: 'Nieznana reguła powtarzania.',
+    });
+    expect(await eventRows()).toHaveLength(before);
+
     // a missing "do" is refused in Polish
     const bad = await A.createEventAction(form({ repeat: 'weekly' }));
     expect(bad.ok).toBe(false);

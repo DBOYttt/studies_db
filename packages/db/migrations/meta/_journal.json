@@ -92,6 +92,13 @@
       "when": 1792164206320,
       "tag": "0012_event_series",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "5",
+      "when": 1792165461439,
+      "tag": "0013_event_series_parent",
+      "breakpoints": true
     }
   ]
 }

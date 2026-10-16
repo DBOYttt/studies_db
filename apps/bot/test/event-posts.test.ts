@@ -512,9 +512,27 @@ describe('series posts', () => {
     );
     expect(seriesPostTitle('K', 'biweekly')).toBe('🔁 K — co 2 tygodnie');
     const long = seriesPostTitle('😀'.repeat(150), 'weekly');
-    expect([...long].length).toBeLessThanOrEqual(100);
+    expect(long.length).toBeLessThanOrEqual(100);
+    for (const n of [40, 41, 42, 43]) {
+      const t = seriesPostTitle(`${'a'.repeat(n)}${'😀'.repeat(60)}`, 'weekly');
+      expect(t.length).toBeLessThanOrEqual(100);
+      expect(t).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+      expect(t).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
+    }
     expect(long.endsWith(' — co tydzień')).toBe(true);
     expect(long).not.toMatch(/\uFFFD/);
+  });
+
+  it('event titles also clip by UTF-16 length without splitting emoji', () => {
+    for (const n of [60, 61, 62, 63, 64]) {
+      const t = eventPostTitle({
+        kind: 'inne',
+        title: `${'a'.repeat(n)}${'😀'.repeat(60)}`,
+        startsAt: new Date(Date.UTC(2026, 9, 20, 10)),
+      } as never);
+      expect(t.length).toBeLessThanOrEqual(100);
+      expect(t).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
+    }
   });
 
   it('queues series:<id> and makes ONE post for all occurrences', async () => {
@@ -569,6 +587,58 @@ describe('series posts', () => {
       archived: true,
       content: DELETED_TEXT,
     });
+  });
+
+  it('a split before the post exists still gives exactly one post', async () => {
+    const sid = await mk();
+    const [, b] = await occ(sid);
+    const r = await editEvent(
+      db,
+      userId,
+      b.id,
+      { title: 'Zmiana' },
+      'web',
+      'following',
+    );
+    expect(r.ok, r.message).toBe(true);
+    await drain();
+    expect(guild.posts.size).toBe(1);
+    const all = await db.select().from(eventSeries);
+    expect(all).toHaveLength(2);
+    expect(new Set(all.map((x) => x.topicId)).size).toBe(1);
+    expect(all[0].topicId).not.toBeNull();
+    expect(await db.select().from(topics)).toHaveLength(1);
+    await drain();
+    expect(guild.posts.size).toBe(1);
+  });
+
+  it('a split after the first request failed still gives one post after the retry', async () => {
+    const sid = await mk();
+    guild.failCreate = new Error('boom');
+    await drain();
+    expect(guild.posts.size).toBe(0);
+    guild.failCreate = null;
+    const [, b] = await occ(sid);
+    await editEvent(db, userId, b.id, { title: 'Zmiana' }, 'web', 'following');
+    await drain();
+    await enqueueBotRequest(db, 'event_post_upsert', `series:${sid}`);
+    await drain();
+    expect(guild.posts.size).toBe(1);
+    expect(await db.select().from(topics)).toHaveLength(1);
+  });
+
+  it('a second split keeps one post for the whole lineage', async () => {
+    const sid = await mk({ until: dmyOf(38) });
+    const [, b] = await occ(sid);
+    await editEvent(db, userId, b.id, { title: 'B' }, 'web', 'following');
+    const [bRow] = await db.select().from(events).where(eq(events.id, b.id));
+    const bs = bRow as { seriesId: number | null };
+    const [, c] = await occ(bs.seriesId as number);
+    await editEvent(db, userId, c.id, { title: 'C' }, 'web', 'following');
+    await drain();
+    expect(guild.posts.size).toBe(1);
+    expect(await db.select().from(topics)).toHaveLength(1);
+    expect([...guild.posts.values()][0].title).toBe('🔁 C — co tydzień');
   });
 
   it('a deleted series archives its post; a restore reopens it', async () => {

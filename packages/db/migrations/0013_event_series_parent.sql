@@ -1,0 +1,2 @@
+ALTER TABLE `event_series` ADD `parent_id` int;--> statement-breakpoint
+ALTER TABLE `event_series` ADD CONSTRAINT `event_series_parent_id_event_series_id_fk` FOREIGN KEY (`parent_id`) REFERENCES `event_series`(`id`) ON DELETE set null ON UPDATE no action;

@@ -296,6 +296,8 @@ export async function editInSeries(
         rule: series.rule,
         until: series.until,
         topicId: series.topicId,
+        // Lineage root, so every split of one series shares one post.
+        parentId: series.parentId ?? series.id,
         createdBy: series.createdBy,
       });
       targetSeries = ns.insertId;

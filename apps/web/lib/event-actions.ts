@@ -99,6 +99,9 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
   const input = readForm(form);
   if (isResult(input)) return input;
   const repeat = text(form, 'repeat');
+  if (repeat && repeat !== 'weekly' && repeat !== 'biweekly') {
+    return fail('Nieznana reguła powtarzania.');
+  }
   if (repeat === 'weekly' || repeat === 'biweekly') {
     const until = text(form, 'until').trim();
     if (!until) return fail('Podaj, do kiedy powtarzać wydarzenie.');

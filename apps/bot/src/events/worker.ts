@@ -19,7 +19,7 @@ import {
   topics,
 } from '@studies/db';
 import { DiscordAPIError, RESTJSONErrorCodes } from 'discord.js';
-import { and, asc, eq, isNull, ne, sql } from 'drizzle-orm';
+import { and, asc, eq, inArray, isNull, or, sql } from 'drizzle-orm';
 import { EVENTS_FORUM_SETTING } from '../config.js';
 import {
   DELETED_TEXT,
@@ -190,23 +190,19 @@ export async function upsertEventPost(
   });
 }
 
-/** Live (not deleted) series with live occurrences, sharing `topicId`. */
-async function liveSeriesOf(db: Db, topicId: number) {
-  const group = await db
+/**
+ * Every series of `s`'s split lineage (same root) or sharing its post, deleted
+ * ones included: they all share one forum post, even before `topic_id` is set.
+ */
+async function familyOf(db: Db, s: typeof eventSeries.$inferSelect) {
+  const rootId = s.parentId ?? s.id;
+  const conds = [eq(eventSeries.id, rootId), eq(eventSeries.parentId, rootId)];
+  if (s.topicId !== null) conds.push(eq(eventSeries.topicId, s.topicId));
+  return db
     .select()
     .from(eventSeries)
-    .where(and(eq(eventSeries.topicId, topicId), isNull(eventSeries.deletedAt)))
+    .where(or(...conds))
     .orderBy(asc(eventSeries.id));
-  const live = [];
-  for (const g of group) {
-    const occ = await db
-      .select({ id: events.id, startsAt: events.startsAt })
-      .from(events)
-      .where(and(eq(events.seriesId, g.id), isNull(events.deletedAt)))
-      .orderBy(asc(events.startsAt), asc(events.id));
-    if (occ.length > 0) live.push({ series: g, occ });
-  }
-  return live;
 }
 
 /**
@@ -225,10 +221,14 @@ export async function upsertSeriesPost(
     .from(eventSeries)
     .where(eq(eventSeries.id, seriesId));
   if (!me || me.deletedAt) return;
-  const group =
-    me.topicId === null
-      ? await seriesWithOccurrences(db, [me])
-      : await liveSeriesOf(db, me.topicId);
+  const family = await familyOf(db, me);
+  const group = await seriesWithOccurrences(
+    db,
+    family.filter((x) => !x.deletedAt),
+  );
+  // The post of the lineage: mine, else a sibling's (reused, not recreated).
+  const topicId =
+    me.topicId ?? family.find((x) => x.topicId !== null)?.topicId ?? null;
   const mine = group.find((g) => g.series.id === me.id);
   if (!mine) return; // no live occurrences (an archive follows)
   const owner = group.reduce((a, b) =>
@@ -244,8 +244,18 @@ export async function upsertSeriesPost(
   if (!e || !first) return;
   const forumId = await targetForum(db, first);
   const dates = all.map((o) => o.startsAt);
-  const topic = await topicOf(db, me.topicId);
+  const topic = await topicOf(db, topicId);
   const ids = group.map((g) => g.series.id);
+  const familyIds = family.map((x) => x.id);
+  // A sibling already has the post: this series (and the rest) adopt it.
+  if (me.topicId === null && topicId !== null) {
+    await db
+      .update(eventSeries)
+      .set({ topicId })
+      .where(
+        and(inArray(eventSeries.id, familyIds), isNull(eventSeries.topicId)),
+      );
+  }
   await publishPost(deps, {
     subjectId: first.subjectId,
     forumId,
@@ -262,15 +272,21 @@ export async function upsertSeriesPost(
       tagName: EVENT_KINDS[first.kind].label,
     },
     createdBy: me.createdBy,
-    attach: async (topicId) => {
-      // Every sharing series follows the new post.
+    attach: async (created) => {
+      // Every series of the lineage follows the new post.
       await db
         .update(eventSeries)
-        .set({ topicId })
+        .set({ topicId: created })
         .where(
-          me.topicId === null
-            ? eq(eventSeries.id, me.id)
-            : eq(eventSeries.topicId, me.topicId),
+          and(
+            inArray(eventSeries.id, familyIds),
+            topicId === null
+              ? isNull(eventSeries.topicId)
+              : or(
+                  isNull(eventSeries.topicId),
+                  eq(eventSeries.topicId, topicId),
+                ),
+          ),
         );
     },
     keepOld: async (topicId) => {
@@ -332,10 +348,7 @@ export async function archiveSeriesPost(
     .where(eq(eventSeries.id, seriesId));
   // A live series (restored since) keeps its post; the restore queued an upsert.
   if (!s?.deletedAt || s.topicId === null) return;
-  const sharing = await db
-    .select()
-    .from(eventSeries)
-    .where(and(eq(eventSeries.topicId, s.topicId), ne(eventSeries.id, s.id)));
+  const sharing = (await familyOf(db, s)).filter((x) => x.id !== s.id);
   const alive = await seriesWithOccurrences(
     db,
     sharing.filter((x) => !x.deletedAt),

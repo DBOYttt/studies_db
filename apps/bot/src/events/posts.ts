@@ -20,14 +20,24 @@ const dm = (d: Date) => `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}`;
 const dmy = (d: Date) => `${dm(d)}.${d.getUTCFullYear()}`;
 const hm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 
+/**
+ * Cuts `title` to `room` UTF-16 units (the unit Discord counts), ending in
+ * "…", and never splits a surrogate pair.
+ */
+export function clipTitle(title: string, room: number): string {
+  if (title.length <= room) return title;
+  let end = Math.max(0, room - 1);
+  const last = title.charCodeAt(end - 1);
+  if (end > 0 && last >= 0xd800 && last <= 0xdbff) end--;
+  return `${title.slice(0, end)}…`;
+}
+
 /** `<symbol> <Tytuł> — DD.MM`, at most 100 characters (the title is cut). */
 export function eventPostTitle(e: EventDetails): string {
   const tail = ` — ${dm(e.startsAt)}`;
   const head = `${EVENT_KINDS[e.kind].symbol} `;
   const room = MAX_THREAD_NAME - head.length - tail.length;
-  const title =
-    e.title.length > room ? `${e.title.slice(0, room - 1)}…` : e.title;
-  return `${head}${title}${tail}`;
+  return `${head}${clipTitle(e.title, room)}${tail}`;
 }
 
 export const RULE_LABELS = {
@@ -35,17 +45,15 @@ export const RULE_LABELS = {
   biweekly: 'co 2 tygodnie',
 } as const;
 
-/** `🔁 <Tytuł> — co tydzień`, at most 100 characters (the title is cut by code points). */
+/** `🔁 <Tytuł> — co tydzień`, at most 100 characters (the title is cut, never inside a surrogate pair). */
 export function seriesPostTitle(
   title: string,
   rule: keyof typeof RULE_LABELS,
 ): string {
   const tail = ` — ${RULE_LABELS[rule]}`;
   const head = '🔁 ';
-  const room = MAX_THREAD_NAME - [...head].length - [...tail].length;
-  const chars = [...title];
-  const cut =
-    chars.length > room ? `${chars.slice(0, room - 1).join('')}…` : title;
+  const room = MAX_THREAD_NAME - head.length - tail.length;
+  const cut = clipTitle(title, room);
   return `${head}${cut}${tail}`;
 }
 
