@@ -448,14 +448,19 @@ async function handleUpload(
   if (failed) throw new EventPostError(failed);
 }
 
-/** Processes queued requests one by one until none are left. */
+/**
+ * Processes queued requests one by one until none are left, or until
+ * `isStopped()` (checked between requests, so a shutdown waits for one only).
+ */
 export async function drainEventRequests(
   deps: EventPostDeps,
   log: (msg: string, err?: unknown) => void = console.error,
+  isStopped: () => boolean = () => false,
 ): Promise<number> {
   const { db } = deps;
   let n = 0;
   for (;;) {
+    if (isStopped()) return n;
     const req = await claimNextBotRequest(db, [...EVENT_REQUEST_KINDS]);
     if (!req) return n;
     n++;
@@ -491,7 +496,7 @@ export function startEventPoller(
   let running: Promise<unknown> = Promise.resolve();
   let lastCleanup = 0;
   const cleanup = async () => {
-    if (Date.now() - lastCleanup < CLEANUP_INTERVAL_MS) return;
+    if (stopped || Date.now() - lastCleanup < CLEANUP_INTERVAL_MS) return;
     lastCleanup = Date.now();
     try {
       await cleanupUploads(deps.db, deps.storageDir);
@@ -500,7 +505,7 @@ export function startEventPoller(
     }
   };
   const tick = () => {
-    running = drainEventRequests(deps)
+    running = drainEventRequests(deps, console.error, () => stopped)
       .catch((err) => console.error('event poller:', err))
       .then(cleanup)
       .finally(() => {

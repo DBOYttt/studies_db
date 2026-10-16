@@ -80,13 +80,23 @@ client.once(Events.ClientReady, async (c) => {
   );
 });
 
+const STOP_TIMEOUT_MS = 8_000;
 let shuttingDown = false;
 async function shutdown(code: number): Promise<never> {
   if (!shuttingDown) {
     shuttingDown = true;
     try {
-      await eventPoller?.stop();
-      await reminderTick?.stop();
+      // Both loops stop between steps; don't let a slow Discord call hold
+      // the shutdown past the container's grace period.
+      const stopped = Promise.all([eventPoller?.stop(), reminderTick?.stop()]);
+      const timedOut = await Promise.race([
+        stopped.then(() => false),
+        new Promise<boolean>((r) =>
+          setTimeout(() => r(true), STOP_TIMEOUT_MS).unref(),
+        ),
+      ]);
+      if (timedOut)
+        console.error('Zamykanie: zadania nie skończyły się w czasie.');
       await client.destroy();
       await pool.end();
     } catch (err) {

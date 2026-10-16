@@ -388,6 +388,37 @@ describe('event posts', () => {
     expect(guild.posts.size).toBe(3);
     expect(guild.maxActive).toBe(1);
   });
+
+  it('a stop during a backlog returns after the current request', async () => {
+    await add({ title: 'A' });
+    await add({ title: 'B' });
+    await add({ title: 'C' });
+    let stopped = false;
+    const create = guild.createPost;
+    guild.createPost = async (forumId, post) => {
+      stopped = true;
+      return create(forumId, post);
+    };
+    const n = await drainEventRequests(deps(), log, () => stopped);
+    expect(n).toBe(1);
+    expect(guild.posts.size).toBe(1);
+    expect((await requests()).map((r) => r.status)).toEqual([
+      'done',
+      'queued',
+      'queued',
+    ]);
+  });
+
+  it('stop() of the poller waits only for the current request', async () => {
+    guild = fakeGuild(50);
+    await add({ title: 'A' });
+    await add({ title: 'B' });
+    await add({ title: 'C' });
+    const poller = startEventPoller(deps(), 1);
+    await vi.waitFor(() => expect(guild.maxActive).toBe(1));
+    await poller.stop();
+    expect(guild.posts.size).toBe(1);
+  });
 });
 
 describe('event post fixes', () => {
