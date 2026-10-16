@@ -111,7 +111,7 @@ deletes its jobs (prefer setting `deleted_at`).
 
 Details (admin command visibility, panel channels) are in `apps/bot/README.md`.
 
-### Upgrading to schedule events (migrations 0010-0015)
+### Upgrading to schedule events (migrations 0010-0016)
 
 1. `scripts/backup.sh`, then `pnpm db:migrate` (or let the `migrate` container run on `compose up`). The migrations
    add events and their links to topics (and make `topics.subject_id` nullable), the `v_events` view, recurring

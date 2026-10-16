@@ -144,6 +144,8 @@ type Ready = {
   rel: string;
   name: string;
   size: number;
+  /** Set when an earlier attempt already sent the file to Discord. */
+  sent?: SentFile;
 };
 
 /**
@@ -189,6 +191,17 @@ export async function postEventUploads(
         rel: r.storagePath,
         name: r.originalFilename,
         size: st.size,
+        sent: r.sentAttachmentId
+          ? {
+              id: r.sentAttachmentId,
+              messageId: r.sentMessageId ?? '',
+              url: r.sentUrl ?? '',
+              name: r.originalFilename,
+              contentType: r.sentContentType,
+              size: st.size,
+              postedAt: r.sentAt ?? new Date(),
+            }
+          : undefined,
       });
     } catch {
       await fail([r.id], FILE_MISSING);
@@ -215,7 +228,54 @@ export async function postEventUploads(
   for (const [userId, files] of byUser) {
     const [u] = await db.select().from(users).where(eq(users.id, userId));
     const content = `Plik od ${escapeMarkdown(u?.displayName ?? 'użytkownika')} (przez stronę)`;
-    for (const chunk of packFiles(files)) {
+    const uploader = {
+      discordUserId: u?.discordUserId ?? '',
+      displayName: u?.displayName ?? '',
+      avatarUrl: u?.avatarUrl ?? null,
+    };
+    // Runs ingest from the local file with the Discord ids of the sent file.
+    const ingestOne = async (x: Ready, a: SentFile) => {
+      const res: IngestResult = await ingestAttachment(
+        {
+          db,
+          storageDir,
+          fetchBody: async () =>
+            Readable.toWeb(
+              createReadStream(x.path),
+            ) as ReadableStream<Uint8Array>,
+        },
+        {
+          attachmentId: a.id,
+          messageId: a.messageId,
+          url: a.url,
+          filename: x.name,
+          contentType: a.contentType,
+          size: a.size,
+          postedAt: a.postedAt,
+          uploader,
+          thread: {
+            threadId: post.threadId,
+            forumChannelId: '',
+            title: '',
+            ownerDiscordId: null,
+            tagIds: [],
+          },
+          threadOwner: null,
+          topicId: post.topicId,
+        },
+      );
+      if (res === 'failed' || res === 'ignored') {
+        await fail([x.id], NOT_INGESTED);
+      } else {
+        await setRows(db, [x.id], 'done');
+        await removeRow(storageDir, x.rel);
+      }
+    };
+    // Already on Discord (an earlier attempt failed in ingest): never resend.
+    for (const x of files.filter((f) => f.sent)) {
+      await ingestOne(x, x.sent as SentFile);
+    }
+    for (const chunk of packFiles(files.filter((f) => !f.sent))) {
       const chunkIds = chunk.map((x) => x.id);
       let sent: SentFile[];
       try {
@@ -229,67 +289,52 @@ export async function postEventUploads(
         await fail(chunkIds, isTooBig(err) ? TOO_BIG : SEND_FAILED);
         continue;
       }
-      // The bot's own messages are not ingested by the gateway handlers, so
-      // the sent attachments become materials here.
+      // Remember the Discord ids first: a crash or an ingest failure must not
+      // make a retry post the file again.
       for (const [i, x] of chunk.entries()) {
         const a = sent[i];
-        const res: IngestResult = a
-          ? await ingestAttachment(
-              {
-                db,
-                storageDir,
-                fetchBody: async () =>
-                  Readable.toWeb(
-                    createReadStream(x.path),
-                  ) as ReadableStream<Uint8Array>,
-              },
-              {
-                attachmentId: a.id,
-                messageId: a.messageId,
-                url: a.url,
-                filename: x.name,
-                contentType: a.contentType,
-                size: a.size,
-                postedAt: a.postedAt,
-                uploader: {
-                  discordUserId: u?.discordUserId ?? '',
-                  displayName: u?.displayName ?? '',
-                  avatarUrl: u?.avatarUrl ?? null,
-                },
-                thread: {
-                  threadId: post.threadId,
-                  forumChannelId: '',
-                  title: '',
-                  ownerDiscordId: null,
-                  tagIds: [],
-                },
-                threadOwner: null,
-                topicId: post.topicId,
-              },
-            )
-          : 'failed';
-        if (res === 'failed' || res === 'ignored') {
+        if (!a) {
           await fail([x.id], NOT_INGESTED);
-        } else {
-          await setRows(db, [x.id], 'done');
-          await removeRow(storageDir, x.rel);
+          continue;
         }
+        x.sent = a;
+        await db
+          .update(webUploads)
+          .set({
+            sentMessageId: a.messageId,
+            sentAttachmentId: a.id,
+            sentUrl: a.url.slice(0, 1000),
+            sentContentType: a.contentType,
+            sentAt: a.postedAt,
+          })
+          .where(eq(webUploads.id, x.id));
       }
+      // The bot's own messages are not ingested by the gateway handlers, so
+      // the sent attachments become materials here.
+      for (const x of chunk) if (x.sent) await ingestOne(x, x.sent);
     }
   }
   return firstError;
 }
 
-/** At boot: rows left `posting` by a crash will not finish; fail them. */
+/**
+ * At boot: rows left `posting` by a crash will not finish; fail them. A row
+ * that already has its Discord ids was sent, so a retry only re-runs ingest.
+ */
 export async function failInterruptedUploads(db: Db): Promise<void> {
+  const posting = await db
+    .select({ id: webUploads.id, sent: webUploads.sentAttachmentId })
+    .from(webUploads)
+    .where(eq(webUploads.status, 'posting'));
   await setRows(
     db,
-    (
-      await db
-        .select({ id: webUploads.id })
-        .from(webUploads)
-        .where(eq(webUploads.status, 'posting'))
-    ).map((r) => r.id),
+    posting.filter((r) => r.sent).map((r) => r.id),
+    'failed',
+    NOT_INGESTED,
+  );
+  await setRows(
+    db,
+    posting.filter((r) => !r.sent).map((r) => r.id),
     'failed',
     INTERRUPTED,
   );

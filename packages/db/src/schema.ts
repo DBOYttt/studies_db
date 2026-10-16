@@ -502,6 +502,15 @@ export const webUploads = mysqlTable(
       .notNull()
       .default('queued'),
     error: varchar('error', { length: 500 }),
+    /**
+     * Set by the bot right after Discord accepted the file, before ingest: a
+     * retry then only re-runs ingest, so the file is never posted twice.
+     */
+    sentMessageId: varchar('sent_message_id', { length: 32 }),
+    sentAttachmentId: varchar('sent_attachment_id', { length: 32 }),
+    sentUrl: varchar('sent_url', { length: 1000 }),
+    sentContentType: varchar('sent_content_type', { length: 150 }),
+    sentAt: datetime('sent_at'),
     createdAt: now(),
     finishedAt: datetime('finished_at'),
   },

@@ -34,7 +34,11 @@ import {
 } from 'vitest';
 import type { EventPostFields } from '../src/events/posts.js';
 import { cleanupUploads } from '../src/events/uploads.js';
-import { drainEventRequests } from '../src/events/worker.js';
+import {
+  drainEventRequests,
+  recoverInterruptedRequests,
+} from '../src/events/worker.js';
+import * as ingestMod from '../src/ingest.js';
 
 function fakeGuild() {
   const g = {
@@ -282,6 +286,69 @@ describe('event uploads', () => {
     await drain();
     expect((await rows())[0].status).toBe('done');
     expect(guild.sent).toHaveLength(1);
+  });
+
+  it('ingest fails once, retry: one Discord send and one material', async () => {
+    const id = await mkEvent();
+    await drain();
+    const [rowId] = await queueUploads(id, ['a.pdf']);
+    const spy = vi
+      .spyOn(ingestMod, 'ingestAttachment')
+      .mockResolvedValueOnce('failed');
+    await drain();
+    spy.mockRestore();
+    const [failed] = await rows();
+    expect(failed).toMatchObject({
+      status: 'failed',
+      error: 'Plik jest na Discordzie, ale nie trafił do materiałów.',
+      sentAttachmentId: 'a-1',
+    });
+    expect(await db.select().from(materials)).toHaveLength(0);
+    await db
+      .update(webUploads)
+      .set({ status: 'queued', error: null })
+      .where(eq(webUploads.id, rowId));
+    await enqueueBotRequest(db, 'event_upload', `upload:${rowId}`, {
+      eventId: id,
+      uploadIds: [rowId],
+    });
+    await drain();
+    expect(guild.sent).toHaveLength(1);
+    const mats = await db.select().from(materials);
+    expect(mats).toHaveLength(1);
+    expect(mats[0].discordAttachmentId).toBe('a-1');
+    expect((await rows())[0].status).toBe('done');
+  });
+
+  it('crash after the send: recovery + retry does not send again', async () => {
+    const id = await mkEvent();
+    await drain();
+    const [rowId] = await queueUploads(id, ['a.pdf']);
+    await db
+      .update(webUploads)
+      .set({
+        status: 'posting',
+        sentMessageId: 'm-9',
+        sentAttachmentId: 'a-9',
+        sentUrl: 'https://cdn/a.pdf',
+      })
+      .where(eq(webUploads.id, rowId));
+    await db.delete(botRequests);
+    await recoverInterruptedRequests(db);
+    expect((await rows())[0].status).toBe('failed');
+    await db
+      .update(webUploads)
+      .set({ status: 'queued', error: null })
+      .where(eq(webUploads.id, rowId));
+    await enqueueBotRequest(db, 'event_upload', `upload:${rowId}`, {
+      eventId: id,
+      uploadIds: [rowId],
+    });
+    await drain();
+    expect(guild.sent).toEqual([]);
+    const mats = await db.select().from(materials);
+    expect(mats.map((m) => m.discordAttachmentId)).toEqual(['a-9']);
+    expect((await rows())[0].status).toBe('done');
   });
 
   it('splits more than 10 files into several messages', async () => {

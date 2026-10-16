@@ -78,7 +78,7 @@ Missing env vars make the process exit with `Missing env: ...`; a login failure 
 Students can add events (kolokwia, egzaminy, wyjazdy, zajęcia dodatkowe) from `#panel` / `/event` and the web; the
 bot keeps one forum post per event (a series shares one), sends reminders and posts files uploaded on the website.
 
-1. `pnpm db:migrate` (migrations 0010-0015: events, series, reminders, web uploads).
+1. `pnpm db:migrate` (migrations 0010-0016: events, series, reminders, web uploads).
 2. Re-register slash commands: `pnpm --filter @studies/bot register` (new `/event`).
 3. Make sure the bot's role has Attach Files, Send Messages in Threads, Manage Threads (it archives, locks and
    renames event posts) and Create Public Threads in the subject forums and `#wydarzenia`. Reminders also need

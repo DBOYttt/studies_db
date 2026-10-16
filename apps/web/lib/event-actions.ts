@@ -223,7 +223,11 @@ export async function searchTopicsAction(
   return searchTopics(getDb(), subjectId, q);
 }
 
-/** "Spróbuj ponownie": requeues the event's failed uploads whose files remain. */
+/**
+ * "Spróbuj ponownie": requeues the event's failed uploads whose files remain.
+ * Like every event action it follows the wiki rules: any logged-in student may
+ * retry, and all failed rows of the event are requeued, not just their own.
+ */
 export async function retryUploadsAction(id: number): Promise<ActionResult> {
   const user = await requireUser();
   if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
