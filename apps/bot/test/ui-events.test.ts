@@ -519,17 +519,32 @@ function slash(opts: Record<string, string | number>) {
 describe('/event add', () => {
   const base = { kind: 'egzamin', title: 'Egzamin', when: '25.10.2026 09:00' };
 
-  it('rejects repeat and until until Phase 2', async () => {
-    for (const extra of [{ repeat: 'weekly' }, { until: '01.12' }] as Record<
-      string,
-      string
-    >[]) {
-      const i = slash({ ...base, ...extra });
-      await handler()(i);
-      expect(i.reply.mock.calls[0][0].content).toBe(
-        'Powtarzanie będzie dostępne wkrótce',
-      );
-    }
+  it('adds a weekly series and shows the first occurrence card', async () => {
+    const i = slash({
+      ...base,
+      title: 'Konsultacje',
+      repeat: 'weekly',
+      until: '08.11.2026',
+      subject: 'asd',
+    });
+    await handler()(i);
+    const rows = await db.select().from(events);
+    expect(rows).toHaveLength(3);
+    expect(new Set(rows.map((e) => e.seriesId)).size).toBe(1);
+    expect(textOf(i.editReply.mock.calls[0][0])).toContain(
+      'Część serii: co tydzień',
+    );
+    const reqs = await db.select().from(botRequests);
+    expect(reqs.map((r) => r.target)).toEqual([`series:${rows[0].seriesId}`]);
+  });
+
+  it('asks for the missing half of repeat/until', async () => {
+    const a = slash({ ...base, repeat: 'weekly' });
+    await handler()(a);
+    expect(a.editReply.mock.calls[0][0].content).toContain('until');
+    const b = slash({ ...base, until: '01.12.2026' });
+    await handler()(b);
+    expect(b.editReply.mock.calls[0][0].content).toContain('repeat');
     expect(await db.select().from(events)).toHaveLength(0);
   });
 
@@ -583,5 +598,101 @@ describe('/event add', () => {
     await handler()(i);
     expect(i.editReply.mock.calls[0][0].content).toBe(BANNED_MESSAGE);
     expect(await db.select().from(events)).toHaveLength(0);
+  });
+});
+
+describe('series scope', () => {
+  const mkSeries = async () => {
+    const i = slash({
+      kind: 'egzamin',
+      title: 'Konsultacje',
+      when: '25.10.2026 09:00',
+      repeat: 'weekly',
+      until: '08.11.2026',
+    });
+    await handler()(i);
+    return (await db.select().from(events).orderBy(events.startsAt)).map(
+      (e) => e.id,
+    );
+  };
+  const buttons = (p: Json) =>
+    nodes(p)
+      .filter((n) => n.type === 2)
+      .map((b) => b.custom_id);
+
+  it('Edytuj and Usuń on an occurrence ask Tylko to / To i następne first', async () => {
+    const [id] = await mkSeries();
+    for (const action of ['edit', 'del']) {
+      const i = interaction(`v1:evt:${action}:${id}`);
+      await handler()(i);
+      expect(i.calls).toEqual(['deferUpdate', 'editReply']);
+      expect(i.showModal).not.toHaveBeenCalled();
+      expect(buttons(lastEdit(i))).toEqual([
+        `v1:evt:${action}:${id}:one`,
+        `v1:evt:${action}:${id}:following`,
+        `v1:evt:show:${id}`,
+      ]);
+    }
+  });
+
+  it('a plain event goes straight to the modal / confirm', async () => {
+    const i = slash({ kind: 'egzamin', title: 'X', when: '25.10.2026 09:00' });
+    await handler()(i);
+    const [e] = await db.select().from(events);
+    const edit = interaction(`v1:evt:edit:${e.id}`);
+    await handler()(edit);
+    expect(edit.calls).toEqual(['showModal']);
+    expect(edit.showModal.mock.calls[0][0].toJSON().custom_id).toBe(
+      `v1:evt:save:${e.id}`,
+    );
+    const del = interaction(`v1:evt:del:${e.id}`);
+    await handler()(del);
+    expect(buttons(lastEdit(del))).toContain(`v1:evt:delok:${e.id}`);
+  });
+
+  it('edit with a scope opens the modal that saves with the scope', async () => {
+    const [, second, third] = await mkSeries();
+    const open = interaction(`v1:evt:edit:${second}:following`);
+    await handler()(open);
+    const m = open.showModal.mock.calls[0][0].toJSON();
+    expect(m.custom_id).toBe(`v1:evt:save:${second}:following`);
+    const i = save(
+      `${second}:following`,
+      {
+        title: 'Zmiana',
+        when: m.components[3].component.value,
+        place_note: '',
+      },
+      selects({ kind: ['egzamin'], subject: ['-'] }),
+      true,
+    );
+    await handler()(i);
+    const rows = await db.select().from(events).orderBy(events.startsAt);
+    expect(rows.map((e) => e.title)).toEqual([
+      'Konsultacje',
+      'Zmiana',
+      'Zmiana',
+    ]);
+    expect(third).toBeDefined();
+  });
+
+  it('delete: scope -> confirm -> only that scope is deleted', async () => {
+    const [first, second] = await mkSeries();
+    const ask = interaction(`v1:evt:del:${second}:following`);
+    await handler()(ask);
+    expect(buttons(lastEdit(ask))).toContain(
+      `v1:evt:delok:${second}:following`,
+    );
+    const ok = interaction(`v1:evt:delok:${second}:following`);
+    await handler()(ok);
+    const rows = await db.select().from(events).orderBy(events.startsAt);
+    expect(rows.map((e) => e.deletedAt !== null)).toEqual([false, true, true]);
+    expect(rows[0].id).toBe(first);
+  });
+
+  it('a bad scope argument is stale', async () => {
+    const i = interaction('v1:evt:del:1:everything');
+    await handler()(i);
+    expect(textOf(i.reply.mock.calls[0][0])).toContain('nieaktualny');
   });
 });

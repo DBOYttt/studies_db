@@ -1,20 +1,23 @@
 /** `/event add`: the slash-command twin of the "Dodaj wydarzenie" modal. */
 import {
   addEvent,
+  addSeries,
   classes,
   classGroups,
+  events,
   subjects,
   upsertUser,
 } from '@studies/db';
 import type { EventKind } from '@studies/db/constants';
 import { type ChatInputCommandInteraction, MessageFlags } from 'discord.js';
-import { and, eq } from 'drizzle-orm';
+import { and, asc, eq } from 'drizzle-orm';
 import type { DiscordUser } from '../types.js';
 import { cardView } from '../ui/events.js';
 import { replyOptions } from './reply.js';
 import type { RouterDeps } from './router.js';
 
-export const REPEAT_SOON = 'Powtarzanie będzie dostępne wkrótce';
+export const UNTIL_MISSING = 'Podaj, do kiedy powtarzać (opcja until).';
+export const REPEAT_MISSING = 'Opcja until działa tylko z opcją repeat.';
 
 export async function runEventAdd(
   deps: RouterDeps,
@@ -23,12 +26,7 @@ export async function runEventAdd(
   user: DiscordUser,
 ): Promise<void> {
   const { db } = deps.ingest;
-  const first = (text: string) => i.reply(replyOptions(text, true));
   if (i.options.getSubcommand() !== 'add') return;
-  if (i.options.getString('repeat') || i.options.getString('until')) {
-    await first(REPEAT_SOON);
-    return;
-  }
   // Acknowledge first: the lookups below can take a while.
   await i.deferReply({ flags: MessageFlags.Ephemeral });
   const say = (text: string) => i.editReply(replyOptions(text));
@@ -77,26 +75,46 @@ export async function runEventAdd(
     return void (await say('Grupę można wybrać tylko razem z zajęciami.'));
   }
 
-  const r = await addEvent(
-    db,
-    userId,
-    {
-      kind: i.options.getString('kind', true) as EventKind,
-      title: i.options.getString('title', true),
-      subjectId,
-      classId,
-      groupId,
-      when: i.options.getString('when', true),
-      place: i.options.getString('place'),
-      note: i.options.getString('note'),
-    },
-    'discord',
-  );
+  const input = {
+    kind: i.options.getString('kind', true) as EventKind,
+    title: i.options.getString('title', true),
+    subjectId,
+    classId,
+    groupId,
+    when: i.options.getString('when', true),
+    place: i.options.getString('place'),
+    note: i.options.getString('note'),
+  };
+  const repeat = i.options.getString('repeat');
+  const until = i.options.getString('until')?.trim();
+  if (until && !repeat) return void (await say(REPEAT_MISSING));
+  if (repeat && !until) return void (await say(UNTIL_MISSING));
+  const r =
+    repeat && until
+      ? await addSeries(
+          db,
+          userId,
+          { ...input, rule: repeat as 'weekly' | 'biweekly', until },
+          'discord',
+        )
+      : await addEvent(db, userId, input, 'discord');
   if (!r.ok || r.id === undefined) {
     await i.editReply(replyOptions(r.message));
     return;
   }
-  const v = await cardView(deps, r.id);
+  let eventId = r.id;
+  if (repeat) {
+    // The card shows the first occurrence of the new series.
+    const [first] = await db
+      .select({ id: events.id })
+      .from(events)
+      .where(eq(events.seriesId, r.id))
+      .orderBy(asc(events.startsAt), asc(events.id))
+      .limit(1);
+    if (!first) return void (await say(r.message));
+    eventId = first.id;
+  }
+  const v = await cardView(deps, eventId);
   await i.editReply({
     components: v.components,
     flags: v.flags,

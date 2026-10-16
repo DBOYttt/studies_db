@@ -1,5 +1,6 @@
 import {
   addEvent,
+  addSeries,
   adminAudit,
   botRequests,
   botSettings,
@@ -7,6 +8,7 @@ import {
   deleteEvent,
   editEvent,
   enqueueBotRequest,
+  eventSeries,
   events,
   eventTopics,
   getEvent,
@@ -35,6 +37,7 @@ import {
   eventPostContent,
   eventPostTitle,
   PostGoneError,
+  seriesPostTitle,
 } from '../src/events/posts.js';
 import {
   drainEventRequests,
@@ -142,6 +145,7 @@ beforeEach(async () => {
   await db.delete(botRequests);
   await db.delete(eventTopics);
   await db.delete(events);
+  await db.delete(eventSeries);
   await db.delete(topics);
   await db.delete(adminAudit);
 });
@@ -472,5 +476,114 @@ describe('eventPostTitle', () => {
     expect([...t].length).toBeLessThanOrEqual(100);
     expect(t).not.toMatch(/[\ud800-\udbff](?![\udc00-\udfff])/);
     expect(t).toContain('…');
+  });
+});
+
+describe('series posts', () => {
+  const dmyOf = (days: number) => when(days).slice(0, 10);
+  const mk = async (over: Record<string, unknown> = {}) => {
+    const r = await addSeries(
+      db,
+      userId,
+      {
+        kind: 'zajecia_dodatkowe',
+        title: 'Konsultacje',
+        subjectId: bdId,
+        when: when(3),
+        rule: 'weekly',
+        until: dmyOf(24),
+        ...over,
+      },
+      'web',
+    );
+    expect(r.ok, r.message).toBe(true);
+    return r.id as number;
+  };
+  const occ = (sid: number) =>
+    db
+      .select()
+      .from(events)
+      .where(eq(events.seriesId, sid))
+      .orderBy(events.startsAt);
+
+  it('titles: code-point clip, weekly and biweekly', () => {
+    expect(seriesPostTitle('Konsultacje', 'weekly')).toBe(
+      '🔁 Konsultacje — co tydzień',
+    );
+    expect(seriesPostTitle('K', 'biweekly')).toBe('🔁 K — co 2 tygodnie');
+    const long = seriesPostTitle('😀'.repeat(150), 'weekly');
+    expect([...long].length).toBeLessThanOrEqual(100);
+    expect(long.endsWith(' — co tydzień')).toBe(true);
+    expect(long).not.toMatch(/\uFFFD/);
+  });
+
+  it('queues series:<id> and makes ONE post for all occurrences', async () => {
+    const sid = await mk();
+    expect((await requests()).map((r) => r.target)).toEqual([`series:${sid}`]);
+    await drain();
+    expect(guild.posts.size).toBe(1);
+    const p = [...guild.posts.values()][0];
+    expect(p.title).toBe('🔁 Konsultacje — co tydzień');
+    expect(p.tagName).toBe('Zajęcia dodatkowe');
+    expect(p.content).toContain('Cykl: co tydzień');
+    const [s] = await db.select().from(eventSeries);
+    expect(s.topicId).not.toBeNull();
+    for (const e of await occ(sid)) expect(e.topicId).toBeNull();
+    await enqueueBotRequest(db, 'event_post_upsert', `series:${sid}`);
+    await drain();
+    expect(guild.posts.size).toBe(1);
+  });
+
+  it('a split shares one post; no second post, archived only when nothing is left', async () => {
+    const sid = await mk();
+    await drain();
+    const [a, b] = await occ(sid);
+    const r = await editEvent(
+      db,
+      userId,
+      b.id,
+      { title: 'Zmiana' },
+      'web',
+      'following',
+    );
+    expect(r.ok, r.message).toBe(true);
+    expect(
+      (await requests()).filter((q) => q.status === 'queued'),
+    ).toHaveLength(2);
+    await drain();
+    expect(guild.posts.size).toBe(1);
+    const all = await db.select().from(eventSeries);
+    expect(all).toHaveLength(2);
+    expect(new Set(all.map((x) => x.topicId)).size).toBe(1);
+    const p = [...guild.posts.values()][0];
+    expect(p.title).toBe('🔁 Zmiana — co tydzień');
+    // the old series is deleted entirely: the post stays for the other one
+    await deleteEvent(db, userId, a.id, 'web', 'following');
+    await drain();
+    expect([...guild.posts.values()][0].archived).toBe(false);
+    expect(guild.posts.size).toBe(1);
+    // the last live occurrences go: now it is archived
+    await deleteEvent(db, userId, b.id, 'web', 'following');
+    await drain();
+    expect([...guild.posts.values()][0]).toMatchObject({
+      archived: true,
+      content: DELETED_TEXT,
+    });
+  });
+
+  it('a deleted series archives its post; a restore reopens it', async () => {
+    const sid = await mk();
+    await drain();
+    const [first] = await occ(sid);
+    await deleteEvent(db, userId, first.id, 'web', 'following');
+    await drain();
+    expect([...guild.posts.values()][0]).toMatchObject({
+      content: DELETED_TEXT,
+      archived: true,
+    });
+    await restoreEvent(db, adminId, first.id, 'web');
+    await drain();
+    expect(guild.posts.size).toBe(1);
+    expect([...guild.posts.values()][0].archived).toBe(false);
   });
 });

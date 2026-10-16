@@ -24,6 +24,7 @@ import { and, count, desc, eq, isNull, ne } from 'drizzle-orm';
 import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import type { RouterDeps } from '../commands/router.js';
 import { toDiscordUser } from '../discord/map.js';
+import { RULE_LABELS } from '../events/posts.js';
 import { MAX_OPTIONS } from './limits.js';
 import {
   ack,
@@ -41,7 +42,9 @@ import {
   linkView,
   type ModalCurrent,
   placementView,
+  type Scope,
   SUBJECT_NONE,
+  scopeChoice,
   whenInput,
 } from './views/events.js';
 import { notice, type View } from './views/student.js';
@@ -63,14 +66,14 @@ type Action =
   | { kind: 'new' }
   | { kind: 'open'; id: number }
   | { kind: 'show'; id: number }
-  | { kind: 'edit'; id: number }
-  | { kind: 'save'; id: number | null }
+  | { kind: 'edit'; id: number; scope: Scope | null }
+  | { kind: 'save'; id: number | null; scope: Scope }
   | { kind: 'grpOpen'; id: number }
   | { kind: 'grpSet'; id: number; value: string }
   | { kind: 'linkOpen'; id: number; page: number }
   | { kind: 'linkToggle'; id: number; page: number; topicId: number }
-  | { kind: 'del'; id: number }
-  | { kind: 'delok'; id: number };
+  | { kind: 'del'; id: number; scope: Scope | null }
+  | { kind: 'delok'; id: number; scope: Scope };
 
 type Via = 'button' | 'select' | 'modal';
 
@@ -83,6 +86,9 @@ export function parseEventAction(
 ): Action | null {
   const [a, b] = args;
   const id = a !== undefined && ID_RE.test(a) ? Number(a) : null;
+  // An optional trailing scope; anything else is a stale id.
+  const scopeArg =
+    b === undefined ? null : b === 'one' || b === 'following' ? b : false;
   const value = values[0];
   switch (name) {
     case 'new':
@@ -93,19 +99,28 @@ export function parseEventAction(
         : null;
     case 'save':
       if (via !== 'modal') return null;
-      if (a === 'new') return { kind: 'save', id: null };
-      return id === null ? null : { kind: 'save', id };
+      if (scopeArg === false) return null;
+      if (a === 'new') return { kind: 'save', id: null, scope: 'one' };
+      return id === null
+        ? null
+        : { kind: 'save', id, scope: scopeArg ?? 'one' };
   }
   if (id === null) return null;
   switch (name) {
     case 'show':
       return via === 'button' ? { kind: 'show', id } : null;
     case 'edit':
-      return via === 'button' ? { kind: 'edit', id } : null;
+      return via === 'button' && scopeArg !== false
+        ? { kind: 'edit', id, scope: scopeArg }
+        : null;
     case 'del':
-      return via === 'button' ? { kind: 'del', id } : null;
+      return via === 'button' && scopeArg !== false
+        ? { kind: 'del', id, scope: scopeArg }
+        : null;
     case 'delok':
-      return via === 'button' ? { kind: 'delok', id } : null;
+      return via === 'button' && scopeArg !== false
+        ? { kind: 'delok', id, scope: scopeArg ?? 'one' }
+        : null;
     case 'grp':
       if (via === 'button') return { kind: 'grpOpen', id };
       return via === 'select' && value !== undefined
@@ -147,11 +162,12 @@ export async function loadCardData(
     if (r) placement = r.c;
   }
   let postUrl: string | null = null;
-  if (e.topicId !== null && deps.config.discordGuildId) {
+  const postTopicId = e.series ? e.series.topicId : e.topicId;
+  if (postTopicId !== null && deps.config.discordGuildId) {
     const [t] = await db
       .select({ thread: topics.discordThreadId })
       .from(topics)
-      .where(and(eq(topics.id, e.topicId), isNull(topics.deletedAt)));
+      .where(and(eq(topics.id, postTopicId), isNull(topics.deletedAt)));
     if (t) {
       postUrl = `https://discord.com/channels/${deps.config.discordGuildId}/${t.thread}`;
     }
@@ -180,6 +196,7 @@ export async function loadCardData(
       })),
       webBaseUrl: deps.config.webBaseUrl,
       postUrl,
+      seriesLabel: e.series ? RULE_LABELS[e.series.rule] : null,
     },
   };
 }
@@ -250,6 +267,10 @@ export async function handleEvent(
           ephemeral(notice(e ? DELETED_TEXT : NOT_FOUND_TEXT)),
         ));
       }
+      if (e.series && action.scope === null) {
+        await ack(i);
+        return show(i, scopeChoice('edit', e.id, e.title));
+      }
       id = e.id;
       cur = {
         kind: e.kind,
@@ -262,7 +283,14 @@ export async function handleEvent(
         note: e.note,
       };
     }
-    await i.showModal(eventModal(id, await modalSubjects(db), cur));
+    await i.showModal(
+      eventModal(
+        id,
+        await modalSubjects(db),
+        cur,
+        action.kind === 'edit' ? (action.scope ?? undefined) : undefined,
+      ),
+    );
     return;
   }
 
@@ -345,7 +373,14 @@ export async function handleEvent(
       }
       if (input.place !== (e.place?.trim() || null)) patch.place = input.place;
       if (input.note !== (e.note?.trim() || null)) patch.note = input.note;
-      const r = await editEvent(db, userId, action.id, patch, 'discord');
+      const r = await editEvent(
+        db,
+        userId,
+        action.id,
+        patch,
+        'discord',
+        action.scope,
+      );
       if (!r.ok) return fail(r.message);
       return showCard(action.id);
     }
@@ -420,11 +455,27 @@ export async function handleEvent(
     case 'del': {
       const e = await getEvent(db, action.id);
       if (!e || e.deletedAt) return fail(e ? DELETED_TEXT : NOT_FOUND_TEXT);
-      return show(i, deleteConfirm(e.id, e.title));
+      if (e.series && action.scope === null) {
+        return show(i, scopeChoice('del', e.id, e.title));
+      }
+      return show(
+        i,
+        deleteConfirm(
+          e.id,
+          e.title,
+          e.series ? (action.scope ?? 'one') : undefined,
+        ),
+      );
     }
 
     case 'delok': {
-      const r = await deleteEvent(db, userId, action.id, 'discord');
+      const r = await deleteEvent(
+        db,
+        userId,
+        action.id,
+        'discord',
+        action.scope,
+      );
       return show(i, notice(r.ok ? DELETED_TEXT : r.message));
     }
   }
@@ -456,7 +507,9 @@ async function linkPage(
   const where = and(
     eq(topics.subjectId, e.subjectId),
     isNull(topics.deletedAt),
-    e.topicId === null ? undefined : ne(topics.id, e.topicId),
+    (e.series ? e.series.topicId : e.topicId) === null
+      ? undefined
+      : ne(topics.id, (e.series ? e.series.topicId : e.topicId) as number),
   );
   const [{ n }] = await db.select({ n: count() }).from(topics).where(where);
   const pages = Math.max(1, Math.ceil(n / MAX_OPTIONS));

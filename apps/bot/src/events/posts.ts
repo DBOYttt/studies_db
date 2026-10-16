@@ -30,6 +30,69 @@ export function eventPostTitle(e: EventDetails): string {
   return `${head}${title}${tail}`;
 }
 
+export const RULE_LABELS = {
+  weekly: 'co tydzień',
+  biweekly: 'co 2 tygodnie',
+} as const;
+
+/** `🔁 <Tytuł> — co tydzień`, at most 100 characters (the title is cut by code points). */
+export function seriesPostTitle(
+  title: string,
+  rule: keyof typeof RULE_LABELS,
+): string {
+  const tail = ` — ${RULE_LABELS[rule]}`;
+  const head = '🔁 ';
+  const room = MAX_THREAD_NAME - [...head].length - [...tail].length;
+  const chars = [...title];
+  const cut =
+    chars.length > room ? `${chars.slice(0, room - 1).join('')}…` : title;
+  return `${head}${cut}${tail}`;
+}
+
+/** Upcoming dates listed in a series post. */
+const MAX_LISTED_DATES = 8;
+
+/**
+ * First message of a series post: the shared details (`base`), the rule, the
+ * span and the next dates, and the link to the nearest occurrence's page.
+ */
+export function seriesPostContent(
+  base: EventDetails,
+  next: EventDetails,
+  rule: keyof typeof RULE_LABELS,
+  dates: Date[],
+  webBaseUrl: string,
+): string {
+  const upcoming = dates
+    .filter((d) => d >= next.startsAt)
+    .slice(0, MAX_LISTED_DATES);
+  const later = dates.filter((d) => d >= next.startsAt).length;
+  const time = base.allDay
+    ? '(cały dzień)'
+    : base.endsAt
+      ? `${hm(base.startsAt)}–${hm(base.endsAt)}`
+      : hm(base.startsAt);
+  const lines = [
+    `**${EVENT_KINDS[base.kind].label}**${base.subjectCode ? ` · ${base.subjectCode}${base.subjectName ? ` — ${base.subjectName}` : ''}` : ''}`,
+    `Cykl: ${RULE_LABELS[rule]}, ${time}, ${dates.length} wystąpień (${dm(dates[0])} – ${dmy(dates[dates.length - 1])})`,
+    `Najbliższe: ${upcoming.map(dm).join(', ')}${later > upcoming.length ? ', …' : ''}`,
+    ...(base.place ? [`Miejsce: ${base.place}`] : []),
+    ...(base.note ? [`Notatka: ${base.note}`] : []),
+    ...(base.createdByName ? [`Dodane przez ${base.createdByName}`] : []),
+    `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${next.id}`,
+  ];
+  const full = lines.join('\n');
+  if (full.length <= MAX_MESSAGE) return full;
+  // Too long: trim the note, never the link.
+  const noteAt = lines.findIndex((l) => l.startsWith('Notatka: '));
+  if (noteAt >= 0) {
+    const room = MAX_MESSAGE - (full.length - lines[noteAt].length) - 1;
+    lines[noteAt] =
+      [...lines[noteAt]].slice(0, Math.max(10, room - 1)).join('') + '…';
+  }
+  return lines.join('\n').slice(0, MAX_MESSAGE);
+}
+
 /** "Kiedy" as text: a day, a day and hours, or a day and a time range. */
 export function eventWhenText(e: EventDetails): string {
   if (e.allDay) return `${dmy(e.startsAt)} (cały dzień)`;

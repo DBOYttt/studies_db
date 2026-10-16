@@ -88,6 +88,8 @@ export interface EventCardData {
   webBaseUrl: string;
   /** https://discord.com/channels/… of the event's post; null without one. */
   postUrl: string | null;
+  /** "co tydzień" / "co 2 tygodnie" for an occurrence of a series. */
+  seriesLabel?: string | null;
 }
 
 const base = (u: string) => u.replace(/\/+$/, '');
@@ -141,7 +143,7 @@ export function eventCard(d: EventCardData): View {
   ]
     .filter((l): l is string => !!l)
     .join(' · ');
-  const head = `## ${symbol} ${esc(d.title)}\n-# ${[label, subject && esc(subject)].filter(Boolean).join(' · ')}`;
+  const head = `## ${symbol} ${esc(d.title)}\n-# ${[label, subject && esc(subject), d.seriesLabel ? `Część serii: ${d.seriesLabel}` : null].filter(Boolean).join(' · ')}`;
   const tail = who ? `-# ${who}` : '';
   const budget = MAX_TEXT - head.length - info.length - tail.length - 40;
 
@@ -174,7 +176,34 @@ export function eventCard(d: EventCardData): View {
 
 /* ---------- delete confirmation ---------- */
 
-export function deleteConfirm(id: number, title: string): View {
+export type Scope = 'one' | 'following';
+
+/** "Tylko to" / "To i następne" before an edit or a delete in a series. */
+export function scopeChoice(
+  action: 'edit' | 'del',
+  id: number,
+  title: string,
+): View {
+  return view(
+    new ContainerBuilder()
+      .addTextDisplayComponents(
+        text(
+          `## ${action === 'edit' ? 'Edytować' : 'Usunąć'} wydarzenie z serii\n${esc(clip(title, 100))}`,
+        ),
+        text('-# Dotyczy tylko tego wystąpienia czy także następnych?'),
+      )
+      .addSeparatorComponents(divider())
+      .addActionRowComponents(
+        row(
+          button(encodeId('evt', action, id, 'one'), 'Tylko to'),
+          button(encodeId('evt', action, id, 'following'), 'To i następne'),
+          button(encodeId('evt', 'show', id), 'Anuluj'),
+        ),
+      ),
+  );
+}
+
+export function deleteConfirm(id: number, title: string, scope?: Scope): View {
   return view(
     new ContainerBuilder()
       .addTextDisplayComponents(
@@ -184,7 +213,11 @@ export function deleteConfirm(id: number, title: string): View {
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
-          button(encodeId('evt', 'delok', id), 'Usuń', ButtonStyle.Danger),
+          button(
+            encodeId('evt', 'delok', ...(scope ? [id, scope] : [id])),
+            'Usuń',
+            ButtonStyle.Danger,
+          ),
           button(encodeId('evt', 'show', id), 'Anuluj'),
         ),
       ),
@@ -340,6 +373,7 @@ export function eventModal(
   eventId: number | null,
   subjects: ModalSubject[],
   cur?: ModalCurrent,
+  scope?: Scope,
 ): ModalBuilder {
   const kind = new StringSelectMenuBuilder()
     .setCustomId('kind')
@@ -382,7 +416,11 @@ export function eventModal(
     ? `${cur.place ?? ''}\n${cur.note}`
     : (cur?.place ?? '');
   return modal(
-    encodeId('evt', 'save', eventId ?? 'new'),
+    encodeId(
+      'evt',
+      'save',
+      ...(scope ? [eventId ?? 'new', scope] : [eventId ?? 'new']),
+    ),
     eventId === null ? 'Dodaj wydarzenie' : 'Edytuj wydarzenie',
     [
       new LabelBuilder().setLabel('Rodzaj').setStringSelectMenuComponent(kind),
