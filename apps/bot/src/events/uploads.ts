@@ -5,7 +5,7 @@
 // A failure stores a SAFE Polish message on the rows (never a path or a stack
 // trace) and keeps the temp file for a retry until it is a day old.
 import { createReadStream } from 'node:fs';
-import { readdir, stat, unlink } from 'node:fs/promises';
+import { lstat, readdir, stat, unlink } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import {
   type Db,
@@ -13,11 +13,12 @@ import {
   getEvent,
   getUploadsByIds,
   resolveInStorage,
+  topics,
   users,
   webUploads,
 } from '@studies/db';
 import { DiscordAPIError, escapeMarkdown } from 'discord.js';
-import { and, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { type IngestResult, ingestAttachment } from '../ingest.js';
 
 /** Discord allows at most 10 attachments per message. */
@@ -148,6 +149,67 @@ type Ready = {
   sent?: SentFile;
 };
 
+type Uploader = {
+  discordUserId: string;
+  displayName: string;
+  avatarUrl: string | null;
+};
+
+async function uploaderOf(db: Db, userId: number) {
+  const [u] = await db.select().from(users).where(eq(users.id, userId));
+  const uploader: Uploader = {
+    discordUserId: u?.discordUserId ?? '',
+    displayName: u?.displayName ?? '',
+    avatarUrl: u?.avatarUrl ?? null,
+  };
+  const content = `Plik od ${escapeMarkdown(u?.displayName ?? 'użytkownika')} (przez stronę)`;
+  return { uploader, content };
+}
+
+/**
+ * Runs ingest from the local file with the Discord ids of the sent file (the
+ * bot's own messages are not ingested by the gateway handlers). True when the
+ * file is a material now (or already was).
+ */
+async function ingestSent(
+  db: Db,
+  storageDir: string,
+  path: string,
+  name: string,
+  a: SentFile,
+  post: { threadId: string; topicId: number },
+  uploader: Uploader,
+): Promise<boolean> {
+  const res: IngestResult = await ingestAttachment(
+    {
+      db,
+      storageDir,
+      fetchBody: async () =>
+        Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>,
+    },
+    {
+      attachmentId: a.id,
+      messageId: a.messageId,
+      url: a.url,
+      filename: name,
+      contentType: a.contentType,
+      size: a.size,
+      postedAt: a.postedAt,
+      uploader,
+      thread: {
+        threadId: post.threadId,
+        forumChannelId: '',
+        title: '',
+        ownerDiscordId: null,
+        tagIds: [],
+      },
+      threadOwner: null,
+      topicId: post.topicId,
+    },
+  );
+  return res !== 'failed' && res !== 'ignored';
+}
+
 /**
  * Posts the queued rows `ids`. Returns the first failure message (the rows
  * carry their own), or null when everything was sent.
@@ -226,49 +288,13 @@ export async function postEventUploads(
     byUser.set(f.userId, [...(byUser.get(f.userId) ?? []), f]);
   }
   for (const [userId, files] of byUser) {
-    const [u] = await db.select().from(users).where(eq(users.id, userId));
-    const content = `Plik od ${escapeMarkdown(u?.displayName ?? 'użytkownika')} (przez stronę)`;
-    const uploader = {
-      discordUserId: u?.discordUserId ?? '',
-      displayName: u?.displayName ?? '',
-      avatarUrl: u?.avatarUrl ?? null,
-    };
-    // Runs ingest from the local file with the Discord ids of the sent file.
+    const { uploader, content } = await uploaderOf(db, userId);
     const ingestOne = async (x: Ready, a: SentFile) => {
-      const res: IngestResult = await ingestAttachment(
-        {
-          db,
-          storageDir,
-          fetchBody: async () =>
-            Readable.toWeb(
-              createReadStream(x.path),
-            ) as ReadableStream<Uint8Array>,
-        },
-        {
-          attachmentId: a.id,
-          messageId: a.messageId,
-          url: a.url,
-          filename: x.name,
-          contentType: a.contentType,
-          size: a.size,
-          postedAt: a.postedAt,
-          uploader,
-          thread: {
-            threadId: post.threadId,
-            forumChannelId: '',
-            title: '',
-            ownerDiscordId: null,
-            tagIds: [],
-          },
-          threadOwner: null,
-          topicId: post.topicId,
-        },
-      );
-      if (res === 'failed' || res === 'ignored') {
-        await fail([x.id], NOT_INGESTED);
-      } else {
+      if (await ingestSent(db, storageDir, x.path, x.name, a, post, uploader)) {
         await setRows(db, [x.id], 'done');
         await removeRow(storageDir, x.rel);
+      } else {
+        await fail([x.id], NOT_INGESTED);
       }
     };
     // Already on Discord (an earlier attempt failed in ingest): never resend.
@@ -341,7 +367,62 @@ export async function failInterruptedUploads(db: Db): Promise<void> {
 }
 
 /**
- * Removes queued/failed uploads (rows and files) older than 24 h, and files
+ * Failed rows that are already on Discord (sent, but ingest failed): runs
+ * ingest again from the local file with the stored ids, into the post of the
+ * event (or its series). The file is removed only after a success; until then
+ * the row and the file stay, however old.
+ */
+async function reingestSent(db: Db, storageDir: string): Promise<void> {
+  const sent = await db
+    .select()
+    .from(webUploads)
+    .where(
+      and(
+        eq(webUploads.status, 'failed'),
+        isNotNull(webUploads.sentAttachmentId),
+      ),
+    )
+    .orderBy(webUploads.id);
+  for (const r of sent) {
+    try {
+      const path = uploadAbs(storageDir, r.storagePath);
+      const st = await lstat(path);
+      if (!st.isFile()) continue;
+      const e = await getEvent(db, r.eventId);
+      const topicId = e ? (e.series ? e.series.topicId : e.topicId) : null;
+      if (topicId === null) continue;
+      const [t] = await db.select().from(topics).where(eq(topics.id, topicId));
+      if (!t) continue;
+      const { uploader } = await uploaderOf(db, r.userId);
+      const ok = await ingestSent(
+        db,
+        storageDir,
+        path,
+        r.originalFilename,
+        {
+          id: r.sentAttachmentId as string,
+          messageId: r.sentMessageId ?? '',
+          url: r.sentUrl ?? '',
+          name: r.originalFilename,
+          contentType: r.sentContentType,
+          size: st.size,
+          postedAt: r.sentAt ?? new Date(),
+        },
+        { threadId: t.discordThreadId, topicId: t.id },
+        uploader,
+      );
+      if (!ok) continue;
+      await setRows(db, [r.id], 'done');
+      await removeRow(storageDir, r.storagePath);
+    } catch (err) {
+      console.error(`upload ${r.id}: re-ingest failed:`, err);
+    }
+  }
+}
+
+/**
+ * Removes queued/failed uploads (rows and files) older than 24 h, except rows
+ * already sent to Discord, and files
  * in STORAGE_DIR/uploads/ with no row and an mtime older than 24 h (crash
  * leftovers). Nothing outside uploads/ is touched.
  */
@@ -351,6 +432,8 @@ export async function cleanupUploads(
   now: Date = new Date(),
 ): Promise<{ rows: number; orphans: number }> {
   const cutoff = new Date(now.getTime() - UPLOAD_MAX_AGE_MS);
+  await reingestSent(db, storageDir);
+  // Rows already sent to Discord are never purged (see reingestSent).
   const old = await db
     .select({ id: webUploads.id, path: webUploads.storagePath })
     .from(webUploads)
@@ -358,6 +441,7 @@ export async function cleanupUploads(
       and(
         inArray(webUploads.status, ['queued', 'failed']),
         lt(webUploads.createdAt, cutoff),
+        isNull(webUploads.sentAttachmentId),
       ),
     );
   for (const r of old) {

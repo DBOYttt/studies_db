@@ -472,4 +472,34 @@ describe('cleanupUploads', () => {
       'uploads/old-done',
     ]);
   });
+
+  it('never purges a sent row: re-runs ingest, removes the file only after success', async () => {
+    const id = await mkEvent();
+    await drain();
+    const [rowId] = await queueUploads(id, ['a.pdf']);
+    const spy = vi
+      .spyOn(ingestMod, 'ingestAttachment')
+      .mockResolvedValue('failed');
+    await drain();
+    await db
+      .update(webUploads)
+      .set({ createdAt: ago(30) })
+      .where(eq(webUploads.id, rowId));
+    const [before] = await rows();
+    expect(before).toMatchObject({ status: 'failed', sentAttachmentId: 'a-1' });
+
+    // Ingest still failing: the row and its file stay.
+    await cleanupUploads(db, dir);
+    spy.mockRestore();
+    expect(await rows()).toHaveLength(1);
+    expect((await rows())[0].status).toBe('failed');
+    expect(await readdir(join(dir, 'uploads'))).toHaveLength(1);
+
+    await cleanupUploads(db, dir);
+    expect(guild.sent).toHaveLength(1);
+    const mats = await db.select().from(materials);
+    expect(mats.map((m) => m.discordAttachmentId)).toEqual(['a-1']);
+    expect((await rows())[0].status).toBe('done');
+    expect(await readdir(join(dir, 'uploads'))).toEqual([]);
+  });
 });
