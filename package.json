@@ -12,7 +12,10 @@
     "db:migrate": "pnpm --filter @studies/db migrate",
     "db:seed": "pnpm --filter @studies/db seed",
     "db:login": "pnpm --filter @studies/db run login-link",
-    "dev:web": "pnpm --filter @studies/web dev"
+    "dev:web": "pnpm --filter @studies/web dev",
+    "qa:sandbox": "pnpm --filter @studies/db qa sandbox",
+    "qa:login": "pnpm --filter @studies/db qa login",
+    "qa:serve": "pnpm --filter @studies/web qa:serve"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",

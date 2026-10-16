@@ -14,3 +14,6 @@ apps/web/test-results/
 apps/web/playwright-report/
 
 .claude/settings.local.json
+
+# QA persona sandbox (pnpm qa:sandbox / qa:serve): files and screenshots
+.qa/
