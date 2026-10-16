@@ -9,6 +9,7 @@ import type { SimpleFile } from '@/lib/simple-queries';
 import { EventButtons } from './EventButtons';
 import { EventUploads, type UploadItem } from './EventUploads';
 import { LinkedPosts } from './LinkedPosts';
+import { PostLine } from './PostLine';
 
 export type EventPageData = {
   id: number;
@@ -28,6 +29,8 @@ export type EventPageData = {
   series: { rule: 'weekly' | 'biweekly'; until: string } | null;
   deleted: boolean;
   postLine: string;
+  /** The post failed or is missing: "Spróbuj ponownie". */
+  canRetryPost: boolean;
   files: SimpleFile[];
   linked: LinkedTopic[];
   history: AuditRow[];
@@ -104,7 +107,7 @@ export function EventDetails({
           {e.note}
         </p>
       )}
-      <p className="m-0 text-muted">{e.postLine}</p>
+      <PostLine eventId={e.id} text={e.postLine} canRetry={e.canRetryPost} />
       {(!e.deleted || canRestore) && (
         <EventButtons
           id={e.id}

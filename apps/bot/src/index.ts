@@ -1,4 +1,8 @@
-import { createDb, resolveStorageDir } from '@studies/db';
+import {
+  createDb,
+  enqueueMissingEventPosts,
+  resolveStorageDir,
+} from '@studies/db';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
 import { catchUp, discordForumSource } from './catchup.js';
 import { createInteractionHandler } from './commands/router.js';
@@ -58,6 +62,13 @@ client.once(Events.ClientReady, async (c) => {
     if (n > 0) console.log(`Przerwane zlecenia: ${n}.`);
   } catch (err) {
     console.error('recoverInterruptedRequests:', err);
+  }
+  // Failed or interrupted post requests are never retried on their own.
+  try {
+    const n = await enqueueMissingEventPosts(db);
+    if (n > 0) console.log(`Brakujące posty wydarzeń: ${n}.`);
+  } catch (err) {
+    console.error('enqueueMissingEventPosts:', err);
   }
   eventPoller = startEventPoller({
     db,

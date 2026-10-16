@@ -401,7 +401,8 @@ describe('edit round trip', () => {
     expect(e.place).toBeNull();
     expect(e.note).toBe('Pierwsza linia\nDruga');
     expect(await editAudits()).toHaveLength(0);
-    expect(await upserts()).toHaveLength(0);
+    // The event has no post yet: saving unchanged only retries the post.
+    expect(await upserts()).toHaveLength(1);
   });
 
   it('an event older than a month can be edited (only the title changes)', async () => {

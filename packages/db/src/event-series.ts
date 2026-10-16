@@ -280,7 +280,15 @@ export async function editInSeries(
     plan.push({ row: t, changes: diffFields(rowFields(t), next), next });
   }
   const changed = plan.filter((p) => Object.keys(p.changes).length > 0);
-  if (changed.length === 0) return { ok: true, message: 'Brak zmian.' };
+  if (changed.length === 0) {
+    // Saving unchanged retries a post that never got made.
+    const [s] = await db
+      .select({ topicId: eventSeries.topicId })
+      .from(eventSeries)
+      .where(eq(eventSeries.id, seriesId));
+    if (s && s.topicId === null) await upsertSeries(db, seriesId);
+    return { ok: true, message: 'Brak zmian.' };
+  }
   return db.transaction(async (tx) => {
     const [series] = await tx
       .select()

@@ -41,12 +41,18 @@ export async function loadEventPage(
     listEventUploads(db, id),
     retryableUploadIds(db, id, uploadFileExists),
   ]);
+  const pending = req?.status === 'queued' || req?.status === 'running';
   const postLine =
     postTopicId !== null
       ? 'Post na Discordzie: utworzony'
       : req?.status === 'failed'
         ? `Post na Discordzie: błąd${req.error ? ` (${req.error})` : ''}`
-        : 'Post na Discordzie: w przygotowaniu';
+        : pending
+          ? 'Post na Discordzie: w przygotowaniu'
+          : 'Post na Discordzie: brak';
+  // Failed, or no request is on its way: the post can be asked for again.
+  const canRetryPost =
+    ev.deletedAt === null && postTopicId === null && !pending;
   return {
     id,
     kind: ev.kind,
@@ -64,6 +70,7 @@ export async function loadEventPage(
     series: ev.series ? { rule: ev.series.rule, until: ev.series.until } : null,
     deleted: ev.deletedAt !== null,
     postLine,
+    canRetryPost,
     files,
     linked,
     history,

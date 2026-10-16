@@ -94,7 +94,9 @@ export async function validateEvent(
   if (title.length < 1 || title.length > TITLE_MAX) {
     return bad('Tytuł musi mieć od 1 do 100 znaków.');
   }
-  if (!EVENT_KINDS[i.kind]) return bad('Nieznany rodzaj wydarzenia.');
+  if (!Object.hasOwn(EVENT_KINDS, i.kind)) {
+    return bad('Nieznany rodzaj wydarzenia.');
+  }
   const place = blankToNull(i.place);
   if (place && place.length > PLACE_MAX) {
     return bad('Miejsce może mieć najwyżej 100 znaków.');
@@ -360,6 +362,8 @@ export async function editEvent(
   const next = v.fields;
   const changes = diffFields(cur, next);
   if (Object.keys(changes).length === 0) {
+    // Saving unchanged retries a post that never got made.
+    if (row.topicId === null) await upsert(db, eventId);
     return { ok: true, message: 'Brak zmian.' };
   }
   await db.transaction(async (tx) => {

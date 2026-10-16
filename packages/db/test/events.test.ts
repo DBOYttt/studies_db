@@ -468,6 +468,14 @@ describe('event actions', () => {
       ]);
     });
 
+    it('refuses an inherited property name as the kind', async () => {
+      for (const kind of ['toString', 'constructor', '__proto__']) {
+        expect(
+          await addEvent(db, id.u, input({ kind: kind as never }), 'web'),
+        ).toEqual({ ok: false, message: 'Nieznany rodzaj wydarzenia.' });
+      }
+    });
+
     it('a banned user is refused by every mutation with no rows written', async () => {
       const { id: eid } = await addEvent(db, id.u, input(), 'web');
       const t = await topic(id.subA);

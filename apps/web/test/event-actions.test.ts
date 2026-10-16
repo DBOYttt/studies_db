@@ -1,4 +1,6 @@
 import {
+  adminAudit,
+  botRequests,
   consumeLoginToken,
   createLoginToken,
   type Db,
@@ -240,5 +242,63 @@ describe('event actions', () => {
       true,
       true,
     ]);
+  });
+});
+
+describe('retryPostAction', () => {
+  const mk = async () => {
+    const [{ id }] = await db
+      .insert(events)
+      .values({ kind: 'inne', title: 'Bez posta', startsAt: new Date() })
+      .$returningId();
+    return id;
+  };
+  const queued = async (id: number) =>
+    (await db.select().from(botRequests)).filter(
+      (r) => r.target === `event:${id}` && r.status === 'queued',
+    );
+
+  it('requires a session and refuses banned users', async () => {
+    const id = await mk();
+    cookieSid = undefined;
+    await expect(A.retryPostAction(id)).rejects.toThrow('redirect');
+    cookieSid = banned.sid;
+    await A.retryPostAction(id).catch(() => null);
+    expect(await queued(id)).toHaveLength(0);
+  });
+
+  it('queues the upsert and audits event.post_retry from the web', async () => {
+    const id = await mk();
+    cookieSid = alice.sid;
+    expect((await A.retryPostAction(id)).ok).toBe(true);
+    expect(await queued(id)).toHaveLength(1);
+    const audit = (await db.select().from(adminAudit)).filter(
+      (a) => a.action === 'event.post_retry' && a.target === String(id),
+    );
+    expect(audit).toHaveLength(1);
+    expect(audit[0].details).toMatchObject({ source: 'web' });
+    expect(await A.retryPostAction(-1)).toMatchObject({ ok: false });
+  });
+
+  it('the page offers the retry when the request failed or is missing', async () => {
+    const { loadEventPage } = await import('../lib/event-page');
+    const id = await mk();
+    const user = { id: alice.id, isAdmin: false } as never;
+    let page = await loadEventPage(id, user);
+    expect(page.canRetryPost).toBe(true);
+    await A.retryPostAction(id);
+    page = await loadEventPage(id, user);
+    expect(page.canRetryPost).toBe(false);
+    expect(page.postLine).toBe('Post na Discordzie: w przygotowaniu');
+    await db
+      .update(botRequests)
+      .set({ status: 'failed', error: 'Brak forum' })
+      .where(eq(botRequests.target, `event:${id}`));
+    page = await loadEventPage(id, user);
+    expect(page.canRetryPost).toBe(true);
+    expect(page.postLine).toBe('Post na Discordzie: błąd (Brak forum)');
+    await db.update(events).set({ topicId }).where(eq(events.id, id));
+    page = await loadEventPage(id, user);
+    expect(page.canRetryPost).toBe(false);
   });
 });

@@ -11,6 +11,7 @@ import {
   getEvent,
   linkTopic,
   restoreEvent,
+  retryEventPost,
   retryFailedUploads,
   toWall,
   unlinkTopic,
@@ -232,6 +233,18 @@ export async function retryUploadsAction(id: number): Promise<ActionResult> {
   const user = await requireUser();
   if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
   const r = await retryFailedUploads(getDb(), user.id, id, uploadFileExists);
+  if (r.ok) refresh(id);
+  return r;
+}
+
+/**
+ * "Spróbuj ponownie" for the Discord post: queues its upsert again (the
+ * series' post for an occurrence). Same wiki rules as every event action.
+ */
+export async function retryPostAction(id: number): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  const r = await retryEventPost(getDb(), user.id, id, 'web');
   if (r.ok) refresh(id);
   return r;
 }

@@ -1,4 +1,11 @@
-import { type Db, setSetting, subjects, users } from '@studies/db';
+import {
+  botRequests,
+  type Db,
+  events,
+  setSetting,
+  subjects,
+  users,
+} from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { ChannelType, Collection } from 'discord.js';
 import { eq } from 'drizzle-orm';
@@ -85,6 +92,23 @@ describe('runSetup', () => {
       updated: 0,
       failures: 0,
     });
+  });
+});
+
+describe('runSetup re-queues missing event posts', () => {
+  it('after a real run, not after a dry run', async () => {
+    const [{ id }] = await db
+      .insert(events)
+      .values({ kind: 'inne', title: 'x', startsAt: new Date() })
+      .$returningId();
+    const audit = vi.fn().mockResolvedValue(undefined);
+    await runSetup(deps(), guild(['r']), 'u1', true, audit);
+    expect(await db.select().from(botRequests)).toEqual([]);
+    await runSetup(deps(), guild(['r']), 'u1', false, audit);
+    const reqs = await db.select().from(botRequests);
+    expect(reqs.map((r) => [r.kind, r.target])).toEqual([
+      ['event_post_upsert', `event:${id}`],
+    ]);
   });
 });
 
