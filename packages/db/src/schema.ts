@@ -3,6 +3,8 @@ import {
   bigint,
   boolean,
   char,
+  check,
+  date,
   datetime,
   index,
   int,
@@ -344,8 +346,22 @@ export const botSettings = mysqlTable('bot_settings', {
   updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
 });
 
+// A recurring event. Its occurrences are `events` rows with `series_id`; the
+// series has ONE forum post (`topic_id`), set by the bot. Soft-deleted.
+export const eventSeries = mysqlTable('event_series', {
+  id: int('id').autoincrement().primaryKey(),
+  rule: mysqlEnum('rule', ['weekly', 'biweekly']).notNull(),
+  until: date('until', { mode: 'string' }).notNull(),
+  topicId: int('topic_id').references(() => topics.id, {
+    onDelete: 'set null',
+  }),
+  createdBy: int('created_by').references(() => users.id),
+  createdAt: now(),
+  deletedAt: datetime('deleted_at'),
+});
+
 // One row per event occurrence (kolokwium, wyjazd, ...). Times are Europe/Warsaw
-// wall time like class_sessions. `series_id` is added with recurring events.
+// wall time like class_sessions.
 export const events = mysqlTable(
   'events',
   {
@@ -366,6 +382,7 @@ export const events = mysqlTable(
     allDay: boolean('all_day').notNull().default(false),
     place: varchar('place', { length: 100 }),
     note: varchar('note', { length: 1000 }),
+    seriesId: int('series_id').references(() => eventSeries.id),
     topicId: int('topic_id').references(() => topics.id, {
       onDelete: 'set null',
     }),
@@ -381,20 +398,30 @@ export const events = mysqlTable(
   ],
 );
 
-// Existing forum posts linked to an event. `id` is a surrogate key so a series
-// owner (nullable series_id) can be added later without rebuilding the PK.
+// Existing forum posts linked to an event or to a whole series (exactly one
+// owner is set, enforced by the CHECK). `id` is a surrogate key.
 export const eventTopics = mysqlTable(
   'event_topics',
   {
     id: int('id').autoincrement().primaryKey(),
-    eventId: int('event_id')
-      .notNull()
-      .references(() => events.id, { onDelete: 'cascade' }),
+    eventId: int('event_id').references(() => events.id, {
+      onDelete: 'cascade',
+    }),
+    seriesId: int('series_id').references(() => eventSeries.id, {
+      onDelete: 'cascade',
+    }),
     topicId: int('topic_id')
       .notNull()
       .references(() => topics.id, { onDelete: 'cascade' }),
   },
-  (t) => [unique('uq_event_topics').on(t.eventId, t.topicId)],
+  (t) => [
+    unique('uq_event_topics').on(t.eventId, t.topicId),
+    unique('uq_event_topics_series').on(t.seriesId, t.topicId),
+    check(
+      'chk_event_topics_owner',
+      sql`(${t.eventId} IS NULL) <> (${t.seriesId} IS NULL)`,
+    ),
+  ],
 );
 
 // Generic DB queue the web/worker use to ask the bot to do things.

@@ -228,7 +228,12 @@ describe('event posts', () => {
     expect(guild.posts.get(fresh.discordThreadId)?.forumId).toBe('f-fiz');
     const links = await db.select().from(eventTopics);
     expect(links).toEqual([
-      { id: expect.any(Number), eventId: id, topicId: oldTopic.id },
+      {
+        id: expect.any(Number),
+        eventId: id,
+        seriesId: null,
+        topicId: oldTopic.id,
+      },
     ]);
     // Another upsert changes nothing more.
     await enqueueBotRequest(db, 'event_post_upsert', `event:${id}`);

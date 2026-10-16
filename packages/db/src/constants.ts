@@ -126,6 +126,7 @@ export const CONTENT_TABLES = [
   'materials',
   'jobs',
   'events',
+  'event_series',
   'event_topics',
 ] as const;
 

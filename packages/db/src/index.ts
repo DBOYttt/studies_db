@@ -3,6 +3,7 @@ export * from './audit.js';
 export * from './auth.js';
 export * from './bot-requests.js';
 export { createDb, type Db, type DbExecutor } from './client.js';
+export * from './event-series.js';
 export * from './events.js';
 export * from './files.js';
 export * from './hierarchy.js';

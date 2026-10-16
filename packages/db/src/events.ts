@@ -13,6 +13,12 @@ import { writeAudit } from './audit.js';
 import { enqueueBotRequest } from './bot-requests.js';
 import type { Db, DbExecutor } from './client.js';
 import { EVENT_KINDS, type EventKind } from './constants.js';
+import {
+  deleteInSeries,
+  editInSeries,
+  reviveSeries,
+  seriesTopicIds,
+} from './event-series.js';
 import { nowWall, type PlanSession, parseWhen, toWall } from './plan.js';
 import {
   classes,
@@ -46,11 +52,14 @@ const TITLE_MAX = 100;
 const PLACE_MAX = 100;
 const NOTE_MAX = 1000;
 
-const refused = (message: string): ActionResult => ({ ok: false, message });
-const NOT_FOUND = 'Nie znaleziono wydarzenia.';
+export const refused = (message: string): ActionResult => ({
+  ok: false,
+  message,
+});
+export const NOT_FOUND = 'Nie znaleziono wydarzenia.';
 
 /** The validated, normalised fields of an event. */
-type Fields = {
+export type Fields = {
   kind: EventKind;
   title: string;
   subjectId: number | null;
@@ -146,7 +155,7 @@ export async function validateEvent(
 }
 
 /** Null when the user may write, else the refusal. */
-async function checkUser(
+export async function checkUser(
   db: DbExecutor,
   userId: number,
 ): Promise<{ isAdmin: boolean } | ActionResult> {
@@ -158,10 +167,11 @@ async function checkUser(
   if (u.banned) return refused(BANNED_MESSAGE);
   return { isAdmin: u.admin };
 }
-const isRefusal = (x: { isAdmin: boolean } | ActionResult): x is ActionResult =>
-  'ok' in x;
+export const isRefusal = (
+  x: { isAdmin: boolean } | ActionResult,
+): x is ActionResult => 'ok' in x;
 
-const jsonFields = (f: Fields) => ({
+export const jsonFields = (f: Fields) => ({
   ...f,
   startsAt: f.startsAt.toISOString(),
   endsAt: f.endsAt?.toISOString() ?? null,
@@ -169,6 +179,25 @@ const jsonFields = (f: Fields) => ({
 
 const upsert = (db: DbExecutor, eventId: number) =>
   enqueueBotRequest(db, 'event_post_upsert', `event:${eventId}`);
+
+/** Null when `userId` is under the hourly add limit, else the refusal. */
+export async function checkAddRateLimit(
+  tx: DbExecutor,
+  userId: number,
+): Promise<ActionResult | null> {
+  const [r] = (await tx.execute(sql`
+    SELECT COUNT(*) AS n FROM admin_audit
+     WHERE user_id = ${userId} AND action = 'event.add'
+       AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)`)) as unknown as [
+    { n: number | string }[],
+  ];
+  if (Number(r[0].n) >= MAX_EVENTS_PER_HOUR) {
+    return refused(
+      `Możesz dodać najwyżej ${MAX_EVENTS_PER_HOUR} wydarzeń na godzinę. Spróbuj później.`,
+    );
+  }
+  return null;
+}
 
 export async function addEvent(
   db: Db,
@@ -181,18 +210,8 @@ export async function addEvent(
   const v = await validateEvent(db, input);
   if (!v.ok) return refused(v.message);
   return db.transaction(async (tx) => {
-    // Rate limit: this user's recent adds, counted from the audit log.
-    const [r] = (await tx.execute(sql`
-      SELECT COUNT(*) AS n FROM admin_audit
-       WHERE user_id = ${userId} AND action = 'event.add'
-         AND created_at > DATE_SUB(NOW(), INTERVAL 1 HOUR)`)) as unknown as [
-      { n: number | string }[],
-    ];
-    if (Number(r[0].n) >= MAX_EVENTS_PER_HOUR) {
-      return refused(
-        `Możesz dodać najwyżej ${MAX_EVENTS_PER_HOUR} wydarzeń na godzinę. Spróbuj później.`,
-      );
-    }
+    const limited = await checkAddRateLimit(tx, userId);
+    if (limited) return limited;
     const f = v.fields;
     const [res] = await tx
       .insert(events)
@@ -209,7 +228,7 @@ export async function addEvent(
   });
 }
 
-const FIELD_KEYS = [
+export const FIELD_KEYS = [
   'kind',
   'title',
   'subjectId',
@@ -222,12 +241,16 @@ const FIELD_KEYS = [
   'note',
 ] as const;
 
-const same = (a: unknown, b: unknown) =>
+export const same = (a: unknown, b: unknown) =>
   a instanceof Date && b instanceof Date
     ? a.getTime() === b.getTime()
     : a === b;
 
-const asInput = (patch: Partial<EventInput>, cur: Fields, when: string) => {
+export const asInput = (
+  patch: Partial<EventInput>,
+  cur: Fields,
+  when: string,
+) => {
   const subjectChanged =
     patch.subjectId !== undefined && patch.subjectId !== cur.subjectId;
   return {
@@ -255,12 +278,59 @@ const asInput = (patch: Partial<EventInput>, cur: Fields, when: string) => {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 /** The "Kiedy" text of stored times, to re-validate an event unchanged. */
-function whenText(f: Fields): string {
+export function whenText(f: Fields): string {
   const s = f.startsAt;
   const date = `${pad(s.getUTCDate())}.${pad(s.getUTCMonth() + 1)}.${s.getUTCFullYear()}`;
   if (f.allDay) return date;
   const t = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
   return `${date} ${t(s)}${f.endsAt ? `-${t(f.endsAt)}` : ''}`;
+}
+
+export type EventRow = typeof events.$inferSelect;
+export type Scope = 'one' | 'following';
+
+export const rowFields = (row: EventRow): Fields => ({
+  kind: row.kind,
+  title: row.title,
+  subjectId: row.subjectId,
+  classId: row.classId,
+  groupId: row.groupId,
+  startsAt: toWall(row.startsAt),
+  endsAt: row.endsAt ? toWall(row.endsAt) : null,
+  allDay: row.allDay,
+  place: row.place,
+  note: row.note,
+});
+
+/** Field-by-field differences, in the audit's `{from, to}` shape. */
+export function diffFields(cur: Fields, next: Fields) {
+  const changes: Record<string, { from: unknown; to: unknown }> = {};
+  for (const k of FIELD_KEYS) {
+    if (!same(cur[k], next[k])) {
+      const j = (x: unknown) => (x instanceof Date ? x.toISOString() : x);
+      changes[k] = { from: j(cur[k]), to: j(next[k]) };
+    }
+  }
+  return changes;
+}
+
+/**
+ * Validates `patch` against stored fields. A changed "Kiedy" is range-checked
+ * against now; an old event stays editable otherwise.
+ */
+export async function validatePatch(
+  db: DbExecutor,
+  cur: Fields,
+  patch: Partial<EventInput>,
+) {
+  const input = asInput(patch, cur, patch.when ?? whenText(cur));
+  return validateEvent(
+    db,
+    input,
+    patch.when !== undefined
+      ? nowWall()
+      : new Date(cur.startsAt.getTime() - 86_400_000),
+  );
 }
 
 export async function editEvent(
@@ -269,6 +339,7 @@ export async function editEvent(
   eventId: number,
   patch: Partial<EventInput>,
   source: EventSource,
+  scope: Scope = 'one',
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
@@ -277,35 +348,14 @@ export async function editEvent(
     .from(events)
     .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
   if (!row) return refused(NOT_FOUND);
-  const cur: Fields = {
-    kind: row.kind,
-    title: row.title,
-    subjectId: row.subjectId,
-    classId: row.classId,
-    groupId: row.groupId,
-    startsAt: toWall(row.startsAt),
-    endsAt: row.endsAt ? toWall(row.endsAt) : null,
-    allDay: row.allDay,
-    place: row.place,
-    note: row.note,
-  };
-  // Only a changed "Kiedy" is range-checked; an old event stays editable.
-  const whenGiven = patch.when !== undefined;
-  const input = asInput(patch, cur, patch.when ?? whenText(cur));
-  const v = await validateEvent(
-    db,
-    input,
-    whenGiven ? nowWall() : new Date(cur.startsAt.getTime() - 86_400_000),
-  );
+  if (row.seriesId !== null) {
+    return editInSeries(db, userId, row, patch, source, scope);
+  }
+  const cur = rowFields(row);
+  const v = await validatePatch(db, cur, patch);
   if (!v.ok) return refused(v.message);
   const next = v.fields;
-  const changes: Record<string, { from: unknown; to: unknown }> = {};
-  for (const k of FIELD_KEYS) {
-    if (!same(cur[k], next[k])) {
-      const j = (x: unknown) => (x instanceof Date ? x.toISOString() : x);
-      changes[k] = { from: j(cur[k]), to: j(next[k]) };
-    }
-  }
+  const changes = diffFields(cur, next);
   if (Object.keys(changes).length === 0) {
     return { ok: true, message: 'Brak zmian.' };
   }
@@ -330,9 +380,17 @@ export async function deleteEvent(
   userId: number,
   eventId: number,
   source: EventSource,
+  scope: Scope = 'one',
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
+  const [row] = await db
+    .select()
+    .from(events)
+    .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
+  if (row?.seriesId != null) {
+    return deleteInSeries(db, userId, row, source, scope);
+  }
   return db.transaction(async (tx) => {
     const [res] = await tx
       .update(events)
@@ -376,7 +434,12 @@ export async function restoreEvent(
       target: String(eventId),
       details: { source },
     });
-    await upsert(tx, eventId);
+    const [ev] = await tx
+      .select({ seriesId: events.seriesId })
+      .from(events)
+      .where(eq(events.id, eventId));
+    if (ev?.seriesId != null) await reviveSeries(tx, ev.seriesId);
+    else await upsert(tx, eventId);
     return { ok: true, message: 'Przywrócono wydarzenie.' };
   });
 }
@@ -513,7 +576,7 @@ export async function eventMaterials(
   eventId: number,
 ): Promise<EventMaterial[]> {
   const [ev] = await db
-    .select({ topicId: events.topicId })
+    .select({ topicId: events.topicId, seriesId: events.seriesId })
     .from(events)
     .where(eq(events.id, eventId));
   if (!ev) return [];
@@ -521,10 +584,13 @@ export async function eventMaterials(
     .select({ topicId: eventTopics.topicId })
     .from(eventTopics)
     .where(eq(eventTopics.eventId, eventId));
+  const fromSeries =
+    ev.seriesId === null ? [] : await seriesTopicIds(db, ev.seriesId);
   const ids = [
     ...new Set([
       ...(ev.topicId === null ? [] : [ev.topicId]),
       ...links.map((l) => l.topicId),
+      ...fromSeries,
     ]),
   ];
   if (ids.length === 0) return [];

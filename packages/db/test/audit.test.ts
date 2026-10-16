@@ -134,6 +134,6 @@ describe('audit', () => {
     expect(PUBLIC_VIEWS as readonly string[]).not.toContain('admin_audit');
     expect(CONTENT_TABLES as readonly string[]).not.toContain('admin_audit');
     expect(CONTENT_TABLES).toContain('subjects');
-    expect(CONTENT_TABLES).toHaveLength(13);
+    expect(CONTENT_TABLES).toHaveLength(14);
   });
 });
