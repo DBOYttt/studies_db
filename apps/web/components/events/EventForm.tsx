@@ -70,7 +70,15 @@ export function EventForm({
   };
 
   return (
-    <form action={submit} className="flex max-w-xl flex-col gap-3.5">
+    <form
+      onSubmit={(e) => {
+        // Not `action={fn}`: React 19 resets uncontrolled fields after it,
+        // which would empty the form on a refusal.
+        e.preventDefault();
+        submit(new FormData(e.currentTarget));
+      }}
+      className="flex max-w-xl flex-col gap-3.5"
+    >
       <input type="hidden" name="base" value={base} />
       <label className={label}>
         Rodzaj

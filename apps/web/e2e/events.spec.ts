@@ -85,6 +85,26 @@ test('an invalid form shows the Polish message', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('a refused save keeps the typed values', async ({ page }) => {
+  await page.goto('/s/wydarzenia/nowe');
+  await page.getByLabel('Tytuł').fill('Zachowaj mnie');
+  await page.getByLabel('Data').fill('2001-01-01');
+  await page.getByLabel('Miejsce').fill('B-7');
+  await page
+    .getByRole('combobox', { name: 'Przedmiot' })
+    .selectOption({ label: 'FIZ · Fizyka techniczna' });
+  await page.getByRole('button', { name: 'Dodaj wydarzenie' }).click();
+  await expect(
+    page.getByText('Data nie może być więcej niż miesiąc wstecz.'),
+  ).toBeVisible();
+  await expect(page.getByLabel('Tytuł')).toHaveValue('Zachowaj mnie');
+  await expect(page.getByLabel('Data')).toHaveValue('2001-01-01');
+  await expect(page.getByLabel('Miejsce')).toHaveValue('B-7');
+  await expect(page.getByRole('combobox', { name: 'Przedmiot' })).toHaveValue(
+    /\d+/,
+  );
+});
+
 test('edit the title', async ({ page }) => {
   await page.goto(eventUrl);
   await page.getByRole('link', { name: 'Edytuj' }).click();
