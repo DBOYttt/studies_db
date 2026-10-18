@@ -364,6 +364,8 @@ export const eventSeries = mysqlTable('event_series', {
   createdBy: int('created_by').references(() => users.id),
   createdAt: now(),
   deletedAt: datetime('deleted_at'),
+  // Bumped on every change; lets an edit or delete detect a stale form.
+  version: int('version').notNull().default(0),
 });
 
 // One row per event occurrence (kolokwium, wyjazd, ...). Times are Europe/Warsaw
@@ -397,6 +399,8 @@ export const events = mysqlTable(
     createdAt: now(),
     updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
     deletedAt: datetime('deleted_at'),
+    // Bumped on every change; lets an edit or delete detect a stale form.
+    version: int('version').notNull().default(0),
   },
   (t) => [
     index('idx_events_starts').on(t.startsAt),

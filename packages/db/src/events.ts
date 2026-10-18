@@ -62,6 +62,33 @@ export const refused = (message: string): ActionResult => ({
   message,
 });
 export const NOT_FOUND = 'Nie znaleziono wydarzenia.';
+export const CONFLICT =
+  "Someone changed this event while you were editing. Your changes weren't saved — reload to see the current version.";
+
+export type VersionOpts = { expectedVersion?: number };
+/** SQL fragment for `SET version = version + 1` on an `events` row. */
+export const bumpEvent = sql`${events.version} + 1`;
+
+/**
+ * Inside a transaction: locks the event row and, when `expectedVersion` is
+ * given, refuses a deleted event (NOT_FOUND) or a stale version (CONFLICT)
+ * before anything is written. Null when the caller may proceed.
+ */
+export async function checkExpectedVersion(
+  tx: DbExecutor,
+  eventId: number,
+  opts: VersionOpts,
+): Promise<ActionResult | null> {
+  if (opts.expectedVersion === undefined) return null;
+  const [cur] = await tx
+    .select({ version: events.version, deletedAt: events.deletedAt })
+    .from(events)
+    .where(eq(events.id, eventId))
+    .for('update');
+  if (!cur || cur.deletedAt !== null) return refused(NOT_FOUND);
+  if (cur.version !== opts.expectedVersion) return refused(CONFLICT);
+  return null;
+}
 
 /** The validated, normalised fields of an event. */
 export type Fields = {
@@ -347,6 +374,7 @@ export async function editEvent(
   patch: Partial<EventInput>,
   source: EventSource,
   scope: Scope = 'one',
+  opts: VersionOpts = {},
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
@@ -356,7 +384,7 @@ export async function editEvent(
     .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
   if (!row) return refused(NOT_FOUND);
   if (row.seriesId !== null) {
-    return editInSeries(db, userId, row, patch, source, scope);
+    return editInSeries(db, userId, row, patch, source, scope, opts);
   }
   const cur = rowFields(row);
   const v = await validatePatch(db, cur, patch);
@@ -364,14 +392,29 @@ export async function editEvent(
   const next = v.fields;
   const changes = diffFields(cur, next);
   if (Object.keys(changes).length === 0) {
+    if (opts.expectedVersion !== undefined) {
+      return withTxRetry(db, async (tx) => {
+        const stale = await checkExpectedVersion(tx, eventId, opts);
+        if (stale) return stale;
+        if (row.topicId === null) await upsert(tx, eventId);
+        return { ok: true, message: 'Brak zmian.' };
+      });
+    }
     // Saving unchanged retries a post that never got made.
     if (row.topicId === null) await upsert(db, eventId);
     return { ok: true, message: 'Brak zmian.' };
   }
-  await withTxRetry(db, async (tx) => {
+  return withTxRetry(db, async (tx) => {
+    const stale = await checkExpectedVersion(tx, eventId, opts);
+    if (stale) return stale;
     await tx
       .update(events)
-      .set({ ...next, updatedBy: userId, updatedAt: new Date() })
+      .set({
+        ...next,
+        updatedBy: userId,
+        updatedAt: new Date(),
+        version: bumpEvent,
+      })
       .where(eq(events.id, eventId));
     await writeAudit(tx, {
       userId,
@@ -380,8 +423,8 @@ export async function editEvent(
       details: { source, changes },
     });
     await upsert(tx, eventId);
+    return { ok: true, message: 'Zapisano zmiany.' };
   });
-  return { ok: true, message: 'Zapisano zmiany.' };
 }
 
 export async function deleteEvent(
@@ -390,6 +433,7 @@ export async function deleteEvent(
   eventId: number,
   source: EventSource,
   scope: Scope = 'one',
+  opts: VersionOpts = {},
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
@@ -398,12 +442,19 @@ export async function deleteEvent(
     .from(events)
     .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
   if (row?.seriesId != null) {
-    return deleteInSeries(db, userId, row, source, scope);
+    return deleteInSeries(db, userId, row, source, scope, opts);
   }
   return withTxRetry(db, async (tx) => {
+    const stale = await checkExpectedVersion(tx, eventId, opts);
+    if (stale) return stale;
     const [res] = await tx
       .update(events)
-      .set({ deletedAt: new Date(), updatedBy: userId, updatedAt: new Date() })
+      .set({
+        deletedAt: new Date(),
+        updatedBy: userId,
+        updatedAt: new Date(),
+        version: bumpEvent,
+      })
       .where(and(eq(events.id, eventId), isNull(events.deletedAt)));
     if (res.affectedRows === 0) return refused(NOT_FOUND);
     await writeAudit(tx, {
@@ -432,7 +483,12 @@ export async function restoreEvent(
   return withTxRetry(db, async (tx) => {
     const [res] = await tx
       .update(events)
-      .set({ deletedAt: null, updatedBy: adminUserId, updatedAt: new Date() })
+      .set({
+        deletedAt: null,
+        updatedBy: adminUserId,
+        updatedAt: new Date(),
+        version: bumpEvent,
+      })
       .where(and(eq(events.id, eventId), sql`${events.deletedAt} IS NOT NULL`));
     if (res.affectedRows === 0) {
       return refused('Nie znaleziono usuniętego wydarzenia.');
@@ -496,6 +552,10 @@ export async function linkTopic(
       return refused(`Można powiązać najwyżej ${MAX_EVENT_LINKS} postów.`);
     }
     await tx.insert(eventTopics).values({ eventId, topicId });
+    await tx
+      .update(events)
+      .set({ version: bumpEvent })
+      .where(eq(events.id, eventId));
     await writeAudit(tx, {
       userId,
       action: 'event.link',
@@ -530,6 +590,10 @@ export async function unlinkTopic(
         and(eq(eventTopics.eventId, eventId), eq(eventTopics.topicId, topicId)),
       );
     if (res.affectedRows === 0) return refused('Ten post nie jest powiązany.');
+    await tx
+      .update(events)
+      .set({ version: bumpEvent })
+      .where(eq(events.id, eventId));
     await writeAudit(tx, {
       userId,
       action: 'event.unlink',

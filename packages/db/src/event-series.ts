@@ -7,13 +7,15 @@
  * occurrence or "following" (it and all later ones).
  */
 
-import { and, asc, eq, gte, isNull } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, sql } from 'drizzle-orm';
 import type { ActionResult } from './admin-actions.js';
 import { writeAudit } from './audit.js';
 import { enqueueBotRequest } from './bot-requests.js';
 import type { Db, DbExecutor } from './client.js';
 import {
+  bumpEvent,
   checkAddRateLimit,
+  checkExpectedVersion,
   checkUser,
   diffFields,
   type EventInput,
@@ -27,6 +29,7 @@ import {
   refused,
   rowFields,
   type Scope,
+  type VersionOpts,
   validateEvent,
   validatePatch,
 } from './events.js';
@@ -43,6 +46,8 @@ const STEP_DAYS: Record<SeriesRule, number> = { weekly: 7, biweekly: 14 };
 const isoDate = (d: Date) => d.toISOString().slice(0, 10);
 const dayStart = (d: Date) =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
+
+const bumpSeries = sql`${eventSeries.version} + 1`;
 
 const upsertSeries = (db: DbExecutor, id: number) =>
   enqueueBotRequest(db, 'event_post_upsert', `series:${id}`);
@@ -206,7 +211,7 @@ export async function seriesTopicIds(
 export async function reviveSeries(tx: DbExecutor, seriesId: number) {
   await tx
     .update(eventSeries)
-    .set({ deletedAt: null })
+    .set({ deletedAt: null, version: bumpSeries })
     .where(eq(eventSeries.id, seriesId));
   await upsertSeries(tx, seriesId);
 }
@@ -258,6 +263,7 @@ export async function editInSeries(
   patch: Partial<EventInput>,
   source: EventSource,
   scope: Scope,
+  opts: VersionOpts = {},
 ): Promise<ActionResult> {
   const seriesId = row.seriesId as number;
   const curTarget = rowFields(row);
@@ -284,12 +290,16 @@ export async function editInSeries(
   const changed = plan.filter((p) => Object.keys(p.changes).length > 0);
   if (changed.length === 0) {
     // Saving unchanged retries a post that never got made.
-    const [s] = await db
-      .select({ topicId: eventSeries.topicId })
-      .from(eventSeries)
-      .where(eq(eventSeries.id, seriesId));
-    if (s && s.topicId === null) await upsertSeries(db, seriesId);
-    return { ok: true, message: 'Brak zmian.' };
+    return withTxRetry(db, async (tx) => {
+      const stale = await checkExpectedVersion(tx, row.id, opts);
+      if (stale) return stale;
+      const [s] = await tx
+        .select({ topicId: eventSeries.topicId })
+        .from(eventSeries)
+        .where(eq(eventSeries.id, seriesId));
+      if (s && s.topicId === null) await upsertSeries(tx, seriesId);
+      return { ok: true, message: 'Brak zmian.' };
+    });
   }
   return withTxRetry(db, async (tx) => {
     const [series] = await tx
@@ -298,6 +308,10 @@ export async function editInSeries(
       .where(eq(eventSeries.id, seriesId))
       .for('update');
     if (!series) return refused(NOT_FOUND);
+    // The plan above was computed outside the transaction: a stale version
+    // is refused here, before any write.
+    const stale = await checkExpectedVersion(tx, row.id, opts);
+    if (stale) return stale;
     let targetSeries = seriesId;
     const touched = [seriesId];
     const split = scope === 'following' && idx > 0;
@@ -337,6 +351,7 @@ export async function editInSeries(
             ? { ...p.next, updatedBy: userId, updatedAt: now }
             : {}),
           seriesId: targetSeries,
+          version: bumpEvent,
         })
         .where(eq(events.id, p.row.id));
     }
@@ -364,6 +379,10 @@ export async function editInSeries(
         changes: plan.find((p) => p.row.id === row.id)?.changes ?? {},
       },
     });
+    await tx
+      .update(eventSeries)
+      .set({ version: bumpSeries })
+      .where(inArray(eventSeries.id, touched));
     for (const id of touched) await upsertSeries(tx, id);
     return { ok: true, message: 'Zapisano zmiany.' };
   });
@@ -375,6 +394,7 @@ export async function deleteInSeries(
   row: EventRow,
   source: EventSource,
   scope: Scope,
+  opts: VersionOpts = {},
 ): Promise<ActionResult> {
   const seriesId = row.seriesId as number;
   return withTxRetry(db, async (tx) => {
@@ -383,6 +403,8 @@ export async function deleteInSeries(
       .from(eventSeries)
       .where(eq(eventSeries.id, seriesId))
       .for('update');
+    const stale = await checkExpectedVersion(tx, row.id, opts);
+    if (stale) return stale;
     const where =
       scope === 'following'
         ? and(
@@ -394,7 +416,12 @@ export async function deleteInSeries(
     const now = new Date();
     const [res] = await tx
       .update(events)
-      .set({ deletedAt: now, updatedBy: userId, updatedAt: now })
+      .set({
+        deletedAt: now,
+        updatedBy: userId,
+        updatedAt: now,
+        version: bumpEvent,
+      })
       .where(where);
     if (res.affectedRows === 0) return refused(NOT_FOUND);
     await writeAudit(tx, {
@@ -407,13 +434,16 @@ export async function deleteInSeries(
     if (left.length === 0) {
       await tx
         .update(eventSeries)
-        .set({ deletedAt: now })
+        .set({ deletedAt: now, version: bumpSeries })
         .where(eq(eventSeries.id, seriesId));
       await archiveSeries(tx, seriesId);
     } else {
       await tx
         .update(eventSeries)
-        .set({ until: isoDate(left[left.length - 1].startsAt) })
+        .set({
+          until: isoDate(left[left.length - 1].startsAt),
+          version: bumpSeries,
+        })
         .where(eq(eventSeries.id, seriesId));
       await upsertSeries(tx, seriesId);
     }
@@ -483,6 +513,10 @@ export async function linkSeriesTopic(
       return refused(`Można powiązać najwyżej ${MAX_EVENT_LINKS} postów.`);
     }
     await tx.insert(eventTopics).values({ seriesId, topicId });
+    await tx
+      .update(eventSeries)
+      .set({ version: bumpSeries })
+      .where(eq(eventSeries.id, seriesId));
     await writeAudit(tx, {
       userId,
       action: 'event.link',
@@ -513,6 +547,10 @@ export async function unlinkSeriesTopic(
         ),
       );
     if (res.affectedRows === 0) return refused('Ten post nie jest powiązany.');
+    await tx
+      .update(eventSeries)
+      .set({ version: bumpSeries })
+      .where(eq(eventSeries.id, seriesId));
     await writeAudit(tx, {
       userId,
       action: 'event.unlink',

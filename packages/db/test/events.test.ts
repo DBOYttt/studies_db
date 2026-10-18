@@ -5,6 +5,7 @@ import { createDb, type Db } from '../src/client.js';
 import {
   addEvent,
   BANNED_MESSAGE,
+  CONFLICT,
   deleteEvent,
   type EventInput,
   editEvent,
@@ -500,6 +501,88 @@ describe('event actions', () => {
       }
       expect(BANNED_MESSAGE).toBe('Twój dostęp do strony jest zablokowany.');
       expect(await counts()).toEqual(before);
+    });
+  });
+
+  describe('optimistic version', () => {
+    const edits = (eid: number) => auditRows('event.edit', String(eid));
+    it('editEvent with the current version succeeds and bumps it', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      const v0 = (await getEvent(db, eid as number))?.version;
+      expect(v0).toBe(0);
+      const r = await editEvent(
+        db,
+        id.u,
+        eid as number,
+        { title: 'Nowy' },
+        'web',
+        'one',
+        { expectedVersion: v0 },
+      );
+      expect(r.ok).toBe(true);
+      expect((await getEvent(db, eid as number))?.version).toBe(1);
+    });
+    it('a stale version is refused with no write, audit or request', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      await editEvent(db, id.u, eid as number, { title: 'B' }, 'web');
+      const reqs = (await db.select().from(botRequests)).length;
+      const audits = (await edits(eid as number)).length;
+      const r = await editEvent(
+        db,
+        id.u,
+        eid as number,
+        { title: 'C' },
+        'web',
+        'one',
+        { expectedVersion: 0 },
+      );
+      expect(r).toEqual({ ok: false, message: CONFLICT });
+      expect((await getEvent(db, eid as number))?.title).toBe('B');
+      expect((await edits(eid as number)).length).toBe(audits);
+      expect((await db.select().from(botRequests)).length).toBe(reqs);
+    });
+    it('an unchanged save with a stale version is also a conflict', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      await editEvent(db, id.u, eid as number, { title: 'B' }, 'web');
+      const r = await editEvent(
+        db,
+        id.u,
+        eid as number,
+        { title: 'B' },
+        'web',
+        'one',
+        { expectedVersion: 0 },
+      );
+      expect(r).toEqual({ ok: false, message: CONFLICT });
+    });
+    it('without expectedVersion there is no check', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      await editEvent(db, id.u, eid as number, { title: 'B' }, 'web');
+      const r = await editEvent(db, id.u, eid as number, { title: 'C' }, 'web');
+      expect(r.ok).toBe(true);
+      expect((await getEvent(db, eid as number))?.version).toBe(2);
+    });
+    it('deleteEvent with a stale version is refused; a current one deletes', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      await editEvent(db, id.u, eid as number, { title: 'B' }, 'web');
+      const r = await deleteEvent(db, id.u, eid as number, 'web', 'one', {
+        expectedVersion: 0,
+      });
+      expect(r).toEqual({ ok: false, message: CONFLICT });
+      expect((await getEvent(db, eid as number))?.deletedAt).toBeNull();
+      const ok = await deleteEvent(db, id.u, eid as number, 'web', 'one', {
+        expectedVersion: 1,
+      });
+      expect(ok.ok).toBe(true);
+      expect((await getEvent(db, eid as number))?.version).toBe(2);
+    });
+    it('linkTopic and unlinkTopic bump the version', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      const t = await topic(id.subA);
+      await linkTopic(db, id.u, eid as number, t, 'web');
+      expect((await getEvent(db, eid as number))?.version).toBe(1);
+      await unlinkTopic(db, id.u, eid as number, t, 'web');
+      expect((await getEvent(db, eid as number))?.version).toBe(2);
     });
   });
 

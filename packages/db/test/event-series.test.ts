@@ -7,6 +7,7 @@ import {
   unlinkSeriesTopic,
 } from '../src/event-series.js';
 import {
+  CONFLICT,
   deleteEvent,
   editEvent,
   eventMaterials,
@@ -376,6 +377,74 @@ describe('event series', () => {
       expect(r).toEqual({ ok: true, message: 'Brak zmian.' });
       expect((await db.select().from(adminAudit)).length).toBe(a0);
       expect((await db.select().from(botRequests)).length).toBe(r0);
+      expect((await occ(sid)).length).toBe(rows.length);
+    });
+  });
+
+  describe('optimistic version', () => {
+    it('editInSeries one/following with a stale version is a conflict', async () => {
+      const sid = await mkSeries();
+      const rows = await occ(sid);
+      // Someone else edits the target first.
+      await editEvent(db, id.u, rows[2].id, { place: 'X' }, 'web', 'one');
+      const [before] = await db
+        .select()
+        .from(eventSeries)
+        .where(eq(eventSeries.id, sid));
+      const seriesBefore = (await db.select().from(eventSeries)).length;
+      for (const scope of ['one', 'following'] as const) {
+        const r = await editEvent(
+          db,
+          id.u,
+          rows[2].id,
+          { title: 'Nope' },
+          'web',
+          scope,
+          { expectedVersion: 0 },
+        );
+        expect(r).toEqual({ ok: false, message: CONFLICT });
+      }
+      expect((await occ(sid)).every((e) => e.title === 'Konsultacje')).toBe(
+        true,
+      );
+      expect((await db.select().from(eventSeries)).length).toBe(seriesBefore);
+      const [after] = await db
+        .select()
+        .from(eventSeries)
+        .where(eq(eventSeries.id, sid));
+      expect(after.until).toBe(before.until);
+      expect(after.version).toBe(before.version);
+    });
+    it('a current version edits and bumps event and series', async () => {
+      const sid = await mkSeries();
+      const rows = await occ(sid);
+      const r = await editEvent(
+        db,
+        id.u,
+        rows[1].id,
+        { title: 'Ok' },
+        'web',
+        'one',
+        { expectedVersion: 0 },
+      );
+      expect(r.ok).toBe(true);
+      expect((await getEvent(db, rows[1].id))?.version).toBe(1);
+      const [s] = await db
+        .select()
+        .from(eventSeries)
+        .where(eq(eventSeries.id, sid));
+      expect(s.version).toBe(1);
+    });
+    it('deleteInSeries with a stale version is a conflict', async () => {
+      const sid = await mkSeries();
+      const rows = await occ(sid);
+      await editEvent(db, id.u, rows[2].id, { place: 'X' }, 'web', 'one');
+      for (const scope of ['one', 'following'] as const) {
+        const r = await deleteEvent(db, id.u, rows[2].id, 'web', scope, {
+          expectedVersion: 0,
+        });
+        expect(r).toEqual({ ok: false, message: CONFLICT });
+      }
       expect((await occ(sid)).length).toBe(rows.length);
     });
   });
