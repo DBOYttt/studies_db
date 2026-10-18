@@ -6,6 +6,7 @@
  * Messages are Polish and identical on both surfaces. Times are wall-clock
  * Warsaw time (UTC fields = local), never converted.
  */
+
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type mysql from 'mysql2/promise';
 import type { ActionResult } from './admin-actions.js';
@@ -33,6 +34,7 @@ import {
   topics,
   users,
 } from './schema.js';
+import { withTxRetry } from './tx.js';
 
 export type EventSource = 'web' | 'discord';
 
@@ -214,7 +216,7 @@ export async function addEvent(
   if (isRefusal(user)) return user;
   const v = await validateEvent(db, input);
   if (!v.ok) return refused(v.message);
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const limited = await checkAddRateLimit(tx, userId);
     if (limited) return limited;
     const f = v.fields;
@@ -366,7 +368,7 @@ export async function editEvent(
     if (row.topicId === null) await upsert(db, eventId);
     return { ok: true, message: 'Brak zmian.' };
   }
-  await db.transaction(async (tx) => {
+  await withTxRetry(db, async (tx) => {
     await tx
       .update(events)
       .set({ ...next, updatedBy: userId, updatedAt: new Date() })
@@ -398,7 +400,7 @@ export async function deleteEvent(
   if (row?.seriesId != null) {
     return deleteInSeries(db, userId, row, source, scope);
   }
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const [res] = await tx
       .update(events)
       .set({ deletedAt: new Date(), updatedBy: userId, updatedAt: new Date() })
@@ -427,7 +429,7 @@ export async function restoreEvent(
   if (!user.isAdmin) {
     return refused('Tylko administrator może przywrócić wydarzenie.');
   }
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const [res] = await tx
       .update(events)
       .set({ deletedAt: null, updatedBy: adminUserId, updatedAt: new Date() })
@@ -468,7 +470,7 @@ export async function linkTopic(
   if (own?.seriesId != null) {
     return linkSeriesTopic(db, userId, own.seriesId, topicId, source);
   }
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const [ev] = await tx
       .select({ subjectId: events.subjectId })
       .from(events)
@@ -521,7 +523,7 @@ export async function unlinkTopic(
   if (own?.seriesId != null) {
     return unlinkSeriesTopic(db, userId, own.seriesId, topicId, source);
   }
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const [res] = await tx
       .delete(eventTopics)
       .where(

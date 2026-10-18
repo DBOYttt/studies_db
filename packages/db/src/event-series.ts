@@ -6,6 +6,7 @@
  * requests for a series target `series:<id>`. Edit/delete take a scope: "one"
  * occurrence or "following" (it and all later ones).
  */
+
 import { and, asc, eq, gte, isNull } from 'drizzle-orm';
 import type { ActionResult } from './admin-actions.js';
 import { writeAudit } from './audit.js';
@@ -30,6 +31,7 @@ import {
   validatePatch,
 } from './events.js';
 import { eventSeries, events, eventTopics, topics } from './schema.js';
+import { withTxRetry } from './tx.js';
 
 export type SeriesRule = 'weekly' | 'biweekly';
 export type SeriesInput = EventInput & { rule: SeriesRule; until: string };
@@ -144,7 +146,7 @@ export async function addSeries(
   }
   const gen = occurrenceTimes(f, input.rule, until);
   if (!gen.ok) return refused(gen.message);
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const limited = await checkAddRateLimit(tx, userId);
     if (limited) return limited;
     const [s] = await tx
@@ -289,7 +291,7 @@ export async function editInSeries(
     if (s && s.topicId === null) await upsertSeries(db, seriesId);
     return { ok: true, message: 'Brak zmian.' };
   }
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const [series] = await tx
       .select()
       .from(eventSeries)
@@ -375,7 +377,7 @@ export async function deleteInSeries(
   scope: Scope,
 ): Promise<ActionResult> {
   const seriesId = row.seriesId as number;
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     await tx
       .select({ id: eventSeries.id })
       .from(eventSeries)
@@ -454,7 +456,7 @@ export async function linkSeriesTopic(
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     await tx
       .select({ id: eventSeries.id })
       .from(eventSeries)
@@ -501,7 +503,7 @@ export async function unlinkSeriesTopic(
 ): Promise<ActionResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
-  return db.transaction(async (tx) => {
+  return withTxRetry(db, async (tx) => {
     const [res] = await tx
       .delete(eventTopics)
       .where(
