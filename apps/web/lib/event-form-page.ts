@@ -29,16 +29,22 @@ export function newEventDefaults(sp: SP): EventFormValues {
   };
 }
 
-/** Current values of a live event for the edit form; 404 if missing/deleted. */
-export async function loadEventForm(id: number): Promise<EventFormValues> {
+/**
+ * Current values of an event for the edit form; 404 if it does not exist. A
+ * soft-deleted event comes back with `deleted: true` (and its own values) so
+ * the page can explain instead of 404-ing.
+ */
+export async function loadEventForm(
+  id: number,
+): Promise<{ values: EventFormValues; deleted: boolean }> {
   const ev = await getEvent(getDb(), id);
-  if (!ev || ev.deletedAt !== null) notFound();
+  if (!ev) notFound();
   const w = formWhen(
     toWall(ev.startsAt),
     ev.endsAt ? toWall(ev.endsAt) : null,
     ev.allDay,
   );
-  return {
+  const values: EventFormValues = {
     kind: ev.kind,
     title: ev.title,
     subjectId: ev.subjectId,
@@ -48,5 +54,7 @@ export async function loadEventForm(id: number): Promise<EventFormValues> {
     place: ev.place ?? '',
     note: ev.note ?? '',
     inSeries: ev.series !== null,
+    version: ev.version,
   };
+  return { values, deleted: ev.deletedAt !== null };
 }

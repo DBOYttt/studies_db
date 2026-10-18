@@ -20,12 +20,15 @@ export function EventButtons({
   editHref,
   deleted,
   inSeries = false,
+  version,
 }: {
   id: number;
   base: 'simple' | 'advanced';
   editHref: string;
   deleted: boolean;
   inSeries?: boolean;
+  /** Row version when the page was rendered; a stale delete is refused. */
+  version?: number;
 }) {
   const router = useRouter();
   const [confirming, setConfirming] = useState(false);
@@ -78,7 +81,9 @@ export function EventButtons({
                   type="button"
                   disabled={pending}
                   className={`${btn} border-err-fg text-err-fg`}
-                  onClick={() => run(() => deleteEventAction(id, base, 'one'))}
+                  onClick={() =>
+                    run(() => deleteEventAction(id, base, 'one', version))
+                  }
                 >
                   Tylko to
                 </button>
@@ -87,7 +92,7 @@ export function EventButtons({
                   disabled={pending}
                   className={`${btn} border-err-fg text-err-fg`}
                   onClick={() =>
-                    run(() => deleteEventAction(id, base, 'following'))
+                    run(() => deleteEventAction(id, base, 'following', version))
                   }
                 >
                   To i następne
@@ -98,7 +103,9 @@ export function EventButtons({
                 type="button"
                 disabled={pending}
                 className={`${btn} border-err-fg text-err-fg`}
-                onClick={() => run(() => deleteEventAction(id, base))}
+                onClick={() =>
+                  run(() => deleteEventAction(id, base, 'one', version))
+                }
               >
                 Tak, usuń
               </button>

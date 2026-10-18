@@ -1,6 +1,7 @@
 import {
   adminAudit,
   botRequests,
+  CONFLICT,
   consumeLoginToken,
   createLoginToken,
   type Db,
@@ -174,6 +175,38 @@ describe('event actions', () => {
     cookieSid = admin.sid;
     expect((await A.restoreEventAction(ev.id)).ok).toBe(true);
     expect((await eventRows())[0].deletedAt).toBeNull();
+  });
+
+  it('a stale version is refused; the current one saves', async () => {
+    cookieSid = alice.sid;
+    await expect(
+      A.createEventAction(form({ title: 'Wersje' })),
+    ).rejects.toThrow('redirect');
+    const ev = (await eventRows()).find((e) => e.title === 'Wersje');
+    if (!ev) throw new Error('no event');
+    const { version } = ev;
+    await expect(
+      A.updateEventAction(ev.id, form({ title: 'Inna', version: '99' })),
+    ).resolves.toEqual({ ok: false, message: CONFLICT });
+    expect((await eventRows()).find((e) => e.id === ev.id)?.title).toBe(
+      'Wersje',
+    );
+    await expect(
+      A.updateEventAction(
+        ev.id,
+        form({ title: 'Nowa', version: String(version) }),
+      ),
+    ).rejects.toThrow('redirect');
+    const after = (await eventRows()).find((e) => e.id === ev.id);
+    expect(after?.title).toBe('Nowa');
+    // the old version is now stale, also for a delete
+    expect(await A.deleteEventAction(ev.id, 'simple', 'one', version)).toEqual({
+      ok: false,
+      message: CONFLICT,
+    });
+    await expect(
+      A.deleteEventAction(ev.id, 'simple', 'one', version + 1),
+    ).rejects.toThrow('redirect:/s/plan');
   });
 
   it('searches posts by title within the subject, at most 20', async () => {

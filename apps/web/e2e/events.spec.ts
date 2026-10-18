@@ -238,3 +238,72 @@ test.describe('recurring event', () => {
     }
   });
 });
+
+test.describe('concurrent edits', () => {
+  async function addEvent(page: import('@playwright/test').Page, t: string) {
+    await page.goto('/s/wydarzenia/nowe');
+    await page.getByLabel('Tytuł').fill(t);
+    await page.getByLabel('Data').fill(dateIn(9));
+    await page.getByRole('button', { name: 'Dodaj wydarzenie' }).click();
+    await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+    return new URL(page.url()).pathname;
+  }
+  // A second browser context logged in as the same student.
+  async function otherTab(
+    page: import('@playwright/test').Page,
+    browser: import('@playwright/test').Browser,
+  ) {
+    const ctx = await browser.newContext({ locale: 'pl-PL' });
+    await ctx.addCookies(await page.context().cookies());
+    return { ctx, page: await ctx.newPage() };
+  }
+
+  test('editing a deleted event shows the banner', async ({
+    page,
+    browser,
+  }) => {
+    const url = await addEvent(page, 'Do usunięcia w trakcie');
+    await page.goto(`${url}/edytuj`);
+    await page.getByLabel('Tytuł').waitFor();
+    const b = await otherTab(page, browser);
+    try {
+      await b.page.goto(url);
+      await b.page.getByRole('button', { name: 'Usuń', exact: true }).click();
+      await b.page.getByRole('button', { name: 'Tak, usuń' }).click();
+      await expect(b.page).toHaveURL(/\/s\/plan$/);
+    } finally {
+      await b.ctx.close();
+    }
+    await page.getByLabel('Tytuł').fill('Nowy tytuł po usunięciu');
+    await page.getByRole('button', { name: 'Zapisz' }).click();
+    await expect(
+      page.getByText("This event was deleted. Your changes weren't saved."),
+    ).toBeVisible();
+    await expect(page.getByLabel('Tytuł')).toHaveValue(
+      'Nowy tytuł po usunięciu',
+    );
+    await expect(page.getByRole('button', { name: 'Zapisz' })).toBeDisabled();
+    await expect(
+      page.getByRole('link', { name: 'Back to plan' }),
+    ).toBeVisible();
+  });
+
+  test('two tabs editing one event', async ({ page, browser }) => {
+    const url = await addEvent(page, 'Dwie karty');
+    await page.goto(`${url}/edytuj`);
+    await page.getByLabel('Tytuł').waitFor();
+    const b = await otherTab(page, browser);
+    try {
+      await b.page.goto(`${url}/edytuj`);
+      await b.page.getByLabel('Tytuł').fill('Zmiana z karty B');
+      await b.page.getByRole('button', { name: 'Zapisz' }).click();
+      await expect(b.page).toHaveURL(url);
+    } finally {
+      await b.ctx.close();
+    }
+    await page.getByLabel('Tytuł').fill('Zmiana z karty A');
+    await page.getByRole('button', { name: 'Zapisz' }).click();
+    await expect(page.getByText('Someone changed this event')).toBeVisible();
+    await expect(page.getByLabel('Tytuł')).toHaveValue('Zmiana z karty A');
+  });
+});

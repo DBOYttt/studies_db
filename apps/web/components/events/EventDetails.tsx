@@ -31,6 +31,7 @@ export type EventPageData = {
   postLine: string;
   /** The post failed or is missing: "Spróbuj ponownie". */
   canRetryPost: boolean;
+  version: number;
   files: SimpleFile[];
   linked: LinkedTopic[];
   history: AuditRow[];
@@ -115,6 +116,7 @@ export function EventDetails({
           editHref={editHref}
           deleted={e.deleted}
           inSeries={e.series !== null}
+          version={e.version}
         />
       )}
       <h2 className={h2}>Materiały</h2>

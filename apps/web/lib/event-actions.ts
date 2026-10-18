@@ -63,6 +63,12 @@ const idOrNull = (form: FormData, k: string): number | null | 'bad' => {
   return /^[1-9]\d{0,9}$/.test(v) ? Number(v) : 'bad';
 };
 
+/** Version the form was loaded with; absent or malformed means no check. */
+const versionOf = (v: unknown): number | undefined => {
+  const t = typeof v === 'string' ? v.trim() : '';
+  return /^\d{1,9}$/.test(t) ? Number(t) : undefined;
+};
+
 /** The form's fields as an EventInput (with the composed "Kiedy"). */
 function readForm(form: FormData): EventInput | ActionResult {
   const kind = text(form, 'kind') as EventKind;
@@ -163,6 +169,7 @@ export async function updateEventAction(
     patch,
     'web',
     scopeOf(text(form, 'scope')),
+    { expectedVersion: versionOf(form.get('version')) },
   );
   if (!r.ok) return r;
   refresh(id);
@@ -173,10 +180,18 @@ export async function deleteEventAction(
   id: number,
   base: Base = 'simple',
   scope: 'one' | 'following' = 'one',
+  version?: number,
 ): Promise<ActionResult> {
   const user = await requireUser();
   if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
-  const r = await deleteEvent(getDb(), user.id, id, 'web', scopeOf(scope));
+  const r = await deleteEvent(getDb(), user.id, id, 'web', scopeOf(scope), {
+    expectedVersion:
+      typeof version === 'number' &&
+      Number.isSafeInteger(version) &&
+      version >= 0
+        ? version
+        : undefined,
+  });
   if (!r.ok) return r;
   refresh(id);
   redirect(planHref(base === 'advanced' ? 'advanced' : 'simple'));

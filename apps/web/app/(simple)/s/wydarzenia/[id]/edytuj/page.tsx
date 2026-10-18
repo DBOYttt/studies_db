@@ -19,7 +19,7 @@ export default async function SimpleEditEvent({
   const user = await requireUser();
   const id = parseEventId((await params).id);
   const db = getDb();
-  const [initial, cards, options] = await Promise.all([
+  const [{ values: initial, deleted }, cards, options] = await Promise.all([
     loadEventForm(id),
     listSubjectCards(db),
     listEventSubjectOptions(db),
@@ -46,6 +46,9 @@ export default async function SimpleEditEvent({
         initial={initial}
         eventId={id}
         cancelHref={`/s/wydarzenia/${id}`}
+        deleted={deleted}
+        isAdmin={user.isAdmin}
+        planHref="/s/plan"
       />
     </SimpleShell>
   );

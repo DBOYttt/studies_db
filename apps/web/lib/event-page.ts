@@ -69,6 +69,7 @@ export async function loadEventPage(
     updatedByName: ev.updatedByName,
     series: ev.series ? { rule: ev.series.rule, until: ev.series.until } : null,
     deleted: ev.deletedAt !== null,
+    version: ev.version,
     postLine,
     canRetryPost,
     files,

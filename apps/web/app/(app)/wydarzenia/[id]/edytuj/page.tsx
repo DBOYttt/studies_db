@@ -15,9 +15,9 @@ export default async function EditEventPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const id = parseEventId((await params).id);
-  const [initial, options] = await Promise.all([
+  const [{ values: initial, deleted }, options] = await Promise.all([
     loadEventForm(id),
     listEventSubjectOptions(getDb()),
   ]);
@@ -38,6 +38,9 @@ export default async function EditEventPage({
         initial={initial}
         eventId={id}
         cancelHref={`/wydarzenia/${id}`}
+        deleted={deleted}
+        isAdmin={user.isAdmin}
+        planHref="/plan"
       />
     </>
   );
