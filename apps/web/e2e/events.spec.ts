@@ -6,6 +6,8 @@ loginOnce('events', process.env.E2E_TOKEN_EVENTS, { mode: 'simple' });
 test.describe.configure({ mode: 'serial' });
 
 let eventUrl = '';
+// The admin's login token is single use: its cookies are kept for later tests.
+let adminCookies: import('@playwright/test').Cookie[] = [];
 
 function dateIn(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
@@ -190,6 +192,8 @@ test('delete the event; an admin sees it with Przywróć', async ({
       `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_EVENTS_ADMIN}`,
     );
     await p.getByRole('button', { name: 'Zaloguj się' }).click();
+    await expect(p).toHaveURL(/localhost:3100\/s$/);
+    adminCookies = await admin.cookies();
     await p.goto(`http://localhost:3100${eventUrl.replace('/s', '')}`);
     await expect(p.getByText('Wydarzenie usunięte')).toBeVisible();
     await p.getByRole('button', { name: 'Przywróć' }).click();
@@ -286,6 +290,38 @@ test.describe('concurrent edits', () => {
     await expect(
       page.getByRole('link', { name: 'Back to plan' }),
     ).toBeVisible();
+  });
+
+  test('an admin restores from the banner, then saves', async ({
+    page,
+    browser,
+  }) => {
+    const url = await addEvent(page, 'Przywróć i zapisz');
+    await page.getByRole('button', { name: 'Usuń', exact: true }).click();
+    await page.getByRole('button', { name: 'Tak, usuń' }).click();
+    await expect(page).toHaveURL(/\/s\/plan$/);
+    const admin = await browser.newContext({ locale: 'pl-PL' });
+    try {
+      const p = await admin.newPage();
+      await admin.addCookies(adminCookies);
+      await p.goto(`http://localhost:3100${url.replace('/s', '')}/edytuj`);
+      await expect(
+        p.getByText("This event was deleted. Your changes weren't saved."),
+      ).toBeVisible();
+      await p.getByLabel('Tytuł').fill('Przywrócone i zmienione');
+      await p.getByRole('button', { name: 'Restore' }).click();
+      await expect(p.getByRole('button', { name: 'Restore' })).toBeHidden();
+      await expect(p.getByLabel('Tytuł')).toHaveValue(
+        'Przywrócone i zmienione',
+      );
+      await p.getByRole('button', { name: 'Zapisz' }).click();
+      await expect(p).toHaveURL(/\/wydarzenia\/\d+$/);
+      await expect(
+        p.getByRole('heading', { name: 'Przywrócone i zmienione' }),
+      ).toBeVisible();
+    } finally {
+      await admin.close();
+    }
   });
 
   test('two tabs editing one event', async ({ page, browser }) => {

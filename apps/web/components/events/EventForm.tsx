@@ -4,7 +4,7 @@ import { FloppyDisk } from '@phosphor-icons/react';
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import {
   createEventAction,
   restoreEventAction,
@@ -68,7 +68,13 @@ export function EventForm({
   const router = useRouter();
   // Kept from the first render: a refresh after a refusal must not swap in a
   // newer version, or the next Save would silently overwrite the other edit.
-  const [version] = useState(initial.version);
+  const [version, setVersion] = useState(initial.version);
+  // Restoring (or deleting) bumps the row's version. While the event is
+  // deleted Save is disabled, so adopting the fresh version once it is live
+  // again is safe; a plain conflict never refreshes, so it keeps the old one.
+  useEffect(() => {
+    if (!deleted) setVersion(initial.version);
+  }, [deleted, initial.version]);
   const [subjectId, setSubjectId] = useState(initial.subjectId);
   const [classId, setClassId] = useState(initial.classId);
   const [groupId, setGroupId] = useState(initial.groupId);
