@@ -14,6 +14,8 @@ import { createLoginToken, upsertUser } from '../auth.js';
 import { createDb } from '../client.js';
 import { addSeries } from '../event-series.js';
 import { addEvent } from '../events.js';
+import { ensureReadonlyUser } from '../readonly-user.js';
+import { ensureReadWriteUser } from '../readwrite-user.js';
 import { subjects, users } from '../schema.js';
 import { closeTestDb, resetTestDb } from '../testing.js';
 
@@ -49,6 +51,13 @@ export function qaDatabaseUrl(): string {
   return u.toString();
 }
 
+/**
+ * The sandbox's own RO/RW users. The test users (`studies_*_test`) can't be
+ * shared: every test run recreates them with grants on `studies_test` only.
+ */
+export const QA_RO_USER = { user: 'studies_ro_qa', password: 'qa-ro' };
+export const QA_RW_USER = { user: 'studies_rw_qa', password: 'qa-rw' };
+
 const discordId = (p: string) => `qa-${p}`;
 
 async function sandbox(): Promise<void> {
@@ -57,6 +66,8 @@ async function sandbox(): Promise<void> {
   rmSync(QA_STORAGE_DIR, { recursive: true, force: true });
   mkdirSync(QA_STORAGE_DIR, { recursive: true });
   await closeTestDb(await resetTestDb());
+  await ensureReadonlyUser(url, QA_RO_USER.password, QA_RO_USER.user);
+  await ensureReadWriteUser(url, QA_RW_USER.password, QA_RW_USER.user);
 
   const seeded = spawnSync(
     process.execPath,

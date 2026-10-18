@@ -31,9 +31,9 @@ const child = spawn('npx', ['next', 'dev', '--webpack', '-p', String(port)], {
     ...process.env,
     NEXT_DIST_DIR: '.next-qa',
     DATABASE_URL: withUser(),
-    // Same users as the test DB (created by resetTestDb), granted on this DB too.
-    DATABASE_RO_URL: withUser('studies_ro_test', 'test-ro'),
-    DATABASE_RW_URL: withUser('studies_rw_test', 'test-rw'),
+    // The sandbox's own users (QA_RO_USER / QA_RW_USER in packages/db/src/cli/qa.ts).
+    DATABASE_RO_URL: withUser('studies_ro_qa', 'qa-ro'),
+    DATABASE_RW_URL: withUser('studies_rw_qa', 'qa-rw'),
     STORAGE_DIR: storage,
     WEB_BASE_URL: `http://localhost:${port}`,
     DISCORD_GUILD_ID: 'qaguild',
