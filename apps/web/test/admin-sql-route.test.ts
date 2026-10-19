@@ -528,6 +528,27 @@ describe('handleAdminSqlRequest', () => {
     }
   });
 
+  it('real grants: a column-restricted UPDATE is refused, explained and audited', async () => {
+    const sql = 'UPDATE events SET topic_id = topic_id WHERE id = 0';
+    const before = await auditCount('sql.rejected');
+    const res = await call({ mode: 'preview', sql });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toBe(
+      "Column `topic_id` of `events` can't be changed from the console.",
+    );
+    const rows = await db
+      .select()
+      .from(adminAudit)
+      .where(eq(adminAudit.action, 'sql.rejected'));
+    expect(rows).toHaveLength(before + 1);
+    expect(rows[rows.length - 1].details).toMatchObject({
+      reason: 'permission',
+      errno: 1143,
+      table: 'events',
+      column: 'topic_id',
+    });
+  });
+
   it('a rejected statement is 400 with one sql.rejected audit row', async () => {
     const before = await auditCount('sql.rejected');
     const res = await call({ mode: 'preview', sql: 'DROP TABLE tags' });

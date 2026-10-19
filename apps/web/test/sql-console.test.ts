@@ -10,6 +10,7 @@ import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import { sql } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import { configuredDbNames } from '../lib/sql-messages';
 
 let db: Db;
 let roPool: mysql.Pool;
@@ -121,12 +122,13 @@ describe('error mapping', () => {
   it('sanitizes a denial: no user, host or schema', () => {
     const e = Object.assign(
       new Error(
-        "SELECT command denied to user 'studies_ro_qa'@'10.88.0.2' for table `studies_qa_test`.`users`",
+        `SELECT command denied to user 'studies_ro_qa'@'10.88.0.2' for table \`${configuredDbNames()[0]}\`.\`users\``,
       ),
       { errno: 1142 },
     );
     const m = queryErrorMessage(e);
-    expect(m).not.toMatch(/@|studies_/);
+    expect(configuredDbNames().length).toBeGreaterThan(0);
+    expect(m).not.toMatch(/@|studies_ro|\.`/);
     expect(m).toContain('`users`');
   });
   it('runReadonlyQuery maps getConnection failures', async () => {
