@@ -44,12 +44,12 @@ export async function loadEventPage(
   const pending = req?.status === 'queued' || req?.status === 'running';
   const postLine =
     postTopicId !== null
-      ? 'Post na Discordzie: utworzony'
+      ? 'Discord post: created'
       : req?.status === 'failed'
-        ? `Post na Discordzie: błąd${req.error ? ` (${req.error})` : ''}`
+        ? `Discord post: failed${req.error ? ` (${req.error})` : ''}`
         : pending
-          ? 'Post na Discordzie: w przygotowaniu'
-          : 'Post na Discordzie: brak';
+          ? 'Discord post: being prepared'
+          : 'Discord post: none';
   // Failed, or no request is on its way: the post can be asked for again.
   const canRetryPost =
     ev.deletedAt === null && postTopicId === null && !pending;

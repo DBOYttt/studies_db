@@ -18,10 +18,10 @@ const selectCls =
   'h-7 w-full rounded border border-line-strong bg-panel px-1.5 text-fg sm:w-56';
 
 /**
- * "Moje grupy": one select per class with groups (Wszystkie = no choice).
+ * "My groups": one select per class with groups (All = no choice).
  * Each pick shows at once and is saved to the account in the background (a
- * rejected save reverts that one choice); Zapisz waits for pending saves and
- * returns to the week view; Wyczyść forgets all choices.
+ * rejected save reverts that one choice); Save waits for pending saves and
+ * returns to the week view; Clear forgets all choices.
  */
 export function MyGroupsForm({
   options,
@@ -109,17 +109,17 @@ export function MyGroupsForm({
       <div className="flex items-center gap-1.5 border-b border-line-strong bg-box-head px-3 py-[7px]">
         <UsersThree size={15} className="text-accent-ink" aria-hidden />
         <h2 id="my-groups-title" className="m-0 text-[13px] font-semibold">
-          Moje grupy
+          My groups
         </h2>
       </div>
       <p className="m-0 border-b border-line px-3 py-2 text-muted">
-        Wybierz swoją grupę w zajęciach z podziałem na grupy. Tydzień pokaże
-        tylko te grupy; wykłady i zajęcia bez wyboru zostają widoczne. Wybór
-        jest zapisany na Twoim koncie.
+        Pick your group in each class that is split into groups. The week view
+        shows only those groups; lectures and classes you have not chosen for
+        stay visible. Your choice is saved to your account.
       </p>
       {options.length === 0 ? (
         <p className="m-0 px-3 py-6 text-center text-muted">
-          Brak zajęć z podziałem na grupy.
+          No classes are split into groups.
         </p>
       ) : (
         <ul>
@@ -144,7 +144,7 @@ export function MyGroupsForm({
                   onChange={(e) => set(o.classId, e.target.value)}
                   className={selectCls}
                 >
-                  <option value="">Wszystkie</option>
+                  <option value="">All</option>
                   {o.groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -161,17 +161,17 @@ export function MyGroupsForm({
           role="alert"
           className="m-0 border-b border-line px-3 py-2 text-err-fg"
         >
-          Nie udało się zapisać wyboru. Spróbuj ponownie.
+          Could not save your choice. Try again.
         </p>
       )}
       <div className="flex flex-wrap gap-1.5 bg-bar px-3 py-2">
         <button type="submit" className={primaryBtn}>
           <FloppyDisk size={14} aria-hidden />
-          Zapisz
+          Save
         </button>
         <button type="button" onClick={onClear} className={btn}>
           <X size={14} aria-hidden />
-          Wyczyść
+          Clear
         </button>
       </div>
     </form>

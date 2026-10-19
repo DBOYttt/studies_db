@@ -30,15 +30,15 @@ export default async function SimpleEditEvent({
       active={{ screen: 'plan' }}
       crumbs={[
         { label: 'Start', href: '/s' },
-        { label: 'Plan zajęć', href: '/s/plan' },
+        { label: 'Timetable', href: '/s/plan' },
         { label: initial.title, href: `/s/wydarzenia/${id}` },
-        { label: 'Edytuj' },
+        { label: 'Edit' },
       ]}
       user={user}
       adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
     >
       <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
-        Edytuj wydarzenie
+        Edit event
       </h1>
       <EventForm
         options={options}

@@ -37,18 +37,18 @@ import busboy from 'busboy';
 import { isCrossOrigin } from './same-origin';
 
 export const UPLOAD_ERRORS = {
-  origin: 'Nieprawidłowe pochodzenie żądania.',
-  notFound: 'Nie znaleziono wydarzenia.',
-  storage: 'Przesyłanie plików jest niedostępne.',
-  none: 'Nie wybrano plików.',
-  count: `Możesz wysłać najwyżej ${MAX_UPLOAD_FILES} plików naraz.`,
-  size: `Plik jest za duży (maks. ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`,
-  total: `Łącznie maks. ${MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB na raz.`,
-  empty: 'Plik jest pusty.',
-  bad: 'Nieprawidłowe żądanie.',
-  rate: `Limit ${MAX_UPLOADS_PER_HOUR} plików na godzinę. Spróbuj później.`,
-  busy: 'Poprzednie wysyłanie jeszcze trwa.',
-  save: 'Nie udało się zapisać plików.',
+  origin: 'Invalid request origin.',
+  notFound: 'Event not found.',
+  storage: 'File upload is unavailable.',
+  none: 'No files selected.',
+  count: `You can send at most ${MAX_UPLOAD_FILES} files at once.`,
+  size: `A file is too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`,
+  total: `Max ${MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB in total at once.`,
+  empty: 'The file is empty.',
+  bad: 'Invalid request.',
+  rate: `Limit of ${MAX_UPLOADS_PER_HOUR} files per hour. Try again later.`,
+  busy: 'The previous upload is still in progress.',
+  save: 'Could not save the files.',
 } as const;
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };

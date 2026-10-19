@@ -4,7 +4,7 @@ export type Chip = { label: string; href: string; active: boolean };
 export type ChipRow = { label: string; chips: Chip[] };
 
 /**
- * Subject chip panel (Zajęcia / Grupa / Rodzaj): every chip is a link to the
+ * Subject chip panel (Class / Group / Type): every chip is a link to the
  * filtered URL; the active one is filled. Label column beside the chips from
  * sm up, stacked above them on phones.
  */

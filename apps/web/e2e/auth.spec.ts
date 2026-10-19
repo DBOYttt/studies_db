@@ -35,7 +35,7 @@ const cases = [
   {
     path: '/sql',
     tree: tree(['(app)']),
-    secrets: ['v_subjects', 'display_name', 'Konsola SQL'],
+    secrets: ['v_subjects', 'display_name', 'Konsola SQL', 'SQL console'],
   },
   {
     path: '/tables/v_users',

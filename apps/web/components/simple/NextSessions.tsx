@@ -4,23 +4,23 @@ import type { PlanSession } from '@/lib/plan';
 import { dayHeader, wallTime } from '@/lib/plan-view';
 
 /**
- * "Najbliższe zajęcia": the subject's next sessions (wall times, UTC getters).
+ * "Next classes": the subject's next sessions (wall times, UTC getters).
  * The page passes confirmed ones only; a cancelled one would still render
- * struck through and marked "Odwołane".
+ * struck through and marked "Cancelled".
  */
 export function NextSessions({ sessions }: { sessions: PlanSession[] }) {
   return (
     <section aria-labelledby="next-sessions" className="flex flex-col gap-2">
       <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-3">
         <h2 id="next-sessions" className="m-0 text-base font-semibold">
-          Najbliższe zajęcia
+          Next classes
         </h2>
         <Link
           href="/s/plan"
           className="flex items-center gap-1 text-[13px] text-accent-ink hover:text-accent-ink-hover hover:underline"
         >
           <CalendarBlank size={15} aria-hidden />
-          Cały plan
+          Full timetable
         </Link>
       </div>
       <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3 p-0">
@@ -41,7 +41,7 @@ export function NextSessions({ sessions }: { sessions: PlanSession[] }) {
                 </span>
                 {cancelled && (
                   <span className="rounded-full border border-err-fg px-2 text-xs text-err-fg">
-                    Odwołane
+                    Cancelled
                   </span>
                 )}
               </div>
@@ -52,7 +52,7 @@ export function NextSessions({ sessions }: { sessions: PlanSession[] }) {
                 <div className="break-words">{what}</div>
               </div>
               {s.room && (
-                <div className="text-xs text-faint">sala {s.room}</div>
+                <div className="text-xs text-faint">room {s.room}</div>
               )}
             </li>
           );

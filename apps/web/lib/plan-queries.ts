@@ -1,5 +1,5 @@
 /**
- * Plan zajęć queries on the read-only pool (public `v_*` views only). Like
+ * Timetable queries on the read-only pool (public `v_*` views only). Like
  * entity-queries, the clauses are constants of this module and values are
  * bound as `?`; the returned SQL text has them inlined.
  */
@@ -82,7 +82,7 @@ export async function sessionRange(
   return { first: toWall(r.first), last: toWall(r.last) };
 }
 
-/** Columns of `v_class_sessions`, in view order (Lista grid). */
+/** Columns of `v_class_sessions`, in view order (list grid). */
 export const SESSION_COLUMNS = [
   'id',
   'starts_at',
@@ -101,7 +101,7 @@ export const SESSION_COLUMNS = [
   'status',
 ];
 
-/** Lista: one page of `v_class_sessions` by start time. */
+/** List: one page of `v_class_sessions` by start time. */
 export function planListPage(
   pool: mysql.Pool,
   o: GridOpts & PlanFilter,

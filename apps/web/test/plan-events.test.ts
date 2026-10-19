@@ -87,8 +87,8 @@ describe('helpers', () => {
     );
   });
   it('short when label', () => {
-    expect(eventWhenShort(base)).toBe('śr 14.10 10:00');
-    expect(eventWhenShort({ ...base, allDay: true })).toBe('śr 14.10');
+    expect(eventWhenShort(base)).toBe('Wed 14.10 10:00');
+    expect(eventWhenShort({ ...base, allDay: true })).toBe('Wed 14.10');
   });
 });
 

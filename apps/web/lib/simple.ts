@@ -1,4 +1,4 @@
-/** Pure, client-safe helpers of the simple (Prosty) view. */
+/** Pure, client-safe helpers of the simple view. */
 import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
 
 /**
@@ -42,20 +42,20 @@ export function highlightParts(
 
 export const REPORT_META: { icon: 'Books' | 'Medal' | 'Exam'; desc: string }[] =
   [
-    { icon: 'Books', desc: 'Ile materiałów ma każdy przedmiot.' },
-    { icon: 'Medal', desc: 'Kto dodał najwięcej plików.' },
-    { icon: 'Exam', desc: 'Tematy z tagiem Kolokwium z ostatnich 30 dni.' },
+    { icon: 'Books', desc: 'How many materials each subject has.' },
+    { icon: 'Medal', desc: 'Who has added the most files.' },
+    { icon: 'Exam', desc: 'Topics tagged Kolokwium in the last 30 days.' },
   ];
 
 export const REPORT_LABELS: Record<string, string> = {
-  code: 'Kod',
-  name: 'Przedmiot',
-  materialy: 'Materiały',
-  display_name: 'Autor',
-  liczba_plikow: 'Pliki',
-  id: 'Nr',
-  title: 'Temat',
-  created_at: 'Dodano',
+  code: 'Code',
+  name: 'Subject',
+  materialy: 'Materials',
+  display_name: 'Author',
+  liczba_plikow: 'Files',
+  id: 'No.',
+  title: 'Topic',
+  created_at: 'Added',
 };
 
 export type FileIconName =
@@ -148,8 +148,8 @@ export function fileIcon(f: {
 export function statusBadge(
   s: 'pending' | 'ready' | 'failed',
 ): { label: string; tone: 'warn' | 'err' } | null {
-  if (s === 'pending') return { label: 'Przetwarzanie…', tone: 'warn' };
-  if (s === 'failed') return { label: 'Podgląd niedostępny', tone: 'err' };
+  if (s === 'pending') return { label: 'Processing…', tone: 'warn' };
+  if (s === 'failed') return { label: 'Preview unavailable', tone: 'err' };
   return null;
 }
 
@@ -261,7 +261,7 @@ export type LecturerCard = {
 
 /**
  * One card per lecturer (first-appearance order) with one line per class in
- * kind order: `<class> · wszystkie grupy` when any assignment covers the whole
+ * kind order: `<class> · all groups` when any assignment covers the whole
  * class, else `<class> · Gr. 1–3, 5`.
  */
 export function groupLecturers(rows: LecturerRow[]): LecturerCard[] {
@@ -296,7 +296,7 @@ export function groupLecturers(rows: LecturerRow[]): LecturerCard[] {
       .sort(([a], [b]) => CLASS_KINDS.indexOf(a) - CLASS_KINDS.indexOf(b))
       .map(([kind, c]) => ({
         kind,
-        label: `${c.name} · ${c.all ? 'wszystkie grupy' : formatGroupNumbers(c.nums)}`,
+        label: `${c.name} · ${c.all ? 'all groups' : formatGroupNumbers(c.nums)}`,
       })),
   }));
 }

@@ -3,24 +3,24 @@ import Link from 'next/link';
 import type { PlanSession } from '@/lib/plan';
 import { eventPageHref, eventWhenShort } from '@/lib/plan-events';
 
-/** Start page card: the next events matching Moje grupy. */
+/** Start page card: the next events matching My groups. */
 export function UpcomingEvents({ events }: { events: PlanSession[] }) {
   return (
     <section aria-labelledby="upcoming-events" className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="upcoming-events" className="m-0 text-base font-semibold">
-          Nadchodzące wydarzenia
+          Upcoming events
         </h2>
         <Link
           href="/s/wydarzenia/nowe"
           className="text-accent-ink hover:text-accent-ink-hover hover:underline"
         >
-          + Wydarzenie
+          + Add event
         </Link>
       </div>
       {events.length === 0 ? (
         <p className="m-0 rounded-md border border-line-strong bg-zebra px-4 py-3 text-muted">
-          Brak nadchodzących wydarzeń.
+          No upcoming events.
         </p>
       ) : (
         <ul className="m-0 flex list-none flex-col divide-y divide-line rounded-md border border-line-strong bg-panel p-0">

@@ -47,8 +47,8 @@ describe('highlightParts', () => {
 describe('static maps', () => {
   it('has three reports and the column labels', () => {
     expect(REPORT_META.map((r) => r.icon)).toEqual(['Books', 'Medal', 'Exam']);
-    expect(REPORT_LABELS.liczba_plikow).toBe('Pliki');
-    expect(REPORT_LABELS.created_at).toBe('Dodano');
+    expect(REPORT_LABELS.liczba_plikow).toBe('Files');
+    expect(REPORT_LABELS.created_at).toBe('Added');
   });
   it('fileIcon and statusBadge', () => {
     expect(
@@ -90,11 +90,11 @@ describe('static maps', () => {
     expect(fileIcon({ filename: 'a.odt' }).icon).toBe('FileDoc');
     expect(statusBadge('ready')).toBeNull();
     expect(statusBadge('pending')).toEqual({
-      label: 'Przetwarzanie…',
+      label: 'Processing…',
       tone: 'warn',
     });
     expect(statusBadge('failed')).toEqual({
-      label: 'Podgląd niedostępny',
+      label: 'Preview unavailable',
       tone: 'err',
     });
   });
@@ -257,7 +257,7 @@ describe('groupLecturers', () => {
       name: 'dr P. Malinowski',
       email: 'x@agh.edu.pl',
       classes: [
-        { kind: 'wyklad', label: 'Wykład · wszystkie grupy' },
+        { kind: 'wyklad', label: 'Wykład · all groups' },
         { kind: 'laboratorium', label: 'Laboratorium · Gr. 1–3' },
       ],
     });
@@ -274,7 +274,7 @@ describe('groupLecturers', () => {
     ]);
     expect(got).toHaveLength(1);
     expect(got[0].classes).toEqual([
-      { kind: 'cwiczenia', label: 'Ćwiczenia · wszystkie grupy' },
+      { kind: 'cwiczenia', label: 'Ćwiczenia · all groups' },
     ]);
   });
 
@@ -294,7 +294,7 @@ describe('groupLecturers', () => {
       email: null,
       officeHours: 'wt 10-11',
       room: 'D-10 205',
-      classes: [{ kind: 'wyklad', label: 'Wykład · wszystkie grupy' }],
+      classes: [{ kind: 'wyklad', label: 'Wykład · all groups' }],
     });
   });
 });

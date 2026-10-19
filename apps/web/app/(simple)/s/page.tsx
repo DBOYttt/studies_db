@@ -50,21 +50,21 @@ export default async function SimpleStart({
     >
       <div>
         <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
-          Przedmioty
+          Subjects
         </h1>
         <p className="mt-1 mb-0 text-pretty text-muted">
-          Wybierz przedmiot, aby zobaczyć materiały z zajęć.
+          Pick a subject to see its class materials.
         </p>
       </div>
       <SubjectCards cards={cards} />
       <UpcomingEvents events={upcoming} />
-      <h2 className="mt-3 mb-0 text-base font-semibold">Ostatnio dodane</h2>
+      <h2 className="mt-3 mb-0 text-base font-semibold">Recently added</h2>
       <FileList
         files={isoFiles(recent.rows)}
         withSubject
         selectedId={preview?.file.id ?? null}
         baseHref="/s"
-        emptyText="Nie dodano jeszcze żadnych plików."
+        emptyText="No files have been added yet."
       />
     </SimpleShell>
   );

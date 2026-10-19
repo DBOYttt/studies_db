@@ -5,7 +5,7 @@ import { REPORT_META } from '@/lib/simple';
 
 const ICONS = { Books, Medal, Exam };
 
-/** Gotowe zestawienia: one card per ready-made report, `selected` tinted. */
+/** Ready-made reports: one card per ready-made report, `selected` tinted. */
 export function ReportCards({ selected }: { selected: number }) {
   return (
     <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 p-0">

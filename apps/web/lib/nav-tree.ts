@@ -73,7 +73,7 @@ export function activeNavKey(
   views: NavView[],
 ): string | null {
   const path = pathname.length > 1 ? pathname.replace(/\/+$/, '') : pathname;
-  // The Plan zajęć screen has its own node (it is also a db tab).
+  // The Timetable screen has its own node (it is also a db tab).
   if (path === '/plan') return navKey.plan;
   if (DB_SCREENS.includes(path)) return navKey.db;
   const view = segment(path, '/tables/');

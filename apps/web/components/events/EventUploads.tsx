@@ -19,16 +19,16 @@ export type UploadItem = {
 
 const POLL_MS = 3000;
 const LABEL: Record<UploadItem['status'], string> = {
-  queued: 'wysyłanie…',
-  posting: 'wysyłanie…',
-  done: 'gotowe',
-  failed: 'błąd',
+  queued: 'sending…',
+  posting: 'sending…',
+  done: 'done',
+  failed: 'failed',
 };
 
 const btn =
   'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60';
 
-/** "Dodaj pliki" plus the status of the event's recent uploads. */
+/** "Add files" plus the status of the event's recent uploads. */
 export function EventUploads({
   eventId,
   initial,
@@ -76,7 +76,7 @@ export function EventUploads({
       );
       router.refresh();
     } catch {
-      setError('Nie udało się ponowić wysyłania.');
+      setError('Could not retry sending.');
     } finally {
       setBusy(false);
     }
@@ -86,20 +86,20 @@ export function EventUploads({
     e.preventDefault();
     const files = Array.from(input.current?.files ?? []);
     setError(null);
-    if (files.length === 0) return setError('Nie wybrano plików.');
+    if (files.length === 0) return setError('No files selected.');
     if (files.length > MAX_UPLOAD_FILES) {
       return setError(
-        `Możesz wysłać najwyżej ${MAX_UPLOAD_FILES} plików naraz.`,
+        `You can send at most ${MAX_UPLOAD_FILES} files at once.`,
       );
     }
     if (files.some((f) => f.size > MAX_UPLOAD_BYTES)) {
       return setError(
-        `Plik jest za duży (maks. ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`,
+        `A file is too large (max ${MAX_UPLOAD_BYTES / 1024 / 1024} MB).`,
       );
     }
     if (files.reduce((n, f) => n + f.size, 0) > MAX_UPLOAD_TOTAL_BYTES) {
       return setError(
-        `Łącznie maks. ${MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB na raz.`,
+        `Max ${MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB in total at once.`,
       );
     }
     const form = new FormData();
@@ -109,7 +109,7 @@ export function EventUploads({
       const res = await fetch(url, { method: 'POST', body: form });
       const body = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setError(body.error ?? 'Nie udało się wysłać plików.');
+        setError(body.error ?? 'Could not send the files.');
         return;
       }
       const added = (body.uploads as { id: number; name: string }[]).map(
@@ -118,7 +118,7 @@ export function EventUploads({
       setItems((cur) => [...added.reverse(), ...cur]);
       if (input.current) input.current.value = '';
     } catch {
-      setError('Nie udało się wysłać plików.');
+      setError('Could not send the files.');
     } finally {
       setBusy(false);
     }
@@ -132,18 +132,19 @@ export function EventUploads({
           type="file"
           name="files"
           multiple
-          aria-label="Pliki do dodania"
+          aria-label="Files to add"
           className="max-w-full text-[13px]"
         />
         <button type="submit" disabled={busy} className={btn}>
           <UploadSimple size={15} aria-hidden />
-          Dodaj pliki
+          Add files
         </button>
       </form>
       <p className="m-0 text-xs text-faint">
-        Do {MAX_UPLOAD_FILES} plików, każdy do {MAX_UPLOAD_BYTES / 1024 / 1024}{' '}
-        MB, łącznie do {MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB. Trafią do
-        wątku wydarzenia na Discordzie.
+        Up to {MAX_UPLOAD_FILES} files, each up to{' '}
+        {MAX_UPLOAD_BYTES / 1024 / 1024} MB,{' '}
+        {MAX_UPLOAD_TOTAL_BYTES / 1024 / 1024} MB in total. They go to the
+        event's thread on Discord.
       </p>
       {error && (
         <span role="alert" className="text-err-fg">
@@ -152,7 +153,7 @@ export function EventUploads({
       )}
       {canRetry && items.some((i) => i.status === 'failed') && (
         <button type="button" onClick={retry} disabled={busy} className={btn}>
-          Spróbuj ponownie
+          Try again
         </button>
       )}
       {items.length > 0 && (

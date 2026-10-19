@@ -8,7 +8,7 @@ import {
 } from './plan';
 import { listMyGroupOptions } from './plan-queries';
 
-/** The first `limit` events matching Moje grupy (pure; input in time order). */
+/** The first `limit` events matching My groups (pure; input in time order). */
 export const pickUpcoming = (
   events: PlanSession[],
   mine: MyGroups,
@@ -18,7 +18,7 @@ export const pickUpcoming = (
 /** How many upcoming events are scanned before Moje grupy drops some. */
 const SCAN = 100;
 
-/** "Nadchodzące wydarzenia" of the start page: next 5 matching Moje grupy. */
+/** "Upcoming events" of the start page: next 5 matching My groups. */
 export async function upcomingForUser(
   db: DbExecutor,
   pool: mysql.Pool,

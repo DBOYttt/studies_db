@@ -25,18 +25,18 @@ export type EventPageData = {
   subjectName: string | null;
   createdByName: string | null;
   updatedByName: string | null;
-  /** Part of a series ("Część serii"). */
+  /** Part of a series ("Part of a series"). */
   series: { rule: 'weekly' | 'biweekly'; until: string } | null;
   deleted: boolean;
   postLine: string;
-  /** The post failed or is missing: "Spróbuj ponownie". */
+  /** The post failed or is missing: "Try again". */
   canRetryPost: boolean;
   version: number;
   files: SimpleFile[];
   linked: LinkedTopic[];
   history: AuditRow[];
   uploads: UploadItem[];
-  /** Some failed upload still has its file: "Spróbuj ponownie". */
+  /** Some failed upload still has its file: "Try again". */
   canRetryUploads: boolean;
 };
 
@@ -60,21 +60,21 @@ export function EventDetails({
 }) {
   const kind = EVENT_KINDS[e.kind];
   const rows: [string, string][] = [
-    ['Kiedy', whenLabel(e.startsAt, e.endsAt, e.allDay)],
+    ['When', whenLabel(e.startsAt, e.endsAt, e.allDay)],
   ];
   if (e.subjectCode)
-    rows.push(['Przedmiot', `${e.subjectCode} · ${e.subjectName}`]);
-  if (e.place) rows.push(['Miejsce', e.place]);
+    rows.push(['Subject', `${e.subjectCode} · ${e.subjectName}`]);
+  if (e.place) rows.push(['Place', e.place]);
   if (e.series) {
     const [y, m, d] = e.series.until.split('-');
     rows.push([
-      'Część serii',
-      `${e.series.rule === 'weekly' ? 'co tydzień' : 'co 2 tygodnie'} do ${d}.${m}.${y}`,
+      'Part of a series',
+      `${e.series.rule === 'weekly' ? 'weekly' : 'every 2 weeks'} until ${d}.${m}.${y}`,
     ]);
   }
-  if (e.createdByName) rows.push(['Dodał(a)', e.createdByName]);
+  if (e.createdByName) rows.push(['Added by', e.createdByName]);
   if (e.updatedByName && e.updatedByName !== e.createdByName) {
-    rows.push(['Ostatnio zmienił(a)', e.updatedByName]);
+    rows.push(['Last changed by', e.updatedByName]);
   }
   return (
     <>
@@ -92,7 +92,7 @@ export function EventDetails({
           role="status"
           className="rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
         >
-          Wydarzenie usunięte
+          This event is deleted
         </div>
       )}
       <dl className="m-0 grid max-w-xl grid-cols-[auto_1fr] gap-x-4 gap-y-1">
@@ -119,23 +119,23 @@ export function EventDetails({
           version={e.version}
         />
       )}
-      <h2 className={h2}>Materiały</h2>
+      <h2 className={h2}>Materials</h2>
       <FileList
         files={isoFiles(e.files)}
         withSubject={!e.subjectId}
         selectedId={selectedFileId}
         baseHref={baseHref}
-        emptyText="Brak materiałów. Pojawią się po powiązaniu postów z plikami."
+        emptyText="No materials. They appear once you link posts that have files."
       />
       {!e.deleted && (
         <>
-          <h2 className={h2}>Dodaj pliki</h2>
+          <h2 className={h2}>Add files</h2>
           <EventUploads
             eventId={e.id}
             initial={e.uploads}
             canRetry={e.canRetryUploads}
           />
-          <h2 className={h2}>Powiąż posty</h2>
+          <h2 className={h2}>Link posts</h2>
           <LinkedPosts
             eventId={e.id}
             subjectId={e.subjectId}
@@ -145,7 +145,7 @@ export function EventDetails({
       )}
       {e.deleted && e.linked.length > 0 && (
         <>
-          <h2 className={h2}>Powiązane posty</h2>
+          <h2 className={h2}>Linked posts</h2>
           <ul className="m-0 pl-5">
             {e.linked.map((t) => (
               <li key={t.id}>{t.title}</li>
@@ -153,7 +153,7 @@ export function EventDetails({
           </ul>
         </>
       )}
-      <h2 className={h2}>Historia</h2>
+      <h2 className={h2}>History</h2>
       <ul className="m-0 flex list-none flex-col divide-y divide-line overflow-hidden rounded-lg border border-line-strong p-0">
         {e.history.map((r) => (
           <li key={r.id} className="bg-panel px-3.5 py-2">

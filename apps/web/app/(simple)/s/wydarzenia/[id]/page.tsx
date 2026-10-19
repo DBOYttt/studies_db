@@ -37,7 +37,7 @@ export default async function SimpleEvent({
       active={{ screen: 'plan' }}
       crumbs={[
         { label: 'Start', href: '/s' },
-        { label: 'Plan zajęć', href: '/s/plan' },
+        { label: 'Timetable', href: '/s/plan' },
         { label: e.title },
       ]}
       user={user}
@@ -57,7 +57,7 @@ export default async function SimpleEvent({
         className="link inline-flex items-center gap-1 self-start text-[13px]"
       >
         <Plus size={13} aria-hidden />
-        Wydarzenie
+        Add event
       </Link>
       <EventDetails
         e={e}

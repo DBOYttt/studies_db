@@ -224,7 +224,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
       Array.from({ length: 11 }, (_, i) => file(10, `f${i}.txt`)),
     );
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/10 plików/);
+    expect((await res.json()).error).toMatch(/at most 10 files/);
     expect(stored().length).toBe(before);
   });
 
@@ -234,7 +234,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     const before = stored().length;
     const res = await post([file(10 * MB + 1, 'big.bin'), file(5, 'x.txt')]);
     expect(res.status).toBe(400);
-    expect((await res.json()).error).toMatch(/za duży/);
+    expect((await res.json()).error).toMatch(/too large/);
     expect(stored().length).toBe(before);
   });
 
@@ -243,7 +243,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     const before = stored().length;
     const empty = await post([file(0, 'empty.txt'), file(5, 'x.txt')]);
     expect(empty.status).toBe(400);
-    expect((await empty.json()).error).toMatch(/pusty/);
+    expect((await empty.json()).error).toMatch(/empty/);
     const none = await post([]);
     expect(none.status).toBe(400);
     expect(stored().length).toBe(before);
@@ -367,7 +367,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     const before = stored().length;
     const res = await chunked(97 * MB, one());
     expect(res.status).toBe(413);
-    expect((await res.json()).error).toBe('Łącznie maks. 95 MB na raz.');
+    expect((await res.json()).error).toBe('Max 95 MB in total at once.');
     expect(stored().length).toBe(before);
   });
 
@@ -384,7 +384,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
       Array.from({ length: 10 }, (_, i) => file(9.6 * MB, `f${i}.bin`)),
     );
     expect(res.status).toBe(413);
-    expect((await res.json()).error).toBe('Łącznie maks. 95 MB na raz.');
+    expect((await res.json()).error).toBe('Max 95 MB in total at once.');
     expect(stored().length).toBe(before);
   });
 

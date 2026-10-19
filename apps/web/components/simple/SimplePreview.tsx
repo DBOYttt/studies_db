@@ -18,9 +18,9 @@ const BADGE = {
 /**
  * Simple-mode preview panel (design: 360px right column; full-screen sheet
  * below lg). Same real preview as the advanced PreviewPanel (`FilePreview`:
- * PDF viewer, image, text), laid out per the simple design: Pobierz as the
- * primary action, Pełny ekran, status badge, preview, then the meta table
- * Przedmiot / Zajęcia / Rozmiar / Dodał(a) / Dodano. `meta.subjectName` is
+ * PDF viewer, image, text), laid out per the simple design: Download as the
+ * primary action, Full screen, status badge, preview, then the meta table
+ * Subject / Class / Size / Added by / Added. `meta.subjectName` is
  * the subject's full name (PreviewFile only carries the code). Escape
  * (outside form fields) and × navigate to `closeHref`.
  */
@@ -52,31 +52,31 @@ export function SimplePreview({
   const ready = file.status === 'ready' && file.previewKind !== 'none';
   const badge = statusBadge(file.status);
   const rows: [string, string][] = [
-    ['Przedmiot', meta.subjectName],
+    ['Subject', meta.subjectName],
     [
-      'Zajęcia',
+      'Class',
       [file.className, file.groupName].filter(Boolean).join(', ') || '-',
     ],
-    ['Rozmiar', formatSize(file.sizeBytes)],
-    ['Dodał(a)', file.uploader],
-    ['Dodano', formatDate(file.createdAt)],
+    ['Size', formatSize(file.sizeBytes)],
+    ['Added by', file.uploader],
+    ['Added', formatDate(file.createdAt)],
   ];
 
   return (
     <aside
-      aria-label="Podgląd pliku"
+      aria-label="File preview"
       className="panel-in fixed inset-0 z-40 flex flex-col overflow-y-auto bg-page lg:static lg:z-auto lg:w-[360px] lg:shrink-0 lg:border-l lg:border-line-strong"
     >
       <div className="sticky top-0 z-[1] flex h-11 shrink-0 items-center justify-between border-b border-line-strong bg-surface pr-2 pl-3.5">
         <h2 className="m-0 flex items-center gap-1.5 text-[14px] font-semibold">
           <FileTypeIcon file={file} size={16} toned />
-          Podgląd pliku
+          File preview
         </h2>
         <Link
           href={closeHref}
           scroll={false}
-          aria-label="Zamknij podgląd"
-          title="Zamknij podgląd (Esc)"
+          aria-label="Close preview"
+          title="Close preview (Esc)"
           className="grid size-8 place-items-center rounded-md text-muted hover:bg-line hover:text-fg"
         >
           <X size={16} aria-hidden />
@@ -95,7 +95,7 @@ export function SimplePreview({
             className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-accent-fill px-3 py-2 font-semibold text-on-accent transition-colors duration-100 hover:bg-accent-fill-hover active:translate-y-px"
           >
             <DownloadSimple size={16} aria-hidden />
-            Pobierz
+            Download
           </a>
           {ready && (
             <a
@@ -105,7 +105,7 @@ export function SimplePreview({
               className="inline-flex items-center gap-1.5 rounded-md border border-line-strong px-3 py-2 text-accent-ink transition-colors duration-100 hover:border-accent active:translate-y-px"
             >
               <ArrowsOut size={16} aria-hidden />
-              Pełny ekran
+              Full screen
             </a>
           )}
         </div>
@@ -129,10 +129,10 @@ export function SimplePreview({
             <FileTypeIcon file={file} size={32} />
             <span>
               {file.status === 'pending'
-                ? 'Podgląd pojawi się po przetworzeniu pliku'
+                ? 'The preview appears once the file is processed'
                 : file.status === 'failed'
-                  ? 'Podgląd niedostępny'
-                  : 'Brak podglądu dla tego typu pliku'}
+                  ? 'Preview unavailable'
+                  : 'No preview for this file type'}
             </span>
           </div>
         )}

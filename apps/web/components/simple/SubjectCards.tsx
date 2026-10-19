@@ -19,7 +19,7 @@ export function SubjectCards({ cards }: { cards: SubjectCard[] }) {
                 {c.code}
               </span>
               <span className="text-xs text-faint">
-                Semestr {c.semester} · {c.ects} ECTS
+                Semester {c.semester} · {c.ects} ECTS
               </span>
             </div>
             <div className="text-base leading-[1.3] font-semibold text-fg">
@@ -41,11 +41,11 @@ export function SubjectCards({ cards }: { cards: SubjectCard[] }) {
               <span className="flex items-center gap-1.5">
                 <Files size={15} aria-hidden />
                 {c.fileCount === 0
-                  ? 'brak plików'
+                  ? 'no files'
                   : plural(c.fileCount, 'file', 'files')}
               </span>
               {c.fileCount > 0 && c.lastUpload && (
-                <span>ostatnio {formatDate(c.lastUpload)}</span>
+                <span>last upload {formatDate(c.lastUpload)}</span>
               )}
             </div>
           </Link>

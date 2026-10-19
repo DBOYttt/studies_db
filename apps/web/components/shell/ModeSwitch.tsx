@@ -39,15 +39,15 @@ function Segments({ mode }: { mode: UiMode }) {
   };
   return (
     <nav
-      aria-label="Tryb widoku"
+      aria-label="View mode"
       className="flex items-center gap-0.5 rounded-md border border-line p-0.5"
     >
-      {item('simple', 'Prosty', <Sparkle aria-hidden />)}
+      {item('simple', 'Simple', <Sparkle aria-hidden />)}
       {item(
         'advanced',
-        'Zaawansowany',
+        'Advanced',
         <TerminalWindow aria-hidden />,
-        'Pokaż SQL, widoki i strukturę bazy',
+        'Show SQL, views and the database structure',
       )}
     </nav>
   );

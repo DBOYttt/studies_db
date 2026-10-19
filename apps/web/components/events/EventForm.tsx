@@ -31,7 +31,7 @@ export type EventFormValues = {
 };
 
 /** The refusal for an event that no longer exists (same text as the db's). */
-const GONE = 'Nie znaleziono wydarzenia.';
+const GONE = 'Event not found.';
 
 const input =
   'h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent';
@@ -40,7 +40,7 @@ const primaryBtn =
   'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[6px] font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-60';
 
 /**
- * Add / edit form of an event. "Kiedy" is three inputs (date, start, end)
+ * Add / edit form of an event. "When" is three inputs (date, start, end)
  * that the Server Action composes into `DD.MM.RRRR [GG:MM[-GG:MM]]`. Class and
  * group follow the chosen subject. A refusal is shown in place; success
  * redirects from the action.
@@ -121,7 +121,7 @@ export function EventForm({
           <span>This event was deleted. Your changes weren't saved.</span>
           {planHref && (
             <Link href={planHref} className="link">
-              Back to plan
+              Back to timetable
             </Link>
           )}
           {isAdmin && (
@@ -145,7 +145,7 @@ export function EventForm({
           <input type="hidden" name="version" value={version} />
         )}
         <label className={label}>
-          Rodzaj
+          Type
           <select name="kind" defaultValue={initial.kind} className={input}>
             {Object.entries(EVENT_KINDS).map(([k, v]) => (
               <option key={k} value={k}>
@@ -155,7 +155,7 @@ export function EventForm({
           </select>
         </label>
         <label className={label}>
-          Tytuł
+          Title
           <input
             name="title"
             required
@@ -166,7 +166,7 @@ export function EventForm({
         </label>
         <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
           <label className={label}>
-            Data
+            Date
             <input
               type="date"
               name="date"
@@ -176,7 +176,7 @@ export function EventForm({
             />
           </label>
           <label className={label}>
-            Od (godz.)
+            From (time)
             <input
               type="time"
               name="start"
@@ -185,7 +185,7 @@ export function EventForm({
             />
           </label>
           <label className={label}>
-            Do (godz.)
+            To (time)
             <input
               type="time"
               name="end"
@@ -195,26 +195,26 @@ export function EventForm({
           </label>
         </div>
         <p className="m-0 -mt-2 text-xs text-muted">
-          Bez godziny wydarzenie trwa cały dzień.
+          Without a time the event lasts all day.
         </p>
         {eventId === undefined && (
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <label className={label}>
-              Powtarzaj
+              Repeat
               <select
                 name="repeat"
                 value={repeat}
                 onChange={(e) => setRepeat(e.target.value)}
                 className={input}
               >
-                <option value="">nie</option>
-                <option value="weekly">co tydzień</option>
-                <option value="biweekly">co 2 tygodnie</option>
+                <option value="">no</option>
+                <option value="weekly">every week</option>
+                <option value="biweekly">every 2 weeks</option>
               </select>
             </label>
             {repeat && (
               <label className={label}>
-                do
+                until
                 <input type="date" name="until" required className={input} />
               </label>
             )}
@@ -223,20 +223,20 @@ export function EventForm({
         {initial.inSeries && (
           <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
             <legend className="mb-1 p-0 text-[13px] font-semibold text-fg">
-              Zastosuj zmiany do
+              Apply changes to
             </legend>
             <label className="flex items-center gap-2">
               <input type="radio" name="scope" value="one" defaultChecked />
-              Tylko to
+              Only this one
             </label>
             <label className="flex items-center gap-2">
               <input type="radio" name="scope" value="following" />
-              To i następne
+              This and following
             </label>
           </fieldset>
         )}
         <label className={label}>
-          Przedmiot
+          Subject
           <select
             name="subjectId"
             value={subjectId ?? ''}
@@ -247,7 +247,7 @@ export function EventForm({
             }}
             className={input}
           >
-            <option value="">Bez przedmiotu</option>
+            <option value="">No subject</option>
             {options.map((s) => (
               <option key={s.id} value={s.id}>
                 {s.code} · {s.name}
@@ -258,7 +258,7 @@ export function EventForm({
         {subject && subject.classes.length > 0 && (
           <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
             <label className={label}>
-              Zajęcia
+              Class
               <select
                 name="classId"
                 value={classId ?? ''}
@@ -268,7 +268,7 @@ export function EventForm({
                 }}
                 className={input}
               >
-                <option value="">Wszystkie</option>
+                <option value="">All</option>
                 {subject.classes.map((c) => (
                   <option key={c.id} value={c.id}>
                     {c.name}
@@ -278,7 +278,7 @@ export function EventForm({
             </label>
             {cls && cls.groups.length > 0 && (
               <label className={label}>
-                Grupa
+                Group
                 <select
                   name="groupId"
                   value={groupId ?? ''}
@@ -287,7 +287,7 @@ export function EventForm({
                   }
                   className={input}
                 >
-                  <option value="">Wszystkie</option>
+                  <option value="">All</option>
                   {cls.groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -299,7 +299,7 @@ export function EventForm({
           </div>
         )}
         <label className={label}>
-          Miejsce
+          Place
           <input
             name="place"
             maxLength={100}
@@ -308,7 +308,7 @@ export function EventForm({
           />
         </label>
         <label className={label}>
-          Notatka
+          Note
           <textarea
             name="note"
             maxLength={1000}
@@ -332,10 +332,10 @@ export function EventForm({
             className={primaryBtn}
           >
             <FloppyDisk size={15} aria-hidden />
-            {eventId === undefined ? 'Dodaj wydarzenie' : 'Zapisz'}
+            {eventId === undefined ? 'Add event' : 'Save'}
           </button>
           <Link href={cancelHref} className="link">
-            Anuluj
+            Cancel
           </Link>
         </div>
       </form>

@@ -33,19 +33,19 @@ const NAV: {
   {
     screen: 'plan',
     href: '/s/plan',
-    label: 'Plan zajęć',
+    label: 'Timetable',
     icon: <CalendarBlank size={18} />,
   },
   {
     screen: 'recent',
     href: '/s/recent',
-    label: 'Ostatnio dodane',
+    label: 'Recently added',
     icon: <ClockCounterClockwise size={18} />,
   },
   {
     screen: 'reports',
     href: '/s/reports',
-    label: 'Gotowe zestawienia',
+    label: 'Ready-made reports',
     icon: <ChartBar size={18} />,
   },
 ];
@@ -54,7 +54,7 @@ const row = navRow;
 const idle = navRowIdle;
 const on = 'bg-selected font-semibold text-fg';
 
-/** Simple-mode sidebar (design: 248px, logo, search, nav, PRZEDMIOTY list). */
+/** Simple-mode sidebar (design: 248px, logo, search, nav, SUBJECTS list). */
 export function SimpleSidebar({
   subjects,
   active,
@@ -62,7 +62,7 @@ export function SimpleSidebar({
 }: {
   subjects: NavSubject[];
   active: SimpleActive;
-  /** "Panel admina", passed in by the server only for admins. */
+  /** "Admin panel", passed in by the server only for admins. */
   adminEntry?: ReactNode;
 }) {
   return (
@@ -97,8 +97,8 @@ export function SimpleSidebar({
               type="search"
               name="q"
               defaultValue={active.q ?? ''}
-              placeholder="Szukaj plików i tematów"
-              aria-label="Szukaj plików i tematów"
+              placeholder="Search files and topics"
+              aria-label="Search files and topics"
               maxLength={200}
               className="min-w-0 flex-1 border-0 bg-transparent text-fg outline-none placeholder:text-faint"
             />
@@ -130,10 +130,10 @@ export function SimpleSidebar({
       </nav>
 
       <h2 className="m-0 shrink-0 border-t border-line px-[18px] pt-3.5 pb-1.5 text-xs font-semibold tracking-[0.04em] text-muted uppercase">
-        Przedmioty
+        Subjects
       </h2>
       <nav
-        aria-label="Przedmioty"
+        aria-label="Subjects"
         className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3"
       >
         {subjects.map((s) => {
@@ -152,7 +152,7 @@ export function SimpleSidebar({
               />
               <span className="min-w-0 flex-1 leading-snug">{s.name}</span>
               <span className="text-xs font-normal text-faint tabular-nums">
-                <span className="sr-only">plików: </span>
+                <span className="sr-only">files: </span>
                 {s.count}
               </span>
             </Link>

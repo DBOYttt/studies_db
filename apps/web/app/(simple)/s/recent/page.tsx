@@ -15,7 +15,7 @@ export const dynamic = 'force-dynamic';
 type SP = Record<string, string | string[] | undefined>;
 
 const PER_PAGE = 50;
-/** "Pokaż więcej" grows the list in place; cap the rows rendered at once. */
+/** "Show more" grows the list in place; cap the rows rendered at once. */
 const MAX_PAGES = 40;
 
 export default async function SimpleRecent({
@@ -42,7 +42,7 @@ export default async function SimpleRecent({
       active={{ screen: 'recent' }}
       crumbs={[
         { label: 'Start', href: '/s' },
-        { label: 'Ostatnio dodane', href: '/s/recent' },
+        { label: 'Recently added', href: '/s/recent' },
       ]}
       user={user}
       adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
@@ -58,10 +58,10 @@ export default async function SimpleRecent({
     >
       <div>
         <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
-          Ostatnio dodane
+          Recently added
         </h1>
         <p className="mt-1 mb-0 text-pretty text-muted">
-          Wszystkie pliki, od najnowszych.
+          All files, newest first.
         </p>
       </div>
       <FileList
@@ -69,12 +69,12 @@ export default async function SimpleRecent({
         withSubject
         selectedId={preview?.file.id ?? null}
         baseHref={baseHref}
-        emptyText="Nie dodano jeszcze żadnych plików."
+        emptyText="No files have been added yet."
       />
       {list.total > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted">
           <span>
-            {shown} z {plural(list.total, 'file', 'files')}
+            {shown} of {plural(list.total, 'file', 'files')}
           </span>
           {more && (
             <Link
@@ -82,7 +82,7 @@ export default async function SimpleRecent({
               scroll={false}
               className="inline-flex h-8 items-center rounded-md border border-line-strong bg-page px-3 text-accent-ink transition-colors duration-100 hover:border-accent active:translate-y-px"
             >
-              Pokaż więcej
+              Show more
             </Link>
           )}
         </div>

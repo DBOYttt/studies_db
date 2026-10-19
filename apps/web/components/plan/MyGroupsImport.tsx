@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import { importMyGroupsAction } from '@/lib/my-groups-actions';
 import { parseMyGroups } from '@/lib/plan';
 
-/** Old browser-only storage of "Moje grupy": `{ "<class_id>": <group_id> }`. */
+/** Old browser-only storage of "My groups": `{ "<class_id>": <group_id> }`. */
 export const MY_GROUPS_KEY = 'studiesdb.myGroups.v1';
 
 // At most one import per page load (also across both plan tabs and strict

@@ -7,7 +7,7 @@ import { retryPostAction } from '@/lib/event-actions';
 const btn =
   'inline-flex h-7 items-center rounded border border-line-strong bg-panel px-2.5 text-[13px] text-accent-ink hover:border-accent disabled:opacity-60';
 
-/** "Post na Discordzie: …", with "Spróbuj ponownie" when it failed or is missing. */
+/** "Discord post: …", with "Try again" when it failed or is missing. */
 export function PostLine({
   eventId,
   text,
@@ -29,7 +29,7 @@ export function PostLine({
       if (!r.ok) return setError(r.message);
       router.refresh();
     } catch {
-      setError('Nie udało się ponowić.');
+      setError('Could not retry.');
     } finally {
       setBusy(false);
     }
@@ -40,7 +40,7 @@ export function PostLine({
       <p className="m-0 text-muted">{text}</p>
       {canRetry && (
         <button type="button" onClick={retry} disabled={busy} className={btn}>
-          Spróbuj ponownie
+          Try again
         </button>
       )}
       {error && (

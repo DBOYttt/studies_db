@@ -66,13 +66,13 @@ export interface WeekViewProps {
   nav: { prev: string; today: string; next: string };
   /** Wall date `YYYY-MM-DD` of today (highlighted when shown). */
   today: string | null;
-  /** Apply the stored "Moje grupy" choice (only on /plan). */
+  /** Apply the stored "My groups" choice (only on /plan). */
   myGroupsFilter: boolean;
-  /** The user's saved "Moje grupy" (already sanitized by the server). */
+  /** The user's saved "My groups" (already sanitized by the server). */
   myGroups?: MyGroups;
   /** Simple view: the session panel hides the SQL link. */
   simple?: boolean;
-  /** Link of the "+ Wydarzenie" button (the event form, prefilled). */
+  /** Link of the "+ Add event" button (the event form, prefilled). */
   newEventHref?: string;
 }
 
@@ -139,20 +139,20 @@ export function WeekView({
   const heading = weekHeading(week, days);
 
   return (
-    <section aria-label="Plan tygodnia" className="flex flex-col gap-3">
+    <section aria-label="Week timetable" className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
         <h2 className="m-0 text-base font-semibold tracking-[-0.01em]">
           {heading}
         </h2>
-        <nav aria-label="Tygodnie" className="flex items-center gap-1.5">
+        <nav aria-label="Weeks" className="flex items-center gap-1.5">
           <Link href={nav.prev} className={navBtn} scroll={false}>
-            ‹ Poprzedni
+            ‹ Previous
           </Link>
           <Link href={nav.today} className={navBtn} scroll={false}>
-            Dziś
+            Today
           </Link>
           <Link href={nav.next} className={navBtn} scroll={false}>
-            Następny ›
+            Next ›
           </Link>
           {newEventHref && (
             <Link
@@ -160,7 +160,7 @@ export function WeekView({
               className="ml-1 inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px"
             >
               <Plus size={13} weight="bold" aria-hidden />
-              Wydarzenie
+              Add event
             </Link>
           )}
         </nav>
@@ -169,19 +169,19 @@ export function WeekView({
       {filterOn && (
         <div className="flex items-center gap-1.5 self-start rounded-md border border-line-strong bg-box-head px-2.5 py-1">
           <Funnel size={14} className="text-accent-ink" aria-hidden />
-          <span>Filtr: Moje grupy</span>
+          <span>Filter: My groups</span>
           <Link
             href="/plan?tab=groups"
             className="text-accent-ink hover:text-accent-ink-hover hover:underline"
           >
-            zmień
+            change
           </Link>
           {hidden > 0 && (
             <Link
               href="/plan?tab=groups"
               className="ml-1 text-muted hover:underline"
             >
-              Ukryte zajęcia: {hidden} — uzupełnij Moje grupy
+              Hidden classes: {hidden} — fill in My groups
             </Link>
           )}
         </div>
@@ -189,7 +189,7 @@ export function WeekView({
 
       {shown.length === 0 ? (
         <div className="rounded-md border border-line-strong bg-zebra px-4 py-10 text-center text-muted">
-          Brak zajęć w tym tygodniu.
+          No classes this week.
         </div>
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
@@ -219,7 +219,7 @@ export function WeekView({
                       >
                         {h.date}
                       </span>
-                      {isToday && <span className="sr-only">(dziś)</span>}
+                      {isToday && <span className="sr-only">(today)</span>}
                     </div>
                   );
                 })}
@@ -227,12 +227,12 @@ export function WeekView({
                 {hasAllDay && (
                   <>
                     <div className="sticky left-0 z-[2] border-b border-line-strong bg-surface px-1.5 py-1 text-right text-[10px] leading-[14px] text-faint">
-                      cały dzień
+                      all day
                     </div>
                     {columns.map(({ key, allDay }) => (
                       <ul
                         key={key}
-                        aria-label="Wydarzenia całodniowe"
+                        aria-label="All-day events"
                         className="m-0 flex list-none flex-col gap-0.5 border-b border-l border-line-strong border-l-line bg-surface p-[3px]"
                       >
                         {allDay.map((s) => (
@@ -302,7 +302,7 @@ export function WeekView({
             </div>
             {(kinds.length > 0 || hasEvents) && (
               <ul
-                aria-label="Rodzaje zajęć"
+                aria-label="Class types"
                 className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted"
               >
                 {kinds.map((k) => (
@@ -321,7 +321,7 @@ export function WeekView({
                       aria-hidden
                       className="inline-block h-3 w-3 rounded-sm border-[1.5px] border-accent-ink bg-page"
                     />
-                    Wydarzenia
+                    Events
                   </li>
                 )}
               </ul>
@@ -366,7 +366,7 @@ function Block({
     classLine,
     s.room,
     s.lecturerName,
-    cancelled ? 'Odwołane' : null,
+    cancelled ? 'Cancelled' : null,
   ]
     .filter(Boolean)
     .join('\n');
@@ -401,7 +401,7 @@ function Block({
         {s.subjectCode || s.subjectName}
       </span>
       {cancelled && (
-        <span className="truncate font-semibold text-err-fg">Odwołane</span>
+        <span className="truncate font-semibold text-err-fg">Cancelled</span>
       )}
       {classLine && (
         <span className={`truncate ${cancelled ? 'line-through' : ''}`}>
@@ -432,7 +432,7 @@ function EventBlock({
 }) {
   const kind = s.eventKind ? EVENT_KINDS[s.eventKind] : null;
   const title = s.eventTitle ?? s.label;
-  const time = s.allDay ? 'cały dzień' : wallTime(s.startsAt);
+  const time = s.allDay ? 'all day' : wallTime(s.startsAt);
   const tip = [`${time} ${title}`, kind?.label, s.subjectName, s.room]
     .filter(Boolean)
     .join('\n');

@@ -36,7 +36,7 @@ export default async function SimpleSearch({
     <SimpleShell
       subjects={navSubjects(cards)}
       active={{ screen: 'search', q }}
-      crumbs={[{ label: 'Start', href: '/s' }, { label: 'Wyszukiwanie' }]}
+      crumbs={[{ label: 'Start', href: '/s' }, { label: 'Search' }]}
       user={user}
       adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
       aside={
@@ -51,14 +51,14 @@ export default async function SimpleSearch({
     >
       <div>
         <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em] break-words">
-          {q ? `Wyniki dla „${q}”` : 'Wyszukiwanie'}
+          {q ? `Results for “${q}”` : 'Search'}
         </h1>
         <p className="mt-1 mb-0 text-pretty text-muted">
           {q
             ? hits.length >= SEARCH_LIMIT
-              ? `${SEARCH_LIMIT}+ plików — pokazuję pierwsze ${SEARCH_LIMIT}`
+              ? `${SEARCH_LIMIT}+ files — showing the first ${SEARCH_LIMIT}`
               : plural(hits.length, 'file', 'files')
-            : 'Wpisz słowo w polu wyszukiwania i naciśnij Enter.'}
+            : 'Type a word in the search box and press Enter.'}
         </p>
       </div>
       {q && (
@@ -68,7 +68,7 @@ export default async function SimpleSearch({
           selectedId={preview?.file.id ?? null}
           baseHref={baseHref}
           q={q}
-          emptyText="Nic nie znaleziono. Spróbuj innego słowa."
+          emptyText="Nothing found. Try another word."
         />
       )}
     </SimpleShell>

@@ -99,11 +99,11 @@ describe('/auth/callback', () => {
     expect(res.headers.get('referrer-policy')).toBe('no-referrer');
     expect(res.headers.get('set-cookie')).toBeNull();
     const html = await res.text();
-    expect(html).toContain('Zaloguj się do Studies DB');
+    expect(html).toContain('Sign in to Studies DB');
     expect(html).toContain('<meta name="robots" content="noindex">');
     expect(html).toMatch(/<form method="post" action="\/auth\/callback">/);
     expect(html).toContain(`name="token" value="${token}"`);
-    expect(html).toMatch(/<button[^>]*>Zaloguj się<\/button>/);
+    expect(html).toMatch(/<button[^>]*>Sign in<\/button>/);
   });
 
   it('GET twice (link preview) leaves the token usable by POST', async () => {

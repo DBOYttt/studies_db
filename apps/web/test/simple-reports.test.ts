@@ -96,7 +96,7 @@ describe('GET /s/reports/csv', () => {
     }
     cookieSid = sid;
   });
-  it('r=1 has Polish labels as the header row and a slug filename', async () => {
+  it('r=1 has English labels as the header row and a slug filename', async () => {
     const res = await call('1');
     expect(res.status).toBe(200);
     expect(res.headers.get('Content-Type')).toContain('text/csv');
@@ -104,12 +104,12 @@ describe('GET /s/reports/csv', () => {
       `attachment; filename="${REPORT_SLUGS[1]}.csv"`,
     );
     const text = await res.text();
-    expect(text.replace(/^﻿/, '').split('\r\n')[0]).toBe('Autor,Pliki');
+    expect(text.replace(/^﻿/, '').split('\r\n')[0]).toBe('Author,Files');
   });
   it('invalid r falls back to report 0', async () => {
     const res = await call('9');
     expect((await res.text()).replace(/^﻿/, '').split('\r\n')[0]).toBe(
-      'Kod,Przedmiot,Materiały',
+      'Code,Subject,Materials',
     );
   });
 });

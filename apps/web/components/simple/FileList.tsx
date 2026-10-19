@@ -49,7 +49,7 @@ export function FileRow({
   const meta = [
     withSubject ? f.subjectName : null,
     [f.className, f.groupName].filter(Boolean).join(', ') || null,
-    `dodał(a) ${f.uploader}`,
+    `added by ${f.uploader}`,
     formatDate(f.createdAt),
     formatSize(f.sizeBytes),
   ]
@@ -93,19 +93,19 @@ export function FileRow({
         <Link
           href={href}
           scroll={false}
-          aria-label={`Podgląd pliku ${f.filename}`}
+          aria-label={`Preview file ${f.filename}`}
           className={btn}
         >
           <Eye size={15} aria-hidden />
-          Podgląd
+          Preview
         </Link>
         <a
           href={`/files/${f.id}/original`}
-          aria-label={`Pobierz plik ${f.filename}`}
+          aria-label={`Download file ${f.filename}`}
           className={btn}
         >
           <DownloadSimple size={15} aria-hidden />
-          Pobierz
+          Download
         </a>
       </div>
     </li>
@@ -114,7 +114,7 @@ export function FileRow({
 
 /**
  * File rows of every simple list (design: icon tile, name → preview, badge,
- * topic, meta, Podgląd / Pobierz). Preview links are `baseHref` + `file=<id>`;
+ * topic, meta, Preview / Download). Preview links are `baseHref` + `file=<id>`;
  * `q` highlights hits in filename and topic; `empty` is shown for no rows.
  */
 export function FileList({
@@ -123,7 +123,7 @@ export function FileList({
   selectedId,
   baseHref,
   q,
-  emptyText = 'Brak plików.',
+  emptyText = 'No files.',
   emptyAction,
 }: {
   files: FileRowData[];

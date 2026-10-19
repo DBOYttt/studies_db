@@ -69,16 +69,15 @@ const versionOf = (v: unknown): number | undefined => {
   return /^\d{1,9}$/.test(t) ? Number(t) : undefined;
 };
 
-/** The form's fields as an EventInput (with the composed "Kiedy"). */
+/** The form's fields as an EventInput (with the composed "When"). */
 function readForm(form: FormData): EventInput | ActionResult {
   const kind = text(form, 'kind') as EventKind;
-  if (!Object.hasOwn(EVENT_KINDS, kind))
-    return fail('Nieznany rodzaj wydarzenia.');
+  if (!Object.hasOwn(EVENT_KINDS, kind)) return fail('Unknown event type.');
   const subjectId = idOrNull(form, 'subjectId');
   const classId = idOrNull(form, 'classId');
   const groupId = idOrNull(form, 'groupId');
   if (subjectId === 'bad' || classId === 'bad' || groupId === 'bad') {
-    return fail('Nieprawidłowy wybór przedmiotu, zajęć lub grupy.');
+    return fail('Invalid subject, class or group selection.');
   }
   const when = composeWhen(
     text(form, 'date'),
@@ -113,7 +112,7 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
   }
   if (repeat === 'weekly' || repeat === 'biweekly') {
     const until = text(form, 'until').trim();
-    if (!until) return fail('Podaj, do kiedy powtarzać wydarzenie.');
+    if (!until) return fail('Enter the date until which the event repeats.');
     const s = await addSeries(
       getDb(),
       user.id,
@@ -144,13 +143,13 @@ export async function updateEventAction(
   form: FormData,
 ): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  if (!isId(id)) return fail('Event not found.');
   const input = readForm(form);
   if (isResult(input)) return input;
   const db = getDb();
   const cur = await getEvent(db, id);
   const patch: Partial<EventInput> = { ...input };
-  // An unchanged "Kiedy" is left out, so an old event stays editable.
+  // An unchanged "When" is left out, so an old event stays editable.
   if (
     cur &&
     input.when ===
@@ -183,7 +182,7 @@ export async function deleteEventAction(
   version?: number,
 ): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  if (!isId(id)) return fail('Event not found.');
   const r = await deleteEvent(getDb(), user.id, id, 'web', scopeOf(scope), {
     expectedVersion:
       typeof version === 'number' &&
@@ -200,7 +199,7 @@ export async function deleteEventAction(
 /** Admin only (404 for everyone else). */
 export async function restoreEventAction(id: number): Promise<ActionResult> {
   const admin = await requireAdmin();
-  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  if (!isId(id)) return fail('Event not found.');
   const r = await restoreEvent(getDb(), admin.id, id, 'web');
   if (r.ok) refresh(id);
   return r;
@@ -211,7 +210,7 @@ export async function linkTopicAction(
   topicId: number,
 ): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id) || !isId(topicId)) return fail('Nie znaleziono posta.');
+  if (!isId(id) || !isId(topicId)) return fail('Post not found.');
   const r = await linkTopic(getDb(), user.id, id, topicId, 'web');
   if (r.ok) refresh(id);
   return r;
@@ -222,7 +221,7 @@ export async function unlinkTopicAction(
   topicId: number,
 ): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id) || !isId(topicId)) return fail('Nie znaleziono posta.');
+  if (!isId(id) || !isId(topicId)) return fail('Post not found.');
   const r = await unlinkTopic(getDb(), user.id, id, topicId, 'web');
   if (r.ok) refresh(id);
   return r;
@@ -240,25 +239,25 @@ export async function searchTopicsAction(
 }
 
 /**
- * "Spróbuj ponownie": requeues the event's failed uploads whose files remain.
+ * "Try again": requeues the event's failed uploads whose files remain.
  * Like every event action it follows the wiki rules: any logged-in student may
  * retry, and all failed rows of the event are requeued, not just their own.
  */
 export async function retryUploadsAction(id: number): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  if (!isId(id)) return fail('Event not found.');
   const r = await retryFailedUploads(getDb(), user.id, id, uploadFileExists);
   if (r.ok) refresh(id);
   return r;
 }
 
 /**
- * "Spróbuj ponownie" for the Discord post: queues its upsert again (the
+ * "Try again" for the Discord post: queues its upsert again (the
  * series' post for an occurrence). Same wiki rules as every event action.
  */
 export async function retryPostAction(id: number): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Nie znaleziono wydarzenia.');
+  if (!isId(id)) return fail('Event not found.');
   const r = await retryEventPost(getDb(), user.id, id, 'web');
   if (r.ok) refresh(id);
   return r;

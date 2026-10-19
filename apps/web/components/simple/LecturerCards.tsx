@@ -1,7 +1,7 @@
 import { ChalkboardTeacher } from '@phosphor-icons/react/dist/ssr';
 import type { LecturerCard } from '@/lib/simple';
 
-/** "Prowadzący" cards: one per lecturer, a line per class (name is plain text in simple mode). */
+/** "Lecturers" cards: one per lecturer, a line per class (name is plain text in simple mode). */
 export function LecturerCards({ lecturers }: { lecturers: LecturerCard[] }) {
   return (
     <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 p-0">
@@ -28,13 +28,13 @@ export function LecturerCards({ lecturers }: { lecturers: LecturerCard[] }) {
                 {l.email}
               </a>
             ) : (
-              <span className="text-[13px] text-faint">brak e-maila</span>
+              <span className="text-[13px] text-faint">no email</span>
             )}
             {(l.officeHours || l.room) && (
               <dl className="m-0 mt-1 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-2 text-[13px]">
                 {l.officeHours && (
                   <>
-                    <dt className="text-faint">Konsultacje</dt>
+                    <dt className="text-faint">Office hours</dt>
                     <dd className="m-0 break-words whitespace-pre-line">
                       {l.officeHours}
                     </dd>
@@ -42,7 +42,7 @@ export function LecturerCards({ lecturers }: { lecturers: LecturerCard[] }) {
                 )}
                 {l.room && (
                   <>
-                    <dt className="text-faint">Pokój</dt>
+                    <dt className="text-faint">Room</dt>
                     <dd className="m-0 break-words">{l.room}</dd>
                   </>
                 )}

@@ -10,7 +10,7 @@ import { RemindersForm } from './RemindersForm';
 export const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
 
-/** "Moje grupy" tab of the plan; `weekHref` is the week view of the same mode. */
+/** "My groups" tab of the timetable; `weekHref` is the week view of the same mode. */
 export async function GroupsTab({ weekHref }: { weekHref: string }) {
   const user = await requireUser();
   try {
@@ -39,7 +39,7 @@ export async function GroupsTab({ weekHref }: { weekHref: string }) {
   } catch (err) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać zajęć: {roErrorMessage(err)}
+        Could not load the classes: {roErrorMessage(err)}
       </div>
     );
   }

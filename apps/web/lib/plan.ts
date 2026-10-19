@@ -1,6 +1,6 @@
 /**
  * Pure, client-safe helpers of the Plan zajęć screen: ISO weeks, the day grid
- * layout and the "Moje grupy" filter (mostly re-exported from
+ * layout and the "My groups" filter (mostly re-exported from
  * `@studies/db/plan`, which the bot's plan image shares).
  *
  * Session times are Europe/Warsaw WALL time carried in "wall Dates" (a Date

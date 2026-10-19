@@ -22,7 +22,7 @@ export type { Crumb } from './Crumbs';
 export type { NavSubject, SimpleActive } from './SimpleSidebar';
 
 /**
- * Simple (Prosty) shell: 248px sidebar + 48px top bar + content, and an
+ * Simple shell: 248px sidebar + 48px top bar + content, and an
  * optional `aside` (the preview panel) to the right of the content.
  * Below 768px the sidebar is an off-canvas drawer (same behaviour as the
  * advanced ShellFrame): Escape, the backdrop and following a link close it.
@@ -42,7 +42,7 @@ export function SimpleShell({
   active: SimpleActive;
   crumbs: Crumb[];
   user: SessionUser;
-  /** "Panel admina" (SimpleAdminEntry); the page passes it only for admins. */
+  /** "Admin panel" (SimpleAdminEntry); the page passes it only for admins. */
   adminEntry?: ReactNode;
   aside?: ReactNode;
   children: ReactNode;
@@ -136,7 +136,7 @@ export function SimpleShell({
       <aside
         ref={drawerRef}
         id="simple-nav"
-        aria-label="Panel nawigacji"
+        aria-label="Navigation panel"
         role={open ? 'dialog' : undefined}
         aria-modal={open ? true : undefined}
         className={`flex min-h-0 flex-col border-r border-line-strong bg-surface max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[280px] max-md:max-w-[85vw] max-md:duration-150 motion-reduce:transition-none ${
@@ -158,7 +158,7 @@ export function SimpleShell({
             ref={menuRef}
             type="button"
             onClick={() => setOpen(true)}
-            aria-label="Otwórz panel nawigacji"
+            aria-label="Open navigation panel"
             aria-expanded={open}
             aria-controls="simple-nav"
             className="grid size-8 shrink-0 place-items-center rounded-md text-accent-ink hover:bg-line md:hidden"
@@ -197,7 +197,7 @@ export function SimpleShell({
                 className="flex items-center gap-1 rounded px-0.5 text-accent-ink hover:text-accent-ink-hover hover:underline"
               >
                 <SignOut size={15} aria-hidden />
-                <span className="max-lg:sr-only">Wyloguj</span>
+                <span className="max-lg:sr-only">Sign out</span>
               </button>
             </form>
           </div>

@@ -13,7 +13,7 @@ import { deleteEventAction, restoreEventAction } from '@/lib/event-actions';
 const btn =
   'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60';
 
-/** Edytuj / Usuń (two steps) for a live event, Przywróć for a deleted one. */
+/** Edit / Delete (two steps) for a live event, Restore for a deleted one. */
 export function EventButtons({
   id,
   base,
@@ -55,7 +55,7 @@ export function EventButtons({
           onClick={() => run(() => restoreEventAction(id))}
         >
           <ArrowCounterClockwise size={15} aria-hidden />
-          Przywróć
+          Restore
         </button>
         {error && (
           <span role="alert" className="text-err-fg">
@@ -70,11 +70,11 @@ export function EventButtons({
       <div className="flex flex-wrap items-center gap-2">
         <Link href={editHref} className={btn}>
           <PencilSimple size={15} aria-hidden />
-          Edytuj
+          Edit
         </Link>
         {confirming ? (
           <>
-            <span className="text-muted">Usunąć to wydarzenie?</span>
+            <span className="text-muted">Delete this event?</span>
             {inSeries ? (
               <>
                 <button
@@ -85,7 +85,7 @@ export function EventButtons({
                     run(() => deleteEventAction(id, base, 'one', version))
                   }
                 >
-                  Tylko to
+                  Only this one
                 </button>
                 <button
                   type="button"
@@ -95,7 +95,7 @@ export function EventButtons({
                     run(() => deleteEventAction(id, base, 'following', version))
                   }
                 >
-                  To i następne
+                  This and following
                 </button>
               </>
             ) : (
@@ -107,7 +107,7 @@ export function EventButtons({
                   run(() => deleteEventAction(id, base, 'one', version))
                 }
               >
-                Tak, usuń
+                Yes, delete
               </button>
             )}
             <button
@@ -115,7 +115,7 @@ export function EventButtons({
               className={btn}
               onClick={() => setConfirming(false)}
             >
-              Anuluj
+              Cancel
             </button>
           </>
         ) : (
@@ -125,7 +125,7 @@ export function EventButtons({
             onClick={() => setConfirming(true)}
           >
             <Trash size={15} aria-hidden />
-            Usuń
+            Delete
           </button>
         )}
       </div>

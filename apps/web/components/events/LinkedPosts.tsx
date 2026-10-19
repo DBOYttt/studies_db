@@ -16,7 +16,7 @@ const btn =
 const topicLabel = (t: LinkedTopic) =>
   t.subjectCode ? `${t.title} (${t.subjectCode})` : t.title;
 
-/** "Powiąż posty": the linked posts and a title search to add more. */
+/** "Link posts": the linked posts and a title search to add more. */
 export function LinkedPosts({
   eventId,
   subjectId,
@@ -54,7 +54,7 @@ export function LinkedPosts({
   return (
     <div className="flex flex-col gap-2.5">
       {linked.length === 0 ? (
-        <p className="m-0 text-muted">Brak powiązanych postów.</p>
+        <p className="m-0 text-muted">No linked posts.</p>
       ) : (
         <ul className="m-0 flex list-none flex-col divide-y divide-line overflow-hidden rounded-lg border border-line-strong p-0">
           {linked.map((t) => (
@@ -67,11 +67,11 @@ export function LinkedPosts({
                 type="button"
                 disabled={pending}
                 className={btn}
-                aria-label={`Usuń powiązanie z postem ${t.title}`}
+                aria-label={`Unlink post ${t.title}`}
                 onClick={() => change(unlinkTopicAction(eventId, t.id))}
               >
                 <X size={13} aria-hidden />
-                Odłącz
+                Unlink
               </button>
             </li>
           ))}
@@ -85,18 +85,18 @@ export function LinkedPosts({
         }}
       >
         <label className="sr-only" htmlFor={`topic-q-${eventId}`}>
-          Szukaj posta po tytule
+          Search posts by title
         </label>
         <input
           id={`topic-q-${eventId}`}
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Szukaj posta po tytule"
+          placeholder="Search posts by title"
           className="h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent sm:w-72"
         />
         <button type="submit" disabled={pending} className={btn}>
           <MagnifyingGlass size={14} aria-hidden />
-          Szukaj
+          Search
         </button>
       </form>
       {message && (
@@ -106,27 +106,25 @@ export function LinkedPosts({
       )}
       {results && (
         <ul
-          aria-label="Wyniki wyszukiwania"
+          aria-label="Search results"
           className="m-0 flex list-none flex-col gap-1 p-0"
         >
-          {results.length === 0 && (
-            <li className="text-muted">Brak wyników.</li>
-          )}
+          {results.length === 0 && <li className="text-muted">No results.</li>}
           {results.map((t) => (
             <li key={t.id} className="flex items-center justify-between gap-3">
               <span className="min-w-0 break-words">{topicLabel(t)}</span>
               {linkedIds.has(t.id) ? (
-                <span className="text-xs text-muted">Powiązany</span>
+                <span className="text-xs text-muted">Linked</span>
               ) : (
                 <button
                   type="button"
                   disabled={pending}
                   className={btn}
-                  aria-label={`Powiąż post ${t.title}`}
+                  aria-label={`Link post ${t.title}`}
                   onClick={() => change(linkTopicAction(eventId, t.id))}
                 >
                   <LinkSimple size={14} aria-hidden />
-                  Powiąż
+                  Link
                 </button>
               )}
             </li>

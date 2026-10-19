@@ -32,16 +32,13 @@ export async function GET(_req: Request, ctx: Ctx) {
   const user = await requireUser();
   const { id } = await ctx.params;
   if (!/^[1-9]\d{0,9}$/.test(id)) {
-    return Response.json(
-      { error: 'Nie znaleziono wydarzenia.' },
-      { status: 404 },
-    );
+    return Response.json({ error: 'Event not found.' }, { status: 404 });
   }
   const db = getDb();
   const ev = await getEvent(db, Number(id));
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) {
     return Response.json(
-      { error: 'Nie znaleziono wydarzenia.' },
+      { error: 'Event not found.' },
       { status: 404, headers: NO_STORE },
     );
   }

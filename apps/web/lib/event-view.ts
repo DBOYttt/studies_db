@@ -1,5 +1,5 @@
 /**
- * Pure helpers of the event form and page (client-safe): composing "Kiedy"
+ * Pure helpers of the event form and page (client-safe): composing "When"
  * from the form's inputs, showing stored wall times, labelling audit rows.
  */
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
@@ -7,26 +7,26 @@ import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
 const pad = (n: number) => String(n).padStart(2, '0');
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
-/** Date `YYYY-MM-DD`, start/end `HH:MM` (or empty) → `DD.MM.RRRR [HH:MM[-HH:MM]]`. */
+/** Date `YYYY-MM-DD`, start/end `HH:MM` (or empty) → `DD.MM.YYYY [HH:MM[-HH:MM]]`. */
 export function composeWhen(
   date: string,
   start: string,
   end: string,
 ): { ok: true; when: string } | { ok: false; message: string } {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(date.trim());
-  if (!m) return { ok: false, message: 'Podaj datę wydarzenia.' };
+  if (!m) return { ok: false, message: 'Enter the event date.' };
   const s = start.trim();
   const e = end.trim();
   const day = `${m[3]}.${m[2]}.${m[1]}`;
-  if (!s && e) return { ok: false, message: 'Podaj godzinę rozpoczęcia.' };
+  if (!s && e) return { ok: false, message: 'Enter the start time.' };
   if (!s) return { ok: true, when: day };
   if (!TIME_RE.test(s) || (e && !TIME_RE.test(e))) {
-    return { ok: false, message: 'Nieprawidłowa godzina.' };
+    return { ok: false, message: 'Invalid time.' };
   }
   return { ok: true, when: `${day} ${s}${e ? `-${e}` : ''}` };
 }
 
-/** "Kiedy" text of stored wall times (same shape `composeWhen` makes). */
+/** "When" text of stored wall times (same shape `composeWhen` makes). */
 export function whenOf(startsAt: Date, endsAt: Date | null, allDay: boolean) {
   const date = `${pad(startsAt.getUTCDate())}.${pad(startsAt.getUTCMonth() + 1)}.${startsAt.getUTCFullYear()}`;
   if (allDay) return date;
@@ -76,28 +76,28 @@ export function whenLabel(
 export const kindLabel = (k: EventKind) => EVENT_KINDS[k].label;
 
 export const AUDIT_LABELS: Record<string, string> = {
-  'event.add': 'Dodano wydarzenie',
-  'event.edit': 'Zmieniono wydarzenie',
-  'event.delete': 'Usunięto wydarzenie',
-  'event.restore': 'Przywrócono wydarzenie',
-  'event.link': 'Powiązano post',
-  'event.unlink': 'Usunięto powiązanie z postem',
-  'event.upload': 'Dodano pliki',
-  'event.upload_retry': 'Ponowiono wysyłanie plików',
-  'event.post_retry': 'Ponowiono post na Discordzie',
+  'event.add': 'Event added',
+  'event.edit': 'Event changed',
+  'event.delete': 'Event deleted',
+  'event.restore': 'Event restored',
+  'event.link': 'Post linked',
+  'event.unlink': 'Post unlinked',
+  'event.upload': 'Files added',
+  'event.upload_retry': 'File upload retried',
+  'event.post_retry': 'Discord post retried',
 };
 
 const FIELD_LABELS: Record<string, string> = {
-  kind: 'rodzaj',
-  title: 'tytuł',
-  subjectId: 'przedmiot',
-  classId: 'zajęcia',
-  groupId: 'grupa',
-  startsAt: 'początek',
-  endsAt: 'koniec',
-  allDay: 'cały dzień',
-  place: 'miejsce',
-  note: 'notatka',
+  kind: 'type',
+  title: 'title',
+  subjectId: 'subject',
+  classId: 'class',
+  groupId: 'group',
+  startsAt: 'start',
+  endsAt: 'end',
+  allDay: 'all day',
+  place: 'place',
+  note: 'note',
 };
 
 /** One line describing an audit row's details (changed fields, source). */
@@ -109,9 +109,9 @@ export function auditSummary(action: string, details: unknown): string {
   const parts: string[] = [];
   if (action === 'event.edit' && d.changes && typeof d.changes === 'object') {
     const keys = Object.keys(d.changes).map((k) => FIELD_LABELS[k] ?? k);
-    if (keys.length) parts.push(`zmienione: ${keys.join(', ')}`);
+    if (keys.length) parts.push(`changed: ${keys.join(', ')}`);
   }
-  if (d.source === 'web') parts.push('przez stronę');
-  else if (d.source === 'discord') parts.push('przez Discorda');
+  if (d.source === 'web') parts.push('via the website');
+  else if (d.source === 'discord') parts.push('via Discord');
   return parts.join(' · ');
 }

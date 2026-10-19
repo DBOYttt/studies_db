@@ -23,7 +23,7 @@ export const eventPageHref = (id: number, simple: boolean) =>
   `${simple ? '/s' : ''}/wydarzenia/${id}`;
 
 /**
- * "+ Wydarzenie": the form prefilled with today when the shown week contains
+ * "+ Add event": the form prefilled with today when the shown week contains
  * it, otherwise with the Monday of the shown week; `subject` when the plan is
  * filtered to one subject.
  */
@@ -78,10 +78,10 @@ export function dayColumns<S extends PlanSession>(
   });
 }
 
-const DOW = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
+const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const p2 = (n: number) => String(n).padStart(2, '0');
 
-/** `wt 20.10 10:00` (no time for all-day events). */
+/** `Tue 20.10 10:00` (no time for all-day events). */
 export function eventWhenShort(s: PlanSession): string {
   const d = s.startsAt;
   const date = `${DOW[d.getUTCDay()]} ${p2(d.getUTCDate())}.${p2(d.getUTCMonth() + 1)}`;

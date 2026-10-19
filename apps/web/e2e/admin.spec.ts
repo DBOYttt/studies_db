@@ -45,7 +45,7 @@ test('simple sidebar shows Panel admina for the admin', async ({ browser }) => {
     await page.goto(
       `http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_ADMIN_SIMPLE}`,
     );
-    await page.getByRole('button', { name: 'Zaloguj się' }).click();
+    await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(/localhost:3100\/s$/);
     await expect(
       page.getByRole('link', { name: 'Panel admina' }),

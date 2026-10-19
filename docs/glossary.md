@@ -47,3 +47,27 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Zablokować / odblokować dostęp | Block / unblock access |
 | Wiersz / kolumna / wpis / trafienie | Row / column / entry / match |
 | DM zamknięte (reminder disabled reason) | DMs closed |
+
+## Added in task 2
+
+| Polish | English |
+|---|---|
+| Rodzaj (event kind / file tag row) | Type |
+| Tytuł | Title |
+| Data / Godzina | Date / Time |
+| Sala / Pokój | Room |
+| Odwołane / Zaplanowane | Cancelled / Scheduled |
+| Dziś / Poprzedni / Następny | Today / Previous / Next |
+| Wszystkie / Wszystkie grupy | All / All groups |
+| Edytuj / Usuń / Anuluj / Zapisz / Wyczyść | Edit / Delete / Cancel / Save / Clear |
+| Tylko to / To i następne | Only this one / This and following |
+| Powiąż / Odłącz (post) | Link / Unlink |
+| Spróbuj ponownie | Try again |
+| Dodaj pliki | Add files |
+| Historia | History |
+| Gotowe zestawienia | Ready-made reports |
+| Najbliższe zajęcia | Next classes |
+| Nadchodzące wydarzenia | Upcoming events |
+| Zaloguj się / Wyloguj | Sign in / Sign out |
+| Panel admina | Admin panel |
+| Dodał(a) / Dodano | Added by / Added |

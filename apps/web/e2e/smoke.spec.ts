@@ -4,7 +4,7 @@ import { expect, test } from '@playwright/test';
 test('anonymous visitors are sent to login info', async ({ page }) => {
   await page.goto('/');
   await expect(page).toHaveURL(/\/login-info/);
-  await expect(page.getByText('wpisz /link')).toBeVisible();
+  await expect(page.getByText('type /link')).toBeVisible();
 });
 
 test('browse, preview, search and sql console', async ({ page, context }) => {
@@ -25,9 +25,9 @@ test('browse, preview, search and sql console', async ({ page, context }) => {
   }
   await page.goto(link);
   await expect(
-    page.getByRole('heading', { name: 'Zaloguj się do Studies DB' }),
+    page.getByRole('heading', { name: 'Sign in to Studies DB' }),
   ).toBeVisible();
-  await page.getByRole('button', { name: 'Zaloguj się' }).click();
+  await page.getByRole('button', { name: 'Sign in' }).click();
   await expect(page).toHaveURL(/\/$/);
   const main = page.getByRole('main');
   // Home is the Przedmioty grid; the subject name links to the subject.

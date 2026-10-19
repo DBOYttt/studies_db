@@ -58,21 +58,21 @@ export function SessionPanel({
   const cancelled = s.status === 'cancelled';
   const classLine = [s.className, s.groupName].filter(Boolean).join(' ');
   const meta: [string, string][] = [
-    ['Data', wallLongDate(s.startsAt)],
-    ['Godzina', `${wallTime(s.startsAt)}–${wallTime(s.endsAt)}`],
-    ['Sala', s.room ?? '–'],
+    ['Date', wallLongDate(s.startsAt)],
+    ['Time', `${wallTime(s.startsAt)}–${wallTime(s.endsAt)}`],
+    ['Room', s.room ?? '–'],
     [
-      'Zajęcia',
+      'Class',
       classLine ||
-        (s.classKind ? CLASS_NAMES[s.classKind] : 'Bez przypisanych zajęć'),
+        (s.classKind ? CLASS_NAMES[s.classKind] : 'No class assigned'),
     ],
-    ['Prowadzący', s.lecturerName ?? '–'],
-    ['Opis', s.label || '–'],
+    ['Lecturer', s.lecturerName ?? '–'],
+    ['Description', s.label || '–'],
   ];
 
   return (
     <aside
-      aria-label="Szczegóły zajęć"
+      aria-label="Class details"
       className="panel-in fixed inset-0 z-40 flex flex-col overflow-y-auto bg-page lg:static lg:z-auto lg:max-h-[calc(100dvh-4rem)] lg:rounded-md lg:border lg:border-line-strong"
     >
       <div className="sticky top-0 z-[1] flex h-[34px] shrink-0 items-center justify-between border-b border-line-strong bg-surface pr-2 pl-3">
@@ -82,13 +82,13 @@ export function SessionPanel({
           className="m-0 flex items-center gap-1.5 text-[13px] font-semibold outline-none"
         >
           <CalendarBlank size={15} className="text-accent-ink" aria-hidden />
-          Zajęcia
+          Class
         </h2>
         <button
           type="button"
           onClick={onClose}
-          aria-label="Zamknij szczegóły"
-          title="Zamknij (Esc)"
+          aria-label="Close details"
+          title="Close (Esc)"
           className={closeCls}
         >
           <X size={16} aria-hidden />
@@ -110,7 +110,7 @@ export function SessionPanel({
               : 'border-ok-line bg-ok-bg text-ok-fg'
           }`}
         >
-          {cancelled ? 'Odwołane' : 'Zaplanowane'}
+          {cancelled ? 'Cancelled' : 'Scheduled'}
         </span>
         <table className="w-full border-collapse text-xs">
           <tbody>
@@ -130,18 +130,18 @@ export function SessionPanel({
         <div className="flex flex-wrap gap-1.5">
           <Link href={s.links.subject} className={btn}>
             <ArrowSquareOut size={14} aria-hidden />
-            Przedmiot
+            Subject
           </Link>
           {s.links.lecturer && (
             <Link href={s.links.lecturer} className={btn}>
               <ChalkboardTeacher size={14} aria-hidden />
-              Prowadzący
+              Lecturer
             </Link>
           )}
           {!simple && (
             <Link href={s.links.sql} className={btn}>
               <TerminalWindow size={14} aria-hidden />
-              Pokaż w SQL
+              Show in SQL
             </Link>
           )}
         </div>

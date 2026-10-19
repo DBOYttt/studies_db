@@ -87,9 +87,9 @@ export default async function SimpleSubject({
 
   const rows: ChipRow[] = [
     {
-      label: 'Zajęcia',
+      label: 'Class',
       chips: [
-        { label: 'Wszystkie', href: href({ kind: null }), active: !cur.kind },
+        { label: 'All', href: href({ kind: null }), active: !cur.kind },
         ...classes.map((c) => ({
           label: CLASS_NAMES[c.kind],
           href: href({ kind: c.kind }),
@@ -100,10 +100,10 @@ export default async function SimpleSubject({
   ];
   if (cls && cls.groups.length > 0) {
     rows.push({
-      label: 'Grupa',
+      label: 'Group',
       chips: [
         {
-          label: 'Wszystkie grupy',
+          label: 'All groups',
           href: href({ group: null }),
           active: cur.group === null,
         },
@@ -116,9 +116,9 @@ export default async function SimpleSubject({
     });
   }
   rows.push({
-    label: 'Rodzaj',
+    label: 'Type',
     chips: [
-      { label: 'Wszystko', href: href({ tag: null }), active: !cur.tag },
+      { label: 'All', href: href({ tag: null }), active: !cur.tag },
       ...tags.map((t) => ({
         label: t.name,
         href: href({ tag: t.id }),
@@ -164,7 +164,7 @@ export default async function SimpleSubject({
           {subject.name}
         </h1>
         <p className="m-0 text-muted">
-          Semestr {subject.semester} · {subject.ects} ECTS
+          Semester {subject.semester} · {subject.ects} ECTS
         </p>
         {subject.description && (
           <p className="mt-1 mb-0 max-w-[65ch] text-pretty whitespace-pre-line text-muted">
@@ -179,14 +179,14 @@ export default async function SimpleSubject({
             title={platform}
             className="mt-1 flex items-center gap-1 self-start text-[13px] text-accent-ink hover:text-accent-ink-hover hover:underline"
           >
-            Platforma przedmiotu
+            Subject platform
             <ArrowSquareOut size={14} aria-hidden />
           </a>
         )}
       </div>
       <FilterChips rows={rows} />
       <h2 className="mt-3 mb-0 text-base font-semibold">
-        Pliki ({list.total})
+        Files ({list.total})
       </h2>
       <FileList
         files={isoFiles(list.rows)}
@@ -195,13 +195,13 @@ export default async function SimpleSubject({
         baseHref={baseHref}
         emptyText={
           filtered
-            ? 'Brak plików dla wybranych filtrów.'
-            : 'Brak plików w tym przedmiocie.'
+            ? 'No files match the selected filters.'
+            : 'No files in this subject.'
         }
         emptyAction={
           filtered
             ? {
-                label: 'Wyczyść filtry',
+                label: 'Clear filters',
                 href: `/s/subjects/${encodeURIComponent(subject.code)}`,
               }
             : undefined
@@ -209,22 +209,22 @@ export default async function SimpleSubject({
       />
       {list.total > list.rows.length && (
         <p className="m-0 text-[13px] text-muted">
-          Pokazano {list.rows.length} najnowszych z {list.total}. Zawęź filtry,
-          aby zobaczyć starsze.
+          Showing the newest {list.rows.length} of {list.total}. Narrow the
+          filters to see older ones.
         </p>
       )}
       {sessions.length > 0 && <NextSessions sessions={sessions} />}
       {lecturers.length > 0 && (
         <>
-          <h2 className="mt-3 mb-0 text-base font-semibold">Prowadzący</h2>
+          <h2 className="mt-3 mb-0 text-base font-semibold">Lecturers</h2>
           <LecturerCards lecturers={lecturers} />
         </>
       )}
       <p className="mt-2 mb-0 flex flex-wrap items-center gap-1.5 text-[13px] text-muted">
         <Info size={15} aria-hidden />
-        <span>Potrzebujesz własnego zapytania?</span>
+        <span>Need your own query?</span>
         <a href={advancedHref} className="link">
-          Otwórz ten przedmiot w trybie zaawansowanym
+          Open this subject in advanced mode
         </a>
       </p>
     </SimpleShell>

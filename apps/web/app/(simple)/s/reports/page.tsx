@@ -47,18 +47,18 @@ export default async function SimpleReports({
       active={{ screen: 'reports' }}
       crumbs={[
         { label: 'Start', href: '/s' },
-        { label: 'Gotowe zestawienia', href: '/s/reports' },
+        { label: 'Ready-made reports', href: '/s/reports' },
       ]}
       user={user}
       adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
     >
       <div>
         <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
-          Gotowe zestawienia
+          Ready-made reports
         </h1>
         <p className="mt-1 mb-0 text-pretty text-muted">
-          Odpowiedzi na częste pytania o bazę. Wybierz jedno, aby zobaczyć
-          wynik.
+          Answers to common questions about the data. Pick one to see the
+          result.
         </p>
       </div>
       <ReportCards selected={r} />
@@ -79,7 +79,7 @@ export default async function SimpleReports({
             className="inline-flex items-center gap-1 text-[13px] text-accent-ink hover:underline"
           >
             <TerminalWindow size={15} aria-hidden />
-            Zobacz zapytanie SQL
+            View SQL query
           </a>
           {result.ok && (
             <a
@@ -88,7 +88,7 @@ export default async function SimpleReports({
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-fill px-3.5 font-semibold text-on-accent transition-colors duration-100 hover:bg-accent-fill-hover active:translate-y-px"
             >
               <DownloadSimple size={15} aria-hidden />
-              Pobierz CSV
+              Download CSV
             </a>
           )}
         </div>
@@ -99,7 +99,7 @@ export default async function SimpleReports({
             role="alert"
             className="m-3 rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg"
           >
-            Nie udało się wczytać zestawienia: {result.error}
+            Could not load the report: {result.error}
           </p>
         )}
       </section>
@@ -155,7 +155,7 @@ function ReportTable({
                 colSpan={Math.max(columns.length, 1)}
                 className="px-3.5 py-6 text-center text-muted"
               >
-                Brak wyników w tym zestawieniu.
+                No results in this report.
               </td>
             </tr>
           )}

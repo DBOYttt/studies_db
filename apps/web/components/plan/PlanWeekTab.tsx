@@ -45,7 +45,7 @@ export async function PlanWeekTab({
   extra?: Record<string, string>;
   filter?: PlanFilter;
   myGroupsFilter: boolean;
-  /** Simple (Prosty) view: session links stay in /s, no SQL link. */
+  /** Simple view: session links stay in /s, no SQL link. */
   simple?: boolean;
 }) {
   const pool = getRoPool();
@@ -107,7 +107,7 @@ export async function PlanWeekTab({
   } catch (err) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać planu: {roErrorMessage(err)}
+        Could not load the timetable: {roErrorMessage(err)}
       </div>
     );
   }

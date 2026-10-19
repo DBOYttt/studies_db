@@ -5,7 +5,7 @@ export type Crumb = { label: string; href?: string };
 /** Top-bar breadcrumbs (Start › subject › class › group); the last one is the current page. */
 export function Crumbs({ crumbs }: { crumbs: Crumb[] }) {
   return (
-    <nav aria-label="Ścieżka" className="min-w-0 flex-1">
+    <nav aria-label="Breadcrumb" className="min-w-0 flex-1">
       <ol className="m-0 flex min-w-0 list-none items-center gap-2 overflow-hidden p-0 whitespace-nowrap">
         {crumbs.map((c, i) => {
           const last = i === crumbs.length - 1;

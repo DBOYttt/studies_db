@@ -55,7 +55,7 @@ describe('activeNavKey', () => {
       expect(at(p)).toBe(navKey.db);
     }
   });
-  it('maps /plan (any query) to the Plan zajęć node', () => {
+  it('maps /plan (any query) to the Timetable node', () => {
     expect(at('/plan')).toBe(navKey.plan);
     expect(at('/plan?week=2026-W42')).toBe(navKey.plan);
     expect(at('/plan/?tab=groups')).toBe(navKey.plan);

@@ -127,7 +127,7 @@ describe('event actions', () => {
     expect(await eventRows()).toHaveLength(0);
   });
 
-  it('returns the Polish message for invalid input', async () => {
+  it('returns the English message for invalid input', async () => {
     cookieSid = alice.sid;
     expect(await A.createEventAction(form({ title: '  ' }))).toEqual({
       ok: false,
@@ -135,11 +135,11 @@ describe('event actions', () => {
     });
     expect(await A.createEventAction(form({ date: '' }))).toEqual({
       ok: false,
-      message: 'Podaj datę wydarzenia.',
+      message: 'Enter the event date.',
     });
     expect(
       await A.createEventAction(form({ start: '', end: '11:00' })),
-    ).toEqual({ ok: false, message: 'Podaj godzinę rozpoczęcia.' });
+    ).toEqual({ ok: false, message: 'Enter the start time.' });
     expect(await eventRows()).toHaveLength(0);
   });
 
@@ -322,14 +322,14 @@ describe('retryPostAction', () => {
     await A.retryPostAction(id);
     page = await loadEventPage(id, user);
     expect(page.canRetryPost).toBe(false);
-    expect(page.postLine).toBe('Post na Discordzie: w przygotowaniu');
+    expect(page.postLine).toBe('Discord post: being prepared');
     await db
       .update(botRequests)
       .set({ status: 'failed', error: 'Brak forum' })
       .where(eq(botRequests.target, `event:${id}`));
     page = await loadEventPage(id, user);
     expect(page.canRetryPost).toBe(true);
-    expect(page.postLine).toBe('Post na Discordzie: błąd (Brak forum)');
+    expect(page.postLine).toBe('Discord post: failed (Brak forum)');
     await db.update(events).set({ topicId }).where(eq(events.id, id));
     page = await loadEventPage(id, user);
     expect(page.canRetryPost).toBe(false);
