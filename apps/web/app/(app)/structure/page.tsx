@@ -10,7 +10,7 @@ import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { countViewRows, listViewColumns } from '@/lib/tables';
 
@@ -122,7 +122,7 @@ export default async function StructurePage() {
               })}
               <tr className="bg-surface font-semibold">
                 <td className="px-2.5 py-[7px]">
-                  {n} {pluralPl(n, 'widok', 'widoki', 'widoków')}
+                  {plural(n, 'view', 'views')}
                 </td>
                 <td className="px-2.5 py-[7px]">Suma</td>
                 <td className="px-2.5 py-[7px] text-right font-mono">

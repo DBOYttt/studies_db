@@ -108,13 +108,13 @@ function occurrenceTimes(
     if (startsAt > limit) {
       return {
         ok: false,
-        message: 'Ostatnie wystąpienie może być najwyżej rok po pierwszym.',
+        message: 'The last occurrence can be at most a year after the first.',
       };
     }
     if (k >= MAX_SERIES_OCCURRENCES) {
       return {
         ok: false,
-        message: `Cykl może mieć najwyżej ${MAX_SERIES_OCCURRENCES} wystąpień.`,
+        message: `A series can have at most ${MAX_SERIES_OCCURRENCES} occurrences.`,
       };
     }
     times.push({
@@ -135,19 +135,17 @@ export async function addSeries(
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return user;
   if (input.rule !== 'weekly' && input.rule !== 'biweekly') {
-    return refused('Nieznana reguła powtarzania.');
+    return refused('Unknown repeat rule.');
   }
   const v = await validateEvent(db, input);
   if (!v.ok) return refused(v.message);
   const f = v.fields;
   const until = parseUntil(input.until, f.startsAt);
   if (!until) {
-    return refused('Data końca cyklu ma format DD.MM.RRRR (np. 15.12.2026).');
+    return refused('The series end date must be DD.MM.YYYY (e.g. 15.12.2026).');
   }
   if (until < dayStart(f.startsAt)) {
-    return refused(
-      'Data końca cyklu nie może być przed pierwszym wydarzeniem.',
-    );
+    return refused('The series end date cannot be before the first event.');
   }
   const gen = occurrenceTimes(f, input.rule, until);
   if (!gen.ok) return refused(gen.message);
@@ -185,7 +183,7 @@ export async function addSeries(
     await upsertSeries(tx, seriesId);
     return {
       ok: true,
-      message: `Dodano cykl (${gen.times.length} wydarzeń).`,
+      message: `Added a series (${gen.times.length} events).`,
       id: seriesId,
     };
   });
@@ -305,7 +303,7 @@ export async function editInSeries(
     if (!plan.some((p) => Object.keys(p.changes).length > 0)) {
       // Saving unchanged retries a post that never got made.
       if (series.topicId === null) await upsertSeries(tx, seriesId);
-      return { ok: true, message: 'Brak zmian.' };
+      return { ok: true, message: 'No changes.' };
     }
     let targetSeries = seriesId;
     const touched = [seriesId];
@@ -379,7 +377,7 @@ export async function editInSeries(
       .set({ version: bumpSeries })
       .where(inArray(eventSeries.id, touched));
     for (const id of touched) await upsertSeries(tx, id);
-    return { ok: true, message: 'Zapisano zmiany.' };
+    return { ok: true, message: 'Changes saved.' };
   });
 }
 
@@ -444,8 +442,7 @@ export async function deleteInSeries(
     }
     return {
       ok: true,
-      message:
-        scope === 'following' ? 'Usunięto wydarzenia.' : 'Usunięto wydarzenie.',
+      message: scope === 'following' ? 'Events deleted.' : 'Event deleted.',
     };
   });
 }
@@ -493,19 +490,19 @@ export async function linkSeriesTopic(
       .select({ subjectId: topics.subjectId })
       .from(topics)
       .where(and(eq(topics.id, topicId), isNull(topics.deletedAt)));
-    if (!t) return refused('Nie znaleziono posta.');
+    if (!t) return refused('Post not found.');
     if (subj.subjectId !== null && t.subjectId !== subj.subjectId) {
-      return refused('Ten post należy do innego przedmiotu.');
+      return refused('This post belongs to a different subject.');
     }
     const links = await tx
       .select({ topicId: eventTopics.topicId })
       .from(eventTopics)
       .where(eq(eventTopics.seriesId, seriesId));
     if (links.some((l) => l.topicId === topicId)) {
-      return refused('Ten post jest już powiązany.');
+      return refused('This post is already linked.');
     }
     if (links.length >= MAX_EVENT_LINKS) {
-      return refused(`Można powiązać najwyżej ${MAX_EVENT_LINKS} postów.`);
+      return refused(`You can link at most ${MAX_EVENT_LINKS} posts.`);
     }
     await tx.insert(eventTopics).values({ seriesId, topicId });
     await tx
@@ -519,7 +516,7 @@ export async function linkSeriesTopic(
       details: { source, topicId },
     });
     await upsertSeries(tx, seriesId);
-    return { ok: true, message: 'Powiązano post.' };
+    return { ok: true, message: 'Post linked.' };
   });
 }
 
@@ -541,7 +538,7 @@ export async function unlinkSeriesTopic(
           eq(eventTopics.topicId, topicId),
         ),
       );
-    if (res.affectedRows === 0) return refused('Ten post nie jest powiązany.');
+    if (res.affectedRows === 0) return refused('This post is not linked.');
     await tx
       .update(eventSeries)
       .set({ version: bumpSeries })
@@ -553,6 +550,6 @@ export async function unlinkSeriesTopic(
       details: { source, topicId },
     });
     await upsertSeries(tx, seriesId);
-    return { ok: true, message: 'Usunięto powiązanie.' };
+    return { ok: true, message: 'Link removed.' };
   });
 }

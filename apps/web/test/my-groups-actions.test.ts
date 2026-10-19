@@ -196,7 +196,7 @@ describe('my-groups actions', () => {
 describe('reminders action', () => {
   it('saves the toggles for the session user and clears the DM-closed reason', async () => {
     cookieSid = aliceSid;
-    await disableReminders(db, aliceId, 'DM zamknięte');
+    await disableReminders(db, aliceId, 'DMs closed');
     expect(await saveRemindersAction(true, false)).toEqual({ ok: true });
     expect(await getReminderPrefs(db, aliceId)).toEqual({
       dayBefore: true,

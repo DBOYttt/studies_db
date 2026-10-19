@@ -185,7 +185,7 @@ describe('a no-op edit of an event without a post', () => {
     const e = await mkEvent();
     await db.delete(botRequests);
     const r = await editEvent(db, id.u, e, { title: 'K' }, 'web');
-    expect(r).toEqual({ ok: true, message: 'Brak zmian.' });
+    expect(r).toEqual({ ok: true, message: 'No changes.' });
     expect(await targets()).toEqual([`event_post_upsert event:${e}`]);
   });
 
@@ -205,7 +205,7 @@ describe('a no-op edit of an event without a post', () => {
       .from(events)
       .where(eq(events.seriesId, s));
     const r = await editEvent(db, id.u, first.id, { title: 'S' }, 'web');
-    expect(r.message).toBe('Brak zmian.');
+    expect(r.message).toBe('No changes.');
     expect(await targets()).toEqual([`event_post_upsert series:${s}`]);
   });
 });

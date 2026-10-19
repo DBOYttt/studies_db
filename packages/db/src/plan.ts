@@ -92,7 +92,7 @@ export type WhenResult =
   | { ok: false; message: string };
 
 export const WHEN_FORMAT_MESSAGE =
-  'Nieprawidłowy format daty. Użyj DD.MM[.RRRR] [GG:MM[-GG:MM]], np. 20.10 10:00-11:30.';
+  'Invalid date format. Use DD.MM[.YYYY] [HH:MM[-HH:MM]], e.g. 20.10 10:00-11:30.';
 const WHEN_RE =
   /^(\d{1,2})\.(\d{1,2})(?:\.(\d{4}))?(?:\s+(\d{1,2}):(\d{2})(?:\s*[-–—]\s*(\d{1,2}):(\d{2}))?)?$/;
 const MIN_MS = 60_000;
@@ -123,7 +123,7 @@ export function parseWhen(text: string, now: Date): WhenResult {
   const startMin = minutes(m[4], m[5]);
   const endMin = minutes(m[6], m[7]);
   if (Number.isNaN(startMin) || Number.isNaN(endMin)) {
-    return fail('Nieprawidłowa godzina.');
+    return fail('Invalid time.');
   }
   const offset = (startMin ?? 0) * MIN_MS;
   let date: Date | null = null;
@@ -140,22 +140,22 @@ export function parseWhen(text: string, now: Date): WhenResult {
       }
     }
   }
-  if (!date) return fail('Nieprawidłowa data.');
+  if (!date) return fail('Invalid date.');
   const startsAt = new Date(date.getTime() + offset);
   let endsAt: Date | null = null;
   if (endMin !== null) {
     endsAt = new Date(date.getTime() + endMin * MIN_MS);
-    if (endsAt <= startsAt) return fail('Koniec musi być po początku.');
+    if (endsAt <= startsAt) return fail('The end must be after the start.');
   }
   const lo = new Date(now);
   lo.setUTCMonth(lo.getUTCMonth() - 1);
   const hi = new Date(now);
   hi.setUTCFullYear(hi.getUTCFullYear() + 1);
   if (startsAt < lo) {
-    return fail('Data nie może być więcej niż miesiąc wstecz.');
+    return fail('The date cannot be more than a month in the past.');
   }
   if (startsAt > hi) {
-    return fail('Data nie może być więcej niż rok naprzód.');
+    return fail('The date cannot be more than a year ahead.');
   }
   return { ok: true, startsAt, endsAt, allDay: startMin === null };
 }

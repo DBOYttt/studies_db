@@ -6,7 +6,7 @@ import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
 import { explorerHref } from '@/lib/explorer';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -120,7 +120,7 @@ export default async function SearchPage({
                 Wyniki wyszukiwania „<b>{q}</b>”:{' '}
                 {capped
                   ? `${SEARCH_LIMIT}+ trafień (pokazano pierwsze ${SEARCH_LIMIT})`
-                  : `${hits.length} ${pluralPl(hits.length, 'trafienie', 'trafienia', 'trafień')}`}
+                  : plural(hits.length, 'match', 'matches')}
               </span>
             </div>
             <div className="shrink-0 overflow-auto rounded-md border border-line-strong">

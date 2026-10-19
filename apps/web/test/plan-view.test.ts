@@ -110,21 +110,21 @@ describe('labels', () => {
     expect(wallTime(W(2026, 10, 13, 7, 5))).toBe('07:05');
     expect(wallSqlText('2026-10-13T08:00:00.000Z')).toBe('2026-10-13 08:00:00');
     expect(dayHeader(W(2026, 10, 13))).toEqual({
-      name: 'Wtorek',
+      name: 'Tuesday',
       date: '13.10',
     });
-    expect(dayHeader(W(2026, 10, 18)).name).toBe('Niedziela');
+    expect(dayHeader(W(2026, 10, 18)).name).toBe('Sunday');
     expect(wallLongDate(W(2026, 10, 13, 23, 30))).toBe(
-      'wtorek, 13 października 2026',
+      'Tuesday, 13 October 2026',
     );
   });
   it('heads the week with its number and shown days', () => {
     expect(
       weekHeading({ year: 2026, week: 42 }, [W(2026, 10, 12), W(2026, 10, 16)]),
-    ).toBe('Tydzień 42 · 12 paź – 16 paź 2026');
+    ).toBe('Week 42 · 12 Oct – 16 Oct 2026');
     expect(
       weekHeading({ year: 2026, week: 53 }, [W(2026, 12, 28), W(2027, 1, 3)]),
-    ).toBe('Tydzień 53 · 28 gru 2026 – 3 sty 2027');
+    ).toBe('Week 53 · 28 Dec 2026 – 3 Jan 2027');
   });
   it('shows sync instants in Warsaw time', () => {
     // 2026-10-12 10:15 UTC = 12:15 in Warsaw (CEST).

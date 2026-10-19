@@ -268,7 +268,7 @@ describe('router', () => {
       .where(eq(users.discordUserId, 'ghost'));
     expect(u?.isBanned).toBe(true);
     expect(i.reply.mock.calls[0]?.[0].content).toBe(
-      'Zablokowano dostęp do strony.',
+      'Blocked access to the website.',
     );
   });
 

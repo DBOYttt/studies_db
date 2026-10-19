@@ -4,7 +4,7 @@ import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb } from '@/lib/db';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { parsePageParam } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
@@ -74,8 +74,7 @@ export default async function SimpleRecent({
       {list.total > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted">
           <span>
-            {shown} z {list.total}{' '}
-            {pluralPl(list.total, 'pliku', 'plików', 'plików')}
+            {shown} z {plural(list.total, 'file', 'files')}
           </span>
           {more && (
             <Link

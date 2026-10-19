@@ -109,7 +109,7 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
   if (isResult(input)) return input;
   const repeat = text(form, 'repeat');
   if (repeat && repeat !== 'weekly' && repeat !== 'biweekly') {
-    return fail('Nieznana reguła powtarzania.');
+    return fail('Unknown repeat rule.');
   }
   if (repeat === 'weekly' || repeat === 'biweekly') {
     const until = text(form, 'until').trim();

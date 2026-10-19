@@ -106,7 +106,7 @@ class Resolver {
         })
         .$returningId();
       id = ins?.id;
-      if (id === undefined) throw new Error(`Nie utworzono przedmiotu ${name}`);
+      if (id === undefined) throw new Error(`Subject not created: ${name}`);
     }
     this.subjectIds.set(unitimeName, id);
     return id;
@@ -140,8 +140,7 @@ class Resolver {
         .values({ name, title, email })
         .$returningId();
       id = ins?.id;
-      if (id === undefined)
-        throw new Error(`Nie utworzono prowadzącego ${name}`);
+      if (id === undefined) throw new Error(`Lecturer not created: ${name}`);
     }
     this.lecturerIds.set(key, id);
     return id;
@@ -211,11 +210,13 @@ class Resolver {
  */
 export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
   if (!/^BEGIN:VCALENDAR\s*$/im.test(ics))
-    throw new Error('To nie jest plik iCalendar (brak BEGIN:VCALENDAR).');
+    throw new Error(
+      'This is not an iCalendar file (BEGIN:VCALENDAR is missing).',
+    );
   const calendar = parseIcs(ics);
   // An empty feed would delete every session; treat it as an upstream error.
   if (calendar.events.length === 0)
-    throw new Error('Plan nie zawiera żadnych zajęć — pomijam synchronizację');
+    throw new Error('The timetable contains no classes; skipping the sync');
 
   const warnings = new Set<string>();
   const warn = (w: string) => {
@@ -223,9 +224,8 @@ export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
   };
   const planned = calendar.events.map((ev) => {
     const c = classifyEvent(ev);
-    if (!c.kind) warn(`Nieznany typ zajęć: ${c.label}`);
-    if (ev.rruleUnsupported)
-      warn(`Nieobsługiwana reguła powtarzania: ${ev.uid}`);
+    if (!c.kind) warn(`Unknown class type: ${c.label}`);
+    if (ev.rruleUnsupported) warn(`Unsupported repeat rule: ${ev.uid}`);
     return { ev, c, occurrences: expandOccurrences(ev) };
   });
 

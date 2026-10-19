@@ -31,8 +31,7 @@ import type {
 
 export const MAX_FORUM_TAGS = 20;
 const MAX_CHANNEL_NAME = 100;
-const FIXED_TAGS = ['Kolokwium', 'Egzamin'];
-/** Forum tags for the event kinds (Kolokwium and Egzamin are fixed tags too). */
+/** Forum tags for the event kinds (Test and Exam double as the fixed tags). */
 export const EVENT_KIND_TAGS = Object.values(EVENT_KINDS).map((k) => k.label);
 /** Label of the #wydarzenia actions in the report. */
 export const EVENTS_LABEL = '#wydarzenia';
@@ -55,7 +54,6 @@ export function desiredTags(s: SubjectSpec): string[] {
   return [
     ...s.classes.map((c) => CLASS_NAMES[c.kind]),
     ...Array.from({ length: maxGroup }, (_, i) => groupName(i + 1)),
-    ...FIXED_TAGS,
     ...EVENT_KIND_TAGS,
   ].filter((t, i, all) => all.findIndex((x) => tagKey(x) === tagKey(t)) === i);
 }

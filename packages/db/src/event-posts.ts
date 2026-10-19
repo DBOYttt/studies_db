@@ -82,5 +82,5 @@ export async function retryEventPost(
       details: { source },
     });
   });
-  return { ok: true, message: 'Ponawiam tworzenie posta.' };
+  return { ok: true, message: 'Retrying the post.' };
 }

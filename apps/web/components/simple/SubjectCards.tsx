@@ -1,7 +1,7 @@
 import { Files } from '@phosphor-icons/react/dist/ssr';
 import { CLASS_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
-import { formatDate, pluralPl } from '@/lib/format';
+import { formatDate, plural } from '@/lib/format';
 import type { SubjectCard } from '@/lib/simple-queries';
 
 /** Start page grid: one card per subject (auto-fill, min 240px). */
@@ -42,7 +42,7 @@ export function SubjectCards({ cards }: { cards: SubjectCard[] }) {
                 <Files size={15} aria-hidden />
                 {c.fileCount === 0
                   ? 'brak plików'
-                  : `${c.fileCount} ${pluralPl(c.fileCount, 'plik', 'pliki', 'plików')}`}
+                  : plural(c.fileCount, 'file', 'files')}
               </span>
               {c.fileCount > 0 && c.lastUpload && (
                 <span>ostatnio {formatDate(c.lastUpload)}</span>

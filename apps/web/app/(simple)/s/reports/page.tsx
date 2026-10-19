@@ -5,7 +5,7 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
-import { formatDate, pluralPl } from '@/lib/format';
+import { formatDate, plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { MAX_ROWS, parseReportIndex, REPORT_LABELS } from '@/lib/simple';
 import { navSubjects } from '@/lib/simple-page';
@@ -70,8 +70,7 @@ export default async function SimpleReports({
           <h2 className="m-0 text-base font-semibold">{query.name}</h2>
           {result.ok && (
             <span className="text-[13px] text-muted">
-              {result.rows.length}{' '}
-              {pluralPl(result.rows.length, 'wiersz', 'wiersze', 'wierszy')}
+              {plural(result.rows.length, 'row', 'rows')}
             </span>
           )}
           <span className="flex-1" />

@@ -131,7 +131,7 @@ describe('syncTimetable on the fixture', () => {
     expect(unknown?.classId).toBeNull();
     expect(unknown?.groupId).toBeNull();
     expect(unknown?.label).toBe('Konsultacje 1');
-    expect(stats.warnings).toEqual(['Nieznany typ zajęć: Konsultacje 1']);
+    expect(stats.warnings).toEqual(['Unknown class type: Konsultacje 1']);
 
     // Lecturer e-mails are stored lower-cased; titles parsed.
     const [piek] = await db
@@ -212,9 +212,7 @@ describe('syncTimetable on the fixture', () => {
     expect(sessions).toBeGreaterThan(0);
     await expect(
       syncTimetable(db, 'BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n'),
-    ).rejects.toThrow(
-      'Plan nie zawiera żadnych zajęć — pomijam synchronizację',
-    );
+    ).rejects.toThrow('The timetable contains no classes; skipping the sync');
     expect(await count(db, classSessions)).toBe(sessions);
   });
 

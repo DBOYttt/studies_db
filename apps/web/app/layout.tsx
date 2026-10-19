@@ -9,7 +9,7 @@ export const metadata: Metadata = { title: 'Studies DB | TP 4.0' };
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html
-      lang="pl"
+      lang="en"
       className={`${GeistSans.variable} ${GeistMono.variable}`}
       // Browser extensions (e.g. crxemulator) add attributes to <html> before hydration.
       suppressHydrationWarning

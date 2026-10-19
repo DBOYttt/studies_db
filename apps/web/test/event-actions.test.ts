@@ -131,7 +131,7 @@ describe('event actions', () => {
     cookieSid = alice.sid;
     expect(await A.createEventAction(form({ title: '  ' }))).toEqual({
       ok: false,
-      message: 'Tytuł musi mieć od 1 do 100 znaków.',
+      message: 'The title must be 1 to 100 characters.',
     });
     expect(await A.createEventAction(form({ date: '' }))).toEqual({
       ok: false,
@@ -236,7 +236,7 @@ describe('event actions', () => {
     const unknown = await A.createEventAction(form({ repeat: 'daily', until }));
     expect(unknown).toEqual({
       ok: false,
-      message: 'Nieznana reguła powtarzania.',
+      message: 'Unknown repeat rule.',
     });
     expect(await eventRows()).toHaveLength(before);
 

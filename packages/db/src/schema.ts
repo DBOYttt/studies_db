@@ -435,7 +435,7 @@ export const eventTopics = mysqlTable(
 );
 
 // Opt-in event reminders per user. `disabled_reason` is set when the bot
-// could not DM the user (for example "DM zamknięte").
+// could not DM the user (for example "DMs closed").
 export const reminderPrefs = mysqlTable('reminder_prefs', {
   userId: int('user_id')
     .primaryKey()

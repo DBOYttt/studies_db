@@ -167,7 +167,7 @@ describe('event series', () => {
         'web',
       );
       expect(r.ok).toBe(false);
-      expect(r.message).toBe('Cykl może mieć najwyżej 30 wystąpień.');
+      expect(r.message).toBe('A series can have at most 30 occurrences.');
       expect(
         (
           await addSeries(
@@ -188,7 +188,7 @@ describe('event series', () => {
       );
       expect(r.ok).toBe(false);
       expect(r.message).toBe(
-        'Ostatnie wystąpienie może być najwyżej rok po pierwszym.',
+        'The last occurrence can be at most a year after the first.',
       );
     });
     it('refuses until before the first start', async () => {
@@ -200,7 +200,7 @@ describe('event series', () => {
       );
       expect(r).toEqual({
         ok: false,
-        message: 'Data końca cyklu nie może być przed pierwszym wydarzeniem.',
+        message: 'The series end date cannot be before the first event.',
       });
     });
     it('refuses an unreadable until, a bad rule and a banned user', async () => {
@@ -376,7 +376,7 @@ describe('event series', () => {
         }
       }
     });
-    it('no-op returns "Brak zmian." with no audit or request', async () => {
+    it('no-op returns "No changes." with no audit or request', async () => {
       const sid = await mkSeries();
       const rows = await occ(sid);
       const a0 = (await db.select().from(adminAudit)).length;
@@ -389,7 +389,7 @@ describe('event series', () => {
         'web',
         'following',
       );
-      expect(r).toEqual({ ok: true, message: 'Brak zmian.' });
+      expect(r).toEqual({ ok: true, message: 'No changes.' });
       expect((await db.select().from(adminAudit)).length).toBe(a0);
       expect((await db.select().from(botRequests)).length).toBe(r0);
       expect((await occ(sid)).length).toBe(rows.length);
@@ -527,7 +527,7 @@ describe('event series', () => {
         'web',
         'following',
       );
-      expect(r).toEqual({ ok: false, message: 'Nie znaleziono wydarzenia.' });
+      expect(r).toEqual({ ok: false, message: 'Event not found.' });
       expect((await occ(sid)).every((e) => e.place === null)).toBe(true);
     });
     it('deleteInSeries with a stale version is a conflict', async () => {
@@ -647,12 +647,12 @@ describe('event series', () => {
       const t = await topic(id.sub);
       expect((await linkSeriesTopic(db, id.u, sid, t, 'web')).ok).toBe(true);
       expect((await linkSeriesTopic(db, id.u, sid, t, 'web')).message).toBe(
-        'Ten post jest już powiązany.',
+        'This post is already linked.',
       );
       expect(
         (await linkSeriesTopic(db, id.u, sid, await topic(id.sub2), 'web'))
           .message,
-      ).toBe('Ten post należy do innego przedmiotu.');
+      ).toBe('This post belongs to a different subject.');
       expect((await unlinkSeriesTopic(db, id.u, sid, t, 'web')).ok).toBe(true);
       expect((await unlinkSeriesTopic(db, id.u, sid, t, 'web')).ok).toBe(false);
       const [a] = (await db.select().from(adminAudit)).filter(

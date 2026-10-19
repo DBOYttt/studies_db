@@ -1,6 +1,6 @@
 import dagre from '@dagrejs/dagre';
 import { type ExplorerParams, explorerHref } from './explorer';
-import { pluralPl } from './format';
+import { plural } from './format';
 import type { TreeClass, TreeTopic } from './queries';
 
 export type MapNodeKind = 'subject' | 'class' | 'group' | 'topic' | 'more';
@@ -73,7 +73,7 @@ export function buildDataMapGraph(
       const rows = topics.slice(MAX_TOPICS_PER_PARENT);
       add({
         id: `m:${moreKey}`,
-        label: `+ ${rest} ${pluralPl(rest, 'temat', 'tematy', 'tematów')}`,
+        label: `+ ${plural(rest, 'topic', 'topics')}`,
         count: rows.reduce((n, t) => n + t.fileCount, 0),
         kind: 'more',
         href: explorerHref(subject.code, {

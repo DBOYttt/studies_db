@@ -130,7 +130,7 @@ describe('buildDataMapGraph', () => {
     expect(g.nodes.filter((n) => n.kind === 'topic')).toHaveLength(15);
     const more = g.nodes.find((n) => n.kind === 'more');
     expect(more?.id).toBe('m:20');
-    expect(more?.label).toBe('+ 3 tematy');
+    expect(more?.label).toBe('+ 3 topics');
     expect(more?.href).toBe('/subjects/MECH?class=cwiczenia&group=3');
     expect(
       g.edges.some((e) => e.source === 'g:20' && e.target === 'm:20'),
@@ -161,7 +161,7 @@ describe('buildDataMapGraph', () => {
     );
     const more = g20.nodes.find((n) => n.kind === 'more');
     expect(more?.id).toBe('m:none');
-    expect(more?.label).toBe('+ 5 tematów');
+    expect(more?.label).toBe('+ 5 topics');
     expect(more?.href).toBe('/subjects/MECH?class=none');
   });
 

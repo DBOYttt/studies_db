@@ -337,9 +337,7 @@ describe('subjects', () => {
     });
     await handler()(i);
     expect(i.calls).toEqual(['deferUpdate', 'followUp']);
-    expect(textOf(i.followUp.mock.calls[0][0])).toBe(
-      'Nieprawidłowy adres URL.',
-    );
+    expect(textOf(i.followUp.mock.calls[0][0])).toBe('Invalid URL.');
     expect(await auditRows()).toHaveLength(0);
   });
 
@@ -367,7 +365,7 @@ describe('subjects', () => {
     expect(rows[0]).toMatchObject({ action: 'subject.add', target: 'BD-1' });
     const view = lastEdit(i);
     expect(ids(view)).toContain('v1:adm:setup:ask');
-    expect(textOf(view)).toContain('Dodano przedmiot BD-1');
+    expect(textOf(view)).toContain('Added subject BD-1');
   });
 
   it('rejects a new code with characters that cannot go into an id', async () => {

@@ -49,18 +49,18 @@ export function auditHref(q: AuditQuery): string {
   return s ? `/admin/audit?${s}` : '/admin/audit';
 }
 
-const timeFmt = new Intl.DateTimeFormat('pl-PL', {
+const timeFmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/Warsaw',
   year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
+  month: 'short',
+  day: 'numeric',
   hour: '2-digit',
   minute: '2-digit',
   second: '2-digit',
   hourCycle: 'h23',
 });
 
-/** Audit time as `DD.MM.YYYY, HH:mm:ss` in Europe/Warsaw. */
+/** Audit time as `D Mon YYYY, HH:mm:ss` in Europe/Warsaw. */
 export const formatAuditTime = (d: Date | string): string =>
   timeFmt.format(typeof d === 'string' ? new Date(d) : d);
 

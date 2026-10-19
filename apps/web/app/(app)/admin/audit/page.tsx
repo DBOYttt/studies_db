@@ -11,7 +11,7 @@ import {
   parseAuditQuery,
 } from '@/lib/admin-audit';
 import { getDb } from '@/lib/db';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 import { requireAdmin } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -142,7 +142,7 @@ export default async function AdminAuditPage({
             </Link>
           )}
           <span className="ml-auto self-center pt-4 text-xs text-muted tabular-nums">
-            {total} {pluralPl(total, 'wpis', 'wpisy', 'wpisów')}
+            {plural(total, 'entry', 'entries')}
           </span>
         </form>
 

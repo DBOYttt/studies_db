@@ -50,7 +50,7 @@ export type EventInput = {
   note?: string | null;
 };
 
-export const BANNED_MESSAGE = 'Twój dostęp do strony jest zablokowany.';
+export const BANNED_MESSAGE = 'Your access to the website is blocked.';
 export const MAX_EVENTS_PER_HOUR = 10;
 export const MAX_EVENT_LINKS = 20;
 const TITLE_MAX = 100;
@@ -61,7 +61,7 @@ export const refused = (message: string): ActionResult => ({
   ok: false,
   message,
 });
-export const NOT_FOUND = 'Nie znaleziono wydarzenia.';
+export const NOT_FOUND = 'Event not found.';
 export const CONFLICT =
   "Someone changed this event while you were editing. Your changes weren't saved — reload to see the current version.";
 
@@ -121,18 +121,18 @@ export async function validateEvent(
   const bad = (message: string) => ({ ok: false as const, message });
   const title = (i.title ?? '').trim();
   if (title.length < 1 || title.length > TITLE_MAX) {
-    return bad('Tytuł musi mieć od 1 do 100 znaków.');
+    return bad('The title must be 1 to 100 characters.');
   }
   if (!Object.hasOwn(EVENT_KINDS, i.kind)) {
-    return bad('Nieznany rodzaj wydarzenia.');
+    return bad('Unknown event kind.');
   }
   const place = blankToNull(i.place);
   if (place && place.length > PLACE_MAX) {
-    return bad('Miejsce może mieć najwyżej 100 znaków.');
+    return bad('The place can be at most 100 characters.');
   }
   const note = blankToNull(i.note);
   if (note && note.length > NOTE_MAX) {
-    return bad('Notatka może mieć najwyżej 1000 znaków.');
+    return bad('The note can be at most 1000 characters.');
   }
   const when = parseWhen(i.when ?? '', now);
   if (!when.ok) return bad(when.message);
@@ -142,22 +142,24 @@ export async function validateEvent(
   const subjectId = i.subjectId ?? null;
   if (subjectId === null) {
     if (classId !== null || groupId !== null) {
-      return bad('Zajęcia i grupę można wybrać tylko z przedmiotem.');
+      return bad(
+        'A class and group can only be chosen together with a subject.',
+      );
     }
   } else {
     const [s] = await db
       .select({ id: subjects.id })
       .from(subjects)
       .where(eq(subjects.id, subjectId));
-    if (!s) return bad('Nie znaleziono przedmiotu.');
+    if (!s) return bad('Subject not found.');
     if (groupId !== null) {
       const [g] = await db
         .select({ classId: classGroups.classId })
         .from(classGroups)
         .where(eq(classGroups.id, groupId));
-      if (!g) return bad('Nie znaleziono grupy.');
+      if (!g) return bad('Group not found.');
       if (classId !== null && classId !== g.classId) {
-        return bad('Wybrana grupa nie należy do tych zajęć.');
+        return bad('The chosen group does not belong to this class.');
       }
       classId = g.classId;
     }
@@ -167,7 +169,7 @@ export async function validateEvent(
         .from(classes)
         .where(eq(classes.id, classId));
       if (!c || c.subjectId !== subjectId) {
-        return bad('Wybrane zajęcia nie należą do tego przedmiotu.');
+        return bad('The chosen class does not belong to this subject.');
       }
     }
   }
@@ -197,7 +199,7 @@ export async function checkUser(
     .select({ banned: users.isBanned, admin: users.isAdmin })
     .from(users)
     .where(eq(users.id, userId));
-  if (!u) return refused('Nie znaleziono użytkownika.');
+  if (!u) return refused('User not found.');
   if (u.banned) return refused(BANNED_MESSAGE);
   return { isAdmin: u.admin };
 }
@@ -227,7 +229,7 @@ export async function checkAddRateLimit(
   ];
   if (Number(r[0].n) >= MAX_EVENTS_PER_HOUR) {
     return refused(
-      `Możesz dodać najwyżej ${MAX_EVENTS_PER_HOUR} wydarzeń na godzinę. Spróbuj później.`,
+      `You can add at most ${MAX_EVENTS_PER_HOUR} events per hour. Try again later.`,
     );
   }
   return null;
@@ -258,7 +260,7 @@ export async function addEvent(
       details: { source, fields: jsonFields(f) },
     });
     await upsert(tx, id);
-    return { ok: true, message: 'Dodano wydarzenie.', id };
+    return { ok: true, message: 'Event added.', id };
   });
 }
 
@@ -404,7 +406,7 @@ export async function editEvent(
     if (Object.keys(changes).length === 0) {
       // Saving unchanged retries a post that never got made.
       if (fresh.topicId === null) await upsert(tx, eventId);
-      return { ok: true, message: 'Brak zmian.' };
+      return { ok: true, message: 'No changes.' };
     }
     await tx
       .update(events)
@@ -422,7 +424,7 @@ export async function editEvent(
       details: { source, changes },
     });
     await upsert(tx, eventId);
-    return { ok: true, message: 'Zapisano zmiany.' };
+    return { ok: true, message: 'Changes saved.' };
   });
 }
 
@@ -463,7 +465,7 @@ export async function deleteEvent(
       details: { source },
     });
     await enqueueBotRequest(tx, 'event_post_archive', `event:${eventId}`);
-    return { ok: true, message: 'Usunięto wydarzenie.' };
+    return { ok: true, message: 'Event deleted.' };
   });
 }
 
@@ -477,7 +479,7 @@ export async function restoreEvent(
   const user = await checkUser(db, adminUserId);
   if (isRefusal(user)) return user;
   if (!user.isAdmin) {
-    return refused('Tylko administrator może przywrócić wydarzenie.');
+    return refused('Only an admin can restore an event.');
   }
   return withTxRetry(db, async (tx) => {
     const [res] = await tx
@@ -490,7 +492,7 @@ export async function restoreEvent(
       })
       .where(and(eq(events.id, eventId), sql`${events.deletedAt} IS NOT NULL`));
     if (res.affectedRows === 0) {
-      return refused('Nie znaleziono usuniętego wydarzenia.');
+      return refused('Deleted event not found.');
     }
     await writeAudit(tx, {
       userId: adminUserId,
@@ -504,7 +506,7 @@ export async function restoreEvent(
       .where(eq(events.id, eventId));
     if (ev?.seriesId != null) await reviveSeries(tx, ev.seriesId);
     else await upsert(tx, eventId);
-    return { ok: true, message: 'Przywrócono wydarzenie.' };
+    return { ok: true, message: 'Event restored.' };
   });
 }
 
@@ -536,19 +538,19 @@ export async function linkTopic(
       .select({ subjectId: topics.subjectId })
       .from(topics)
       .where(and(eq(topics.id, topicId), isNull(topics.deletedAt)));
-    if (!t) return refused('Nie znaleziono posta.');
+    if (!t) return refused('Post not found.');
     if (ev.subjectId !== null && t.subjectId !== ev.subjectId) {
-      return refused('Ten post należy do innego przedmiotu.');
+      return refused('This post belongs to a different subject.');
     }
     const links = await tx
       .select({ topicId: eventTopics.topicId })
       .from(eventTopics)
       .where(eq(eventTopics.eventId, eventId));
     if (links.some((l) => l.topicId === topicId)) {
-      return refused('Ten post jest już powiązany.');
+      return refused('This post is already linked.');
     }
     if (links.length >= MAX_EVENT_LINKS) {
-      return refused(`Można powiązać najwyżej ${MAX_EVENT_LINKS} postów.`);
+      return refused(`You can link at most ${MAX_EVENT_LINKS} posts.`);
     }
     await tx.insert(eventTopics).values({ eventId, topicId });
     await tx
@@ -562,7 +564,7 @@ export async function linkTopic(
       details: { source, topicId },
     });
     await upsert(tx, eventId);
-    return { ok: true, message: 'Powiązano post.' };
+    return { ok: true, message: 'Post linked.' };
   });
 }
 
@@ -588,7 +590,7 @@ export async function unlinkTopic(
       .where(
         and(eq(eventTopics.eventId, eventId), eq(eventTopics.topicId, topicId)),
       );
-    if (res.affectedRows === 0) return refused('Ten post nie jest powiązany.');
+    if (res.affectedRows === 0) return refused('This post is not linked.');
     await tx
       .update(events)
       .set({ version: bumpEvent })
@@ -600,7 +602,7 @@ export async function unlinkTopic(
       details: { source, topicId },
     });
     await upsert(tx, eventId);
-    return { ok: true, message: 'Usunięto powiązanie.' };
+    return { ok: true, message: 'Link removed.' };
   });
 }
 

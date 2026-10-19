@@ -23,7 +23,7 @@ import {
 import { useRouter } from 'next/navigation';
 import { memo, useMemo } from 'react';
 import type { ExplorerParams } from '@/lib/explorer';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 import {
   buildDataMapGraph,
   MAP_NODE_HEIGHT,
@@ -51,7 +51,7 @@ const ICONS: Record<MapNodeKind, Icon> = {
 
 const MapNodeView = memo(function MapNodeView({ data }: NodeProps<FlowNode>) {
   const IconC = ICONS[data.kind];
-  const files = `${data.count} ${pluralPl(data.count, 'plik', 'pliki', 'plików')}`;
+  const files = plural(data.count, 'file', 'files');
   return (
     <>
       <Handle

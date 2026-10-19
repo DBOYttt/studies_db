@@ -49,11 +49,11 @@ describe('formatAuditTime', () => {
   it('formats in Europe/Warsaw', () => {
     // 2026-01-15 11:05:09 UTC = 12:05:09 in Warsaw (CET)
     expect(formatAuditTime(new Date(Date.UTC(2026, 0, 15, 11, 5, 9)))).toBe(
-      '15.01.2026, 12:05:09',
+      '15 Jan 2026, 12:05:09',
     );
     // summer time (CEST, UTC+2)
     expect(formatAuditTime(new Date(Date.UTC(2026, 6, 1, 22, 0, 0)))).toBe(
-      '02.07.2026, 00:00:00',
+      '2 Jul 2026, 00:00:00',
     );
   });
 });

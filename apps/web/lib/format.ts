@@ -1,4 +1,4 @@
-const dateFmt = new Intl.DateTimeFormat('pl-PL', {
+const dateFmt = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeZone: 'Europe/Warsaw',
 });
@@ -13,21 +13,9 @@ export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/**
- * Polish plural form: pluralPl(n, 'plik', 'pliki', 'plików') ->
- * 1 plik, 2–4 pliki (but 12–14 plików), everything else plików.
- */
-export function pluralPl(
-  n: number,
-  one: string,
-  few: string,
-  many: string,
-): string {
-  const abs = Math.abs(Math.trunc(n));
-  if (abs === 1) return one;
-  const d = abs % 10;
-  const dd = abs % 100;
-  return d >= 2 && d <= 4 && (dd < 12 || dd > 14) ? few : many;
+/** English plural with the count: plural(2, 'file', 'files') -> "2 files". */
+export function plural(n: number, one: string, many: string): string {
+  return `${n} ${Math.abs(n) === 1 ? one : many}`;
 }
 
 /**

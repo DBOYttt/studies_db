@@ -3,7 +3,7 @@ import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb } from '@/lib/db';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { parseSearchQuery } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
@@ -57,7 +57,7 @@ export default async function SimpleSearch({
           {q
             ? hits.length >= SEARCH_LIMIT
               ? `${SEARCH_LIMIT}+ plików — pokazuję pierwsze ${SEARCH_LIMIT}`
-              : `${hits.length} ${pluralPl(hits.length, 'plik', 'pliki', 'plików')}`
+              : plural(hits.length, 'file', 'files')
             : 'Wpisz słowo w polu wyszukiwania i naciśnij Enter.'}
         </p>
       </div>

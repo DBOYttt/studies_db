@@ -192,7 +192,7 @@ describe('event posts', () => {
     expect(guild.posts.size).toBe(1);
     const [post] = [...guild.posts.entries()];
     expect(post[1].forumId).toBe('f-bd');
-    expect(post[1].tagName).toBe('Kolokwium');
+    expect(post[1].tagName).toBe('Test');
     expect(post[1].title).toMatch(/^📝 Kolokwium 1 — \d\d\.\d\d$/);
     expect(post[1].content).toContain(`https://x.pl/s/wydarzenia/${id}`);
     const e = await eventRow(id);
@@ -221,7 +221,7 @@ describe('event posts', () => {
     expect(guild.posts.size).toBe(1);
     const p = guild.posts.get(threadId);
     expect(p?.title).toMatch(/^🎓 Poprawka — /);
-    expect(p?.tagName).toBe('Egzamin');
+    expect(p?.tagName).toBe('Exam');
     expect(p?.content).toContain('Miejsce: sala 5');
     const [t] = await db.select().from(topics);
     expect(t.title).toBe(p?.title);
@@ -334,7 +334,7 @@ describe('event posts', () => {
     expect(t.subjectId).toBeNull();
     expect([...guild.posts.values()][0]).toMatchObject({
       forumId: 'f-events',
-      tagName: 'Wyjazd',
+      tagName: 'Trip',
     });
     expect((await eventRow(id)).topicId).toBe(t.id);
     await db.delete(events);
@@ -516,7 +516,7 @@ describe('event post fixes', () => {
     const rows = await requests();
     expect(rows[0]).toMatchObject({
       status: 'failed',
-      error: 'Przerwane: bot został zrestartowany.',
+      error: 'Interrupted: the bot was restarted.',
     });
     expect(rows[1].status).toBe('failed');
     await enqueueBotRequest(db, 'event_post_upsert', `event:${id}`);
@@ -612,7 +612,7 @@ describe('series posts', () => {
     expect(guild.posts.size).toBe(1);
     const p = [...guild.posts.values()][0];
     expect(p.title).toBe('🔁 Konsultacje — co tydzień');
-    expect(p.tagName).toBe('Zajęcia dodatkowe');
+    expect(p.tagName).toBe('Extra class');
     expect(p.content).toContain('Cykl: co tydzień');
     const [s] = await db.select().from(eventSeries);
     expect(s.topicId).not.toBeNull();

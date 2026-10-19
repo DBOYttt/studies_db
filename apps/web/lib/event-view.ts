@@ -45,29 +45,30 @@ export function formWhen(startsAt: Date, endsAt: Date | null, allDay: boolean) {
   };
 }
 
+const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = [
-  'stycznia',
-  'lutego',
-  'marca',
-  'kwietnia',
-  'maja',
-  'czerwca',
-  'lipca',
-  'sierpnia',
-  'września',
-  'października',
-  'listopada',
-  'grudnia',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
-/** "20 października 2026, 10:00–11:30" (or without time for all-day). */
+/** "Tue 20 Oct 2026, 10:00–11:30" (or ", all day" for all-day events). */
 export function whenLabel(
   startsAt: Date,
   endsAt: Date | null,
   allDay: boolean,
 ): string {
-  const day = `${startsAt.getUTCDate()} ${MONTHS[startsAt.getUTCMonth()]} ${startsAt.getUTCFullYear()}`;
-  if (allDay) return `${day}, cały dzień`;
+  const day = `${DAYS_SHORT[startsAt.getUTCDay()]} ${startsAt.getUTCDate()} ${MONTHS[startsAt.getUTCMonth()]} ${startsAt.getUTCFullYear()}`;
+  if (allDay) return `${day}, all day`;
   const t = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
   return `${day}, ${t(startsAt)}${endsAt ? `–${t(endsAt)}` : ''}`;
 }

@@ -128,7 +128,7 @@ describe('events schema', () => {
   });
 
   it('EVENT_KINDS has a label and symbol for each kind', () => {
-    expect(EVENT_KINDS.kolokwium).toEqual({ label: 'Kolokwium', symbol: '📝' });
+    expect(EVENT_KINDS.kolokwium).toEqual({ label: 'Test', symbol: '📝' });
     expect(Object.keys(EVENT_KINDS)).toHaveLength(5);
   });
 });

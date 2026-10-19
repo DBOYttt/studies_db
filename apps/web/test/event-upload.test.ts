@@ -512,7 +512,7 @@ describe('retryUploadsAction', () => {
     const r = await retryUploadsAction(eventId);
     expect(r).toMatchObject({
       ok: false,
-      message: 'Brak plików do ponowienia.',
+      message: 'No files to retry.',
     });
   });
 

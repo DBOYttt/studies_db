@@ -79,11 +79,11 @@ describe('formatSeconds', () => {
 
 describe('footerText', () => {
   it('uses the Polish plural of "wiersz"', () => {
-    expect(footerText(1, 1, 1)).toBe('1 wiersz · strona 1 / 1');
-    expect(footerText(3, 1, 1)).toBe('3 wiersze · strona 1 / 1');
-    expect(footerText(12, 1, 1)).toBe('12 wierszy · strona 1 / 1');
-    expect(footerText(22, 2, 3)).toBe('22 wiersze · strona 2 / 3');
-    expect(footerText(0, 1, 0)).toBe('0 wierszy · strona 1 / 1');
+    expect(footerText(1, 1, 1)).toBe('1 row · page 1 / 1');
+    expect(footerText(3, 1, 1)).toBe('3 rows · page 1 / 1');
+    expect(footerText(12, 1, 1)).toBe('12 rows · page 1 / 1');
+    expect(footerText(22, 2, 3)).toBe('22 rows · page 2 / 3');
+    expect(footerText(0, 1, 0)).toBe('0 rows · page 1 / 1');
   });
 });
 

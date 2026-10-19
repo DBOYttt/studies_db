@@ -1,7 +1,7 @@
 /**
- * Pure, client-safe glue between the Plan zajęć queries and the week view:
+ * Pure, client-safe glue between the Timetable queries and the week view:
  * the serialisable session shape (server -> client component), week
- * navigation links and the Polish date/time labels.
+ * navigation links and the English date/time labels.
  *
  * Session dates are wall Dates (see lib/plan.ts): every formatter here reads
  * UTC fields or formats with `timeZone: 'UTC'`. Only `formatSyncTime` takes a
@@ -136,30 +136,30 @@ export const wallSqlText = (iso: string): string =>
   iso.slice(0, 19).replace('T', ' ');
 
 const DAY_NAMES = [
-  'Poniedziałek',
-  'Wtorek',
-  'Środa',
-  'Czwartek',
-  'Piątek',
-  'Sobota',
-  'Niedziela',
+  'Monday',
+  'Tuesday',
+  'Wednesday',
+  'Thursday',
+  'Friday',
+  'Saturday',
+  'Sunday',
 ];
 const MONTHS_SHORT = [
-  'sty',
-  'lut',
-  'mar',
-  'kwi',
-  'maj',
-  'cze',
-  'lip',
-  'sie',
-  'wrz',
-  'paź',
-  'lis',
-  'gru',
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
 ];
 
-/** Column header parts of a wall day: `Wtorek`, `13.10`. */
+/** Column header parts of a wall day: `Tuesday`, `13.10`. */
 export function dayHeader(d: Date): { name: string; date: string } {
   return {
     name: DAY_NAMES[(d.getUTCDay() + 6) % 7],
@@ -171,18 +171,18 @@ const shortDate = (d: Date, year: boolean) =>
   `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}${year ? ` ${d.getUTCFullYear()}` : ''}`;
 
 /**
- * `Tydzień 42 · 12 paź – 16 paź 2026` from the first to the last shown day;
+ * `Week 42 · 12 Oct – 16 Oct 2026` from the first to the last shown day;
  * the first day carries its year too when the week spans two years.
  */
 export function weekHeading(w: IsoWeek, days: Date[]): string {
   const first = days[0];
   const last = days[days.length - 1];
-  if (!first || !last) return `Tydzień ${w.week}`;
+  if (!first || !last) return `Week ${w.week}`;
   const twoYears = first.getUTCFullYear() !== last.getUTCFullYear();
-  return `Tydzień ${w.week} · ${shortDate(first, twoYears)} – ${shortDate(last, true)}`;
+  return `Week ${w.week} · ${shortDate(first, twoYears)} – ${shortDate(last, true)}`;
 }
 
-const longDateFmt = new Intl.DateTimeFormat('pl-PL', {
+const longDateFmt = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
@@ -190,10 +190,10 @@ const longDateFmt = new Intl.DateTimeFormat('pl-PL', {
   timeZone: 'UTC',
 });
 
-/** `wtorek, 13 października 2026` of a wall Date. */
+/** `Tuesday, 13 October 2026` of a wall Date. */
 export const wallLongDate = (d: Date): string => longDateFmt.format(d);
 
-const syncFmt = new Intl.DateTimeFormat('pl-PL', {
+const syncFmt = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeStyle: 'short',
   timeZone: 'Europe/Warsaw',

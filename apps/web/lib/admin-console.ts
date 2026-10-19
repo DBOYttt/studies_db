@@ -4,7 +4,7 @@
  * browser. The server (lib/admin-sql-handler.ts) enforces the same rules.
  */
 
-import { pluralPl } from './format';
+import { plural } from './format';
 
 export type WriteKind = 'insert' | 'update' | 'delete' | 'replace';
 
@@ -23,18 +23,12 @@ export interface WritePreview {
 /** Word the user types to confirm a large change. */
 export const confirmWord = (table: string | null): string => table ?? 'TAK';
 
-/** "1 wiersz", "2 wiersze", "5 wierszy". */
-export const rowCount = (n: number): string =>
-  `${n} ${pluralPl(n, 'wiersz', 'wiersze', 'wierszy')}`;
+/** "1 row", "2 rows". */
+export const rowCount = (n: number): string => plural(n, 'row', 'rows');
 
-/** "1 wiersz zostanie zmieniony", "2 wiersze zostaną zmienione", … */
+/** "1 row will be changed", "2 rows will be changed". */
 export const rowsWillChange = (n: number): string =>
-  `${rowCount(n)} ${pluralPl(
-    n,
-    'zostanie zmieniony',
-    'zostaną zmienione',
-    'zostanie zmienionych',
-  )}`;
+  `${rowCount(n)} will be changed`;
 
 /** Server error for a large change sent without the typed confirmation. */
 export function confirmMessage(table: string | null, affected: number): string {

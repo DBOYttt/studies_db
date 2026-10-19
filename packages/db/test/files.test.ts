@@ -107,7 +107,7 @@ describe('resolveInStorage', () => {
 
   it('uses a message that does not echo the path', () => {
     expect(() => resolveInStorage(root, '/etc/passwd')).toThrow(
-      /^Nieprawidłowa ścieżka pliku$/,
+      /^Invalid file path$/,
     );
   });
 });

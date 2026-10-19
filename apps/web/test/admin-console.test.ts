@@ -61,12 +61,12 @@ describe('canExecute', () => {
 
 describe('row count wording', () => {
   it.each([
-    [1, '1 wiersz', '1 wiersz zostanie zmieniony'],
-    [2, '2 wiersze', '2 wiersze zostaną zmienione'],
-    [5, '5 wierszy', '5 wierszy zostanie zmienionych'],
-    [22, '22 wiersze', '22 wiersze zostaną zmienione'],
-    [12, '12 wierszy', '12 wierszy zostanie zmienionych'],
-    [0, '0 wierszy', '0 wierszy zostanie zmienionych'],
+    [1, '1 row', '1 row will be changed'],
+    [2, '2 rows', '2 rows will be changed'],
+    [5, '5 rows', '5 rows will be changed'],
+    [22, '22 rows', '22 rows will be changed'],
+    [12, '12 rows', '12 rows will be changed'],
+    [0, '0 rows', '0 rows will be changed'],
   ])('%i', (n, count, change) => {
     expect(rowCount(n)).toBe(count);
     expect(rowsWillChange(n)).toBe(change);
@@ -74,10 +74,10 @@ describe('row count wording', () => {
 
   it('confirmMessage agrees with the count', () => {
     expect(confirmMessage('subjects', 101)).toBe(
-      'Zmiana obejmuje 101 wierszy. Aby potwierdzić, wpisz nazwę tabeli „subjects”.',
+      'Zmiana obejmuje 101 rows. Aby potwierdzić, wpisz nazwę tabeli „subjects”.',
     );
     expect(confirmMessage(null, 122)).toBe(
-      'Zmiana obejmuje 122 wiersze. Aby potwierdzić, wpisz „TAK”.',
+      'Zmiana obejmuje 122 rows. Aby potwierdzić, wpisz „TAK”.',
     );
   });
 });

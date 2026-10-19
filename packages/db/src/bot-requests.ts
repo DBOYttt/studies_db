@@ -23,7 +23,7 @@ export type BotRequest = {
 };
 
 const MAX_ERROR = 500;
-export const STALE_BOT_REQUEST_ERROR = 'Przerwane: bot został zrestartowany.';
+export const STALE_BOT_REQUEST_ERROR = 'Interrupted: the bot was restarted.';
 
 /**
  * Queues a request unless one for the same kind and target is already

@@ -100,11 +100,11 @@ describe('reminders', () => {
         hourBefore: false,
         disabledReason: null,
       });
-      await disableReminders(db, id.u, 'DM zamknięte');
+      await disableReminders(db, id.u, 'DMs closed');
       expect(await getReminderPrefs(db, id.u)).toEqual({
         dayBefore: false,
         hourBefore: false,
-        disabledReason: 'DM zamknięte',
+        disabledReason: 'DMs closed',
       });
       await setReminderPrefs(
         db,

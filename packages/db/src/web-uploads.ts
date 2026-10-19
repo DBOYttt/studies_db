@@ -105,9 +105,9 @@ export async function retryFailedUploads(
   const who = await checkUser(db, userId);
   if (isRefusal(who)) return who;
   const e = await getEvent(db, eventId);
-  if (!e || e.deletedAt) return refused('Nie znaleziono wydarzenia.');
+  if (!e || e.deletedAt) return refused('Event not found.');
   const ids = await retryableUploadIds(db, eventId, fileExists);
-  if (ids.length === 0) return refused('Brak plików do ponowienia.');
+  if (ids.length === 0) return refused('No files to retry.');
   await db.transaction(async (tx) => {
     await tx
       .update(webUploads)
@@ -124,5 +124,5 @@ export async function retryFailedUploads(
       details: { source: 'web', count: ids.length, uploadIds: ids },
     });
   });
-  return { ok: true, message: 'Ponawiam wysyłanie.' };
+  return { ok: true, message: 'Retrying the upload.' };
 }

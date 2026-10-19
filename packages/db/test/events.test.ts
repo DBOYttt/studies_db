@@ -214,7 +214,7 @@ describe('event actions', () => {
       for (const title of ['', '   ', 'x'.repeat(101)]) {
         const r = await addEvent(db, id.u, input({ title }), 'web');
         expect(r.ok).toBe(false);
-        expect(r.message).toBe('Tytuł musi mieć od 1 do 100 znaków.');
+        expect(r.message).toBe('The title must be 1 to 100 characters.');
       }
       expect(
         (await addEvent(db, id.u, input({ title: 'x'.repeat(100) }), 'web')).ok,
@@ -250,7 +250,7 @@ describe('event actions', () => {
       const r = await addEvent(db, id.u, input({ classId: id.cB }), 'web');
       expect(r).toEqual({
         ok: false,
-        message: 'Wybrane zajęcia nie należą do tego przedmiotu.',
+        message: 'The chosen class does not belong to this subject.',
       });
     });
     it('refuses a group of another class', async () => {
@@ -262,7 +262,7 @@ describe('event actions', () => {
       );
       expect(r).toEqual({
         ok: false,
-        message: 'Wybrana grupa nie należy do tych zajęć.',
+        message: 'The chosen group does not belong to this class.',
       });
     });
     it('refuses a class without a subject and an unknown subject', async () => {
@@ -298,8 +298,7 @@ describe('event actions', () => {
       const r = await addEvent(db, id.limited, input(), 'discord');
       expect(r).toEqual({
         ok: false,
-        message:
-          'Możesz dodać najwyżej 10 wydarzeń na godzinę. Spróbuj później.',
+        message: 'You can add at most 10 events per hour. Try again later.',
       });
       expect(await counts()).toEqual(before);
     });
@@ -314,7 +313,7 @@ describe('event actions', () => {
         'discord',
       );
       expect(r.ok).toBe(true);
-      expect(r.message).toBe('Dodano wydarzenie.');
+      expect(r.message).toBe('Event added.');
       const eid = r.id as number;
       const [e] = await db.select().from(events).where(eq(events.id, eid));
       expect(e).toMatchObject({
@@ -374,7 +373,7 @@ describe('event actions', () => {
         { title: 'Kolokwium 2', when: soon(7, '12:00-13:00') },
         'web',
       );
-      expect(r).toEqual({ ok: true, message: 'Zapisano zmiany.' });
+      expect(r).toEqual({ ok: true, message: 'Changes saved.' });
       const ev = await getEvent(db, eid as number);
       expect(ev).toMatchObject({
         title: 'Kolokwium 2',
@@ -434,7 +433,7 @@ describe('event actions', () => {
       const { id: eid } = await addEvent(db, id.u, input(), 'web');
       await db.delete(botRequests);
       const r = await deleteEvent(db, id.u2, eid as number, 'discord');
-      expect(r).toEqual({ ok: true, message: 'Usunięto wydarzenie.' });
+      expect(r).toEqual({ ok: true, message: 'Event deleted.' });
       expect((await getEvent(db, eid as number))?.deletedAt).toBeInstanceOf(
         Date,
       );
@@ -459,7 +458,7 @@ describe('event actions', () => {
 
       await db.delete(botRequests);
       const ok = await restoreEvent(db, id.admin, eid as number);
-      expect(ok).toEqual({ ok: true, message: 'Przywrócono wydarzenie.' });
+      expect(ok).toEqual({ ok: true, message: 'Event restored.' });
       expect((await getEvent(db, eid as number))?.deletedAt).toBeNull();
       expect(await auditRows('event.restore', String(eid))).toMatchObject([
         { userId: id.admin, details: { source: 'web' } },
@@ -473,7 +472,7 @@ describe('event actions', () => {
       for (const kind of ['toString', 'constructor', '__proto__']) {
         expect(
           await addEvent(db, id.u, input({ kind: kind as never }), 'web'),
-        ).toEqual({ ok: false, message: 'Nieznany rodzaj wydarzenia.' });
+        ).toEqual({ ok: false, message: 'Unknown event kind.' });
       }
     });
 
@@ -499,7 +498,7 @@ describe('event actions', () => {
       for (const r of results) {
         expect(r).toEqual({ ok: false, message: BANNED_MESSAGE });
       }
-      expect(BANNED_MESSAGE).toBe('Twój dostęp do strony jest zablokowany.');
+      expect(BANNED_MESSAGE).toBe('Your access to the website is blocked.');
       expect(await counts()).toEqual(before);
     });
   });
@@ -622,7 +621,7 @@ describe('event actions', () => {
         { title: 'Za późno' },
         'web',
       );
-      expect(r).toEqual({ ok: false, message: 'Nie znaleziono wydarzenia.' });
+      expect(r).toEqual({ ok: false, message: 'Event not found.' });
       const e = await getEvent(db, eid as number);
       expect(e?.deletedAt).not.toBeNull();
       expect(e?.title).toBe('Kolokwium 1');
@@ -642,7 +641,7 @@ describe('event actions', () => {
       const { id: eid } = await addEvent(db, id.u, input(), 'web');
       const t = await topic(id.subA);
       const r = await linkTopic(db, id.u, eid as number, t, 'discord');
-      expect(r).toEqual({ ok: true, message: 'Powiązano post.' });
+      expect(r).toEqual({ ok: true, message: 'Post linked.' });
       expect((await getEvent(db, eid as number))?.linkedTopicIds).toEqual([t]);
       expect(await auditRows('event.link', String(eid))).toMatchObject([
         { details: { source: 'discord', topicId: t } },
@@ -651,7 +650,7 @@ describe('event actions', () => {
         false,
       );
       const u = await unlinkTopic(db, id.u, eid as number, t, 'web');
-      expect(u).toEqual({ ok: true, message: 'Usunięto powiązanie.' });
+      expect(u).toEqual({ ok: true, message: 'Link removed.' });
       expect(await auditRows('event.unlink', String(eid))).toMatchObject([
         { details: { source: 'web', topicId: t } },
       ]);
@@ -666,7 +665,7 @@ describe('event actions', () => {
       const none = await topic(null);
       expect(await linkTopic(db, id.u, eid as number, other, 'web')).toEqual({
         ok: false,
-        message: 'Ten post należy do innego przedmiotu.',
+        message: 'This post belongs to a different subject.',
       });
       expect((await linkTopic(db, id.u, eid as number, none, 'web')).ok).toBe(
         false,
@@ -706,7 +705,7 @@ describe('event actions', () => {
       );
       expect(r).toEqual({
         ok: false,
-        message: 'Można powiązać najwyżej 20 postów.',
+        message: 'You can link at most 20 posts.',
       });
     });
   });

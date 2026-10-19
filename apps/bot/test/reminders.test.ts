@@ -217,7 +217,7 @@ describe('runReminderTick', () => {
     expect(await getReminderPrefs(db, uid)).toEqual({
       dayBefore: false,
       hourBefore: false,
-      disabledReason: 'DM zamknięte',
+      disabledReason: 'DMs closed',
     });
     expect(await db.select().from(reminderLog)).toHaveLength(1);
   });

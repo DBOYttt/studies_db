@@ -46,12 +46,12 @@ afterAll(async () => {
 
 describe('subjects', () => {
   it('adds, uppercases code, rejects duplicates', async () => {
-    expect(await addSubject(db, base)).toBe('Dodano przedmiot ALG (Algebra).');
+    expect(await addSubject(db, base)).toBe('Added subject ALG (Algebra).');
     expect(await addSubject(db, { ...base, channelId: 'c2' })).toBe(
-      'Przedmiot z tym kodem lub kanałem już istnieje.',
+      'A subject with this code or channel already exists.',
     );
     expect(await addSubject(db, { ...base, code: 'X' })).toBe(
-      'Przedmiot z tym kodem lub kanałem już istnieje.',
+      'A subject with this code or channel already exists.',
     );
   });
 
@@ -65,18 +65,18 @@ describe('subjects', () => {
       name: 'Analiza',
     });
     expect(await editSubject(db, 'alg', { ects: 7 })).toBe(
-      'Zaktualizowano przedmiot ALG.',
+      'Updated subject ALG.',
     );
     expect(await editSubject(db, 'nope', { ects: 7 })).toBe(
       'Nie znaleziono przedmiotu NOPE.',
     );
     expect(await listSubjects(db)).toBe(
-      '**ALG** Algebra — sem. 1, 7 ECTS\n**ANA** Analiza — sem. 2, 5 ECTS',
+      '**ALG** Algebra — semester 1, 7 ECTS\n**ANA** Analiza — semester 2, 5 ECTS',
     );
   });
 
   it('lists empty', async () => {
-    expect(await listSubjects(db)).toBe('Brak przedmiotów.');
+    expect(await listSubjects(db)).toBe('No subjects.');
   });
 });
 
@@ -85,32 +85,32 @@ describe('lecturers', () => {
     await addSubject(db, base);
     const r = await addLecturer(db, { name: 'Jan Kowalski', title: 'dr' });
     const id = Number(/id (\d+)/.exec(r)?.[1]);
-    expect(r).toBe(`Dodano prowadzącego dr Jan Kowalski (id ${id}).`);
+    expect(r).toBe(`Added lecturer dr Jan Kowalski (id ${id}).`);
     const a = {
       subjectCode: 'alg',
       lecturerId: id,
       classKind: 'laboratorium' as const,
     };
     expect(await assignLecturer(db, a)).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium.',
+      'Assigned the lecturer to ALG / Laboratorium.',
     );
     expect(await assignLecturer(db, a)).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium.',
+      'Assigned the lecturer to ALG / Laboratorium.',
     );
     expect(await db.select().from(classLecturers)).toHaveLength(1);
     expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium, Gr. 3.',
+      'Assigned the lecturer to ALG / Laboratorium, Gr. 3.',
     );
     expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
-      'Przypisano prowadzącego do ALG / Laboratorium, Gr. 3.',
+      'Assigned the lecturer to ALG / Laboratorium, Gr. 3.',
     );
     expect(await db.select().from(classLecturers)).toHaveLength(2);
     expect(await db.select().from(classGroups)).toHaveLength(1);
     expect(await assignLecturer(db, { ...a, subjectCode: 'zzz' })).toBe(
-      'Nie znaleziono przedmiotu zzz.',
+      'Subject zzz not found.',
     );
     expect(await assignLecturer(db, { ...a, lecturerId: 9999 })).toBe(
-      'Nie znaleziono prowadzącego o id 9999.',
+      'Lecturer with id 9999 not found.',
     );
   });
 });
@@ -131,7 +131,7 @@ describe('task 6 commands', () => {
         semester: 2,
         description: 'Opis',
       }),
-    ).toBe('Połączono przedmiot ALG z kanałem.');
+    ).toBe('Linked subject ALG to the channel.');
     const s = await getSubject();
     expect(s).toMatchObject({
       name: 'Algebra',
@@ -146,10 +146,10 @@ describe('task 6 commands', () => {
     await addSubject(db, base);
     expect(
       await editSubject(db, 'alg', { platformUrl: 'https://p.example/x' }),
-    ).toBe('Zaktualizowano przedmiot ALG.');
+    ).toBe('Updated subject ALG.');
     expect((await getSubject())?.platformUrl).toBe('https://p.example/x');
     expect(await editSubject(db, 'alg', { platformUrl: 'ftp://x' })).toBe(
-      'Nieprawidłowy adres URL.',
+      'Invalid URL.',
     );
     expect((await getSubject())?.platformUrl).toBe('https://p.example/x');
     await editSubject(db, 'alg', { platformUrl: '-' });
@@ -172,21 +172,21 @@ describe('task 6 commands', () => {
       room: '12',
     });
     expect(await addLecturer(db, { name: 'X', email: 'JAN@example.edu' })).toBe(
-      'Prowadzący z tym adresem e-mail już istnieje.',
+      'A lecturer with this email address already exists.',
     );
     const id2 = Number(
       /id (\d+)/.exec(await addLecturer(db, { name: 'Ewa' }))?.[1],
     );
     expect(await editLecturer(db, id2, { email: 'jan@example.edu' })).toBe(
-      'Prowadzący z tym adresem e-mail już istnieje.',
+      'A lecturer with this email address already exists.',
     );
     expect(await editLecturer(db, id, { room: '-', officeHours: 'wt 9' })).toBe(
-      'Zaktualizowano prowadzącego dr Jan.',
+      'Updated lecturer dr Jan.',
     );
     [l] = await db.select().from(lecturers).where(eq(lecturers.id, id));
     expect(l).toMatchObject({ room: null, officeHours: 'wt 9' });
     expect(await editLecturer(db, 9999, { name: 'Z' })).toBe(
-      'Nie znaleziono prowadzącego o id 9999.',
+      'Lecturer with id 9999 not found.',
     );
   });
 
@@ -196,10 +196,10 @@ describe('task 6 commands', () => {
     );
     expect((await db.select().from(lecturers))[0].title).toBeNull();
     expect(await editLecturer(db, id, { name: '  -  ' })).toBe(
-      'Nazwa nie może być pusta.',
+      'The name cannot be empty.',
     );
     expect(await editLecturer(db, id, { name: '   ' })).toBe(
-      'Nazwa nie może być pusta.',
+      'The name cannot be empty.',
     );
     expect((await db.select().from(lecturers))[0].name).toBe('Jan');
     await editLecturer(db, id, { name: '  Jan Nowak ' });
@@ -209,7 +209,7 @@ describe('task 6 commands', () => {
   it('editClass updates, clears, rejects bad url, never creates', async () => {
     await addSubject(db, base);
     expect(await editClass(db, { subjectCode: 'alg', kind: 'wyklad' })).toBe(
-      'Przedmiot ALG nie ma zajęć typu Wykład.',
+      'Subject ALG has no Wykład class.',
     );
     expect(await db.select().from(classes)).toHaveLength(0);
     await assignLecturer(db, {
@@ -227,7 +227,7 @@ describe('task 6 commands', () => {
         note: 'ustny',
         platformUrl: 'https://p.example/c',
       }),
-    ).toBe('Zaktualizowano ALG / Wykład.');
+    ).toBe('Updated ALG / Wykład.');
     let [c] = await db.select().from(classes);
     expect(c).toMatchObject({
       assessment: 'egzamin',
@@ -241,7 +241,7 @@ describe('task 6 commands', () => {
         note: '-',
         platformUrl: 'nope',
       }),
-    ).toBe('Nieprawidłowy adres URL.');
+    ).toBe('Invalid URL.');
     await editClass(db, {
       subjectCode: 'alg',
       kind: 'wyklad',
@@ -327,7 +327,7 @@ describe('ok flag and null channel', () => {
     const r = await A.addSubject(db, { ...base, channelId: null });
     expect(r).toMatchObject({
       ok: true,
-      message: 'Dodano przedmiot ALG (Algebra).',
+      message: 'Added subject ALG (Algebra).',
     });
     const [s] = await db.select().from(subjects);
     expect(s?.discordChannelId).toBeNull();
@@ -339,16 +339,16 @@ describe('ok flag and null channel', () => {
   it('banUser', async () => {
     expect(await A.banUser(db, 'ghost', true)).toEqual({
       ok: false,
-      message: 'Ten użytkownik nie korzystał jeszcze z bota.',
+      message: 'This user has not used the bot yet.',
     });
     await upsertUser(db, ban);
     expect(await A.banUser(db, 'u1', true)).toEqual({
       ok: true,
-      message: 'Zablokowano dostęp do strony.',
+      message: 'Blocked access to the website.',
     });
     expect(await A.banUser(db, 'u1', false)).toEqual({
       ok: true,
-      message: 'Odblokowano dostęp do strony.',
+      message: 'Unblocked access to the website.',
     });
   });
 });

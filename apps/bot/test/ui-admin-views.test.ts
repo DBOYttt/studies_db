@@ -236,10 +236,10 @@ describe('setupConfirm', () => {
 
 describe('reportView', () => {
   it('shows the title and text', () => {
-    const v = reportView('Podgląd /setup', 'Brak zmian.');
+    const v = reportView('Podgląd /setup', 'No changes.');
     expectValid(v);
     expect(allText(v)).toContain('Podgląd /setup');
-    expect(allText(v)).toContain('Brak zmian.');
+    expect(allText(v)).toContain('No changes.');
   });
 
   it('cuts long text at MAX_TEXT with "…"', () => {

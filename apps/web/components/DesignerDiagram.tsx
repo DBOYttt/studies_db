@@ -32,7 +32,7 @@ import {
   parseStoredPositions,
   rowHover,
 } from '@/lib/designer-layout';
-import { pluralPl } from '@/lib/format';
+import { plural } from '@/lib/format';
 
 /** localStorage key shared by /schema and the subject Schemat tab. */
 const STORAGE_KEY = 'studiesdb.schemaLayout.v1';
@@ -405,7 +405,7 @@ export function DesignerDiagram({
                 >
                   <Link
                     href={`/tables/${b.view}`}
-                    aria-label={`Tabela ${b.view}, ${b.columns.length} ${pluralPl(b.columns.length, 'kolumna', 'kolumny', 'kolumn')}`}
+                    aria-label={`Tabela ${b.view}, ${plural(b.columns.length, 'column', 'columns')}`}
                     aria-current={b.highlighted ? 'true' : undefined}
                     draggable={false}
                     onDragStart={(e) => e.preventDefault()}

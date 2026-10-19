@@ -1,5 +1,5 @@
 import type { Cell } from './cells';
-import { pluralPl } from './format';
+import { plural } from './format';
 
 /** Row counts offered by "Liczba wierszy". */
 export const PER_PAGE_OPTIONS = [25, 50, 100] as const;
@@ -105,7 +105,7 @@ export function footerText(
   page: number,
   pageCount: number,
 ): string {
-  return `${total} ${pluralPl(total, 'wiersz', 'wiersze', 'wierszy')} · strona ${page} / ${Math.max(1, pageCount)}`;
+  return `${plural(total, 'row', 'rows')} · page ${page} / ${Math.max(1, pageCount)}`;
 }
 
 export function pageCountOf(total: number, perPage: number): number {

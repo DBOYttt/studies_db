@@ -86,7 +86,7 @@ export function planProcessing(
  */
 export class StoragePathError extends Error {
   constructor() {
-    super('Nieprawidłowa ścieżka pliku');
+    super('Invalid file path');
     this.name = 'StoragePathError';
   }
 }

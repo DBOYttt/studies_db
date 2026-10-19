@@ -41,7 +41,7 @@ export type SentEntry = {
 
 /** `reminder_log.user_id` of channel digest rows. */
 export const DIGEST_USER_ID = 0;
-export const DM_DISABLED_REASON = 'DM zamknięte';
+export const DM_DISABLED_REASON = 'DMs closed';
 /** A reminder missed by no more than this is still sent. */
 export const CATCH_UP_MS = 30 * 60_000;
 const MIN = 60_000;
@@ -290,7 +290,7 @@ export async function dueDigest(
   return list.filter((e) => !logged.has(`${e.id}:${wall(e.startsAt)}`));
 }
 
-/** Forgets the "DM zamknięte" note once it has been shown; prefs stay as they are. */
+/** Forgets the "DMs closed" note once it has been shown; prefs stay as they are. */
 export async function clearDisabledReason(
   db: Db,
   userId: number,

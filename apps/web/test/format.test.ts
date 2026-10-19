@@ -1,22 +1,29 @@
 import { describe, expect, it } from 'vitest';
-import { formatDate, pluralPl, safeExternalUrl } from '../lib/format';
+import { whenLabel } from '../lib/event-view';
+import { formatDate, plural, safeExternalUrl } from '../lib/format';
 
-describe('pluralPl', () => {
-  const f = (n: number) => pluralPl(n, 'plik', 'pliki', 'plików');
-  it('1 -> singular', () => {
-    expect(f(1)).toBe('plik');
+describe('plural', () => {
+  it('uses the singular only for 1', () => {
+    expect(plural(0, 'file', 'files')).toBe('0 files');
+    expect(plural(1, 'file', 'files')).toBe('1 file');
+    expect(plural(2, 'file', 'files')).toBe('2 files');
+    expect(plural(5, 'file', 'files')).toBe('5 files');
   });
-  it('2–4 (not 12–14) -> few', () => {
-    for (const n of [2, 3, 4, 22, 23, 24, 32, 102, 104, 1002]) {
-      expect(f(n), String(n)).toBe('pliki');
-    }
-  });
-  it('everything else -> many', () => {
-    for (const n of [
-      0, 5, 9, 10, 11, 12, 13, 14, 15, 20, 21, 25, 101, 111, 112, 114, 1000,
-    ]) {
-      expect(f(n), String(n)).toBe('plików');
-    }
+});
+
+describe('whenLabel', () => {
+  const W = (y: number, m: number, d: number, h = 0, mi = 0) =>
+    new Date(Date.UTC(y, m - 1, d, h, mi));
+  it('formats a wall time in English', () => {
+    expect(whenLabel(W(2026, 10, 20, 10), null, false)).toBe(
+      'Tue 20 Oct 2026, 10:00',
+    );
+    expect(whenLabel(W(2026, 10, 20, 10), W(2026, 10, 20, 11, 30), false)).toBe(
+      'Tue 20 Oct 2026, 10:00–11:30',
+    );
+    expect(whenLabel(W(2026, 10, 20), null, true)).toBe(
+      'Tue 20 Oct 2026, all day',
+    );
   });
 });
 

@@ -33,8 +33,8 @@ function isDuplicateEntry(err: unknown): boolean {
 }
 
 const URL_RE = /^https?:\/\/\S+$/;
-const INVALID_URL = 'Nieprawidłowy adres URL.';
-const DUP_EMAIL = 'Prowadzący z tym adresem e-mail już istnieje.';
+const INVALID_URL = 'Invalid URL.';
+const DUP_EMAIL = 'A lecturer with this email address already exists.';
 
 /** `-` clears the field (NULL); anything else is stored trimmed. */
 export const textOrNull = (v: string): string | null => {
@@ -78,11 +78,11 @@ export async function addSubject(
         .where(eq(subjects.id, existing.id));
     } catch (err) {
       if (isDuplicateEntry(err)) {
-        return refused('Przedmiot z tym kodem lub kanałem już istnieje.');
+        return refused('A subject with this code or channel already exists.');
       }
       throw err;
     }
-    return ok(`Połączono przedmiot ${code} z kanałem.`);
+    return ok(`Linked subject ${code} to the channel.`);
   }
   let ins: { insertId: number };
   try {
@@ -96,11 +96,11 @@ export async function addSubject(
     });
   } catch (err) {
     if (isDuplicateEntry(err)) {
-      return refused('Przedmiot z tym kodem lub kanałem już istnieje.');
+      return refused('A subject with this code or channel already exists.');
     }
     throw err;
   }
-  return ok(`Dodano przedmiot ${code} (${i.name}).`, ins.insertId);
+  return ok(`Added subject ${code} (${i.name}).`, ins.insertId);
 }
 
 export async function editSubject(
@@ -131,7 +131,7 @@ export async function editSubject(
   if (Object.keys(set).length > 0) {
     await db.update(subjects).set(set).where(eq(subjects.id, row.id));
   }
-  return ok(`Zaktualizowano przedmiot ${upper}.`);
+  return ok(`Updated subject ${upper}.`);
 }
 
 export async function listSubjects(db: Db): Promise<ActionResult> {
@@ -139,11 +139,12 @@ export async function listSubjects(db: Db): Promise<ActionResult> {
     .select()
     .from(subjects)
     .orderBy(asc(subjects.semester), asc(subjects.code));
-  if (rows.length === 0) return ok('Brak przedmiotów.');
+  if (rows.length === 0) return ok('No subjects.');
   return ok(
     rows
       .map(
-        (s) => `**${s.code}** ${s.name} — sem. ${s.semester}, ${s.ects} ECTS`,
+        (s) =>
+          `**${s.code}** ${s.name} — semester ${s.semester}, ${s.ects} ECTS`,
       )
       .join('\n'),
   );
@@ -177,7 +178,7 @@ export async function addLecturer(
     throw err;
   }
   return ok(
-    `Dodano prowadzącego ${lecturerLabel(i.title, i.name)} (id ${r.insertId}).`,
+    `Added lecturer ${lecturerLabel(i.title, i.name)} (id ${r.insertId}).`,
     r.insertId,
   );
 }
@@ -197,7 +198,7 @@ export async function editLecturer(
   if (patch.name !== undefined) {
     const name = patch.name.trim();
     if (name === '' || name === '-')
-      return refused('Nazwa nie może być pusta.');
+      return refused('The name cannot be empty.');
     set.name = name;
   }
   if (patch.title !== undefined) set.title = textOrNull(patch.title);
@@ -209,7 +210,7 @@ export async function editLecturer(
     .select({ id: lecturers.id })
     .from(lecturers)
     .where(eq(lecturers.id, id));
-  if (!row) return refused(`Nie znaleziono prowadzącego o id ${id}.`);
+  if (!row) return refused(`Lecturer with id ${id} not found.`);
   if (Object.keys(set).length > 0) {
     try {
       await db.update(lecturers).set(set).where(eq(lecturers.id, id));
@@ -223,7 +224,7 @@ export async function editLecturer(
     .from(lecturers)
     .where(eq(lecturers.id, id));
   return ok(
-    `Zaktualizowano prowadzącego ${lecturerLabel(after?.title, after?.name ?? '')}.`,
+    `Updated lecturer ${lecturerLabel(after?.title, after?.name ?? '')}.`,
   );
 }
 
@@ -258,13 +259,11 @@ export async function editClass(
     .from(classes)
     .where(and(eq(classes.subjectId, subject.id), eq(classes.kind, i.kind)));
   if (!cls)
-    return refused(
-      `Przedmiot ${code} nie ma zajęć typu ${CLASS_NAMES[i.kind]}.`,
-    );
+    return refused(`Subject ${code} has no ${CLASS_NAMES[i.kind]} class.`);
   if (Object.keys(set).length > 0) {
     await db.update(classes).set(set).where(eq(classes.id, cls.id));
   }
-  return ok(`Zaktualizowano ${code} / ${CLASS_NAMES[i.kind]}.`);
+  return ok(`Updated ${code} / ${CLASS_NAMES[i.kind]}.`);
 }
 
 export async function assignLecturer(
@@ -281,13 +280,12 @@ export async function assignLecturer(
     .select({ id: subjects.id })
     .from(subjects)
     .where(eq(subjects.code, code));
-  if (!subject) return refused(`Nie znaleziono przedmiotu ${i.subjectCode}.`);
+  if (!subject) return refused(`Subject ${i.subjectCode} not found.`);
   const [lecturer] = await db
     .select({ id: lecturers.id })
     .from(lecturers)
     .where(eq(lecturers.id, i.lecturerId));
-  if (!lecturer)
-    return refused(`Nie znaleziono prowadzącego o id ${i.lecturerId}.`);
+  if (!lecturer) return refused(`Lecturer with id ${i.lecturerId} not found.`);
   const classId = await ensureClass(db, subject.id, i.classKind);
   const groupId =
     i.groupNumber === undefined
@@ -314,7 +312,7 @@ export async function assignLecturer(
     i.groupNumber === undefined
       ? CLASS_NAMES[i.classKind]
       : `${CLASS_NAMES[i.classKind]}, ${groupName(i.groupNumber)}`;
-  return ok(`Przypisano prowadzącego do ${code} / ${where}.`);
+  return ok(`Assigned the lecturer to ${code} / ${where}.`);
 }
 
 export async function banUser(
@@ -323,8 +321,10 @@ export async function banUser(
   banned: boolean,
 ): Promise<ActionResult> {
   const found = await setBanned(db, discordUserId, banned);
-  if (!found) return refused('Ten użytkownik nie korzystał jeszcze z bota.');
+  if (!found) return refused('This user has not used the bot yet.');
   return ok(
-    banned ? 'Zablokowano dostęp do strony.' : 'Odblokowano dostęp do strony.',
+    banned
+      ? 'Blocked access to the website.'
+      : 'Unblocked access to the website.',
   );
 }
