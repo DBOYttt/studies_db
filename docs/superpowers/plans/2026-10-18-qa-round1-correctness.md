@@ -263,3 +263,32 @@ conditions; the `INNER JOIN users` hides nothing, no audit row lacks a user), an
 query, so "30" was exact for the rows that existed then. The gap is an AUTO_INCREMENT id burned by a rolled-back
 transaction (several personas wrote concurrently; InnoDB never reuses a rolled-back id), so no count line change.
 The table has since grown to 49 rows (max id 50); the only gap is still 25.
+
+## Deferred after round 1 (from the SDD ledger)
+
+- Task 1: minor (deferred): integration test never forces a retry; add a deterministic real-DB retry test (fn throws 1020 once → one audit row)
+- Task 1: minor (deferred): blank line added after header comment in events.ts/event-series.ts
+- Task 1: minor (deferred): fake-db tests' `async () => 1` vs expected 'ok' typed mismatch hidden by cast
+- Task 1: minor (deferred): editInSeries computes plan/all/idx outside the retried tx (pre-existing; a retry replays the stale plan)
+- Task 2: minor (deferred): 'following' edit checks only the target occurrence's version; later occurrences edited concurrently are overwritten by the stale plan (fix: re-check versions of plan rows FOR UPDATE inside tx)
+- Task 2: minor (deferred): lock order restoreEvent (event→series) vs editInSeries (series→event); pre-existing, deadlocks retried
+- Task 2: minor (deferred): missing tests (restore/revive/series link bumps, expectedVersion on deleted → NOT_FOUND, no audit/bot_requests after series CONFLICT, series no-change stale)
+- Task 2: minor (deferred): series "Brak zmian" opens a tx even without expectedVersion (inconsistent with non-series path)
+- Task 3: minor (deferred): e2e subject select assertion `/\d+/` is weak; assert the picked id; class/group selects not asserted
+- Task 4: minor (deferred): GONE detection compares copied NOT_FOUND text; move to @studies/db/constants or return a structured flag
+- Task 4: minor (deferred): Polish "Nie znaleziono wydarzenia." error box shown under the English banner (two messages)
+- Task 4: minor (deferred): Restore button unstyled
+- Task 4: minor (deferred): deleteEventAction duplicates version validation (share toVersion helper)
+- Task 4: minor (deferred): restoreEventAction(eventId ?? 0) fake id fallback
+- Task 4: minor (deferred): new e2e "admin restores then saves" depends on adminCookies captured by an earlier serial test (fails if run alone)
+- Task 5: minor (deferred): views/events.ts:384 doc comment still says evt:save:<id|new>
+- Task 5: minor (deferred): edit/del parse ignore a third arg; save:new:one:v3 accepted (never built)
+- Task 5: minor (deferred): ui-events.test.ts:586 hard-codes fixture title
+- Task 6: minor (deferred): `permission` assigned in closure narrows to never in admin-sql-handler.ts:250-261
+- Task 6: minor (deferred): no test for audited 1142 on admin SELECT path; 1044 read-console text thin; stale test name/module doc in sql-console.test.ts / sql-messages.ts
+- Task 6: minor (deferred): no DB URL env vars → no schema stripping; `db.` rule has no trailing boundary
+- Task 7: minor (deferred): SAME_ORIGIN_HEADERS is a function named like a constant, case-sensitive key check; no test for mismatching Origin + Sec-Fetch-Site same-origin; consider a docs/deploy.md note that scripts must send Origin
+- Task 8: minor (deferred): plan Notes state the rollback cause firmly ("burned by") — hedge to "most likely"; audit `until` detail not asserted
+- Final: parked — errno 1467 (ER_AUTOINC_READ_FAILED) not retried — Ruling: deferred to the next round with a console.warn on retries; seen 1 in ~45 runs of a deliberately concurrent test — cost if wrong: a rare 500 on concurrent saves.
+- Final: parked — editInSeries returns NOT_FOUND when a concurrent split moves the occurrence to a new series — Ruling: deferred; nothing is written, only the message misleads — cost if wrong: a confusing message in a rare race.
+- Final: deferred (QA r1): session ended in another tab → form save crashes and loses input (chaos F2, medium) → round 3; hardening lows (Origin on /api/sql + logout, SELECT user() visible, Dziennik source) → later round.
