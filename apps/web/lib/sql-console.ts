@@ -6,6 +6,7 @@ import {
   BUSY_ERROR,
   CONNECT_ERROR,
   EMPTY_QUERY_ERROR,
+  sanitizeDbMessage,
   timeoutMessage,
 } from './sql-messages';
 
@@ -44,9 +45,11 @@ export function connectionErrorMessage(err: unknown): string {
     : CONNECT_ERROR;
 }
 
-/** Query failure -> user message (MariaDB errors verbatim, except 1226). */
+/** Query failure -> user message (MariaDB text without user/host/schema; 1226 -> busy). */
 export function queryErrorMessage(err: DbError): string {
-  return err.errno === ER_TOO_MANY_USER_CONNECTIONS ? BUSY_ERROR : err.message;
+  return err.errno === ER_TOO_MANY_USER_CONNECTIONS
+    ? BUSY_ERROR
+    : sanitizeDbMessage(err.message);
 }
 /** Extra time past max_statement_time before we KILL the query ourselves. */
 const WATCHDOG_GRACE_MS = 500;

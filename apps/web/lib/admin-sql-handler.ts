@@ -14,7 +14,9 @@ import {
   adminSqlErrorMessage,
   CONFIRM_THRESHOLD,
   classifyStatement,
+  type PermissionDetails,
   PREVIEW_ROWS,
+  permissionDetails,
   previewSelect,
   SELECT_ROWS,
   type StatementKind,
@@ -120,11 +122,44 @@ async function parseBody(req: Request): Promise<Body | null> {
 
 type WriteKind = Exclude<StatementKind, 'select'>;
 
+type TxFailure = {
+  ok: false;
+  error: string;
+  /** Set when the refusal came from the MariaDB grants (errno 1142/1143/1044). */
+  permission?: PermissionDetails;
+};
+
+/** Records a grant refusal like a classifier rejection (`sql.rejected`). */
+async function auditPermission(
+  db: Db,
+  user: SessionUser,
+  sql: string,
+  mode: Body['mode'],
+  p: PermissionDetails,
+): Promise<void> {
+  try {
+    await writeAudit(db, {
+      userId: user.id,
+      action: 'sql.rejected',
+      statement: sql,
+      details: {
+        mode,
+        reason: 'permission',
+        errno: p.errno,
+        ...(p.table ? { table: p.table } : {}),
+        ...(p.column ? { column: p.column } : {}),
+      },
+    });
+  } catch (err) {
+    console.error('[admin-sql] audit write failed (sql.rejected):', err);
+  }
+}
+
 /** Runs `work` on a dedicated connection inside BEGIN … ROLLBACK (unless it commits). */
 async function inTransaction<T>(
   pool: mysql.Pool,
   work: (conn: mysql.PoolConnection, commit: () => Promise<void>) => Promise<T>,
-): Promise<{ ok: true; value: T } | { ok: false; error: string }> {
+): Promise<{ ok: true; value: T } | TxFailure> {
   let conn: mysql.PoolConnection;
   try {
     conn = await pool.getConnection();
@@ -140,7 +175,8 @@ async function inTransaction<T>(
     });
     return { ok: true, value };
   } catch (err) {
-    return { ok: false, error: dbErrorMessage(err) };
+    const permission = permissionDetails(err) ?? undefined;
+    return { ok: false, error: dbErrorMessage(err), permission };
   } finally {
     if (!committed) {
       try {
@@ -205,12 +241,24 @@ async function runStatement(
   };
 }
 
-async function runSelect(pool: mysql.Pool, sql: string): Promise<Response> {
-  const r = await runReadonlyQuery(pool, sql, {
+async function runSelect(
+  deps: AdminSqlDeps & { rw: mysql.Pool },
+  user: SessionUser,
+  sql: string,
+  mode: Body['mode'],
+): Promise<Response> {
+  let permission: PermissionDetails | null = null;
+  const r = await runReadonlyQuery(deps.rw, sql, {
     maxRows: SELECT_ROWS,
-    errorMessage: dbErrorMessage,
+    errorMessage: (err) => {
+      permission = permissionDetails(err);
+      return dbErrorMessage(err);
+    },
   });
-  if (!r.ok) return fail(statusFor(r.error), r.error);
+  if (!r.ok) {
+    if (permission) await auditPermission(deps.db, user, sql, mode, permission);
+    return fail(statusFor(r.error), r.error);
+  }
   return ok({
     kind: 'select',
     columns: r.columns,
@@ -220,7 +268,7 @@ async function runSelect(pool: mysql.Pool, sql: string): Promise<Response> {
 }
 
 async function preview(
-  pool: mysql.Pool,
+  deps: AdminSqlDeps & { rw: mysql.Pool },
   user: SessionUser,
   sql: string,
   kind: WriteKind,
@@ -228,7 +276,7 @@ async function preview(
   now: number,
 ): Promise<Response> {
   const before = previewSelect(sql, kind, table);
-  const r = await inTransaction(pool, async (conn) => {
+  const r = await inTransaction(deps.rw, async (conn) => {
     let shown: Shown = { columns: [], rows: [] };
     if (before) shown = await selectRows(conn, before);
     const res = await runStatement(conn, sql);
@@ -253,7 +301,12 @@ async function preview(
     }
     return { affected, ...shown };
   });
-  if (!r.ok) return fail(statusFor(r.error), r.error);
+  if (!r.ok) {
+    if (r.permission) {
+      await auditPermission(deps.db, user, sql, 'preview', r.permission);
+    }
+    return fail(statusFor(r.error), r.error);
+  }
   const { affected, columns, rows } = r.value;
   return ok({
     kind,
@@ -302,7 +355,12 @@ async function execute(
     await commit();
     return { affected: res.affected, insertId: res.insertId };
   });
-  if (!r.ok) return fail(statusFor(r.error), r.error);
+  if (!r.ok) {
+    if (r.permission) {
+      await auditPermission(deps.db, user, sql, 'execute', r.permission);
+    }
+    return fail(statusFor(r.error), r.error);
+  }
   if (!r.value) {
     return fail(
       400,
@@ -365,10 +423,12 @@ export async function handleAdminSqlRequest(
     return fail(400, c.reason);
   }
 
-  if (c.kind === 'select') return runSelect(rw, body.sql);
+  if (c.kind === 'select') {
+    return runSelect({ ...deps, rw }, user, body.sql, body.mode);
+  }
   const now = (deps.now ?? Date.now)();
   if (body.mode === 'preview') {
-    return preview(rw, user, body.sql, c.kind, c.table, now);
+    return preview({ ...deps, rw }, user, body.sql, c.kind, c.table, now);
   }
   return execute({ ...deps, rw }, user, body, c.kind, c.table, now);
 }

@@ -41,9 +41,7 @@ vi.mock('@studies/db', async (importOriginal) => {
 const route = await import('../app/api/admin/sql/route');
 const { POST } = route;
 const { handleAdminSqlRequest } = await import('../lib/admin-sql-handler');
-const { PERMISSION_ERROR, TOKEN_TTL_MS, signPreview } = await import(
-  '../lib/admin-sql'
-);
+const { TOKEN_TTL_MS, signPreview } = await import('../lib/admin-sql');
 const { createRateLimiter } = await import('../lib/rate-limit');
 const { CONNECT_ERROR } = await import('../lib/sql-messages');
 
@@ -422,13 +420,16 @@ describe('handleAdminSqlRequest', () => {
 
   it('tables outside the grants are refused with the permission message', async () => {
     const before = await auditCount('sql.execute');
+    const rejectedBefore = await auditCount('sql.rejected');
     for (const sql of [
       'UPDATE subjects SET name = (SELECT display_name FROM users LIMIT 1)',
       'INSERT INTO tags (subject_id, name, discord_tag_id) SELECT 1, display_name, discord_user_id FROM users',
     ]) {
       const preview = await call({ mode: 'preview', sql });
       expect(preview.status, sql).toBe(400);
-      expect((await json(preview)).error).toBe(PERMISSION_ERROR);
+      expect((await json(preview)).error).toBe(
+        "Table `users` is outside the console's scope.",
+      );
 
       const token = signPreview({
         userId: admin.id,
@@ -438,9 +439,12 @@ describe('handleAdminSqlRequest', () => {
       });
       const res = await call({ mode: 'execute', sql, token });
       expect(res.status, sql).toBe(400);
-      expect((await json(res)).error).toBe(PERMISSION_ERROR);
+      expect((await json(res)).error).toBe(
+        "Table `users` is outside the console's scope.",
+      );
     }
     expect(await auditCount('sql.execute')).toBe(before);
+    expect(await auditCount('sql.rejected')).toBe(rejectedBefore + 4);
     expect((await db.select({ n: count() }).from(tags))[0].n).toBe(0);
     expect(
       (
@@ -452,7 +456,80 @@ describe('handleAdminSqlRequest', () => {
     ).toBe(0);
   });
 
+  describe('grant refusals from MariaDB are audited', () => {
+    const text1143 =
+      "UPDATE command denied to user 'u'@'h' for column 'topic_id' in table 'events'";
+    const text1142 =
+      "SELECT command denied to user 'u'@'h' for table `studies`.`users`";
+    const fakePool = (message: string, errno: number) =>
+      ({
+        getConnection: async () => ({
+          query: async (q: unknown) => {
+            const sql = typeof q === 'string' ? q : (q as { sql: string }).sql;
+            if (/^(BEGIN|ROLLBACK)/.test(sql)) return [[], []];
+            throw Object.assign(new Error(message), {
+              errno,
+              sqlState: '42000',
+            });
+          },
+          destroy: () => {},
+        }),
+      }) as unknown as mysql.Pool;
+    const cases = [
+      {
+        name: '1143',
+        pool: () => fakePool(text1143, 1143),
+        sql: 'UPDATE events SET topic_id = 1 WHERE id = 1',
+        error:
+          "Column `topic_id` of `events` can't be changed from the console.",
+        table: 'events',
+        column: 'topic_id',
+      },
+      {
+        name: '1142',
+        pool: () => fakePool(text1142, 1142),
+        sql: 'DELETE FROM users WHERE id = 1',
+        error: "Table `users` is outside the console's scope.",
+        table: 'users',
+        column: undefined,
+      },
+    ];
+    for (const c of cases) {
+      for (const mode of ['preview', 'execute'] as const) {
+        it(`${c.name} on ${mode}: 400, message and one audit row`, async () => {
+          const before = await auditCount('sql.rejected');
+          const token =
+            mode === 'execute'
+              ? signPreview({
+                  userId: admin.id,
+                  sql: c.sql,
+                  affected: 1,
+                  at: Date.now(),
+                })
+              : undefined;
+          const res = await call({ mode, sql: c.sql, token }, { rw: c.pool() });
+          expect(res.status).toBe(400);
+          expect((await json(res)).error).toBe(c.error);
+          expect(await auditCount('sql.rejected')).toBe(before + 1);
+          const rows = await db
+            .select()
+            .from(adminAudit)
+            .where(eq(adminAudit.action, 'sql.rejected'));
+          const last = rows[rows.length - 1];
+          expect(last.statement).toBe(c.sql);
+          expect(last.details).toMatchObject({
+            mode,
+            reason: 'permission',
+            table: c.table,
+            ...(c.column ? { column: c.column } : {}),
+          });
+        });
+      }
+    }
+  });
+
   it('a rejected statement is 400 with one sql.rejected audit row', async () => {
+    const before = await auditCount('sql.rejected');
     const res = await call({ mode: 'preview', sql: 'DROP TABLE tags' });
     expect(res.status).toBe(400);
     expect((await json(res)).ok).toBe(false);
@@ -460,8 +537,8 @@ describe('handleAdminSqlRequest', () => {
       .select()
       .from(adminAudit)
       .where(eq(adminAudit.action, 'sql.rejected'));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({
+    expect(rows).toHaveLength(before + 1);
+    expect(rows[rows.length - 1]).toMatchObject({
       userId: admin.id,
       statement: 'DROP TABLE tags',
     });

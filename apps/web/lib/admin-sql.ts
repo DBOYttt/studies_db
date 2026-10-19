@@ -7,7 +7,12 @@
  * unsure about is rejected rather than guessed.
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
-import { BUSY_ERROR, EMPTY_QUERY_ERROR, timeoutMessage } from './sql-messages';
+import {
+  BUSY_ERROR,
+  EMPTY_QUERY_ERROR,
+  sanitizeDbMessage,
+  timeoutMessage,
+} from './sql-messages';
 
 export type StatementKind =
   | 'select'
@@ -26,9 +31,6 @@ export const TOKEN_TTL_MS = 300_000;
 export const CONFIRM_THRESHOLD = 100;
 /** MAX_STATEMENT_TIME of `studies_rw`, in seconds. */
 const STATEMENT_TIMEOUT_SEC = 5;
-
-export const PERMISSION_ERROR =
-  'Brak uprawnień: ta tabela jest poza zakresem konsoli administratora.';
 
 // ---------------------------------------------------------------- tokenizer
 
@@ -536,15 +538,57 @@ export function verifyPreview(
 
 const PERMISSION_ERRNOS = new Set([1142, 1143, 1044]);
 
-/** DB error from the RW console -> user message (MariaDB text verbatim otherwise). */
+export interface PermissionDetails {
+  errno: 1142 | 1143 | 1044;
+  table?: string;
+  column?: string;
+}
+
+/** Grant refusal (1142/1143/1044) -> its errno and the table/column MariaDB named, else null. */
+export function permissionDetails(err: unknown): PermissionDetails | null {
+  const e = err as { errno?: unknown; message?: unknown } | null | undefined;
+  if (typeof e?.errno !== 'number' || !PERMISSION_ERRNOS.has(e.errno)) {
+    return null;
+  }
+  const errno = e.errno as PermissionDetails['errno'];
+  const text = typeof e.message === 'string' ? e.message : '';
+  const q = "[`']";
+  const name = "([^`']+)";
+  const schema = `(?:${q}[^\`']*${q}\\.)?`;
+  const col = new RegExp(
+    `for column ${q}${name}${q} in table ${schema}${q}${name}${q}`,
+  ).exec(text);
+  if (errno === 1143 && col) {
+    return { errno, column: col[1], table: col[2] };
+  }
+  const tbl = new RegExp(`for table ${schema}${q}${name}${q}`).exec(text);
+  return tbl ? { errno, table: tbl[1] } : { errno };
+}
+
+/** Permission refusal -> English explanation of what the console may not do. */
+function permissionMessage(d: PermissionDetails): string {
+  if (d.errno === 1044) return 'The console has no access to this database.';
+  if (d.errno === 1143) {
+    return d.table && d.column
+      ? `Column \`${d.column}\` of \`${d.table}\` can't be changed from the console.`
+      : "This column can't be changed from the console.";
+  }
+  return d.table
+    ? `Table \`${d.table}\` is outside the console's scope.`
+    : "This table is outside the console's scope.";
+}
+
+/** DB error from the RW console -> user message (MariaDB text, sanitized, otherwise). */
 export function adminSqlErrorMessage(err: unknown): string {
   const e = err as { errno?: unknown; message?: unknown } | null | undefined;
   const errno = typeof e?.errno === 'number' ? e.errno : undefined;
-  if (errno !== undefined && PERMISSION_ERRNOS.has(errno))
-    return PERMISSION_ERROR;
+  const perm = permissionDetails(err);
+  if (perm) return permissionMessage(perm);
   if (errno === 1226) return BUSY_ERROR;
   if (errno === 1969 || errno === 1317)
     return timeoutMessage(STATEMENT_TIMEOUT_SEC);
-  if (typeof e?.message === 'string' && e.message !== '') return e.message;
+  if (typeof e?.message === 'string' && e.message !== '') {
+    return sanitizeDbMessage(e.message);
+  }
   return 'Nieznany błąd bazy danych.';
 }

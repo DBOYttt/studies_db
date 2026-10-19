@@ -118,6 +118,17 @@ describe('error mapping', () => {
     });
     expect(queryErrorMessage(e)).toBe('SELECT command denied');
   });
+  it('sanitizes a denial: no user, host or schema', () => {
+    const e = Object.assign(
+      new Error(
+        "SELECT command denied to user 'studies_ro_qa'@'10.88.0.2' for table `studies_qa_test`.`users`",
+      ),
+      { errno: 1142 },
+    );
+    const m = queryErrorMessage(e);
+    expect(m).not.toMatch(/@|studies_/);
+    expect(m).toContain('`users`');
+  });
   it('runReadonlyQuery maps getConnection failures', async () => {
     for (const [err, msg] of [
       [tooMany(), BUSY],

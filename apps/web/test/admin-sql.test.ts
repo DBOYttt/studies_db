@@ -4,6 +4,7 @@ import {
   CONFIRM_THRESHOLD,
   classifyStatement,
   PREVIEW_ROWS,
+  permissionDetails,
   previewSelect,
   SELECT_ROWS,
   signPreview,
@@ -309,15 +310,34 @@ describe('preview tokens', () => {
 describe('adminSqlErrorMessage', () => {
   const dbErr = (errno: number, message = 'raw mariadb message') =>
     Object.assign(new Error(message), { errno });
-  const perm =
-    'Brak uprawnień: ta tabela jest poza zakresem konsoli administratora.';
-
-  it('errno 1142 → the permission message', () => {
-    expect(adminSqlErrorMessage(dbErr(1142))).toBe(perm);
+  it('errno 1142 → table outside the scope', () => {
+    expect(
+      adminSqlErrorMessage(
+        dbErr(
+          1142,
+          "SELECT command denied to user 'u'@'h' for table `d`.`users`",
+        ),
+      ),
+    ).toBe("Table `users` is outside the console's scope.");
+    expect(adminSqlErrorMessage(dbErr(1142))).toBe(
+      "This table is outside the console's scope.",
+    );
   });
-  it('1143 and 1044 → the permission message', () => {
-    expect(adminSqlErrorMessage(dbErr(1143))).toBe(perm);
-    expect(adminSqlErrorMessage(dbErr(1044))).toBe(perm);
+  it('1143 → column message, 1044 → database message', () => {
+    expect(
+      adminSqlErrorMessage(
+        dbErr(
+          1143,
+          "UPDATE command denied to user 'u'@'h' for column 'topic_id' in table 'events'",
+        ),
+      ),
+    ).toBe("Column `topic_id` of `events` can't be changed from the console.");
+    expect(adminSqlErrorMessage(dbErr(1143))).toBe(
+      "This column can't be changed from the console.",
+    );
+    expect(adminSqlErrorMessage(dbErr(1044))).toBe(
+      'The console has no access to this database.',
+    );
   });
   it('1226 → busy, 1969/1317 → timeout', () => {
     expect(adminSqlErrorMessage(dbErr(1226))).toBe(BUSY_ERROR);
@@ -329,5 +349,34 @@ describe('adminSqlErrorMessage', () => {
       "Duplicate entry 'a'",
     );
     expect(adminSqlErrorMessage('weird')).toMatch(/\S/);
+  });
+});
+
+describe('permissionDetails', () => {
+  const e = (errno: number, message: string) =>
+    Object.assign(new Error(message), { errno });
+  it('parses table and column', () => {
+    expect(
+      permissionDetails(
+        e(
+          1143,
+          "UPDATE command denied to user 'u'@'h' for column 'topic_id' in table 'events'",
+        ),
+      ),
+    ).toEqual({ errno: 1143, column: 'topic_id', table: 'events' });
+    expect(
+      permissionDetails(
+        e(1142, "SELECT command denied to user 'u'@'h' for table `d`.`users`"),
+      ),
+    ).toEqual({ errno: 1142, table: 'users' });
+    expect(
+      permissionDetails(
+        e(1044, "Access denied for user 'u'@'%' to database 's'"),
+      ),
+    ).toEqual({ errno: 1044 });
+  });
+  it('null for other errors', () => {
+    expect(permissionDetails(e(1062, 'Duplicate'))).toBeNull();
+    expect(permissionDetails('x')).toBeNull();
   });
 });
