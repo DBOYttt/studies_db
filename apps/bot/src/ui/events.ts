@@ -59,6 +59,7 @@ const attempt = <T>(f: () => T): T | null => {
 
 const ID_RE = /^[1-9]\d*$/;
 const PAGE_RE = /^\d+$/;
+const VERSION_RE = /^v\d+$/;
 export const NOT_FOUND_TEXT = 'Nie znaleziono wydarzenia.';
 export const DELETED_TEXT = 'Wydarzenie usunięte';
 
@@ -67,13 +68,13 @@ type Action =
   | { kind: 'open'; id: number }
   | { kind: 'show'; id: number }
   | { kind: 'edit'; id: number; scope: Scope | null }
-  | { kind: 'save'; id: number | null; scope: Scope }
+  | { kind: 'save'; id: number | null; scope: Scope; version: number | null }
   | { kind: 'grpOpen'; id: number }
   | { kind: 'grpSet'; id: number; value: string }
   | { kind: 'linkOpen'; id: number; page: number }
   | { kind: 'linkToggle'; id: number; page: number; topicId: number }
   | { kind: 'del'; id: number; scope: Scope | null }
-  | { kind: 'delok'; id: number; scope: Scope };
+  | { kind: 'delok'; id: number; scope: Scope; version: number | null };
 
 type Via = 'button' | 'select' | 'modal';
 
@@ -84,11 +85,14 @@ export function parseEventAction(
   via: Via,
   values: readonly string[],
 ): Action | null {
-  const [a, b] = args;
+  const [a, b, c] = args;
   const id = a !== undefined && ID_RE.test(a) ? Number(a) : null;
   // An optional trailing scope; anything else is a stale id.
   const scopeArg =
     b === undefined ? null : b === 'one' || b === 'following' ? b : false;
+  // An optional `v<version>` after the scope; anything else is a stale id.
+  const version =
+    c === undefined ? null : VERSION_RE.test(c) ? Number(c.slice(1)) : false;
   const value = values[0];
   switch (name) {
     case 'new':
@@ -99,11 +103,13 @@ export function parseEventAction(
         : null;
     case 'save':
       if (via !== 'modal') return null;
-      if (scopeArg === false) return null;
-      if (a === 'new') return { kind: 'save', id: null, scope: 'one' };
+      if (scopeArg === false || version === false) return null;
+      if (a === 'new') {
+        return { kind: 'save', id: null, scope: 'one', version: null };
+      }
       return id === null
         ? null
-        : { kind: 'save', id, scope: scopeArg ?? 'one' };
+        : { kind: 'save', id, scope: scopeArg ?? 'one', version };
   }
   if (id === null) return null;
   switch (name) {
@@ -118,8 +124,8 @@ export function parseEventAction(
         ? { kind: 'del', id, scope: scopeArg }
         : null;
     case 'delok':
-      return via === 'button' && scopeArg !== false
-        ? { kind: 'delok', id, scope: scopeArg ?? 'one' }
+      return via === 'button' && scopeArg !== false && version !== false
+        ? { kind: 'delok', id, scope: scopeArg ?? 'one', version }
         : null;
     case 'grp':
       if (via === 'button') return { kind: 'grpOpen', id };
@@ -260,6 +266,7 @@ export async function handleEvent(
     }
     let cur: ModalCurrent | undefined;
     let id: number | null = null;
+    let version: number | undefined;
     if (action.kind === 'edit') {
       const e = await getEvent(db, action.id);
       if (!e || e.deletedAt) {
@@ -272,6 +279,7 @@ export async function handleEvent(
         return show(i, scopeChoice('edit', e.id, e.title));
       }
       id = e.id;
+      version = e.version;
       cur = {
         kind: e.kind,
         title: e.title,
@@ -289,6 +297,7 @@ export async function handleEvent(
         await modalSubjects(db),
         cur,
         action.kind === 'edit' ? (action.scope ?? undefined) : undefined,
+        version,
       ),
     );
     return;
@@ -380,6 +389,7 @@ export async function handleEvent(
         patch,
         'discord',
         action.scope,
+        action.version === null ? {} : { expectedVersion: action.version },
       );
       if (!r.ok) return fail(r.message);
       return showCard(action.id);
@@ -464,6 +474,7 @@ export async function handleEvent(
           e.id,
           e.title,
           e.series ? (action.scope ?? 'one') : undefined,
+          e.version,
         ),
       );
     }
@@ -475,6 +486,7 @@ export async function handleEvent(
         action.id,
         'discord',
         action.scope,
+        action.version === null ? {} : { expectedVersion: action.version },
       );
       return show(i, notice(r.ok ? DELETED_TEXT : r.message));
     }

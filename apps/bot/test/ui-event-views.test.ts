@@ -154,6 +154,17 @@ describe('eventModal', () => {
     expect(j24.components[2].component.options).toHaveLength(25);
   });
 
+  it('an edit modal id carries scope then version, within 100 chars', () => {
+    expect(
+      json(eventModal(9, subs(1), undefined, undefined, 4)).custom_id,
+    ).toBe('v1:evt:save:9:one:v4');
+    const id = json(
+      eventModal(999999999, subs(1), undefined, 'following', 999999),
+    ).custom_id as string;
+    expect(id).toBe('v1:evt:save:999999999:following:v999999');
+    expect(id.length).toBeLessThanOrEqual(100);
+  });
+
   it('prefills an edit', () => {
     const j = json(
       eventModal(9, subs(3), {
@@ -186,6 +197,17 @@ describe('pickers', () => {
         .filter((n) => n.type === 2)
         .map((b) => b.custom_id),
     ).toEqual(['v1:evt:delok:5', 'v1:evt:show:5']);
+  });
+
+  it('delete confirmation with a version writes scope then version', () => {
+    const ids = nodes(deleteConfirm(5, 'X', undefined, 3))
+      .filter((n) => n.type === 2)
+      .map((b) => b.custom_id);
+    expect(ids[0]).toBe('v1:evt:delok:5:one:v3');
+    const long = nodes(deleteConfirm(999999999, 'X', 'following', 999999))
+      .filter((n) => n.type === 2)
+      .map((b) => b.custom_id as string);
+    expect(long[0].length).toBeLessThanOrEqual(100);
   });
 
   it('class/group select stays within 25 options', () => {

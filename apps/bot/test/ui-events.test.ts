@@ -14,7 +14,7 @@ import {
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { MessageFlags } from 'discord.js';
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { runEventAdd } from '../src/commands/event.js';
 import {
@@ -344,10 +344,12 @@ describe('card actions', () => {
     const ask = interaction(`v1:evt:del:${id}`);
     await handler()(ask);
     expect(
-      nodes(lastEdit(ask)).some((n) => n.custom_id === `v1:evt:delok:${id}`),
+      nodes(lastEdit(ask)).some(
+        (n) => n.custom_id === `v1:evt:delok:${id}:one:v0`,
+      ),
     ).toBe(true);
     expect((await db.select().from(events))[0].deletedAt).toBeNull();
-    const ok = interaction(`v1:evt:delok:${id}`);
+    const ok = interaction(`v1:evt:delok:${id}:one:v0`);
     await handler()(ok);
     expect(textOf(lastEdit(ok))).toBe('Wydarzenie usunięte');
     expect((await db.select().from(events))[0].deletedAt).not.toBeNull();
@@ -644,11 +646,13 @@ describe('series scope', () => {
     await handler()(edit);
     expect(edit.calls).toEqual(['showModal']);
     expect(edit.showModal.mock.calls[0][0].toJSON().custom_id).toBe(
-      `v1:evt:save:${e.id}`,
+      `v1:evt:save:${e.id}:one:v${e.version}`,
     );
     const del = interaction(`v1:evt:del:${e.id}`);
     await handler()(del);
-    expect(buttons(lastEdit(del))).toContain(`v1:evt:delok:${e.id}`);
+    expect(buttons(lastEdit(del))).toContain(
+      `v1:evt:delok:${e.id}:one:v${e.version}`,
+    );
   });
 
   it('edit with a scope opens the modal that saves with the scope', async () => {
@@ -656,9 +660,11 @@ describe('series scope', () => {
     const open = interaction(`v1:evt:edit:${second}:following`);
     await handler()(open);
     const m = open.showModal.mock.calls[0][0].toJSON();
-    expect(m.custom_id).toBe(`v1:evt:save:${second}:following`);
+    expect(m.custom_id).toMatch(
+      new RegExp(`^v1:evt:save:${second}:following:v\\d+$`),
+    );
     const i = save(
-      `${second}:following`,
+      m.custom_id.replace('v1:evt:save:', ''),
       {
         title: 'Zmiana',
         when: m.components[3].component.value,
@@ -681,14 +687,58 @@ describe('series scope', () => {
     const [first, second] = await mkSeries();
     const ask = interaction(`v1:evt:del:${second}:following`);
     await handler()(ask);
-    expect(buttons(lastEdit(ask))).toContain(
-      `v1:evt:delok:${second}:following`,
+    const delok = buttons(lastEdit(ask)).find((b) =>
+      b.startsWith(`v1:evt:delok:${second}:following:v`),
     );
-    const ok = interaction(`v1:evt:delok:${second}:following`);
+    expect(delok).toBeDefined();
+    const ok = interaction(delok as string);
     await handler()(ok);
     const rows = await db.select().from(events).orderBy(events.startsAt);
     expect(rows.map((e) => e.deletedAt !== null)).toEqual([false, true, true]);
     expect(rows[0].id).toBe(first);
+  });
+
+  it('a save opened before someone else edited is refused', async () => {
+    const [id] = await mkSeries();
+    const open = interaction(`v1:evt:edit:${id}:one`);
+    await handler()(open);
+    const m = open.showModal.mock.calls[0][0].toJSON();
+    await db
+      .update(events)
+      .set({ version: sql`${events.version} + 1` })
+      .where(eq(events.id, id));
+    const i = save(
+      m.custom_id.replace('v1:evt:save:', ''),
+      {
+        title: 'Spóźnione',
+        when: m.components[3].component.value,
+        place_note: '',
+      },
+      selects({ kind: ['egzamin'], subject: ['-'] }),
+      true,
+    );
+    await handler()(i);
+    expect(JSON.stringify(i.followUp.mock.calls[0][0])).toContain(
+      'Someone changed this event',
+    );
+    const [e] = await db.select().from(events).where(eq(events.id, id));
+    expect(e.title).toBe('Konsultacje');
+  });
+
+  it('a delete confirmed after someone else edited is refused', async () => {
+    const [id] = await mkSeries();
+    const ask = interaction(`v1:evt:del:${id}:one`);
+    await handler()(ask);
+    const delok = buttons(lastEdit(ask)).find((b) => b.includes(':delok:'));
+    await db
+      .update(events)
+      .set({ version: sql`${events.version} + 1` })
+      .where(eq(events.id, id));
+    const ok = interaction(delok as string);
+    await handler()(ok);
+    expect(textOf(lastEdit(ok))).toContain('Someone changed this event');
+    const [e] = await db.select().from(events).where(eq(events.id, id));
+    expect(e.deletedAt).toBeNull();
   });
 
   it('a bad scope argument is stale', async () => {

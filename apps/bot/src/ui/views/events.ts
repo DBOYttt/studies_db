@@ -203,7 +203,22 @@ export function scopeChoice(
   );
 }
 
-export function deleteConfirm(id: number, title: string, scope?: Scope): View {
+/** `<id>[:<scope>[:v<version>]]`; the scope is always written before the version. */
+function scopeVersion(
+  id: number | string,
+  scope?: Scope,
+  version?: number,
+): (string | number)[] {
+  if (version !== undefined) return [id, scope ?? 'one', `v${version}`];
+  return scope ? [id, scope] : [id];
+}
+
+export function deleteConfirm(
+  id: number,
+  title: string,
+  scope?: Scope,
+  version?: number,
+): View {
   return view(
     new ContainerBuilder()
       .addTextDisplayComponents(
@@ -214,7 +229,7 @@ export function deleteConfirm(id: number, title: string, scope?: Scope): View {
       .addActionRowComponents(
         row(
           button(
-            encodeId('evt', 'delok', ...(scope ? [id, scope] : [id])),
+            encodeId('evt', 'delok', ...scopeVersion(id, scope, version)),
             'Usuń',
             ButtonStyle.Danger,
           ),
@@ -374,6 +389,7 @@ export function eventModal(
   subjects: ModalSubject[],
   cur?: ModalCurrent,
   scope?: Scope,
+  version?: number,
 ): ModalBuilder {
   const kind = new StringSelectMenuBuilder()
     .setCustomId('kind')
@@ -416,11 +432,7 @@ export function eventModal(
     ? `${cur.place ?? ''}\n${cur.note}`
     : (cur?.place ?? '');
   return modal(
-    encodeId(
-      'evt',
-      'save',
-      ...(scope ? [eventId ?? 'new', scope] : [eventId ?? 'new']),
-    ),
+    encodeId('evt', 'save', ...scopeVersion(eventId ?? 'new', scope, version)),
     eventId === null ? 'Dodaj wydarzenie' : 'Edytuj wydarzenie',
     [
       new LabelBuilder().setLabel('Rodzaj').setStringSelectMenuComponent(kind),
