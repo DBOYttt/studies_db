@@ -127,8 +127,12 @@ describe('events schema', () => {
     ).toHaveLength(1);
   });
 
-  it('EVENT_KINDS has a label and symbol for each kind', () => {
-    expect(EVENT_KINDS.kolokwium).toEqual({ label: 'Test', symbol: '📝' });
+  it('EVENT_KINDS has a label, a Polish forum tag and a symbol for each kind', () => {
+    expect(EVENT_KINDS.kolokwium).toEqual({
+      label: 'Test',
+      tag: 'Kolokwium',
+      symbol: '📝',
+    });
     expect(Object.keys(EVENT_KINDS)).toHaveLength(5);
   });
 });

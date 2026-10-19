@@ -112,20 +112,20 @@ describe('desiredTags', () => {
       'Gr. 1',
       'Gr. 2',
       'Gr. 3',
-      'Test',
-      'Exam',
-      'Trip',
-      'Extra class',
-      'Other',
+      'Kolokwium',
+      'Egzamin',
+      'Wyjazd',
+      'Zajęcia dodatkowe',
+      'Inne',
     ]);
   });
   it('has only fixed tags for a subject without classes', () => {
     expect(desiredTags({ ...ASD, classes: [] })).toEqual([
-      'Test',
-      'Exam',
-      'Trip',
-      'Extra class',
-      'Other',
+      'Kolokwium',
+      'Egzamin',
+      'Wyjazd',
+      'Zajęcia dodatkowe',
+      'Inne',
     ]);
   });
   it('generates tags that classify back to the same class and group', () => {
@@ -246,7 +246,7 @@ describe('planSetup', () => {
         subjectId: 2,
         code: 'BD',
         channelId: 'f-bd',
-        tags: ['Test', 'Exam', 'Trip', 'Extra class', 'Other'],
+        tags: ['Kolokwium', 'Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'],
       },
       {
         type: 'setGuidelines',
@@ -274,9 +274,12 @@ describe('planSetup', () => {
     });
     const actions = planSetup([BD], g, ROLE, render);
     const add = actions.find((a) => a.type === 'addTags');
-    expect(add?.type === 'addTags' && add.tags).toEqual(['Wykład', 'Test']);
+    expect(add?.type === 'addTags' && add.tags).toEqual([
+      'Wykład',
+      'Kolokwium',
+    ]);
     const warn = actions.find((a) => a.type === 'warn');
-    expect(warn?.type === 'warn' && warn.message).toContain('Exam');
+    expect(warn?.type === 'warn' && warn.message).toContain('Egzamin');
   });
 
   it('caps a new forum at 20 tags and warns', () => {
@@ -1156,7 +1159,7 @@ describe('renderEventsInfoPost', () => {
 
 describe('planSetup: #wydarzenia', () => {
   const only = (actions: Action[]) => actions.filter(isEvents);
-  const KINDS = ['Test', 'Exam', 'Trip', 'Extra class', 'Other'];
+  const KINDS = ['Kolokwium', 'Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'];
   const eventsForum = (
     over: Partial<GuildSnapshot['forums'][number]> = {},
   ) => ({
@@ -1192,7 +1195,7 @@ describe('planSetup: #wydarzenia', () => {
 
   it('adopts the only forum with that name and adds missing tags and the info post', () => {
     const g = withRole({
-      forums: [eventsForum({ tags: [{ id: 't1', name: 'test' }] })],
+      forums: [eventsForum({ tags: [{ id: 't1', name: 'kolokwium' }] })],
     });
     const actions = only(planAll([], g, ROLE, render, opts));
     expect(actions.map((a) => a.type)).toEqual([
@@ -1202,7 +1205,7 @@ describe('planSetup: #wydarzenia', () => {
     ]);
     expect(actions[0]).toMatchObject({ existingId: 'f-ev' });
     expect(actions[1]).toMatchObject({
-      tags: ['Exam', 'Trip', 'Extra class', 'Other'],
+      tags: ['Egzamin', 'Wyjazd', 'Zajęcia dodatkowe', 'Inne'],
     });
     expect(actions[2]).toMatchObject({ existing: null, pin: true });
     expect(needsSecondPass(actions)).toBe(false);

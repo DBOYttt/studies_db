@@ -80,14 +80,20 @@ export const EVENT_KIND_KEYS = [
   'inne',
 ] as const;
 export type EventKind = (typeof EVENT_KIND_KEYS)[number];
-export const EVENT_KINDS: Record<EventKind, { label: string; symbol: string }> =
-  {
-    kolokwium: { label: 'Test', symbol: '📝' },
-    egzamin: { label: 'Exam', symbol: '🎓' },
-    wyjazd: { label: 'Trip', symbol: '🚌' },
-    zajecia_dodatkowe: { label: 'Extra class', symbol: '➕' },
-    inne: { label: 'Other', symbol: '📌' },
-  };
+export const EVENT_KINDS: Record<
+  EventKind,
+  { label: string; symbol: string; tag: string }
+> = {
+  kolokwium: { label: 'Test', tag: 'Kolokwium', symbol: '📝' },
+  egzamin: { label: 'Exam', tag: 'Egzamin', symbol: '🎓' },
+  wyjazd: { label: 'Trip', tag: 'Wyjazd', symbol: '🚌' },
+  zajecia_dodatkowe: {
+    label: 'Extra class',
+    tag: 'Zajęcia dodatkowe',
+    symbol: '➕',
+  },
+  inne: { label: 'Other', tag: 'Inne', symbol: '📌' },
+};
 /** Symbol for a recurring series. */
 export const SERIES_SYMBOL = '🔁';
 

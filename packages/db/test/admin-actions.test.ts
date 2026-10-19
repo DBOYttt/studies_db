@@ -68,7 +68,7 @@ describe('subjects', () => {
       'Updated subject ALG.',
     );
     expect(await editSubject(db, 'nope', { ects: 7 })).toBe(
-      'Nie znaleziono przedmiotu NOPE.',
+      'Subject NOPE not found.',
     );
     expect(await listSubjects(db)).toBe(
       '**ALG** Algebra — semester 1, 7 ECTS\n**ANA** Analiza — semester 2, 5 ECTS',

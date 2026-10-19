@@ -167,19 +167,25 @@ export function dayHeader(d: Date): { name: string; date: string } {
   };
 }
 
-const shortDate = (d: Date, year: boolean) =>
-  `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}${year ? ` ${d.getUTCFullYear()}` : ''}`;
+const dm = (d: Date) => `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
 
 /**
- * `Week 42 · 12 Oct – 16 Oct 2026` from the first to the last shown day;
- * the first day carries its year too when the week spans two years.
+ * `Week 43 · 19–25 Oct 2026` from the first to the last shown day. Across
+ * months `Week 40 · 28 Sep – 4 Oct 2026`, across years
+ * `Week 1 · 29 Dec 2025 – 4 Jan 2026`.
  */
 export function weekHeading(w: IsoWeek, days: Date[]): string {
   const first = days[0];
   const last = days[days.length - 1];
   if (!first || !last) return `Week ${w.week}`;
-  const twoYears = first.getUTCFullYear() !== last.getUTCFullYear();
-  return `Week ${w.week} · ${shortDate(first, twoYears)} – ${shortDate(last, true)}`;
+  const fy = first.getUTCFullYear();
+  const ly = last.getUTCFullYear();
+  if (fy !== ly)
+    return `Week ${w.week} · ${dm(first)} ${fy} – ${dm(last)} ${ly}`;
+  if (first.getUTCMonth() !== last.getUTCMonth())
+    return `Week ${w.week} · ${dm(first)} – ${dm(last)} ${ly}`;
+  const same = first.getUTCDate() === last.getUTCDate();
+  return `Week ${w.week} · ${same ? dm(last) : `${first.getUTCDate()}–${dm(last)}`} ${ly}`;
 }
 
 const longDateFmt = new Intl.DateTimeFormat('en-GB', {

@@ -28,7 +28,10 @@ const ALLOW_FILES = [
 ];
 /** Individual lines (per file) that are content: class-type tags, folding. */
 const ALLOW_LINES = [
-  [/^packages\/db\/src\/constants\.ts$/, /Wykład|Ćwiczenia|Zajęcia praktyczne/],
+  [
+    /^packages\/db\/src\/constants\.ts$/,
+    /Wykład|Ćwiczenia|Zajęcia praktyczne|tag: 'Zajęcia dodatkowe'/,
+  ],
   [/^packages\/db\/src\/search\.ts$/, /replace\(\/[łŁ]\//],
 ];
 

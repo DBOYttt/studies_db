@@ -50,7 +50,7 @@ export const emailOrNull = (v: string): string | null => {
   return t === null ? null : t.toLowerCase();
 };
 
-const notFound = (code: string) => `Nie znaleziono przedmiotu ${code}.`;
+const notFound = (code: string) => `Subject ${code} not found.`;
 
 export async function addSubject(
   db: Db,

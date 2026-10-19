@@ -121,10 +121,21 @@ describe('labels', () => {
   it('heads the week with its number and shown days', () => {
     expect(
       weekHeading({ year: 2026, week: 42 }, [W(2026, 10, 12), W(2026, 10, 16)]),
-    ).toBe('Week 42 · 12 Oct – 16 Oct 2026');
+    ).toBe('Week 42 · 12–16 Oct 2026');
     expect(
       weekHeading({ year: 2026, week: 53 }, [W(2026, 12, 28), W(2027, 1, 3)]),
     ).toBe('Week 53 · 28 Dec 2026 – 3 Jan 2027');
+  });
+  it('collapses a shared month and keeps month changes', () => {
+    expect(
+      weekHeading({ year: 2026, week: 43 }, [W(2026, 10, 19), W(2026, 10, 25)]),
+    ).toBe('Week 43 · 19–25 Oct 2026');
+    expect(
+      weekHeading({ year: 2026, week: 40 }, [W(2026, 9, 28), W(2026, 10, 4)]),
+    ).toBe('Week 40 · 28 Sep – 4 Oct 2026');
+    expect(
+      weekHeading({ year: 2026, week: 1 }, [W(2025, 12, 29), W(2026, 1, 4)]),
+    ).toBe('Week 1 · 29 Dec 2025 – 4 Jan 2026');
   });
   it('shows sync instants in Warsaw time', () => {
     // 2026-10-12 10:15 UTC = 12:15 in Warsaw (CEST).

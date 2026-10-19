@@ -186,7 +186,7 @@ export async function upsertEventPost(
     post: {
       title: eventPostTitle(e),
       content: eventPostContent(e, deps.webBaseUrl),
-      tagName: EVENT_KINDS[e.kind].label,
+      tagName: EVENT_KINDS[e.kind].tag,
     },
     createdBy: e.createdBy,
     attach: async (topicId) => {
@@ -281,7 +281,7 @@ export async function upsertSeriesPost(
         dates,
         deps.webBaseUrl,
       ),
-      tagName: EVENT_KINDS[first.kind].label,
+      tagName: EVENT_KINDS[first.kind].tag,
     },
     createdBy: me.createdBy,
     attach: async (created) => {

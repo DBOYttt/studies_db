@@ -178,7 +178,7 @@ const isGone = (err: unknown) =>
     err.code === RESTJSONErrorCodes.UnknownMessage);
 
 const KIND_LABELS = new Set(
-  Object.values(EVENT_KINDS).map((k) => k.label.toLowerCase()),
+  Object.values(EVENT_KINDS).map((k) => k.tag.toLowerCase()),
 );
 
 /** Applied tags with the kind tags replaced by `tagName`'s tag (if the forum has it). */

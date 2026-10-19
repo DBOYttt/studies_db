@@ -20,7 +20,7 @@ import {
   users,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import type { Client } from 'discord.js';
+import { ChannelType, type Client } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import {
   afterAll,
@@ -192,7 +192,7 @@ describe('event posts', () => {
     expect(guild.posts.size).toBe(1);
     const [post] = [...guild.posts.entries()];
     expect(post[1].forumId).toBe('f-bd');
-    expect(post[1].tagName).toBe('Test');
+    expect(post[1].tagName).toBe('Kolokwium');
     expect(post[1].title).toMatch(/^📝 Kolokwium 1 — \d\d\.\d\d$/);
     expect(post[1].content).toContain(`https://x.pl/s/wydarzenia/${id}`);
     const e = await eventRow(id);
@@ -221,7 +221,7 @@ describe('event posts', () => {
     expect(guild.posts.size).toBe(1);
     const p = guild.posts.get(threadId);
     expect(p?.title).toMatch(/^🎓 Poprawka — /);
-    expect(p?.tagName).toBe('Exam');
+    expect(p?.tagName).toBe('Egzamin');
     expect(p?.content).toContain('Miejsce: sala 5');
     const [t] = await db.select().from(topics);
     expect(t.title).toBe(p?.title);
@@ -334,7 +334,7 @@ describe('event posts', () => {
     expect(t.subjectId).toBeNull();
     expect([...guild.posts.values()][0]).toMatchObject({
       forumId: 'f-events',
-      tagName: 'Trip',
+      tagName: 'Wyjazd',
     });
     expect((await eventRow(id)).topicId).toBe(t.id);
     await db.delete(events);
@@ -612,7 +612,7 @@ describe('series posts', () => {
     expect(guild.posts.size).toBe(1);
     const p = [...guild.posts.values()][0];
     expect(p.title).toBe('🔁 Konsultacje — co tydzień');
-    expect(p.tagName).toBe('Extra class');
+    expect(p.tagName).toBe('Zajęcia dodatkowe');
     expect(p.content).toContain('Cykl: co tydzień');
     const [s] = await db.select().from(eventSeries);
     expect(s.topicId).not.toBeNull();
@@ -803,6 +803,27 @@ describe('discordEventPostGuild only touches its own event posts', () => {
       false,
       'wydarzenie',
     );
+  });
+
+  it('swaps the Polish kind tag when the kind changes (no duplicates)', async () => {
+    const t = threads.get('own-ev') as unknown as {
+      parent: unknown;
+      appliedTags: string[];
+      setAppliedTags: ReturnType<typeof vi.fn>;
+    };
+    t.parent = {
+      type: ChannelType.GuildForum,
+      availableTags: [
+        { id: 'k', name: 'Kolokwium' },
+        { id: 'e', name: 'Egzamin' },
+        { id: 'n', name: 'Notatki' },
+      ],
+    };
+    t.appliedTags = ['n', 'k'];
+    t.setAppliedTags = vi.fn(async () => undefined);
+    const g = discordEventPostGuild(client, eventForumCheck(db));
+    await g.editFirstMessage('own-ev', { ...post, tagName: 'Egzamin' });
+    expect(t.setAppliedTags).toHaveBeenCalledWith(['n', 'e'], 'wydarzenie');
   });
 
   it.each(['foreign-owner', 'foreign-forum'])(
