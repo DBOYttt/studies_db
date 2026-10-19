@@ -54,7 +54,11 @@ type Body = Record<string, unknown>;
 const request = (body: unknown, headers: Record<string, string> = {}) =>
   new Request('http://x/api/admin/sql', {
     method: 'POST',
-    headers: { 'content-type': 'application/json', ...headers },
+    headers: {
+      'content-type': 'application/json',
+      ...('Origin' in headers ? {} : { 'sec-fetch-site': 'same-origin' }),
+      ...headers,
+    },
     body: JSON.stringify(body),
   });
 
@@ -315,7 +319,7 @@ describe('handleAdminSqlRequest', () => {
     }
   });
 
-  it('403 for a cross-origin POST; same-origin or no Origin is fine', async () => {
+  it('403 for a cross-origin POST; same-origin is fine', async () => {
     const sql = 'SELECT 1';
     vi.stubEnv('WEB_BASE_URL', 'https://studies.example.com/');
     try {
@@ -348,6 +352,19 @@ describe('handleAdminSqlRequest', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+
+  it('403 without Origin and Sec-Fetch-Site', async () => {
+    const res = await handleAdminSqlRequest(
+      new Request('http://x/api/admin/sql', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ mode: 'preview', sql: 'SELECT 1' }),
+      }),
+      admin,
+      { db, rw: rwPool, limiter: createRateLimiter(1000, 60_000) },
+    );
+    expect(res.status).toBe(403);
   });
 
   it('without WEB_BASE_URL the Origin must match the request URL', async () => {

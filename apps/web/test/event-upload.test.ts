@@ -90,6 +90,9 @@ function body(files: (readonly [Uint8Array, string])[]) {
   }
   return f;
 }
+const SAME_ORIGIN = { 'sec-fetch-site': 'same-origin' };
+const SAME_ORIGIN_HEADERS = (h: Record<string, string>) =>
+  'origin' in h ? h : { ...SAME_ORIGIN, ...h };
 const post = (
   files: (readonly [Uint8Array, string])[],
   id: number | string = eventId,
@@ -99,7 +102,7 @@ const post = (
     new Request(`http://x/api/wydarzenia/${id}/pliki`, {
       method: 'POST',
       body: body(files),
-      headers,
+      headers: SAME_ORIGIN_HEADERS(headers),
     }),
     { params: Promise.resolve({ id: String(id) }) },
   );
@@ -175,7 +178,11 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     await db.update(users).set({ isBanned: true }).where(eq(users.id, uid));
     const before = stored().length;
     const res = await handleEventUpload(
-      new Request('http://x/', { method: 'POST', body: body(one()) }),
+      new Request('http://x/', {
+        method: 'POST',
+        body: body(one()),
+        headers: SAME_ORIGIN,
+      }),
       { id: uid },
       String(eventId),
       { db, storageRoot: storage },
@@ -193,6 +200,19 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     await login();
     const before = stored().length;
     const res = await post(one(), eventId, { origin: 'http://evil.example' });
+    expect(res.status).toBe(403);
+    expect(stored().length).toBe(before);
+  });
+
+  it('refuses a request with no Origin and no Sec-Fetch-Site', async () => {
+    const uid = await login();
+    const before = stored().length;
+    const res = await handleEventUpload(
+      new Request('http://x/', { method: 'POST', body: body(one()) }),
+      { id: uid },
+      String(eventId),
+      { db, storageRoot: storage },
+    );
     expect(res.status).toBe(403);
     expect(stored().length).toBe(before);
   });
@@ -235,7 +255,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
       new Request('http://x/', {
         method: 'POST',
         body: '{}',
-        headers: { 'content-type': 'application/json' },
+        headers: { 'content-type': 'application/json', ...SAME_ORIGIN },
       }),
       { params: Promise.resolve({ id: String(eventId) }) },
     );
@@ -335,7 +355,7 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
       new Request(`http://x/api/wydarzenia/${eventId}/pliki`, {
         method: 'POST',
         body: stream,
-        headers: { 'content-type': type },
+        headers: { 'content-type': type, ...SAME_ORIGIN },
         duplex: 'half',
       } as RequestInit),
       { params: Promise.resolve({ id: String(eventId) }) },
@@ -385,7 +405,11 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
   it('503 when STORAGE_DIR is not set', async () => {
     const uid = await login();
     const res = await handleEventUpload(
-      new Request('http://x/', { method: 'POST', body: body(one()) }),
+      new Request('http://x/', {
+        method: 'POST',
+        body: body(one()),
+        headers: SAME_ORIGIN,
+      }),
       { id: uid },
       String(eventId),
       { db, storageRoot: null },
