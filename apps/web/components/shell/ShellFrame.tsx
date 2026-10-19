@@ -136,7 +136,7 @@ export function ShellFrame({
       <aside
         ref={drawerRef}
         id="shell-nav"
-        aria-label="Panel nawigacji"
+        aria-label="Navigation panel"
         role={open ? 'dialog' : undefined}
         aria-modal={open ? true : undefined}
         className={`flex min-h-0 flex-col border-r border-line-strong bg-surface max-md:fixed max-md:inset-y-0 max-md:left-0 max-md:z-50 max-md:w-[264px] max-md:max-w-[85vw] max-md:duration-150 motion-reduce:transition-none ${
@@ -160,7 +160,7 @@ export function ShellFrame({
             ref={menuRef}
             type="button"
             onClick={() => setOpen(true)}
-            aria-label="Otwórz panel nawigacji"
+            aria-label="Open navigation panel"
             aria-expanded={open}
             aria-controls="shell-nav"
             className="relative z-[2] grid h-[26px] w-[28px] place-items-center rounded text-accent-ink hover:bg-line md:hidden"

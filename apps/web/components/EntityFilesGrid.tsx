@@ -28,7 +28,7 @@ interface GridProps {
 
 /**
  * Server-paged `v_files` grid (FILE_COLUMNS) of an entity page: links per
- * column name, Podgląd opens PreviewPanel via `?preview=`, RO errors show
+ * column name, Preview opens PreviewPanel via `?preview=`, RO errors show
  * an alert instead of the grid.
  */
 export function EntityFilesGrid(props: GridProps) {
@@ -86,7 +86,7 @@ async function EntityGrid({
   if (!page) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać danych: {result.error ?? 'brak danych'}
+        Could not load data: {result.error ?? 'no data'}
       </div>
     );
   }

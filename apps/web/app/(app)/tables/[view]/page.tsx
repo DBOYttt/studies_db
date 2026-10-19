@@ -51,7 +51,7 @@ function parseTab(v: string | string[] | undefined): ViewTab {
   return s === 'structure' || s === 'sql' || s === 'search' ? s : 'browse';
 }
 
-/** View screen (design line 747): Przeglądaj, Struktura, SQL, Szukaj, Eksport. */
+/** View screen (design line 747): Browse, Structure, SQL, Search, Export. */
 export default async function TablePage({
   params,
   searchParams,
@@ -67,7 +67,7 @@ export default async function TablePage({
   const { sort, dir, filters, page, perPage } = parseViewParams(sp);
 
   const base = `/tables/${view}`;
-  // Sort, dir, filters and per (no page): kept by Przeglądaj/Szukaj/Eksport.
+  // Sort, dir, filters and per (no page): kept by Browse/Search/Export.
   const current = viewQueryString({ sort, dir, filters, perPage });
   const withCurrent = (path: string, extra?: Record<string, string>) => {
     const p = new URLSearchParams(extra);
@@ -79,13 +79,13 @@ export default async function TablePage({
 
   const tabs: Tab[] = [
     {
-      label: 'Przeglądaj',
+      label: 'Browse',
       icon: Rows,
       href: withCurrent(base),
       active: tab === 'browse',
     },
     {
-      label: 'Struktura',
+      label: 'Structure',
       icon: Columns,
       href: `${base}?tab=structure`,
       active: tab === 'structure',
@@ -97,13 +97,13 @@ export default async function TablePage({
       active: tab === 'sql',
     },
     {
-      label: 'Szukaj',
+      label: 'Search',
       icon: MagnifyingGlass,
       href: withCurrent(base, { tab: 'search' }),
       active: tab === 'search',
     },
     {
-      label: 'Eksport',
+      label: 'Export',
       icon: Export,
       href: csvHref,
       active: false,
@@ -114,10 +114,10 @@ export default async function TablePage({
   return (
     <>
       <ScreenHeader
-        crumbs={[{ icon: Table, kind: 'Widok:', label: view, href: base }]}
+        crumbs={[{ icon: Table, kind: 'View:', label: view, href: base }]}
         tabs={tabs}
       />
-      <h1 className="sr-only">Widok {view}</h1>
+      <h1 className="sr-only">View {view}</h1>
       {tab === 'browse' && (
         <BrowseTab
           view={view}
@@ -184,7 +184,7 @@ async function BrowseTab({
   if (error || !result) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać widoku: {error ?? 'brak danych'}
+        Could not load the view: {error ?? 'no data'}
       </div>
     );
   }
@@ -240,7 +240,7 @@ async function StructureTab({ view }: { view: PublicView }) {
     <div className="flex flex-col gap-3">
       {error ? (
         <div role="alert" className={errBox}>
-          Nie udało się wczytać struktury: {error}
+          Could not load the structure: {error}
         </div>
       ) : (
         <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
@@ -248,12 +248,12 @@ async function StructureTab({ view }: { view: PublicView }) {
             <thead>
               <tr className="bg-surface text-left">
                 <th className={`${th} w-9`}>#</th>
-                <th className={th}>Nazwa</th>
-                <th className={th}>Typ</th>
-                <th className={th}>Metoda porównywania napisów</th>
-                <th className={th}>Atrybuty</th>
+                <th className={th}>Name</th>
+                <th className={th}>Type</th>
+                <th className={th}>Collation</th>
+                <th className={th}>Attributes</th>
                 <th className={th}>Null</th>
-                <th className={th}>Domyślnie</th>
+                <th className={th}>Default</th>
               </tr>
             </thead>
             <tbody>
@@ -277,7 +277,7 @@ async function StructureTab({ view }: { view: PublicView }) {
                             weight="fill"
                             size={12}
                             className="text-key"
-                            aria-label="Identyfikator"
+                            aria-label="Identifier"
                           />
                         )}
                       </span>
@@ -289,9 +289,9 @@ async function StructureTab({ view }: { view: PublicView }) {
                     <td className={`${td} font-mono text-xs text-muted`}>
                       {c.attributes}
                     </td>
-                    <td className={td}>{c.nullable ? 'Tak' : 'Nie'}</td>
+                    <td className={td}>{c.nullable ? 'Yes' : 'No'}</td>
                     <td className={`${td} text-muted`}>
-                      <i>{c.defaultValue ?? (c.nullable ? 'NULL' : 'Brak')}</i>
+                      <i>{c.defaultValue ?? (c.nullable ? 'NULL' : 'None')}</i>
                     </td>
                   </tr>
                 );
@@ -303,11 +303,11 @@ async function StructureTab({ view }: { view: PublicView }) {
       <div className="flex flex-wrap gap-4">
         <Link href={base} className={linkCls}>
           <Rows aria-hidden />
-          Przeglądaj dane
+          Browse data
         </Link>
         <Link href={`${base}?tab=sql`} className={linkCls}>
           <TerminalWindow aria-hidden />
-          Zapytanie do tego widoku
+          Query this view
         </Link>
       </div>
     </div>
@@ -337,7 +337,7 @@ async function SqlTab({
     <div className="flex flex-col gap-3">
       {error && (
         <div role="alert" className={warnBox}>
-          Nie udało się wczytać listy kolumn: {error}
+          Could not load the column list: {error}
         </div>
       )}
       <SqlConsole
@@ -374,7 +374,7 @@ async function SearchTab({
   if (error) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać kolumn: {error}
+        Could not load columns: {error}
       </div>
     );
   }

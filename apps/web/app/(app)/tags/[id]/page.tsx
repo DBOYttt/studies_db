@@ -28,7 +28,7 @@ const TABS = ['topics', 'files'] as const;
 const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
 
-/** Tag page (spec section 2): Tematy, Pliki. */
+/** Tag page (spec section 2): Topics, Files. */
 export default async function TagPage({
   params,
   searchParams,
@@ -53,7 +53,7 @@ export default async function TagPage({
           crumbs={[{ icon: Tag, kind: 'Tag:', label: `#${id}`, href: base }]}
         />
         <div role="alert" className={errBox}>
-          Nie udało się wczytać tagu: {roErrorMessage(err)}
+          Could not load the tag: {roErrorMessage(err)}
         </div>
       </>
     );
@@ -64,13 +64,13 @@ export default async function TagPage({
   const grid = parseEntityGrid(sp);
   const tabs: Tab[] = [
     {
-      label: 'Tematy',
+      label: 'Topics',
       icon: ChatsCircle,
       href: base,
       active: tab === 'topics',
     },
     {
-      label: 'Pliki',
+      label: 'Files',
       icon: Files,
       href: `${base}?tab=files`,
       active: tab === 'files',
@@ -90,7 +90,7 @@ export default async function TagPage({
             <TagBadge name={tag.name} size="lg" />
           </h1>
           <p className="mt-1 font-mono text-xs text-muted">
-            id {tag.id}, przedmiot{' '}
+            id {tag.id}, subject{' '}
             <Link
               href={explorerHref(tag.subject_code, {})}
               className="text-accent-ink hover:text-accent-ink-hover hover:underline"

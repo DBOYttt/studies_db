@@ -23,12 +23,12 @@ export default async function NewEventPage({
     <>
       <ScreenHeader
         crumbs={[
-          { icon: CalendarBlank, label: 'Plan zajęć', href: '/plan' },
-          { label: 'Dodaj wydarzenie', href: '/wydarzenia/nowe' },
+          { icon: CalendarBlank, label: 'Timetable', href: '/plan' },
+          { label: 'Add event', href: '/wydarzenia/nowe' },
         ]}
         tabs={dbTabs('plan')}
       />
-      <h1 className="m-0 mb-3 text-lg font-semibold">Dodaj wydarzenie</h1>
+      <h1 className="m-0 mb-3 text-lg font-semibold">Add event</h1>
       <EventForm
         options={options}
         base="advanced"

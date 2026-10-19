@@ -64,30 +64,30 @@ export function selectionPath(
 ): { views: PublicView[]; caption: string | null } {
   const views: PublicView[] = ['v_subjects'];
   let caption = withId(
-    `${names.subject ?? 'Przedmiot'} jest w v_subjects`,
+    `${names.subject ?? 'Subject'} is in v_subjects`,
     names.subjectId,
   );
   if (sel.classKind && sel.classKind !== 'none') {
     views.push('v_classes');
     caption = withId(
-      `${names.className ?? 'Zajęcia'} jest w v_classes`,
+      `${names.className ?? 'Class'} is in v_classes`,
       names.classId,
     );
   }
   if (sel.group != null) {
     views.push('v_class_groups');
     caption = withId(
-      `${names.groupName ?? 'Grupa'} jest w v_class_groups`,
+      `${names.groupName ?? 'Group'} is in v_class_groups`,
       names.groupId,
     );
   }
   if (sel.topic != null) {
     views.push('v_topics');
-    caption = withId('Temat jest w v_topics', sel.topic);
+    caption = withId('Topic is in v_topics', sel.topic);
   }
   if (sel.file != null) {
     views.push('v_materials', 'v_files');
-    caption = withId('Plik jest w v_materials i v_files', sel.file);
+    caption = withId('File is in v_materials and v_files', sel.file);
   }
   return { views, caption };
 }

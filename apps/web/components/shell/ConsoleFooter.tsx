@@ -38,9 +38,9 @@ export function ConsoleFooter() {
         className="flex h-7 w-full items-center gap-2 px-3.5 text-left text-accent-ink hover:bg-surface"
       >
         <Terminal size={14} aria-hidden />
-        <span className="font-semibold">Konsola</span>
+        <span className="font-semibold">Console</span>
         <span className="text-xs text-faint">
-          Historia zapytań ({history.length})
+          Query history ({history.length})
         </span>
         <span className="flex-1" />
         {open ? (
@@ -56,8 +56,7 @@ export function ConsoleFooter() {
         >
           {history.length === 0 ? (
             <p className="px-3.5 py-1.5 font-sans text-faint">
-              Brak zapytań. Uruchomione zapytania z konsoli SQL pojawią się
-              tutaj.
+              No queries yet. Queries run in the SQL console will appear here.
             </p>
           ) : (
             <ol>

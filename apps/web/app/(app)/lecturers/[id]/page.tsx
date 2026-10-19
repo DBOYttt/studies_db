@@ -39,7 +39,7 @@ const td = 'border-b border-line px-2.5 py-1';
 const link =
   'font-medium text-accent-ink hover:text-accent-ink-hover hover:underline';
 
-/** Lecturer page (spec section 2): Zajęcia, Materiały, Plan. */
+/** Lecturer page (spec section 2): Classes, Materials, Timetable. */
 export default async function LecturerPage({
   params,
   searchParams,
@@ -64,14 +64,14 @@ export default async function LecturerPage({
           crumbs={[
             {
               icon: ChalkboardTeacher,
-              kind: 'Prowadzący:',
+              kind: 'Lecturer:',
               label: `#${id}`,
               href: base,
             },
           ]}
         />
         <div role="alert" className={errBox}>
-          Nie udało się wczytać prowadzącego: {roErrorMessage(err)}
+          Could not load the lecturer: {roErrorMessage(err)}
         </div>
       </>
     );
@@ -83,19 +83,19 @@ export default async function LecturerPage({
   const fullName = [lecturer.title, lecturer.name].filter(Boolean).join(' ');
   const tabs: Tab[] = [
     {
-      label: 'Zajęcia',
+      label: 'Classes',
       icon: Stack,
       href: base,
       active: tab === 'classes',
     },
     {
-      label: 'Materiały',
+      label: 'Materials',
       icon: Files,
       href: `${base}?tab=files`,
       active: tab === 'files',
     },
     {
-      label: 'Plan',
+      label: 'Timetable',
       icon: CalendarBlank,
       href: `${base}?tab=plan`,
       active: tab === 'plan',
@@ -108,7 +108,7 @@ export default async function LecturerPage({
         crumbs={[
           {
             icon: ChalkboardTeacher,
-            kind: 'Prowadzący:',
+            kind: 'Lecturer:',
             label: fullName,
             href: base,
           },
@@ -138,7 +138,7 @@ export default async function LecturerPage({
             <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-2 gap-y-0.5 text-xs">
               {lecturer.office_hours && (
                 <>
-                  <dt className="text-muted">Konsultacje:</dt>
+                  <dt className="text-muted">Office hours:</dt>
                   <dd className="m-0 whitespace-pre-line">
                     {lecturer.office_hours}
                   </dd>
@@ -146,7 +146,7 @@ export default async function LecturerPage({
               )}
               {lecturer.room && (
                 <>
-                  <dt className="text-muted">Pokój:</dt>
+                  <dt className="text-muted">Room:</dt>
                   <dd className="m-0">{lecturer.room}</dd>
                 </>
               )}
@@ -184,22 +184,22 @@ async function ClassesTab({ id }: { id: number }) {
   } catch (err) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać zajęć: {roErrorMessage(err)}
+        Could not load classes: {roErrorMessage(err)}
       </div>
     );
   }
   return (
     <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
       <table
-        aria-label="Zajęcia prowadzącego"
+        aria-label="Lecturer classes"
         className="w-full min-w-[340px] border-collapse"
       >
         <thead>
           <tr className="bg-surface text-left">
-            <th className={th}>Przedmiot</th>
-            <th className={th}>Zajęcia</th>
-            <th className={th}>Grupa</th>
-            <th className={`${th} text-right`}>Pliki</th>
+            <th className={th}>Subject</th>
+            <th className={th}>Class</th>
+            <th className={th}>Group</th>
+            <th className={`${th} text-right`}>Files</th>
           </tr>
         </thead>
         <tbody>
@@ -238,7 +238,7 @@ async function ClassesTab({ id }: { id: number }) {
                 <td className={`${td} ${underWhole ? 'pl-6' : ''}`}>
                   {r.wholeClass ? (
                     <Link href={classUrl} className={link}>
-                      Wszystkie grupy
+                      All groups
                     </Link>
                   ) : (
                     <Link
@@ -259,7 +259,7 @@ async function ClassesTab({ id }: { id: number }) {
           {rows.length === 0 && (
             <tr>
               <td colSpan={4} className="p-6 text-center text-muted">
-                Brak przypisanych zajęć.
+                No classes assigned.
               </td>
             </tr>
           )}

@@ -21,10 +21,10 @@ export default async function SchemaPage() {
     <>
       <ScreenHeader tabs={dbTabs('designer')} />
       <div className="flex flex-col gap-3">
-        <h1 className="sr-only">Projektant</h1>
+        <h1 className="sr-only">Designer</h1>
         <p className="m-0 max-w-[75ch] text-muted">
-          Widoki dostępne w konsoli SQL i ich kolumny. Linie łączą kolumny, po
-          których możesz robić JOIN. Kliknij tabelę, aby zobaczyć jej wiersze.
+          Views available in the SQL console and their columns. Lines link
+          columns you can JOIN on. Click a table to see its rows.
         </p>
         {columns ? (
           <DesignerDiagram columns={columns} />

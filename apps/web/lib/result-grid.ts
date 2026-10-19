@@ -59,9 +59,9 @@ export function sortRowIndexes(
   );
 }
 
-/** Seconds with 4 decimals and a Polish decimal comma: 12.3 ms -> "0,0123". */
+/** Seconds with 4 decimals: 12.3 ms -> "0.0123". */
 export function formatSeconds(ms: number): string {
-  return (ms / 1000).toFixed(4).replace('.', ',');
+  return (ms / 1000).toFixed(4);
 }
 
 /**
@@ -80,7 +80,7 @@ export function resultMessage({
   count: number;
   total: number;
   elapsedMs?: number | null;
-  /** Rows before "Filtruj wiersze" (client mode); only used when nothing matched. */
+  /** Rows before "Filter rows" (client mode); only used when nothing matched. */
   unfiltered?: number;
 }): string {
   const s =
@@ -88,18 +88,18 @@ export function resultMessage({
       ? null
       : formatSeconds(elapsedMs);
   if (total <= 0 && unfiltered !== undefined && unfiltered > 0) {
-    return `Brak wierszy pasujących do filtra (${unfiltered} łącznie${s ? `, zapytanie trwało ${s} s.` : ''})`;
+    return `No rows match the filter (${unfiltered} total${s ? `, query took ${s} s` : ''})`;
   }
   if (total <= 0) {
-    return `MariaDB zwrócił pusty wynik (zero wierszy).${s ? ` (Zapytanie trwało ${s} s.)` : ''}`;
+    return `MariaDB returned an empty result (zero rows).${s ? ` (Query took ${s} s.)` : ''}`;
   }
   if (count <= 0) {
-    return `Brak wierszy na tej stronie (${total} łącznie${s ? `, zapytanie trwało ${s} s.` : ''})`;
+    return `No rows on this page (${total} total${s ? `, query took ${s} s` : ''})`;
   }
-  return `Pokazano wiersze ${start} – ${start + count - 1} (${total} łącznie${s ? `, zapytanie trwało ${s} s.` : ''})`;
+  return `Showing rows ${start} – ${start + count - 1} (${total} total${s ? `, query took ${s} s` : ''})`;
 }
 
-/** Footer text: "N wierszy · strona p / P". */
+/** Footer text: "N rows · page p / P". */
 export function footerText(
   total: number,
   page: number,

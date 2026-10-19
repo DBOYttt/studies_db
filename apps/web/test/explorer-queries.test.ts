@@ -235,7 +235,7 @@ describe('getSubjectTree', () => {
     expect(none).toMatchObject({
       id: null,
       kind: 'none',
-      name: 'Bez kategorii',
+      name: 'Uncategorized',
       fileCount: 2,
       lecturers: [],
     });
@@ -402,7 +402,7 @@ describe('listExplorerFiles', () => {
       {},
     );
     expect(loose).toMatchObject({
-      className: 'Bez kategorii',
+      className: 'Uncategorized',
       groupName: null,
     });
   });

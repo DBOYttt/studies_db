@@ -36,7 +36,7 @@ export default async function SqlPage({
             role="alert"
             className="rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
           >
-            Nie udało się wczytać listy kolumn: {error}
+            Could not load the column list: {error}
           </div>
         )}
         <SqlConsole

@@ -82,7 +82,7 @@ afterAll(async () => {
   await closeTestDb(db);
 });
 
-const TIMEOUT_MSG = 'Przekroczono limit czasu (5 s).';
+const TIMEOUT_MSG = 'Query timed out (5 s).';
 
 describe('RO pool options', () => {
   it('never allows multiple statements', () => {
@@ -93,8 +93,8 @@ describe('RO pool options', () => {
   });
 });
 
-const BUSY = 'Serwer jest zajęty. Spróbuj za chwilę.';
-const NO_DB = 'Nie udało się połączyć z bazą danych.';
+const BUSY = 'The server is busy. Try again in a moment.';
+const NO_DB = 'Could not connect to the database.';
 const tooMany = () =>
   Object.assign(new Error("User 'studies_ro' has exceeded the limit"), {
     errno: 1226,
@@ -233,11 +233,11 @@ describe('runReadonlyQuery', () => {
   it('rejects empty input', async () => {
     expect(await runReadonlyQuery(roPool, '   ')).toEqual({
       ok: false,
-      error: 'Puste zapytanie.',
+      error: 'Empty query.',
     });
     expect(await runReadonlyQuery(roPool, ' ; ')).toEqual({
       ok: false,
-      error: 'Puste zapytanie.',
+      error: 'Empty query.',
     });
   });
 
@@ -284,7 +284,7 @@ describe('runReadonlyQuery', () => {
       expect(Date.now() - t0).toBeLessThan(4000);
       expect(r).toEqual({
         ok: false,
-        error: 'Przekroczono limit czasu (1 s).',
+        error: 'Query timed out (1 s).',
       });
       // the server-side query was actually killed, not just abandoned
       const [running] = await roPool.query<mysql.RowDataPacket[]>(
@@ -416,7 +416,7 @@ describe('POST /api/sql', () => {
       expect(res.status).toBe(400);
       expect(await res.json()).toEqual({
         ok: false,
-        error: 'Nieprawidłowe zapytanie.',
+        error: 'Invalid query.',
       });
     }
   });
@@ -454,7 +454,7 @@ describe('POST /api/sql', () => {
     expect(res?.status).toBe(429);
     expect(await res?.json()).toEqual({
       ok: false,
-      error: 'Za dużo zapytań. Odczekaj chwilę.',
+      error: 'Too many queries. Wait a moment.',
     });
   });
 

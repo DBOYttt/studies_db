@@ -31,7 +31,7 @@ function joined(v: unknown): string | null {
   return Number.isNaN(d.getTime()) ? null : formatDate(d);
 }
 
-/** User page (spec section 2): Przesłane pliki, Tematy. */
+/** User page (spec section 2): Uploaded files, Topics. */
 export default async function UserPage({
   params,
   searchParams,
@@ -53,12 +53,10 @@ export default async function UserPage({
     return (
       <>
         <ScreenHeader
-          crumbs={[
-            { icon: User, kind: 'Użytkownik:', label: `#${id}`, href: base },
-          ]}
+          crumbs={[{ icon: User, kind: 'User:', label: `#${id}`, href: base }]}
         />
         <div role="alert" className={errBox}>
-          Nie udało się wczytać użytkownika: {roErrorMessage(err)}
+          Could not load the user: {roErrorMessage(err)}
         </div>
       </>
     );
@@ -70,13 +68,13 @@ export default async function UserPage({
   const since = joined(user.created_at);
   const tabs: Tab[] = [
     {
-      label: 'Przesłane pliki',
+      label: 'Uploaded files',
       icon: Files,
       href: base,
       active: tab === 'files',
     },
     {
-      label: 'Tematy',
+      label: 'Topics',
       icon: ChatsCircle,
       href: `${base}?tab=topics`,
       active: tab === 'topics',
@@ -89,7 +87,7 @@ export default async function UserPage({
         crumbs={[
           {
             icon: User,
-            kind: 'Użytkownik:',
+            kind: 'User:',
             label: user.display_name,
             href: base,
           },
@@ -103,7 +101,7 @@ export default async function UserPage({
           </h1>
           <p className="mt-0.5 font-mono text-xs text-muted">
             id {user.id}
-            {since && `, dołączył(a) ${since}`}
+            {since && `, joined ${since}`}
           </p>
         </div>
         {tab === 'files' && (

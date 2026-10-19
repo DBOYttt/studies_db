@@ -48,25 +48,25 @@ export default async function SearchPage({
     <>
       <ScreenHeader tabs={dbTabs('search')} />
       <div className="flex flex-col gap-3">
-        <h1 className="sr-only">Szukaj</h1>
+        <h1 className="sr-only">Search</h1>
         <form method="get" action="/search">
           <fieldset className="m-0 rounded-md border border-line-strong bg-panel p-0">
             <legend className="ml-2.5 px-1.5 font-semibold">
-              Szukaj w materiałach i tematach
+              Search materials and topics
             </legend>
             <div className="grid grid-cols-[max-content_minmax(0,1fr)] items-center gap-x-3.5 gap-y-2.5 px-3.5 pt-2 pb-3.5 max-sm:grid-cols-1 max-sm:gap-y-1.5">
               <label htmlFor="search-q" className="text-muted">
-                Słowa do wyszukania:
+                Search for:
               </label>
               <input
                 id="search-q"
                 name="q"
                 defaultValue={q}
-                placeholder="Szukaj w materiałach i tematach…"
+                placeholder="Search materials and topics…"
                 className={`${field} w-full max-w-[480px] px-2 py-1.5`}
               />
               <label htmlFor="search-subject" className="text-muted">
-                Przedmiot:
+                Subject:
               </label>
               <select
                 id="search-subject"
@@ -74,7 +74,7 @@ export default async function SearchPage({
                 defaultValue={subjectId ?? ''}
                 className={`${field} w-full max-w-[300px] px-1.5 py-[5px]`}
               >
-                <option value="">Wszystkie przedmioty</option>
+                <option value="">All subjects</option>
                 {subjects.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
@@ -90,7 +90,7 @@ export default async function SearchPage({
                 defaultValue={tagId ?? ''}
                 className={`${field} w-full max-w-[300px] px-1.5 py-[5px]`}
               >
-                <option value="">Wszystkie tagi</option>
+                <option value="">All tags</option>
                 {tags.map((t) => (
                   <option key={t.id} value={t.id}>
                     {t.name} ({t.subjectCode})
@@ -103,7 +103,7 @@ export default async function SearchPage({
                 type="submit"
                 className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover"
               >
-                Wykonaj
+                Go
               </button>
             </div>
           </fieldset>
@@ -117,9 +117,9 @@ export default async function SearchPage({
             >
               <CheckCircle size={16} weight="fill" aria-hidden />
               <span>
-                Wyniki wyszukiwania „<b>{q}</b>”:{' '}
+                Search results for “<b>{q}</b>”:{' '}
                 {capped
-                  ? `${SEARCH_LIMIT}+ trafień (pokazano pierwsze ${SEARCH_LIMIT})`
+                  ? `${SEARCH_LIMIT}+ matches (showing the first ${SEARCH_LIMIT})`
                   : plural(hits.length, 'match', 'matches')}
               </span>
             </div>
@@ -127,9 +127,9 @@ export default async function SearchPage({
               <table className="w-full min-w-[640px] border-collapse">
                 <thead>
                   <tr className="bg-surface text-left">
-                    <th className={th}>Wynik</th>
-                    <th className={th}>Przedmiot</th>
-                    <th className={th}>Fragment</th>
+                    <th className={th}>Result</th>
+                    <th className={th}>Subject</th>
+                    <th className={th}>Snippet</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -149,7 +149,7 @@ export default async function SearchPage({
                           {h.filename ?? h.topicTitle}
                         </Link>
                         <div className="text-xs text-muted">
-                          {h.filename ? `temat: ${h.topicTitle}` : 'temat'}
+                          {h.filename ? `topic: ${h.topicTitle}` : 'topic'}
                         </div>
                       </td>
                       <td className={`${td} text-muted`}>
@@ -171,7 +171,7 @@ export default async function SearchPage({
             className="flex items-center gap-2 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
           >
             <WarningCircle size={16} weight="fill" aria-hidden />
-            <span>Brak wyników dla „{q}”.</span>
+            <span>No results for “{q}”.</span>
           </div>
         )}
       </div>

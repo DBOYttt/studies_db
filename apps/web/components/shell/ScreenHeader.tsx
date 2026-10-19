@@ -21,10 +21,10 @@ export type Tab = {
 };
 
 const BASE_CRUMBS: Crumb[] = [
-  { icon: HardDrives, kind: 'Serwer:', label: 'MariaDB', href: '/' },
+  { icon: HardDrives, kind: 'Server:', label: 'MariaDB', href: '/' },
   {
     icon: Database,
-    kind: 'Baza danych:',
+    kind: 'Database:',
     label: 'studies_db',
     href: '/structure',
   },
@@ -33,7 +33,7 @@ const BASE_CRUMBS: Crumb[] = [
 /**
  * Page header inside the app shell: breadcrumbs (drawn into the top bar next
  * to the user block) and the tab strip. Render it first in a page; `crumbs`
- * are the page-specific ones, "Serwer: MariaDB" and "Baza danych: studies_db"
+ * are the page-specific ones, "Server: MariaDB" and "Database: studies_db"
  * are always prepended.
  *
  * Layout contract (components/shell/ShellFrame.tsx): the crumbs are absolutely
@@ -53,7 +53,7 @@ export function ScreenHeader({
   return (
     <>
       <nav
-        aria-label="Ścieżka"
+        aria-label="Breadcrumb"
         className="absolute top-0 right-[var(--topbar-end-w,220px)] left-12 z-[1] flex h-[38px] items-center overflow-hidden whitespace-nowrap md:left-4"
       >
         <ol className="flex min-w-0 flex-1 items-center gap-1.5">
@@ -62,7 +62,7 @@ export function ScreenHeader({
             return (
               <li
                 key={`${c.href}|${c.label}`}
-                // Serwer/Baza stay whole, page crumbs shrink and ellipsize; the
+                // Server/Database stay whole, page crumbs shrink and ellipsize; the
                 // server crumb is dropped on phones to leave room for the page.
                 className={`flex items-center gap-[5px] ${
                   i < BASE_CRUMBS.length ? 'shrink-0' : 'min-w-0'
@@ -99,7 +99,7 @@ export function ScreenHeader({
       </nav>
       {tabs.length > 0 && (
         <nav
-          aria-label="Zakładki"
+          aria-label="Tabs"
           className="sticky top-[calc(var(--content-pt)*-1)] z-[1] -mx-[var(--content-px)] -mt-[var(--content-pt)] mb-4 flex items-end gap-0.5 overflow-x-auto border-b border-line-strong bg-bar px-4 pt-2 max-md:px-3"
         >
           {tabs.map((t) => {

@@ -34,12 +34,12 @@ const TABS = ['week', 'list', 'groups'] as const;
 type PlanTab = (typeof TABS)[number];
 
 const SUB_TABS: [PlanTab, string, Icon, string][] = [
-  ['week', 'Tydzień', CalendarBlank, '/plan'],
-  ['list', 'Lista', ListBullets, '/plan?tab=list'],
-  ['groups', 'Moje grupy', UsersThree, '/plan?tab=groups'],
+  ['week', 'Week', CalendarBlank, '/plan'],
+  ['list', 'List', ListBullets, '/plan?tab=list'],
+  ['groups', 'My groups', UsersThree, '/plan?tab=groups'],
 ];
 
-/** Plan zajęć (timetable): Tydzień, Lista, Moje grupy. */
+/** Timetable: Week, List, My groups. */
 export default async function PlanPage({
   searchParams,
 }: {
@@ -54,13 +54,13 @@ export default async function PlanPage({
   return (
     <>
       <ScreenHeader
-        crumbs={[{ icon: CalendarBlank, label: 'Plan zajęć', href: '/plan' }]}
+        crumbs={[{ icon: CalendarBlank, label: 'Timetable', href: '/plan' }]}
         tabs={dbTabs('plan')}
       />
-      <h1 className="sr-only">Plan zajęć</h1>
+      <h1 className="sr-only">Timetable</h1>
       <div className="flex flex-col gap-3.5">
         <nav
-          aria-label="Widok planu"
+          aria-label="Timetable view"
           className="flex self-start overflow-hidden rounded-md border border-line-strong"
         >
           {SUB_TABS.map(([key, label, I, href], i) => {
@@ -93,8 +93,8 @@ export default async function PlanPage({
         {status && (
           <p className="m-0 text-xs text-muted">
             {status.lastOkAt
-              ? `Ostatnia synchronizacja: ${formatSyncTime(status.lastOkAt)}`
-              : 'Plan nie był jeszcze synchronizowany'}
+              ? `Last sync: ${formatSyncTime(status.lastOkAt)}`
+              : 'The timetable has not been synced yet'}
           </p>
         )}
       </div>
@@ -110,10 +110,10 @@ function SyncWarning({ status }: { status: PlanSyncStatus }) {
     >
       <span className="flex items-center gap-1.5 font-semibold">
         <Warning size={15} aria-hidden />
-        Synchronizacja nie powiodła się — pokazuję ostatnie dane
+        Sync failed — showing the last data
       </span>
       <details>
-        <summary className="cursor-pointer">Szczegóły błędu</summary>
+        <summary className="cursor-pointer">Error details</summary>
         <pre className="mt-1 font-mono text-xs break-words whitespace-pre-wrap">
           {status.lastError}
         </pre>
@@ -137,7 +137,7 @@ async function ListTab({ grid }: { grid: EntityGridParams }) {
   if (!page) {
     return (
       <div role="alert" className={errBox}>
-        Nie udało się wczytać danych: {result.error ?? 'brak danych'}
+        Could not load data: {result.error ?? 'no data'}
       </div>
     );
   }

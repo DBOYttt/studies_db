@@ -47,7 +47,7 @@ export interface SubjectInfo {
 
 export { KIND_ORDER };
 
-const NONE_NAME = 'Bez kategorii';
+const NONE_NAME = 'Uncategorized';
 
 function toDate(v: unknown): Date {
   return v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);
@@ -765,7 +765,7 @@ const liveFiles = (cond: SQL) =>
 
 /**
  * Subjects -> classes -> groups with live file counts, in one query. Every
- * class and group is listed (also empty ones); "Bez kategorii" is added only
+ * class and group is listed (also empty ones); "Uncategorized" is added only
  * when the subject has files in topics without a class.
  */
 export async function getNavSubjects(db: Db): Promise<NavSubject[]> {

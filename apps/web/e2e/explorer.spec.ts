@@ -4,7 +4,7 @@ import { loginOnce } from './session';
 loginOnce('explorer', process.env.E2E_TOKEN_EXPLORER);
 
 const treeNav = (page: Page) =>
-  page.getByRole('navigation', { name: 'Drzewo bazy danych' });
+  page.getByRole('navigation', { name: 'Database tree' });
 
 test('drill down class > group > file, map and schema follow the selection', async ({
   page,
@@ -30,13 +30,13 @@ test('drill down class > group > file, map and schema follow the selection', asy
   const main = page.getByRole('main');
   await main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }).click();
   await expect(page).toHaveURL(/class=laboratorium&group=3.*file=\d+/);
-  const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
+  const panel = page.getByRole('complementary', { name: 'File preview' });
   await expect(panel.locator('canvas').first()).toBeVisible({
     timeout: 30_000,
   });
 
   // Escape while typing in the grid filter must not close the preview.
-  const search = main.getByRole('searchbox', { name: /Filtruj wiersze/ });
+  const search = main.getByRole('searchbox', { name: /Filter rows/ });
   await search.fill('lab');
   await search.press('Escape');
   // router.push is async: give a wrongly-handled Escape time to navigate.
@@ -45,8 +45,8 @@ test('drill down class > group > file, map and schema follow the selection', asy
   await expect(panel).toBeVisible();
 
   // Data map: the group node is highlighted; a topic node returns to the explorer.
-  const tabs = page.getByRole('navigation', { name: 'Zakładki' });
-  await tabs.getByRole('link', { name: 'Mapa danych' }).click();
+  const tabs = page.getByRole('navigation', { name: 'Tabs' });
+  await tabs.getByRole('link', { name: 'Data map' }).click();
   await expect(page).toHaveURL(/tab=map/);
   await expect(page.getByRole('button', { name: /^Gr\. 3/ })).toHaveAttribute(
     'aria-current',
@@ -57,20 +57,20 @@ test('drill down class > group > file, map and schema follow the selection', asy
   await expect(page).toHaveURL(/topic=\d+/);
   await expect(
     page
-      .getByRole('navigation', { name: 'Ścieżka' })
+      .getByRole('navigation', { name: 'Breadcrumb' })
       .getByRole('link', { name: 'Sprawozdanie z ćwiczenia' }),
   ).toHaveAttribute('aria-current', 'page');
 
   // Schemat: the caption names the deepest selected level.
   await page.goto('/subjects/MECH?class=laboratorium&group=3&tab=schema');
   await expect(
-    page.getByText(/^Gr\. 3 jest w v_class_groups \(id \d+\)$/),
+    page.getByText(/^Gr\. 3 is in v_class_groups \(id \d+\)$/),
   ).toBeVisible();
   await expect(
-    page.getByRole('link', { name: /^Tabela v_class_groups,/ }),
+    page.getByRole('link', { name: /^Table v_class_groups,/ }),
   ).toHaveAttribute('aria-current', 'true');
   await expect(
-    page.getByRole('link', { name: /^Tabela v_files,/ }),
+    page.getByRole('link', { name: /^Table v_files,/ }),
   ).not.toHaveAttribute('aria-current', 'true');
 });
 
@@ -79,8 +79,8 @@ test('stale URL params render the tree without error', async ({ page }) => {
   expect(res?.status()).toBe(200);
   await expect(treeNav(page)).toBeVisible();
   // An unknown file id shows the "deleted" state, never a real preview.
-  const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
-  await expect(panel.getByText('Plik został usunięty')).toBeVisible();
+  const panel = page.getByRole('complementary', { name: 'File preview' });
+  await expect(panel.getByText('File deleted')).toBeVisible();
   await expect(panel.locator('canvas')).toHaveCount(0);
 });
 
@@ -91,8 +91,8 @@ test('mobile: drawer navigation and full-screen preview sheet', async ({
   await page.goto('/subjects/MECH');
   const tree = treeNav(page);
   await expect(tree).toBeHidden();
-  const menu = page.getByRole('button', { name: 'Otwórz panel nawigacji' });
-  const drawer = page.getByRole('dialog', { name: 'Panel nawigacji' });
+  const menu = page.getByRole('button', { name: 'Open navigation panel' });
+  const drawer = page.getByRole('dialog', { name: 'Navigation panel' });
 
   await menu.click();
   await expect(drawer).toBeVisible();
@@ -112,12 +112,12 @@ test('mobile: drawer navigation and full-screen preview sheet', async ({
     .getByRole('main')
     .getByRole('link', { name: 'lab-sprawozdanie.pdf' })
     .click();
-  const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
+  const panel = page.getByRole('complementary', { name: 'File preview' });
   await expect(panel).toBeVisible();
   await expect
     .poll(async () => panel.boundingBox())
     .toMatchObject({ x: 0, y: 0, width: 375, height: 800 });
-  await panel.getByRole('link', { name: 'Zamknij podgląd' }).click();
+  await panel.getByRole('link', { name: 'Close preview' }).click();
   await expect(panel).toHaveCount(0);
 });
 
@@ -130,20 +130,20 @@ test('table browser preview is a full-screen sheet on mobile', async ({
     .getByRole('link', { name: 'lab-sprawozdanie.pdf' })
     .first()
     .click();
-  const panel = page.getByRole('complementary', { name: 'Podgląd pliku' });
+  const panel = page.getByRole('complementary', { name: 'File preview' });
   await expect(panel).toBeVisible();
   await page.setViewportSize({ width: 375, height: 800 });
   await expect
     .poll(async () => panel.boundingBox())
     .toMatchObject({ x: 0, y: 0, width: 375, height: 800 });
-  await panel.getByRole('link', { name: 'Zamknij podgląd' }).click();
+  await panel.getByRole('link', { name: 'Close preview' }).click();
   await expect(panel).toHaveCount(0);
 });
 
 test('sql console prefills from ?q= without running', async ({ page }) => {
   await page.goto('/sql?q=SELECT%201');
   await expect(page.locator('.cm-content')).toContainText('SELECT 1');
-  await expect(page.getByRole('button', { name: 'Wykonaj' })).toBeEnabled();
+  await expect(page.getByRole('button', { name: 'Go' })).toBeEnabled();
   await expect(page.getByRole('cell', { name: '1', exact: true })).toHaveCount(
     0,
   );

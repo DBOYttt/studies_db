@@ -20,32 +20,32 @@ describe('resultMessage', () => {
   it('shows the row range, total and timing with a decimal comma', () => {
     expect(
       resultMessage({ start: 0, count: 25, total: 120, elapsedMs: 1.2 }),
-    ).toBe('Pokazano wiersze 0 – 24 (120 łącznie, zapytanie trwało 0,0012 s.)');
+    ).toBe('Showing rows 0 – 24 (120 total, query took 0.0012 s)');
   });
   it('offsets the range on later pages', () => {
     expect(
       resultMessage({ start: 50, count: 20, total: 70, elapsedMs: 340 }),
-    ).toBe('Pokazano wiersze 50 – 69 (70 łącznie, zapytanie trwało 0,3400 s.)');
+    ).toBe('Showing rows 50 – 69 (70 total, query took 0.3400 s)');
   });
   it('omits timing when unknown', () => {
     expect(resultMessage({ start: 0, count: 1, total: 1 })).toBe(
-      'Pokazano wiersze 0 – 0 (1 łącznie)',
+      'Showing rows 0 – 0 (1 total)',
     );
   });
   it('empty result, with and without timing', () => {
     expect(resultMessage({ start: 0, count: 0, total: 0 })).toBe(
-      'MariaDB zwrócił pusty wynik (zero wierszy).',
+      'MariaDB returned an empty result (zero rows).',
     );
     expect(
       resultMessage({ start: 0, count: 0, total: 0, elapsedMs: 0.5 }),
     ).toBe(
-      'MariaDB zwrócił pusty wynik (zero wierszy). (Zapytanie trwało 0,0005 s.)',
+      'MariaDB returned an empty result (zero rows). (Query took 0.0005 s.)',
     );
   });
   it('filter matched nothing (client mode)', () => {
     expect(
       resultMessage({ start: 0, count: 0, total: 0, unfiltered: 40 }),
-    ).toBe('Brak wierszy pasujących do filtra (40 łącznie)');
+    ).toBe('No rows match the filter (40 total)');
     expect(
       resultMessage({
         start: 0,
@@ -54,26 +54,24 @@ describe('resultMessage', () => {
         unfiltered: 40,
         elapsedMs: 2,
       }),
-    ).toBe(
-      'Brak wierszy pasujących do filtra (40 łącznie, zapytanie trwało 0,0020 s.)',
-    );
+    ).toBe('No rows match the filter (40 total, query took 0.0020 s)');
   });
   it('filtered count drives the range (client mode)', () => {
     expect(
       resultMessage({ start: 0, count: 7, total: 7, unfiltered: 40 }),
-    ).toBe('Pokazano wiersze 0 – 6 (7 łącznie)');
+    ).toBe('Showing rows 0 – 6 (7 total)');
   });
   it('page past the end', () => {
     expect(resultMessage({ start: 100, count: 0, total: 30 })).toBe(
-      'Brak wierszy na tej stronie (30 łącznie)',
+      'No rows on this page (30 total)',
     );
   });
 });
 
 describe('formatSeconds', () => {
   it('4 decimals, comma', () => {
-    expect(formatSeconds(0)).toBe('0,0000');
-    expect(formatSeconds(1234.56)).toBe('1,2346');
+    expect(formatSeconds(0)).toBe('0.0000');
+    expect(formatSeconds(1234.56)).toBe('1.2346');
   });
 });
 

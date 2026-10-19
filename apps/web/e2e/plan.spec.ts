@@ -101,18 +101,18 @@ test('lecturer plan tab shows their sessions', async ({ page }) => {
   await expect(blocks.first()).toContainText('A-1 101');
 });
 
-test('Prowadzący tab: office hours, room and platform links', async ({
+test('Lecturers tab: office hours, room and platform links', async ({
   page,
 }) => {
   await page.goto('/subjects/PLAN?tab=lecturers');
-  const table = page.getByRole('table', { name: 'Prowadzący' });
+  const table = page.getByRole('table', { name: 'Lecturers' });
   await expect(table.getByText('wt. 13:00-14:00')).toBeVisible();
   await expect(table.getByText('C-3 305')).toBeVisible();
-  const classes = page.getByRole('table', { name: 'Zajęcia', exact: true });
+  const classes = page.getByRole('table', { name: 'Classes', exact: true });
   await expect(
-    classes.getByRole('link', { name: 'Platforma ↗' }),
+    classes.getByRole('link', { name: 'Platform ↗' }),
   ).toHaveAttribute('href', 'https://platforma.example.edu/cwiczenia');
   await expect(
-    page.getByRole('link', { name: 'UPeL / platforma ↗' }),
+    page.getByRole('link', { name: 'UPeL / platform ↗' }),
   ).toHaveAttribute('href', 'https://upel.example.edu/course/plan');
 });

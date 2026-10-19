@@ -62,7 +62,7 @@ export function sqlFileColumn(columns: string[]): number | undefined {
   return undefined;
 }
 
-/** One-line label of a history entry for the "Historia" select. */
+/** One-line label of a history entry for the "History" select. */
 export function historyLabel(q: string, max = 70): string {
   const one = q.replace(/\s+/g, ' ').trim();
   return one.length > max ? `${one.slice(0, max - 1)}…` : one;

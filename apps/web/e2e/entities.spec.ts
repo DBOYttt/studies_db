@@ -3,8 +3,7 @@ import { loginOnce } from './session';
 
 loginOnce('entities', process.env.E2E_TOKEN_ENTITIES);
 
-const tabsNav = (page: Page) =>
-  page.getByRole('navigation', { name: 'Zakładki' });
+const tabsNav = (page: Page) => page.getByRole('navigation', { name: 'Tabs' });
 
 /** Lecturer page href, read from the v_lecturers grid (ids are not fixed). */
 async function lecturerPath(page: Page, name: string): Promise<string> {
@@ -29,25 +28,25 @@ test('lecturer page: assignments, materials of own groups, links', async ({
     'Anna Nowak',
   );
 
-  const table = main.getByRole('table', { name: 'Zajęcia prowadzącego' });
+  const table = main.getByRole('table', { name: 'Lecturer classes' });
   await expect(table.getByRole('link', { name: 'Gr. 3' })).toBeVisible();
   await expect(table.getByRole('link', { name: 'Gr. 2' })).toHaveCount(0);
 
-  await tabsNav(page).getByRole('link', { name: 'Materiały' }).click();
+  await tabsNav(page).getByRole('link', { name: 'Materials' }).click();
   await expect(page).toHaveURL(/tab=files/);
   await expect(
     main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }),
   ).toBeVisible();
   await expect(main.getByRole('link', { name: 'lab-gr2.pdf' })).toHaveCount(0);
 
-  // Podgląd opens the preview panel next to the grid.
+  // Preview opens the preview panel next to the grid.
   await main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }).click();
   await expect(page).toHaveURL(/preview=\d+/);
   await expect(
-    page.getByRole('complementary', { name: 'Podgląd pliku' }),
+    page.getByRole('complementary', { name: 'File preview' }),
   ).toBeVisible();
 
-  await tabsNav(page).getByRole('link', { name: 'Zajęcia' }).click();
+  await tabsNav(page).getByRole('link', { name: 'Classes' }).click();
   const gr3 = table.getByRole('link', { name: 'Gr. 3', exact: true });
   await expect(gr3).toHaveAttribute(
     'href',
@@ -61,12 +60,10 @@ test('lecturer page: assignments, materials of own groups, links', async ({
   );
 });
 
-test('whole-class lecturer shows "Wszystkie grupy"', async ({ page }) => {
+test('whole-class lecturer shows "All groups"', async ({ page }) => {
   await page.goto(await lecturerPath(page, 'Jan Kowalski'));
-  const table = page.getByRole('table', { name: 'Zajęcia prowadzącego' });
-  await expect(
-    table.getByRole('link', { name: 'Wszystkie grupy' }),
-  ).toBeVisible();
+  const table = page.getByRole('table', { name: 'Lecturer classes' });
+  await expect(table.getByRole('link', { name: 'All groups' })).toBeVisible();
   await expect(table.getByRole('link', { name: 'Wykład' })).toBeVisible();
 });
 
@@ -81,7 +78,7 @@ test('user page: uploaded files and topics', async ({ page }) => {
   for (const f of ['sample.pdf', 'lab-sprawozdanie.pdf', 'lab-gr2.pdf']) {
     await expect(main.getByRole('link', { name: f })).toBeVisible();
   }
-  await tabsNav(page).getByRole('link', { name: 'Tematy' }).click();
+  await tabsNav(page).getByRole('link', { name: 'Topics' }).click();
   await expect(page).toHaveURL(/tab=topics/);
   await expect(
     main.getByRole('link', { name: 'Sprawozdanie z ćwiczenia' }),
@@ -102,7 +99,7 @@ test('tag page: tagged topics and their files', async ({ page }) => {
   await expect(
     main.getByRole('link', { name: 'Sprawozdanie z ćwiczenia' }),
   ).toHaveCount(0);
-  await tabsNav(page).getByRole('link', { name: 'Pliki' }).click();
+  await tabsNav(page).getByRole('link', { name: 'Files' }).click();
   await expect(page).toHaveURL(/tab=files/);
   await expect(main.getByRole('link', { name: 'sample.pdf' })).toBeVisible();
   await expect(
@@ -119,6 +116,6 @@ test('bad or unknown ids are 404', async ({ page }) => {
   ]) {
     const res = await page.goto(path);
     expect(res?.status()).toBe(404);
-    await expect(page.getByText(/404|nie znaleziono/i).first()).toBeVisible();
+    await expect(page.getByText(/404|not found/i).first()).toBeVisible();
   }
 });

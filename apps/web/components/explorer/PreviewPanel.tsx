@@ -30,8 +30,8 @@ const closeCls =
   'grid size-[26px] shrink-0 place-items-center rounded text-muted hover:bg-line hover:text-fg';
 
 const BADGE = {
-  pending: ['Przetwarzanie…', 'border-warn-fg text-warn-fg'],
-  failed: ['Podgląd niedostępny', 'border-err-fg text-err-fg'],
+  pending: ['Processing…', 'border-warn-fg text-warn-fg'],
+  failed: ['Preview unavailable', 'border-err-fg text-err-fg'],
 } as const;
 
 const MAX_MIME = 30;
@@ -74,14 +74,14 @@ export function PreviewPanel({
     file && file.previewKind !== 'none' && file.status === 'ready';
   const meta: [string, string][] = file
     ? [
-        ['Przedmiot', file.subjectCode],
+        ['Subject', file.subjectCode],
         [
-          'Zajęcia',
+          'Class',
           [file.className, file.groupName].filter(Boolean).join(', ') || '—',
         ],
-        ['Rozmiar', formatSize(file.sizeBytes)],
-        ['Autor', file.uploader],
-        ['Dodano', formatDate(file.createdAt)],
+        ['Size', formatSize(file.sizeBytes)],
+        ['Added by', file.uploader],
+        ['Added', formatDate(file.createdAt)],
         [
           'MIME',
           file.mimeType.length > MAX_MIME
@@ -96,20 +96,20 @@ export function PreviewPanel({
 
   return (
     <aside
-      aria-label="Podgląd pliku"
+      aria-label="File preview"
       className="panel-in fixed inset-0 z-40 flex flex-col overflow-y-auto bg-page lg:static lg:z-auto lg:max-h-[calc(100dvh-4rem)] lg:rounded-md lg:border lg:border-line-strong"
     >
       <div className="sticky top-0 z-[1] flex h-[34px] shrink-0 items-center justify-between border-b border-line-strong bg-surface pr-2 pl-3">
         <h2 className="m-0 flex items-center gap-1.5 text-[13px] font-semibold">
           <Icon size={15} className="text-accent-ink" aria-hidden="true" />
-          Podgląd pliku
+          File preview
         </h2>
         {onClose ? (
           <button
             type="button"
             onClick={onClose}
-            aria-label="Zamknij podgląd"
-            title="Zamknij podgląd (Esc)"
+            aria-label="Close preview"
+            title="Close preview (Esc)"
             className={closeCls}
           >
             {closeIcon}
@@ -118,8 +118,8 @@ export function PreviewPanel({
           <Link
             href={closeHref ?? '#'}
             scroll={false}
-            aria-label="Zamknij podgląd"
-            title="Zamknij podgląd (Esc)"
+            aria-label="Close preview"
+            title="Close preview (Esc)"
             className={closeCls}
           >
             {closeIcon}
@@ -152,7 +152,7 @@ export function PreviewPanel({
           <div className="flex flex-wrap gap-1.5">
             <a href={`/files/${file.id}/original`} className={btn}>
               <DownloadSimple size={14} aria-hidden="true" />
-              Pobierz
+              Download
             </a>
             {canFullscreen && (
               <a
@@ -162,7 +162,7 @@ export function PreviewPanel({
                 className={btn}
               >
                 <ArrowsOut size={14} aria-hidden="true" />
-                Pełny ekran
+                Full screen
               </a>
             )}
             {file.discordUrl && (
@@ -173,7 +173,7 @@ export function PreviewPanel({
                 className={btn}
               >
                 <DiscordLogo size={14} aria-hidden="true" />
-                Otwórz w Discordzie
+                Open in Discord
               </a>
             )}
           </div>
@@ -197,19 +197,19 @@ export function PreviewPanel({
               <Icon size={32} aria-hidden="true" />
               <span>
                 {file.status === 'pending'
-                  ? 'Podgląd pojawi się po przetworzeniu pliku'
+                  ? 'The preview will appear once the file is processed'
                   : file.status === 'failed'
-                    ? 'Podgląd niedostępny'
-                    : 'Brak podglądu dla tego typu pliku'}
+                    ? 'Preview unavailable'
+                    : 'No preview for this file type'}
               </span>
             </div>
           )}
         </div>
       ) : (
         <div className="flex flex-col gap-1 p-3">
-          <div className="text-sm font-semibold">Plik został usunięty</div>
+          <div className="text-sm font-semibold">File deleted</div>
           <p className="m-0 text-muted">
-            Ten plik nie jest już dostępny. Wybierz inny z listy.
+            This file is no longer available. Pick another from the list.
           </p>
         </div>
       )}

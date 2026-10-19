@@ -52,7 +52,7 @@ const tree = (): TreeClass[] => [
   cls({
     id: null,
     kind: 'none',
-    name: 'Bez kategorii',
+    name: 'Uncategorized',
     fileCount: 1,
     topics: [topic(200, 1)],
   }),

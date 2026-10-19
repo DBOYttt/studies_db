@@ -41,7 +41,7 @@ export default function PdfViewer({ src }: { src: string }) {
   if (error) {
     return (
       <p className="text-sm text-red-600 dark:text-red-400">
-        Nie udało się wczytać podglądu PDF.
+        Could not load the PDF preview.
       </p>
     );
   }
@@ -56,10 +56,10 @@ export default function PdfViewer({ src }: { src: string }) {
           disabled={page <= 1}
           onClick={() => setPage(page - 1)}
         >
-          ‹ Poprzednia
+          ‹ Previous
         </button>
         <span>
-          Strona {page} / {pages || '…'}
+          Page {page} / {pages || '…'}
         </span>
         <button
           type="button"
@@ -67,13 +67,13 @@ export default function PdfViewer({ src }: { src: string }) {
           disabled={page >= pages}
           onClick={() => setPage(page + 1)}
         >
-          Następna ›
+          Next ›
         </button>
         <span className="mx-2 text-[var(--muted)]">|</span>
         <button
           type="button"
           className={btn}
-          aria-label="Pomniejsz"
+          aria-label="Zoom out"
           onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
         >
           −
@@ -82,7 +82,7 @@ export default function PdfViewer({ src }: { src: string }) {
         <button
           type="button"
           className={btn}
-          aria-label="Powiększ"
+          aria-label="Zoom in"
           onClick={() => setZoom(Math.min(3, zoom + 0.25))}
         >
           +
@@ -94,7 +94,7 @@ export default function PdfViewer({ src }: { src: string }) {
       >
         <Document
           file={src}
-          loading="Wczytywanie PDF…"
+          loading="Loading PDF…"
           onLoadSuccess={(d) => setPages(d.numPages)}
           onLoadError={() => setError(true)}
           className="flex justify-center-safe"

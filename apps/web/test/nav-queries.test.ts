@@ -174,7 +174,7 @@ describe('getNavSubjects', () => {
       },
       {
         kind: 'none',
-        name: 'Bez kategorii',
+        name: 'Uncategorized',
         fileCount: 1,
         href: '/subjects/FIZ?class=none',
         groups: [],

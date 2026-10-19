@@ -18,13 +18,13 @@ const VIEWS = [
 ];
 
 const canvas = (page: Page) =>
-  page.getByRole('region', { name: 'Schemat bazy danych' });
+  page.getByRole('region', { name: 'Database schema' });
 const boxOf = (page: Page, view: string) =>
   page.getByRole('group', {
-    name: `${view}, przeciągnij nagłówek, aby przesunąć`,
+    name: `${view}, drag the header to move`,
   });
 const headerOf = (page: Page, view: string) =>
-  boxOf(page, view).getByRole('link', { name: new RegExp(`^Tabela ${view},`) });
+  boxOf(page, view).getByRole('link', { name: new RegExp(`^Table ${view},`) });
 
 async function rect(page: Page, view: string) {
   const r = await boxOf(page, view).boundingBox();
@@ -79,8 +79,8 @@ test.describe('desktop', () => {
       .toBe(Math.round(after.x));
     expect((await rect(page, 'v_users')).y).toBeCloseTo(after.y, 0);
 
-    // Resetuj układ restores the default position.
-    await page.getByRole('button', { name: 'Resetuj układ' }).click();
+    // Reset layout restores the default position.
+    await page.getByRole('button', { name: 'Reset layout' }).click();
     await expect
       .poll(async () => Math.round((await rect(page, 'v_users')).x))
       .toBe(Math.round(before.x));
@@ -104,22 +104,20 @@ test.describe('desktop', () => {
         ),
       )
       .toEqual([726, 404]);
-    await page.getByRole('button', { name: 'Resetuj układ' }).click();
+    await page.getByRole('button', { name: 'Reset layout' }).click();
 
     // Compact columns by default; the toggle shows every column.
     const region = canvas(page);
     await expect(region.getByText('discord_thread_id')).toHaveCount(0);
-    await page
-      .getByRole('checkbox', { name: 'Pokaż wszystkie kolumny' })
-      .check();
+    await page.getByRole('checkbox', { name: 'Show all columns' }).check();
     await expect(region.getByText('discord_thread_id')).toBeVisible();
 
-    // Zoom buttons change the box size; Dopasuj fits again.
-    await page.getByRole('button', { name: 'Powiększ' }).click();
+    // Zoom buttons change the box size; Fit fits again.
+    await page.getByRole('button', { name: 'Zoom in' }).click();
     await expect
       .poll(async () => (await rect(page, 'v_users')).width)
       .toBeGreaterThan(before.width + 5);
-    await page.getByRole('button', { name: 'Dopasuj' }).click();
+    await page.getByRole('button', { name: 'Fit' }).click();
     await expect
       .poll(async () => Math.round((await rect(page, 'v_users')).width))
       .toBe(Math.round(before.width));

@@ -95,14 +95,14 @@ const toolBtn =
 
 /**
  * phpMyAdmin "Projektant": table boxes (key and label columns by default,
- * all with "Pokaż wszystkie kolumny") with orthogonal edges between related
+ * all with "Show all columns") with orthogonal edges between related
  * column rows, crow's foot at the FK end and a bar at the PK end.
  *
  * - Zoom: `−` / `+` (0.6–1.5), "Dopasuj" fits the container width (0.6–1,
  *   re-fitted on resize until zoomed by hand); below 0.6 the canvas scrolls.
  * - Drag a box by its header (mouse, pen, touch); under 4px it is a click
  *   that opens /tables/<view>. Arrow keys move a focused header (Shift: 64).
- *   Positions persist in localStorage; "Resetuj układ" clears them.
+ *   Positions persist in localStorage; "Reset layout" clears them.
  * - Hover/focus a box to light its edges and joined rows (others dim);
  *   hover a key row to light just its relation(s).
  * - `highlight` marks the current selection in the accent colour and shows
@@ -272,14 +272,14 @@ export function DesignerDiagram({
       )}
       <div
         role="toolbar"
-        aria-label="Widok schematu"
+        aria-label="Schema view"
         className="flex flex-wrap items-center gap-x-3 gap-y-2 text-[13px]"
       >
         <div className="flex items-center gap-1">
           <button
             type="button"
-            aria-label="Pomniejsz"
-            title="Pomniejsz"
+            aria-label="Zoom out"
+            title="Zoom out"
             className={toolBtn}
             disabled={zoom <= ZOOM_MIN + 1e-9}
             onClick={() => zoomBy(-ZOOM_STEP)}
@@ -287,15 +287,15 @@ export function DesignerDiagram({
             <Minus size={12} weight="bold" aria-hidden />
           </button>
           <output
-            aria-label="Powiększenie"
+            aria-label="Zoom level"
             className="w-[44px] text-center font-mono text-xs text-muted tabular-nums"
           >
             {zoomPct}%
           </output>
           <button
             type="button"
-            aria-label="Powiększ"
-            title="Powiększ"
+            aria-label="Zoom in"
+            title="Zoom in"
             className={toolBtn}
             disabled={zoom >= ZOOM_MAX - 1e-9}
             onClick={() => zoomBy(ZOOM_STEP)}
@@ -309,12 +309,12 @@ export function DesignerDiagram({
             onClick={() => setManualZoom(null)}
           >
             <ArrowsInLineHorizontal size={13} aria-hidden />
-            Dopasuj
+            Fit
           </button>
         </div>
         <button type="button" className={toolBtn} onClick={reset}>
           <ArrowCounterClockwise size={13} aria-hidden />
-          Resetuj układ
+          Reset layout
         </button>
         <span className="hidden flex-1 sm:block" />
         <label className="flex cursor-pointer items-center gap-1.5 text-muted">
@@ -323,12 +323,12 @@ export function DesignerDiagram({
             checked={showAll}
             onChange={(e) => setShowAll(e.target.checked)}
           />
-          Pokaż wszystkie kolumny
+          Show all columns
         </label>
       </div>
       <section
         ref={viewport}
-        aria-label="Schemat bazy danych"
+        aria-label="Database schema"
         className="shrink-0 overflow-auto rounded-md border border-line-strong bg-bar"
         style={{
           backgroundImage:
@@ -385,7 +385,7 @@ export function DesignerDiagram({
                 <div
                   key={b.view}
                   role="group"
-                  aria-label={`${b.view}, przeciągnij nagłówek, aby przesunąć`}
+                  aria-label={`${b.view}, drag the header to move`}
                   onMouseEnter={() => setHover({ view: b.view })}
                   onMouseLeave={() => {
                     if (!drag.current) setHover(null);
@@ -405,7 +405,7 @@ export function DesignerDiagram({
                 >
                   <Link
                     href={`/tables/${b.view}`}
-                    aria-label={`Tabela ${b.view}, ${plural(b.columns.length, 'column', 'columns')}`}
+                    aria-label={`Table ${b.view}, ${plural(b.columns.length, 'column', 'columns')}`}
                     aria-current={b.highlighted ? 'true' : undefined}
                     draggable={false}
                     onDragStart={(e) => e.preventDefault()}

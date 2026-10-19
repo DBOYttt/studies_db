@@ -71,3 +71,20 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Zaloguj się / Wyloguj | Sign in / Sign out |
 | Panel admina | Admin panel |
 | Dodał(a) / Dodano | Added by / Added |
+
+## Added in task 3
+
+| Polish | English |
+|---|---|
+| Projektant | Designer |
+| Mapa danych | Data map |
+| Schemat | Schema |
+| Przeglądaj / Struktura / Eksport (view tabs) | Browse / Structure / Export |
+| Temat (forum topic) | Topic |
+| Zaliczenie (column) | Assessment |
+| Bez kategorii | Uncategorized |
+| Wykonaj (run / submit a query or search) | Go |
+| Konsultacje | Office hours |
+| Pełny ekran | Full screen |
+| Strona główna | Home |
+| Drzewo bazy danych | Database tree |

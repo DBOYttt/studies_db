@@ -25,13 +25,13 @@ export default async function EditEventPage({
     <>
       <ScreenHeader
         crumbs={[
-          { icon: CalendarBlank, label: 'Plan zajęć', href: '/plan' },
+          { icon: CalendarBlank, label: 'Timetable', href: '/plan' },
           { label: initial.title, href: `/wydarzenia/${id}` },
-          { label: 'Edytuj', href: `/wydarzenia/${id}/edytuj` },
+          { label: 'Edit', href: `/wydarzenia/${id}/edytuj` },
         ]}
         tabs={dbTabs('plan')}
       />
-      <h1 className="m-0 mb-3 text-lg font-semibold">Edytuj wydarzenie</h1>
+      <h1 className="m-0 mb-3 text-lg font-semibold">Edit event</h1>
       <EventForm
         options={options}
         base="advanced"

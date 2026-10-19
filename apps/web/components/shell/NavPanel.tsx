@@ -35,10 +35,10 @@ import {
 import { toolBtn } from './tool-button';
 
 const TOOLBAR: { title: string; href: string; icon: Icon }[] = [
-  { title: 'Strona główna', href: '/', icon: House },
-  { title: 'Konsola SQL', href: '/sql', icon: TerminalWindow },
-  { title: 'Szukaj', href: '/search', icon: MagnifyingGlass },
-  { title: 'Projektant', href: '/schema', icon: TreeStructure },
+  { title: 'Home', href: '/', icon: House },
+  { title: 'SQL console', href: '/sql', icon: TerminalWindow },
+  { title: 'Search', href: '/search', icon: MagnifyingGlass },
+  { title: 'Designer', href: '/schema', icon: TreeStructure },
 ];
 
 /** Left navigation panel: logo, icon toolbar, name filter and the database tree. */
@@ -92,8 +92,8 @@ export function NavPanel({
         <form action="/auth/logout" method="post" className="ml-auto">
           <button
             type="submit"
-            title="Wyloguj"
-            aria-label="Wyloguj"
+            title="Sign out"
+            aria-label="Sign out"
             className={toolBtn}
           >
             <SignOut size={16} />
@@ -107,14 +107,14 @@ export function NavPanel({
             type="search"
             value={filter}
             onChange={(e) => setFilter(e.target.value)}
-            placeholder="Filtruj według nazwy"
-            aria-label="Filtruj według nazwy"
+            placeholder="Filter by name"
+            aria-label="Filter by name"
             className="min-w-0 flex-1 border-0 bg-transparent outline-none placeholder:text-faint"
           />
         </label>
       </div>
       <nav
-        aria-label="Drzewo bazy danych"
+        aria-label="Database tree"
         className="min-h-0 flex-1 overflow-auto border-t border-line pt-1 pb-3"
       >
         <Suspense fallback={<NavTree {...treeProps} active={null} />}>
@@ -184,7 +184,7 @@ function NavTree({
         depth={2}
         icon={CalendarBlank}
         iconClass="text-accent-ink"
-        label="Plan zajęć"
+        label="Timetable"
         href="/plan"
         active={active === navKey.plan}
       />
@@ -192,7 +192,7 @@ function NavTree({
         depth={2}
         icon={isOpen(navKey.subjects) ? FolderOpen : Folder}
         iconClass="text-folder"
-        label="Przedmioty"
+        label="Subjects"
         count={subjects.length}
         plain
         open={isOpen(navKey.subjects)}
@@ -251,7 +251,7 @@ function NavTree({
         depth={2}
         icon={isOpen(navKey.views) ? FolderOpen : Folder}
         iconClass="text-folder"
-        label="Widoki"
+        label="Views"
         count={views.length}
         plain
         open={isOpen(navKey.views)}
@@ -341,7 +341,7 @@ function Row({
             type="button"
             onClick={onToggle}
             aria-expanded={open}
-            aria-label={`${open ? 'Zwiń' : 'Rozwiń'}: ${label}`}
+            aria-label={`${open ? 'Collapse' : 'Expand'}: ${label}`}
             className="grid h-full w-3.5 shrink-0 place-items-center text-faint"
           >
             {open ? <CaretDown size={11} /> : <CaretRight size={11} />}

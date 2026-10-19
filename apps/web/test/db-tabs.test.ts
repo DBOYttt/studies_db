@@ -6,15 +6,17 @@ describe('dbTabs', () => {
   it('Plan comes first, then the existing tabs', () => {
     const tabs = dbTabs('plan');
     expect(tabs.map((t) => [t.label, t.href])).toEqual([
-      ['Plan', '/plan'],
-      ['Przedmioty', '/'],
-      ['Struktura', '/structure'],
+      ['Timetable', '/plan'],
+      ['Subjects', '/'],
+      ['Structure', '/structure'],
       ['SQL', '/sql'],
-      ['Szukaj', '/search'],
-      ['Projektant', '/schema'],
+      ['Search', '/search'],
+      ['Designer', '/schema'],
     ]);
     expect(tabs[0].icon).toBe(CalendarBlank);
-    expect(tabs.filter((t) => t.active).map((t) => t.label)).toEqual(['Plan']);
+    expect(tabs.filter((t) => t.active).map((t) => t.label)).toEqual([
+      'Timetable',
+    ]);
   });
   it('marks only the active tab', () => {
     expect(

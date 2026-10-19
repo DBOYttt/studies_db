@@ -1,7 +1,7 @@
 export type ExplorerSqlSelection = {
   className?: string;
   groupName?: string;
-  /** Topics without a class ("Bez kategorii"). Takes precedence over className. */
+  /** Topics without a class ("Uncategorized"). Takes precedence over className. */
   noClass?: boolean;
   topicId?: number;
 };

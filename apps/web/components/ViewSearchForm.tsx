@@ -58,17 +58,17 @@ export function ViewSearchForm({
     <form method="get" action={base} onSubmit={submit}>
       <fieldset className="m-0 rounded-md border border-line-strong bg-page p-0">
         <legend className="ml-2.5 px-1.5 font-semibold">
-          Szukaj w widoku{' '}
+          Search in view{' '}
           <span className="font-mono text-accent-ink">{view}</span>
         </legend>
         <div className="mt-1 overflow-x-auto">
           <table className="w-full border-collapse">
             <thead>
               <tr className="text-left text-muted">
-                <th className={head}>Kolumna</th>
-                <th className={head}>Typ</th>
+                <th className={head}>Column</th>
+                <th className={head}>Type</th>
                 <th className={head}>Operator</th>
-                <th className={head}>Wartość</th>
+                <th className={head}>Value</th>
               </tr>
             </thead>
             <tbody>
@@ -86,7 +86,7 @@ export function ViewSearchForm({
                     </td>
                     <td className={cell}>
                       <select
-                        aria-label={`Operator dla ${c.name}`}
+                        aria-label={`Operator for ${c.name}`}
                         className="rounded border border-line-strong bg-page px-1.5 py-[3px]"
                         defaultValue="like"
                       >
@@ -120,13 +120,13 @@ export function ViewSearchForm({
             onClick={clear}
             className="rounded border border-line-strong bg-page px-3 py-1.5 hover:border-accent"
           >
-            Wyczyść
+            Clear
           </button>
           <button
             type="submit"
             className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover"
           >
-            Wykonaj
+            Go
           </button>
         </div>
       </fieldset>

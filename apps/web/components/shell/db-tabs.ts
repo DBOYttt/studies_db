@@ -19,12 +19,12 @@ export type DbTab =
 /** Database-level tab strip (design line 746) for `<ScreenHeader tabs>`. */
 export function dbTabs(active: DbTab): Tab[] {
   const tabs: [DbTab, string, Tab['icon'], string][] = [
-    ['plan', 'Plan', CalendarBlank, '/plan'],
-    ['subjects', 'Przedmioty', Books, '/'],
-    ['structure', 'Struktura', Table, '/structure'],
+    ['plan', 'Timetable', CalendarBlank, '/plan'],
+    ['subjects', 'Subjects', Books, '/'],
+    ['structure', 'Structure', Table, '/structure'],
     ['sql', 'SQL', TerminalWindow, '/sql'],
-    ['search', 'Szukaj', MagnifyingGlass, '/search'],
-    ['designer', 'Projektant', TreeStructure, '/schema'],
+    ['search', 'Search', MagnifyingGlass, '/search'],
+    ['designer', 'Designer', TreeStructure, '/schema'],
   ];
   return tabs.map(([key, label, icon, href]) => ({
     label,

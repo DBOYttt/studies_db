@@ -32,7 +32,7 @@ export default async function EventPage({
     <>
       <ScreenHeader
         crumbs={[
-          { icon: CalendarBlank, label: 'Plan zajęć', href: '/plan' },
+          { icon: CalendarBlank, label: 'Timetable', href: '/plan' },
           { label: e.title, href: baseHref },
         ]}
         tabs={dbTabs('plan')}
@@ -43,7 +43,7 @@ export default async function EventPage({
           className="link inline-flex items-center gap-1 self-start text-[13px]"
         >
           <Plus size={13} aria-hidden />
-          Wydarzenie
+          Add event
         </Link>
         <EventDetails
           e={e}

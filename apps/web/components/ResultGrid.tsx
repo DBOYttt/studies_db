@@ -110,7 +110,7 @@ export interface ResultGridProps {
   sorting?: ServerSort;
   /**
    * Column holding the material id: adds the actions column
-   * (Podgląd -> preview link, Pobierz -> /files/<id>/original).
+   * (Preview -> preview link, Download -> /files/<id>/original).
    */
   fileColumn?: number;
   /** Column whose plain cells link to the row's preview (with `fileColumn`). */
@@ -123,17 +123,17 @@ export interface ResultGridProps {
   editSqlHref?: string;
   /** Server CSV export of the whole result; absent = client CSV of `rows`. */
   csvHref?: string;
-  /** Base name of client CSV downloads (default `wynik`). */
+  /** Base name of client CSV downloads (default `result`). */
   name?: string;
-  /** "Odśwież" handler; default `router.refresh()`. */
+  /** "Refresh" handler; default `router.refresh()`. */
   onRefresh?: () => void;
   /** Client-side preview instead of `nav` links (e.g. inside a client page). */
   onPreview?: (id: number) => void;
 }
 
 const BADGE: Record<'pending' | 'failed', [string, string]> = {
-  pending: ['Przetwarzanie…', 'border-warn-fg text-warn-fg'],
-  failed: ['Podgląd niedostępny', 'border-err-fg text-err-fg'],
+  pending: ['Processing…', 'border-warn-fg text-warn-fg'],
+  failed: ['Preview unavailable', 'border-err-fg text-err-fg'],
 };
 
 const linkCls =
@@ -235,7 +235,7 @@ export function ResultGrid({
   selectedId = null,
   editSqlHref,
   csvHref,
-  name = 'wynik',
+  name = 'result',
   onRefresh,
   onPreview,
 }: ResultGridProps) {
@@ -368,7 +368,7 @@ export function ResultGrid({
   const exportChecked = () => {
     if (checkedRows.length === 0) return;
     downloadCsv(
-      `${name}-zaznaczone.csv`,
+      `${name}-selected.csv`,
       columns,
       checkedRows.map((i) => rows[i]),
     );
@@ -377,12 +377,12 @@ export function ResultGrid({
     csvHref ? (
       <a href={csvHref} className={linkCls}>
         {icon}
-        Eksport CSV
+        Export CSV
       </a>
     ) : (
       <button type="button" onClick={exportAll} className={linkCls}>
         {icon}
-        Eksport CSV
+        Export CSV
       </button>
     );
 
@@ -502,34 +502,34 @@ export function ResultGrid({
         <div className="flex flex-wrap justify-end gap-x-3.5 gap-y-1 border-t border-line px-3 py-1.5 text-xs">
           <Link href={editHref} className={linkCls}>
             <PencilSimple aria-hidden="true" />
-            Edytuj w konsoli SQL
+            Edit in SQL console
           </Link>
           {csvLink(<DownloadSimple aria-hidden="true" />)}
           <button type="button" onClick={refresh} className={linkCls}>
             <ArrowClockwise aria-hidden="true" />
-            Odśwież
+            Refresh
           </button>
         </div>
       </div>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        <nav aria-label="Strony wyniku" className="flex items-center gap-0.5">
+        <nav aria-label="Result pages" className="flex items-center gap-0.5">
           <PagerItem
             pos="first"
-            label="Pierwsza strona"
+            label="First page"
             icon={<CaretDoubleLeft aria-hidden="true" />}
             href={server && page > 1 ? pageHref(1) : null}
             onClick={!server && page > 1 ? () => goPage(1) : null}
           />
           <PagerItem
             pos="mid"
-            label="Poprzednia strona"
+            label="Previous page"
             icon={<CaretLeft aria-hidden="true" />}
             href={server && page > 1 ? pageHref(page - 1) : null}
             onClick={!server && page > 1 ? () => goPage(page - 1) : null}
           />
           <select
-            aria-label="Strona"
+            aria-label="Page"
             value={page}
             onChange={(e) => goPage(Number(e.target.value))}
             className="h-[26px] border border-line-strong bg-page px-1.5 text-fg"
@@ -542,7 +542,7 @@ export function ResultGrid({
           </select>
           <PagerItem
             pos="mid"
-            label="Następna strona"
+            label="Next page"
             icon={<CaretRight aria-hidden="true" />}
             href={server && page < pageCount ? pageHref(page + 1) : null}
             onClick={
@@ -551,7 +551,7 @@ export function ResultGrid({
           />
           <PagerItem
             pos="last"
-            label="Ostatnia strona"
+            label="Last page"
             icon={<CaretDoubleRight aria-hidden="true" />}
             href={server && page < pageCount ? pageHref(pageCount) : null}
             onClick={
@@ -560,7 +560,7 @@ export function ResultGrid({
           />
         </nav>
         <label className="flex items-center gap-1.5 text-muted">
-          Liczba wierszy:
+          Rows per page:
           <select
             value={perPage}
             onChange={(e) => setPer(Number(e.target.value))}
@@ -574,7 +574,7 @@ export function ResultGrid({
           </select>
         </label>
         <label className="flex items-center gap-1.5 text-muted">
-          Filtruj wiersze:
+          Filter rows:
           <input
             type="search"
             value={filter}
@@ -582,7 +582,7 @@ export function ResultGrid({
               setFilter(e.target.value);
               setClientPage(1);
             }}
-            placeholder="Szukaj w tej tabeli"
+            placeholder="Search this table"
             className="h-[26px] w-[200px] max-w-full rounded border border-line-strong bg-page px-2 text-fg placeholder:text-faint"
           />
         </label>
@@ -593,7 +593,7 @@ export function ResultGrid({
             checked={showFull}
             onChange={(e) => setShowFull(e.target.checked)}
           />
-          Pełne teksty
+          Full text
         </label>
       </div>
 
@@ -604,7 +604,7 @@ export function ResultGrid({
               <th className="sticky top-0 z-[1] w-7 border-b border-line-strong bg-surface px-2 py-[7px]">
                 <input
                   type="checkbox"
-                  aria-label="Zaznacz wszystkie wiersze"
+                  aria-label="Select all rows"
                   checked={allChecked}
                   onChange={toggleAll}
                 />
@@ -703,7 +703,7 @@ export function ResultGrid({
                   <td className={`${cellPad} border-b border-line`}>
                     <input
                       type="checkbox"
-                      aria-label={`Zaznacz wiersz ${rowOffset + n + 1}`}
+                      aria-label={`Select row ${rowOffset + n + 1}`}
                       checked={isChecked}
                       onChange={() => toggleRow(ri)}
                     />
@@ -721,7 +721,7 @@ export function ResultGrid({
                               className={linkCls}
                             >
                               <Eye aria-hidden="true" />
-                              Podgląd
+                              Preview
                             </button>
                           ) : (
                             nav && (
@@ -731,13 +731,13 @@ export function ResultGrid({
                                 className={linkCls}
                               >
                                 <Eye aria-hidden="true" />
-                                Podgląd
+                                Preview
                               </Link>
                             )
                           )}
                           <a href={`/files/${id}/original`} className={linkCls}>
                             <DownloadSimple aria-hidden="true" />
-                            Pobierz
+                            Download
                           </a>
                         </span>
                       )}
@@ -763,8 +763,8 @@ export function ResultGrid({
                   className="p-6 text-center font-sans text-muted"
                 >
                   {filter.trim()
-                    ? 'Brak wierszy pasujących do filtra.'
-                    : 'Zapytanie nie zwróciło wierszy.'}
+                    ? 'No rows match the filter.'
+                    : 'The query returned no rows.'}
                 </td>
               </tr>
             )}
@@ -779,9 +779,9 @@ export function ResultGrid({
           onClick={toggleAll}
           className="cursor-pointer text-accent-ink hover:text-accent-ink-hover hover:underline"
         >
-          Zaznacz wszystko
+          Select all
         </button>
-        <span>Z zaznaczonymi ({checkedRows.length}):</span>
+        <span>With selected ({checkedRows.length}):</span>
         <button
           type="button"
           onClick={exportChecked}
@@ -789,7 +789,7 @@ export function ResultGrid({
           className="inline-flex items-center gap-1 rounded border border-line-strong bg-page px-2.5 py-[3px] text-accent-ink enabled:cursor-pointer enabled:hover:border-accent disabled:opacity-60"
         >
           <Export aria-hidden="true" />
-          Eksport CSV
+          Export CSV
         </button>
         <span className="flex-1" />
         <span className="font-mono text-xs">
@@ -799,7 +799,7 @@ export function ResultGrid({
 
       <fieldset className="mt-1 rounded-md border border-line-strong px-3 pt-2 pb-2.5">
         <legend className="px-1.5 font-semibold">
-          Operacje na wynikach zapytania
+          Query results operations
         </legend>
         <div className="flex flex-wrap gap-[18px]">
           <button
@@ -808,12 +808,12 @@ export function ResultGrid({
             className={linkCls}
           >
             <Printer aria-hidden="true" />
-            Drukuj
+            Print
           </button>
           {csvLink(<Export aria-hidden="true" />)}
           <Link href={editHref} className={linkCls}>
             <TerminalWindow aria-hidden="true" />
-            Otwórz w SQL
+            Open in SQL
           </Link>
         </div>
       </fieldset>

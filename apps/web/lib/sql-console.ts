@@ -263,13 +263,13 @@ export async function handleSqlRequest(
   const sql = (body as { sql?: unknown } | null)?.sql;
   if (typeof sql !== 'string' || sql.length > MAX_SQL_LENGTH) {
     return Response.json(
-      { ok: false, error: 'Nieprawidłowe zapytanie.' },
+      { ok: false, error: 'Invalid query.' },
       { status: 400, headers: NO_STORE },
     );
   }
   if (!limiter.check(String(user.id))) {
     return Response.json(
-      { ok: false, error: 'Za dużo zapytań. Odczekaj chwilę.' },
+      { ok: false, error: 'Too many queries. Wait a moment.' },
       { status: 429, headers: NO_STORE },
     );
   }

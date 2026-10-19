@@ -271,16 +271,13 @@ export function SqlConsole({
           ?.includes('application/json');
         if (!isJson) {
           // e.g. a proxy/tunnel error page; keep the query so it can be retried
-          finish({ ok: false, error: `Błąd serwera (${res.status}).` }, false);
+          finish({ ok: false, error: `Server error (${res.status}).` }, false);
           return;
         }
         const data = (await res.json()) as ApiResult;
         finish(data, !data.ok && isDbMessage(res.status, data.error));
       } catch {
-        finish(
-          { ok: false, error: 'Nie udało się połączyć z serwerem.' },
-          false,
-        );
+        finish({ ok: false, error: 'Could not connect to the server.' }, false);
       } finally {
         setRunning(false);
       }
@@ -399,7 +396,7 @@ export function SqlConsole({
     <div className="flex min-w-0 flex-col gap-3">
       <fieldset className="m-0 min-w-0 rounded-md border border-line-strong bg-page p-0">
         <legend className="ml-2.5 px-1.5 font-semibold">
-          Uruchom zapytanie SQL na bazie danych{' '}
+          Run an SQL query on the database{' '}
           <span className="font-mono text-accent-ink">studies_db</span>:
         </legend>
         <div className="grid grid-cols-1 gap-3 px-3 pt-2 pb-3 md:grid-cols-[minmax(0,1fr)_210px]">
@@ -426,7 +423,7 @@ export function SqlConsole({
           </div>
           <div className="flex min-h-0 flex-col gap-1.5">
             <label htmlFor="sql-columns" className="text-muted">
-              Kolumny
+              Columns
             </label>
             <select
               id="sql-columns"
@@ -447,13 +444,13 @@ export function SqlConsole({
               ))}
             </select>
             <span id="sql-columns-hint" className="text-[11px] text-faint">
-              Kliknij dwukrotnie, aby wstawić
+              Double-click to insert
             </span>
           </div>
         </div>
         <div className="flex flex-wrap items-center gap-2 rounded-b-md border-t border-line bg-bar px-3 py-2.5">
           <select
-            aria-label="Przykładowe zapytania"
+            aria-label="Example queries"
             className={control}
             value=""
             onChange={(e) => {
@@ -461,7 +458,7 @@ export function SqlConsole({
               if (ex) setQuery(ex.sql);
             }}
           >
-            <option value="">Przykłady…</option>
+            <option value="">Examples…</option>
             {EXAMPLE_QUERIES.map((q) => (
               <option key={q.name} value={q.name}>
                 {q.name}
@@ -469,7 +466,7 @@ export function SqlConsole({
             ))}
           </select>
           <select
-            aria-label="Historia zapytań"
+            aria-label="Query history"
             className={`${control} max-w-[280px]`}
             value=""
             onChange={(e) => {
@@ -477,7 +474,7 @@ export function SqlConsole({
               if (e.target.value !== '' && h !== undefined) setQuery(h);
             }}
           >
-            <option value="">Historia ({history.length})…</option>
+            <option value="">History ({history.length})…</option>
             {history.map((h, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: index is the value
               <option key={i} value={i}>
@@ -490,11 +487,10 @@ export function SqlConsole({
             onClick={clear}
             className="rounded border border-line-strong bg-page px-2.5 py-[5px] hover:border-accent"
           >
-            Wyczyść
+            Clear
           </button>
           <span className="text-xs text-faint">
-            Tylko odczyt (SELECT) na widokach v_*. Limit 1000 wierszy i 5
-            sekund.
+            Read-only (SELECT) on v_* views. Limit of 1000 rows and 5 seconds.
           </span>
           <div className="ml-auto flex items-center gap-2">
             <kbd className="font-mono text-xs text-faint max-md:hidden">
@@ -507,7 +503,7 @@ export function SqlConsole({
               aria-busy={running}
               className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover disabled:opacity-60 disabled:hover:bg-accent-fill"
             >
-              {running ? 'Wykonywanie…' : 'Wykonaj'}
+              {running ? 'Running…' : 'Go'}
             </button>
           </div>
         </div>
@@ -520,14 +516,14 @@ export function SqlConsole({
         >
           <div className="flex items-center gap-1.5 font-semibold text-err-fg">
             <XCircle weight="fill" size={16} aria-hidden="true" />
-            Błąd
+            Error
           </div>
-          <div className="font-semibold text-muted">Zapytanie SQL:</div>
+          <div className="font-semibold text-muted">SQL query:</div>
           <pre className="m-0 whitespace-pre-wrap break-words rounded border border-err-line bg-page px-2.5 py-2 font-mono text-[12.5px]">
             <SqlText sql={result.sql} />
           </pre>
           <div className="font-semibold text-muted">
-            {result.fromDb ? 'MariaDB zwrócił komunikat:' : 'Komunikat:'}
+            {result.fromDb ? 'MariaDB returned a message:' : 'Message:'}
           </div>
           <code className="break-words font-mono text-err-fg">
             {result.error}
@@ -544,7 +540,7 @@ export function SqlConsole({
                 className="flex items-center gap-2 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
               >
                 <Warning weight="fill" size={16} aria-hidden="true" />
-                Wynik obcięty do pierwszych 1000 wierszy (limit konsoli).
+                Result truncated to the first 1000 rows (console limit).
               </div>
             )}
             <ResultGrid
@@ -553,7 +549,7 @@ export function SqlConsole({
               rows={rows}
               sql={result.sql}
               elapsedMs={result.durationMs}
-              name={`zapytanie-${result.stamp}`}
+              name={`query-${result.stamp}`}
               editSqlHref={sqlHref(editPath, result.sql)}
               onRefresh={() => run(result.sql)}
               fileColumn={fileColumn}
@@ -604,19 +600,19 @@ function PreviewStatus({
   }, [onClose]);
   return (
     <aside
-      aria-label="Podgląd pliku"
+      aria-label="File preview"
       aria-busy={!error}
       className="fixed inset-0 z-40 flex flex-col gap-3 bg-page p-3 lg:static lg:z-auto lg:rounded-md lg:border lg:border-line-strong"
     >
       <p className={error ? 'text-err-fg' : 'text-muted'}>
-        {error ? 'Nie udało się wczytać podglądu.' : 'Wczytywanie podglądu…'}
+        {error ? 'Could not load the preview.' : 'Loading preview…'}
       </p>
       <button
         type="button"
         onClick={onClose}
         className="self-start rounded border border-line-strong bg-page px-2.5 py-[5px] hover:border-accent"
       >
-        Zamknij podgląd
+        Close preview
       </button>
     </aside>
   );

@@ -42,30 +42,26 @@ export default async function StructurePage() {
     <>
       <ScreenHeader tabs={dbTabs('structure')} />
       <div className="flex flex-col gap-3">
-        <h1 className="sr-only">Struktura bazy danych studies_db</h1>
+        <h1 className="sr-only">Structure of the studies_db database</h1>
         {(error || !counts) && (
           <div
             role="alert"
             className="flex flex-col gap-1 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
           >
-            {error && (
-              <p className="m-0">Nie udało się wczytać kolumn: {error}</p>
-            )}
-            {!counts && (
-              <p className="m-0">Nie udało się policzyć wierszy widoków.</p>
-            )}
+            {error && <p className="m-0">Could not load columns: {error}</p>}
+            {!counts && <p className="m-0">Could not count view rows.</p>}
           </div>
         )}
         <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
           <table className="w-full min-w-[720px] border-collapse">
             <thead>
               <tr className="bg-surface text-left">
-                <th className={th}>Widok</th>
-                <th className={th}>Działanie</th>
-                <th className={`${th} text-right`}>Wiersze</th>
-                <th className={th}>Typ</th>
-                <th className={th}>Kolumny</th>
-                <th className={th}>Rozmiar</th>
+                <th className={th}>View</th>
+                <th className={th}>Action</th>
+                <th className={`${th} text-right`}>Rows</th>
+                <th className={th}>Type</th>
+                <th className={th}>Columns</th>
+                <th className={th}>Size</th>
               </tr>
             </thead>
             <tbody>
@@ -88,31 +84,31 @@ export default async function StructurePage() {
                       <div className="flex gap-3 whitespace-nowrap">
                         <Link href={base} className={action}>
                           <Rows aria-hidden />
-                          Przeglądaj
+                          Browse
                         </Link>
                         <Link href={`${base}?tab=structure`} className={action}>
                           <Columns aria-hidden />
-                          Struktura
+                          Structure
                         </Link>
                         <Link href={`${base}?tab=search`} className={action}>
                           <MagnifyingGlass aria-hidden />
-                          Szukaj
+                          Search
                         </Link>
                         <a
                           href={`${base}/csv`}
                           download
                           className={action}
-                          aria-label={`Eksport ${v} do CSV`}
+                          aria-label={`Export ${v} to CSV`}
                         >
                           <Export aria-hidden />
-                          Eksport
+                          Export
                         </a>
                       </div>
                     </td>
                     <td className={`${td} text-right font-mono`}>
                       {counts ? counts[v] : '—'}
                     </td>
-                    <td className={`${td} text-muted`}>Widok</td>
+                    <td className={`${td} text-muted`}>View</td>
                     <td className={`${td} font-mono text-muted`}>
                       {columns ? columns[v].length : '—'}
                     </td>
@@ -124,7 +120,7 @@ export default async function StructurePage() {
                 <td className="px-2.5 py-[7px]">
                   {plural(n, 'view', 'views')}
                 </td>
-                <td className="px-2.5 py-[7px]">Suma</td>
+                <td className="px-2.5 py-[7px]">Total</td>
                 <td className="px-2.5 py-[7px] text-right font-mono">
                   {total ?? '—'}
                 </td>

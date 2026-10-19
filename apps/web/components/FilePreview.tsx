@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 
 const PdfViewer = dynamic(() => import('./PdfViewer'), {
   ssr: false,
-  loading: () => <p className="text-sm">Wczytywanie podglądu…</p>,
+  loading: () => <p className="text-sm">Loading preview…</p>,
 });
 
 const MAX_TEXT_CHARS = 200_000;
@@ -23,8 +23,8 @@ function TextPreview({ src }: { src: string }) {
       live = false;
     };
   }, [src]);
-  if (failed) return <p className="text-sm">Nie udało się wczytać podglądu.</p>;
-  if (text === null) return <p className="text-sm">Wczytywanie podglądu…</p>;
+  if (failed) return <p className="text-sm">Could not load the preview.</p>;
+  if (text === null) return <p className="text-sm">Loading preview…</p>;
   return (
     <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap rounded border border-[var(--border)] bg-[var(--surface)] p-3 font-mono text-xs">
       {text}
@@ -48,7 +48,7 @@ export function FilePreview({
   if (kind === 'none') {
     return (
       <p className="text-sm text-[var(--muted)]">
-        Ten typ pliku nie ma podglądu. Użyj „Pobierz”.
+        This file type has no preview. Use “Download”.
       </p>
     );
   }
@@ -59,7 +59,7 @@ export function FilePreview({
         onClick={() => setOpen(true)}
         className="rounded border border-[var(--border)] px-3 py-1.5 text-sm"
       >
-        Pokaż podgląd
+        Show preview
       </button>
     );
   }

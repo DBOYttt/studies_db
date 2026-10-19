@@ -166,7 +166,7 @@ export function DataMap({
       <div className="flex flex-col items-center gap-2 rounded-md border border-dashed border-line-strong bg-panel px-6 py-12 text-center">
         <TreeStructure size={28} aria-hidden="true" className="text-muted" />
         <p className="font-medium">
-          Brak tematów. Oznacz posty na forum tagami klasy i grupy.
+          No topics. Tag forum posts with class and group tags.
         </p>
       </div>
     );
@@ -175,7 +175,7 @@ export function DataMap({
   return (
     <section
       className="data-map h-[70vh] min-h-[420px] overflow-hidden rounded-md border border-line-strong bg-panel"
-      aria-label="Mapa danych przedmiotu"
+      aria-label="Subject data map"
     >
       <ReactFlow
         nodes={nodes}
