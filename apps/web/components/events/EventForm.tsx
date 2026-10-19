@@ -10,6 +10,7 @@ import {
   restoreEventAction,
   updateEventAction,
 } from '@/lib/event-actions';
+import { type FormVersion, nextFormVersion } from '@/lib/event-form-version';
 import type { SubjectOption } from '@/lib/event-queries';
 
 export type EventFormValues = {
@@ -68,13 +69,16 @@ export function EventForm({
   const router = useRouter();
   // Kept from the first render: a refresh after a refusal must not swap in a
   // newer version, or the next Save would silently overwrite the other edit.
-  const [version, setVersion] = useState(initial.version);
-  // Restoring (or deleting) bumps the row's version. While the event is
-  // deleted Save is disabled, so adopting the fresh version once it is live
-  // again is safe; a plain conflict never refreshes, so it keeps the old one.
+  // Only a delete or restore seen as a single version step is followed
+  // (see nextFormVersion), so restoring from the banner can save again.
+  const [seen, setSeen] = useState<FormVersion>({
+    version: initial.version,
+    deleted,
+  });
   useEffect(() => {
-    if (!deleted) setVersion(initial.version);
+    setSeen((s) => nextFormVersion(s, { version: initial.version, deleted }));
   }, [deleted, initial.version]);
+  const version = seen.version;
   const [subjectId, setSubjectId] = useState(initial.subjectId);
   const [classId, setClassId] = useState(initial.classId);
   const [groupId, setGroupId] = useState(initial.groupId);

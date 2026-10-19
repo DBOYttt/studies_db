@@ -324,6 +324,40 @@ test.describe('concurrent edits', () => {
     }
   });
 
+  test('an edit hidden behind a delete is not overwritten after a restore', async ({
+    page,
+    browser,
+  }) => {
+    const url = await addEvent(page, 'Ukryta zmiana');
+    const admin = await browser.newContext({ locale: 'pl-PL' });
+    try {
+      const p = await admin.newPage();
+      await admin.addCookies(adminCookies);
+      await p.goto(`http://localhost:3100${url.replace('/s', '')}/edytuj`);
+      await p.getByLabel('Tytuł').waitFor();
+      // The student edits, then deletes, while the admin's form is open.
+      await page.goto(`${url}/edytuj`);
+      await page.getByLabel('Tytuł').fill('Zmiana studenta');
+      await page.getByRole('button', { name: 'Zapisz' }).click();
+      await expect(page).toHaveURL(url);
+      await page.getByRole('button', { name: 'Usuń', exact: true }).click();
+      await page.getByRole('button', { name: 'Tak, usuń' }).click();
+      await expect(page).toHaveURL(/\/s\/plan$/);
+      await p.getByLabel('Tytuł').fill('Zmiana admina');
+      await p.getByRole('button', { name: 'Zapisz' }).click();
+      await p.getByRole('button', { name: 'Restore' }).click();
+      await expect(p.getByRole('button', { name: 'Restore' })).toBeHidden();
+      await p.getByRole('button', { name: 'Zapisz' }).click();
+      await expect(p.getByText('Someone changed this event')).toBeVisible();
+      await page.goto(url);
+      await expect(
+        page.getByRole('heading', { name: 'Zmiana studenta' }),
+      ).toBeVisible();
+    } finally {
+      await admin.close();
+    }
+  });
+
   test('two tabs editing one event', async ({ page, browser }) => {
     const url = await addEvent(page, 'Dwie karty');
     await page.goto(`${url}/edytuj`);
