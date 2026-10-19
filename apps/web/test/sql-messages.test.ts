@@ -56,4 +56,33 @@ describe('sanitizeDbMessage', () => {
     expect(f(b)).toBe(b);
     expect(f(c)).toBe(c);
   });
+  it('never rewrites a duplicate value or other quoted user data', () => {
+    const f = (m: string) => sanitizeDbMessage(m, ['studies', ...DB]);
+    const a = "Duplicate entry 'studies.pdf' for key 'materials_name_unique'";
+    const b = "Duplicate entry 'table 'studies.x'' for key 'k'";
+    const c =
+      "Incorrect integer value: 'studies.pdf' for column `x`.`n` at row 1";
+    const d = "Duplicate entry '`studies`.`t`' for key 'k'";
+    expect(f(a)).toBe(a);
+    expect(f(b)).toBe(b);
+    expect(f(c)).toBe(c);
+    expect(f(d)).toBe(d);
+  });
+  it('still strips the schema around a duplicate value', () => {
+    expect(
+      sanitizeDbMessage(
+        "Duplicate entry 'studies.pdf' for key 'k' in table `studies`.`materials`",
+        ['studies'],
+      ),
+    ).toBe("Duplicate entry 'studies.pdf' for key 'k' in table `materials`");
+  });
+  it('strips the schema from the PROCEDURE and view forms', () => {
+    const f = (m: string) => sanitizeDbMessage(m, DB);
+    expect(f('PROCEDURE studies_qa_test.p does not exist')).toBe(
+      'PROCEDURE p does not exist',
+    );
+    expect(f("View 'studies_qa_test.v_x' references invalid table(s)")).toBe(
+      "View 'v_x' references invalid table(s)",
+    );
+  });
 });
