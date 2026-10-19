@@ -576,6 +576,57 @@ describe('event actions', () => {
       expect(ok.ok).toBe(true);
       expect((await getEvent(db, eid as number))?.version).toBe(2);
     });
+    // A db whose first transaction fails with 1020 after `race` ran on the
+    // real db, as when a concurrent commit lands between two attempts.
+    const racingDb = (race: () => Promise<unknown>) => {
+      let calls = 0;
+      return new Proxy(db, {
+        get(target, prop) {
+          if (prop === 'transaction') {
+            return async (fn: Parameters<Db['transaction']>[0]) => {
+              if (++calls === 1) {
+                await race();
+                throw { errno: 1020 };
+              }
+              return target.transaction(fn);
+            };
+          }
+          const v = Reflect.get(target, prop, target);
+          return typeof v === 'function' ? v.bind(target) : v;
+        },
+      }) as Db;
+    };
+    it('without expectedVersion a retried edit applies the patch to the current row', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      const r = await editEvent(
+        racingDb(() =>
+          editEvent(db, id.u2, eid as number, { title: 'Od B' }, 'web'),
+        ),
+        id.u,
+        eid as number,
+        { classId: id.cA, groupId: id.gA1 },
+        'discord',
+      );
+      expect(r.ok, r.message).toBe(true);
+      const e = await getEvent(db, eid as number);
+      expect(e?.title).toBe('Od B');
+      expect(e?.groupId).toBe(id.gA1);
+      expect(e?.version).toBe(2);
+    });
+    it('without expectedVersion an edit of an event deleted meanwhile is refused', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      const r = await editEvent(
+        racingDb(() => deleteEvent(db, id.u2, eid as number, 'web')),
+        id.u,
+        eid as number,
+        { title: 'Za późno' },
+        'web',
+      );
+      expect(r).toEqual({ ok: false, message: 'Nie znaleziono wydarzenia.' });
+      const e = await getEvent(db, eid as number);
+      expect(e?.deletedAt).not.toBeNull();
+      expect(e?.title).toBe('Kolokwium 1');
+    });
     it('linkTopic and unlinkTopic bump the version', async () => {
       const { id: eid } = await addEvent(db, id.u, input(), 'web');
       const t = await topic(id.subA);

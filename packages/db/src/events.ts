@@ -386,27 +386,26 @@ export async function editEvent(
   if (row.seriesId !== null) {
     return editInSeries(db, userId, row, patch, source, scope, opts);
   }
-  const cur = rowFields(row);
-  const v = await validatePatch(db, cur, patch);
-  if (!v.ok) return refused(v.message);
-  const next = v.fields;
-  const changes = diffFields(cur, next);
-  if (Object.keys(changes).length === 0) {
-    if (opts.expectedVersion !== undefined) {
-      return withTxRetry(db, async (tx) => {
-        const stale = await checkExpectedVersion(tx, eventId, opts);
-        if (stale) return stale;
-        if (row.topicId === null) await upsert(tx, eventId);
-        return { ok: true, message: 'Brak zmian.' };
-      });
-    }
-    // Saving unchanged retries a post that never got made.
-    if (row.topicId === null) await upsert(db, eventId);
-    return { ok: true, message: 'Brak zmian.' };
-  }
   return withTxRetry(db, async (tx) => {
     const stale = await checkExpectedVersion(tx, eventId, opts);
     if (stale) return stale;
+    // The patch applies to the row as it is now, never to the one read above.
+    const [fresh] = await tx
+      .select()
+      .from(events)
+      .where(and(eq(events.id, eventId), isNull(events.deletedAt)))
+      .for('update');
+    if (!fresh) return refused(NOT_FOUND);
+    const cur = rowFields(fresh);
+    const v = await validatePatch(tx, cur, patch);
+    if (!v.ok) return refused(v.message);
+    const next = v.fields;
+    const changes = diffFields(cur, next);
+    if (Object.keys(changes).length === 0) {
+      // Saving unchanged retries a post that never got made.
+      if (fresh.topicId === null) await upsert(tx, eventId);
+      return { ok: true, message: 'Brak zmian.' };
+    }
     await tx
       .update(events)
       .set({
