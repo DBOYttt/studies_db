@@ -122,6 +122,21 @@ describe('event series', () => {
       expect(rows.every((r) => r.title === 'Konsultacje')).toBe(true);
       expect(rows.every((r) => r.topicId === null)).toBe(true);
     });
+    it('stores until as the date of the last generated occurrence', async () => {
+      const sid = await mkSeries({
+        when: '20.10.2026 10:00-11:00',
+        until: '14.11.2026',
+      });
+      const [s] = await db
+        .select()
+        .from(eventSeries)
+        .where(eq(eventSeries.id, sid));
+      const rows = await occ(sid);
+      expect(rows[rows.length - 1].startsAt.toISOString().slice(0, 10)).toBe(
+        '2026-11-10',
+      );
+      expect(s.until).toBe('2026-11-10');
+    });
     it('biweekly generates every other week', async () => {
       const sid = await mkSeries({ rule: 'biweekly' });
       const rows = await occ(sid);

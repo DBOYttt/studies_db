@@ -151,12 +151,15 @@ export async function addSeries(
   }
   const gen = occurrenceTimes(f, input.rule, until);
   if (!gen.ok) return refused(gen.message);
+  // Store the last real occurrence, not the typed bound, so the series end
+  // date matches what later splits and deletes compute.
+  const lastUntil = isoDate(gen.times[gen.times.length - 1].startsAt);
   return withTxRetry(db, async (tx) => {
     const limited = await checkAddRateLimit(tx, userId);
     if (limited) return limited;
     const [s] = await tx
       .insert(eventSeries)
-      .values({ rule: input.rule, until: isoDate(until), createdBy: userId });
+      .values({ rule: input.rule, until: lastUntil, createdBy: userId });
     const seriesId = s.insertId;
     await tx.insert(events).values(
       gen.times.map((t) => ({
@@ -174,7 +177,7 @@ export async function addSeries(
       details: {
         source,
         rule: input.rule,
-        until: isoDate(until),
+        until: lastUntil,
         count: gen.times.length,
         fields: jsonFields(f),
       },

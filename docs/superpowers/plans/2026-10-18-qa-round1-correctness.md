@@ -256,4 +256,10 @@ Rule: `Origin` present → compare as today. `Origin` absent → cross-origin un
 
 ## Notes
 
-(Task 8 L4 cause goes here.)
+**L4 (Dziennik "30 wpisów", ids to 31, #25 missing):** not a filter or count bug. Read-only queries on
+`studies_qa_test` show `admin_audit` itself has no row with id 25 (ids 24 and 26 exist, created 20:09:34 and 20:09:38 by
+different personas; `COUNT(*) WHERE id <= 31` = 30). The default Dziennik applies no filter (`listAudit` with no
+conditions; the `INNER JOIN users` hides nothing, no audit row lacks a user), and its count and list use the same
+query, so "30" was exact for the rows that existed then. The gap is an AUTO_INCREMENT id burned by a rolled-back
+transaction (several personas wrote concurrently; InnoDB never reuses a rolled-back id), so no count line change.
+The table has since grown to 49 rows (max id 50); the only gap is still 25.
