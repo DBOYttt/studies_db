@@ -450,6 +450,86 @@ describe('event series', () => {
         .where(eq(eventSeries.id, sid));
       expect(s.version).toBe(1);
     });
+    // A db whose first transaction fails with 1020 after `race` ran on the
+    // real db, as when a concurrent commit lands between two attempts.
+    const racingDb = (race: () => Promise<unknown>) => {
+      let calls = 0;
+      return new Proxy(db, {
+        get(target, prop) {
+          if (prop === 'transaction') {
+            return async (fn: Parameters<Db['transaction']>[0]) => {
+              if (++calls === 1) {
+                await race();
+                throw { errno: 1020 };
+              }
+              return target.transaction(fn);
+            };
+          }
+          const v = Reflect.get(target, prop, target);
+          return typeof v === 'function' ? v.bind(target) : v;
+        },
+      }) as Db;
+    };
+    it('a following edit retried after a concurrent edit keeps that edit', async () => {
+      const sid = await mkSeries();
+      const rows = await occ(sid);
+      const r = await editEvent(
+        racingDb(() =>
+          editEvent(db, id.u, rows[4].id, { title: 'Od B' }, 'web', 'one'),
+        ),
+        id.u,
+        rows[2].id,
+        { place: 'Sala 7' },
+        'web',
+        'following',
+      );
+      expect(r.ok, r.message).toBe(true);
+      const [e4] = await db
+        .select()
+        .from(events)
+        .where(eq(events.id, rows[4].id));
+      expect(e4.title).toBe('Od B');
+      expect(e4.place).toBe('Sala 7');
+    });
+    it('a following edit retried after a concurrent delete does not touch the deleted occurrence', async () => {
+      const sid = await mkSeries();
+      const rows = await occ(sid);
+      const r = await editEvent(
+        racingDb(() => deleteEvent(db, id.u, rows[4].id, 'web', 'one')),
+        id.u,
+        rows[2].id,
+        { place: 'Sala 8' },
+        'web',
+        'following',
+      );
+      expect(r.ok, r.message).toBe(true);
+      const [e4] = await db
+        .select()
+        .from(events)
+        .where(eq(events.id, rows[4].id));
+      expect(e4.deletedAt).not.toBeNull();
+      expect(e4.place).toBeNull();
+      expect(e4.seriesId).toBe(sid);
+      const [e5] = await db
+        .select()
+        .from(events)
+        .where(eq(events.id, rows[5].id));
+      expect(e5.place).toBe('Sala 8');
+    });
+    it('a following edit of an occurrence deleted meanwhile is refused', async () => {
+      const sid = await mkSeries();
+      const rows = await occ(sid);
+      const r = await editEvent(
+        racingDb(() => deleteEvent(db, id.u, rows[2].id, 'web', 'one')),
+        id.u,
+        rows[2].id,
+        { place: 'Sala 9' },
+        'web',
+        'following',
+      );
+      expect(r).toEqual({ ok: false, message: 'Nie znaleziono wydarzenia.' });
+      expect((await occ(sid)).every((e) => e.place === null)).toBe(true);
+    });
     it('deleteInSeries with a stale version is a conflict', async () => {
       const sid = await mkSeries();
       const rows = await occ(sid);

@@ -269,52 +269,44 @@ export async function editInSeries(
   opts: VersionOpts = {},
 ): Promise<ActionResult> {
   const seriesId = row.seriesId as number;
-  const curTarget = rowFields(row);
-  const vt = await validatePatch(db, curTarget, patch);
-  if (!vt.ok) return refused(vt.message);
-  const nextTarget = vt.fields;
-  const all = await liveOccurrences(db, seriesId);
-  const idx = all.findIndex((e) => e.id === row.id);
-  const targets = scope === 'following' ? all.slice(idx) : [row];
-  const plan: {
-    row: EventRow;
-    changes: ReturnType<typeof diffFields>;
-    next: Fields;
-  }[] = [];
-  for (const t of targets) {
-    let next = nextTarget;
-    if (t.id !== row.id) {
-      const f = await followingFields(db, t, patch, curTarget, nextTarget);
-      if (!f.ok) return refused(f.message);
-      next = f.fields;
-    }
-    plan.push({ row: t, changes: diffFields(rowFields(t), next), next });
-  }
-  const changed = plan.filter((p) => Object.keys(p.changes).length > 0);
-  if (changed.length === 0) {
-    // Saving unchanged retries a post that never got made.
-    return withTxRetry(db, async (tx) => {
-      const stale = await checkExpectedVersion(tx, row.id, opts);
-      if (stale) return stale;
-      const [s] = await tx
-        .select({ topicId: eventSeries.topicId })
-        .from(eventSeries)
-        .where(eq(eventSeries.id, seriesId));
-      if (s && s.topicId === null) await upsertSeries(tx, seriesId);
-      return { ok: true, message: 'Brak zmian.' };
-    });
-  }
   return withTxRetry(db, async (tx) => {
+    // Every series write locks the series row first, so the occurrences read
+    // after it are current; the plan is rebuilt on every attempt.
     const [series] = await tx
       .select()
       .from(eventSeries)
       .where(eq(eventSeries.id, seriesId))
       .for('update');
     if (!series) return refused(NOT_FOUND);
-    // The plan above was computed outside the transaction: a stale version
-    // is refused here, before any write.
     const stale = await checkExpectedVersion(tx, row.id, opts);
     if (stale) return stale;
+    const all = await liveOccurrences(tx, seriesId).for('update');
+    const idx = all.findIndex((e) => e.id === row.id);
+    if (idx < 0) return refused(NOT_FOUND);
+    const curTarget = rowFields(all[idx]);
+    const vt = await validatePatch(tx, curTarget, patch);
+    if (!vt.ok) return refused(vt.message);
+    const nextTarget = vt.fields;
+    const targets = scope === 'following' ? all.slice(idx) : [all[idx]];
+    const plan: {
+      row: EventRow;
+      changes: ReturnType<typeof diffFields>;
+      next: Fields;
+    }[] = [];
+    for (const t of targets) {
+      let next = nextTarget;
+      if (t.id !== row.id) {
+        const f = await followingFields(tx, t, patch, curTarget, nextTarget);
+        if (!f.ok) return refused(f.message);
+        next = f.fields;
+      }
+      plan.push({ row: t, changes: diffFields(rowFields(t), next), next });
+    }
+    if (!plan.some((p) => Object.keys(p.changes).length > 0)) {
+      // Saving unchanged retries a post that never got made.
+      if (series.topicId === null) await upsertSeries(tx, seriesId);
+      return { ok: true, message: 'Brak zmian.' };
+    }
     let targetSeries = seriesId;
     const touched = [seriesId];
     const split = scope === 'following' && idx > 0;
@@ -356,7 +348,7 @@ export async function editInSeries(
           seriesId: targetSeries,
           version: bumpEvent,
         })
-        .where(eq(events.id, p.row.id));
+        .where(and(eq(events.id, p.row.id), isNull(events.deletedAt)));
     }
     if (scope === 'following') {
       const last = plan
