@@ -112,13 +112,13 @@ function lex(sql: string, backslash: boolean): LexResult {
   while (i < n) {
     const c = sql.charCodeAt(i);
     const ch = sql[i];
-    if (c === 0) return { ok: false, reason: 'Zapytanie zawiera bajt NUL.' };
+    if (c === 0) return { ok: false, reason: 'The query contains a NUL byte.' };
     if (ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r') {
       i++;
       continue;
     }
     if (c < 0x20 || c === 0x7f) {
-      return { ok: false, reason: 'Zapytanie zawiera znak sterujący.' };
+      return { ok: false, reason: 'The query contains a control character.' };
     }
     const next = sql[i + 1];
     // Line comments: `#…` always; `--` only when followed by whitespace,
@@ -141,12 +141,11 @@ function lex(sql: string, backslash: boolean): LexResult {
       if (a === '!' || ((a === 'M' || a === 'm') && b === '!')) {
         return {
           ok: false,
-          reason: 'Komentarze wykonywalne (/*! … */) są niedozwolone.',
+          reason: 'Executable comments (/*! … */) are not allowed.',
         };
       }
       const j = sql.indexOf('*/', i + 2);
-      if (j < 0)
-        return { ok: false, reason: 'Niezamknięty komentarz /* … */.' };
+      if (j < 0) return { ok: false, reason: 'Unclosed comment /* … */.' };
       toks.push({ t: 'comment', s: i, e: j + 2, v: sql.slice(i, j + 2) });
       i = j + 2;
       continue;
@@ -174,7 +173,7 @@ function lex(sql: string, backslash: boolean): LexResult {
         j++;
       }
       if (!closed || j > n) {
-        return { ok: false, reason: `Niezamknięty cudzysłów ${q}.` };
+        return { ok: false, reason: `Unclosed quote ${q}.` };
       }
       toks.push({
         t: q === '`' ? 'bq' : 'str',
@@ -226,7 +225,7 @@ function lexStrict(sql: string): LexResult {
     return {
       ok: false,
       reason:
-        "Niejednoznaczny ukośnik wsteczny przed cudzysłowem — użyj podwójnego apostrofu ('').",
+        "Ambiguous backslash before a quote — use a doubled apostrophe ('').",
     };
   }
   return a;
@@ -314,7 +313,7 @@ function analyze(sql: string): Analysis {
   const semi = code.findIndex((t) => isPunct(t, ';'));
   if (semi >= 0) {
     if (semi !== code.length - 1) {
-      return { ok: false, reason: 'Dozwolone jest tylko jedno polecenie.' };
+      return { ok: false, reason: 'Only one statement is allowed.' };
     }
     code = code.slice(0, semi);
     if (code.length === 0) return { ok: false, reason: EMPTY_QUERY_ERROR };
@@ -325,7 +324,7 @@ function analyze(sql: string): Analysis {
     return {
       ok: false,
       reason:
-        'Dozwolone są tylko polecenia SELECT, INSERT, UPDATE, DELETE i REPLACE.',
+        'Only SELECT, INSERT, UPDATE, DELETE and REPLACE statements are allowed.',
     };
   }
 
@@ -364,12 +363,12 @@ function analyze(sql: string): Analysis {
       if (!isAscii(t.v)) {
         return {
           ok: false,
-          reason: `Niedozwolone znaki spoza ASCII poza literałem: ${t.v}`,
+          reason: `Non-ASCII characters outside a literal are not allowed: ${t.v}`,
         };
       }
       const w = t.v.toUpperCase();
       if (FORBIDDEN_WORDS.has(w)) {
-        return { ok: false, reason: `Niedozwolone słowo kluczowe: ${w}` };
+        return { ok: false, reason: `Keyword not allowed: ${w}` };
       }
       if (
         w === 'SET' &&
@@ -377,10 +376,10 @@ function analyze(sql: string): Analysis {
         kind !== 'insert' &&
         kind !== 'replace'
       ) {
-        return { ok: false, reason: 'Niedozwolone słowo kluczowe: SET' };
+        return { ok: false, reason: 'Keyword not allowed: SET' };
       }
       if (w === 'INTO' && i !== intoAt) {
-        return { ok: false, reason: 'Niedozwolone słowo kluczowe: INTO' };
+        return { ok: false, reason: 'Keyword not allowed: INTO' };
       }
     }
     if (
@@ -390,12 +389,12 @@ function analyze(sql: string): Analysis {
       if (!isAscii(t.v)) {
         return {
           ok: false,
-          reason: `Niedozwolona nazwa funkcji spoza ASCII: ${t.v}`,
+          reason: `Non-ASCII function name not allowed: ${t.v}`,
         };
       }
       const f = t.v.toUpperCase();
       if (FORBIDDEN_FUNCS.has(f)) {
-        return { ok: false, reason: `Niedozwolona funkcja: ${f}()` };
+        return { ok: false, reason: `Function not allowed: ${f}()` };
       }
     }
   }
@@ -500,8 +499,9 @@ export function signPreview(p: {
 }
 
 const INVALID_TOKEN =
-  'Nieprawidłowy token potwierdzenia lub zapytanie zmieniło się od podglądu. Wykonaj podgląd ponownie.';
-const EXPIRED_TOKEN = 'Token potwierdzenia wygasł. Wykonaj podgląd ponownie.';
+  'Invalid confirmation token, or the query changed since the preview. Run the preview again.';
+const EXPIRED_TOKEN =
+  'The confirmation token has expired. Run the preview again.';
 
 export function verifyPreview(
   token: string,
@@ -590,5 +590,5 @@ export function adminSqlErrorMessage(err: unknown): string {
   if (typeof e?.message === 'string' && e.message !== '') {
     return sanitizeDbMessage(e.message);
   }
-  return 'Nieznany błąd bazy danych.';
+  return 'Unknown database error.';
 }

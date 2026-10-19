@@ -25,7 +25,7 @@ const pagerLink =
 const pagerOff =
   'rounded border border-line bg-bar px-2.5 py-1 text-faint opacity-60';
 
-/** /admin/audit "Dziennik": paged audit log with admin and action filters. */
+/** /admin/audit "Audit log": paged audit log with admin and action filters. */
 export default async function AdminAuditPage({
   searchParams,
 }: {
@@ -54,18 +54,18 @@ export default async function AdminAuditPage({
   return (
     <>
       <ScreenHeader
-        crumbs={[ADMIN_CRUMB, { label: 'Dziennik', href: '/admin/audit' }]}
+        crumbs={[ADMIN_CRUMB, { label: 'Audit log', href: '/admin/audit' }]}
         tabs={adminTabs('audit')}
       />
       <div className="flex flex-col gap-3">
         <nav
-          aria-label="Zakres dziennika"
+          aria-label="Audit log scope"
           className="flex w-fit overflow-hidden rounded-md border border-line-strong"
         >
           {(
             [
-              ['Wszyscy', false],
-              ['Admini', true],
+              ['Everyone', false],
+              ['Admins', true],
             ] as const
           ).map(([label, only], i) => {
             const active = (q.adminsOnly === true) === only;
@@ -92,7 +92,7 @@ export default async function AdminAuditPage({
         <form
           method="get"
           action="/admin/audit"
-          aria-label="Filtry dziennika"
+          aria-label="Audit log filters"
           className="flex flex-wrap items-end gap-3 rounded-md border border-line-strong bg-bar px-3 py-2.5"
         >
           {q.adminsOnly && <input type="hidden" name="who" value="admins" />}
@@ -103,7 +103,7 @@ export default async function AdminAuditPage({
               defaultValue={q.userId ?? ''}
               className={control}
             >
-              <option value="">Wszyscy</option>
+              <option value="">Everyone</option>
               {!userKnown && <option value={q.userId}>#{q.userId}</option>}
               {admins.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -113,13 +113,13 @@ export default async function AdminAuditPage({
             </select>
           </label>
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">Akcja</span>
+            <span className="text-xs text-muted">Action</span>
             <select
               name="action"
               defaultValue={q.action ?? ''}
               className={control}
             >
-              <option value="">Wszystkie</option>
+              <option value="">All</option>
               {AUDIT_ACTIONS.map((a) => (
                 <option key={a} value={a}>
                   {a} — {AUDIT_ACTION_LABELS[a]}
@@ -131,14 +131,14 @@ export default async function AdminAuditPage({
             type="submit"
             className="h-7 rounded bg-accent-fill px-3.5 font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px"
           >
-            Filtruj
+            Filter
           </button>
           {filtered && (
             <Link
               href="/admin/audit"
               className="self-center pt-4 text-accent-ink hover:text-accent-ink-hover hover:underline"
             >
-              Wyczyść filtry
+              Clear filters
             </Link>
           )}
           <span className="ml-auto self-center pt-4 text-xs text-muted tabular-nums">
@@ -150,14 +150,14 @@ export default async function AdminAuditPage({
           rows={rows}
           emptyText={
             filtered
-              ? 'Brak wpisów dla wybranych filtrów.'
-              : 'Dziennik jest pusty.'
+              ? 'No entries match the selected filters.'
+              : 'The audit log is empty.'
           }
         />
 
         {pageCount > 1 && (
           <nav
-            aria-label="Strony dziennika"
+            aria-label="Audit log pages"
             className="flex items-center gap-2 tabular-nums"
           >
             {q.page > 1 ? (
@@ -165,23 +165,23 @@ export default async function AdminAuditPage({
                 href={auditHref({ ...q, page: q.page - 1 })}
                 className={pagerLink}
               >
-                Poprzednia
+                Previous
               </Link>
             ) : (
-              <span className={pagerOff}>Poprzednia</span>
+              <span className={pagerOff}>Previous</span>
             )}
             <span className="text-muted">
-              Strona {Math.min(q.page, pageCount)} z {pageCount}
+              Page {Math.min(q.page, pageCount)} of {pageCount}
             </span>
             {q.page < pageCount ? (
               <Link
                 href={auditHref({ ...q, page: q.page + 1 })}
                 className={pagerLink}
               >
-                Następna
+                Next
               </Link>
             ) : (
-              <span className={pagerOff}>Następna</span>
+              <span className={pagerOff}>Next</span>
             )}
           </nav>
         )}

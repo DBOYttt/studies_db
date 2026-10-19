@@ -269,7 +269,7 @@ export async function handleSqlRequest(
   }
   if (!limiter.check(String(user.id))) {
     return Response.json(
-      { ok: false, error: 'Too many queries. Wait a moment.' },
+      { ok: false, error: 'Too many queries. Please wait a moment.' },
       { status: 429, headers: NO_STORE },
     );
   }

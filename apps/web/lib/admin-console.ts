@@ -21,7 +21,7 @@ export interface WritePreview {
 }
 
 /** Word the user types to confirm a large change. */
-export const confirmWord = (table: string | null): string => table ?? 'TAK';
+export const confirmWord = (table: string | null): string => table ?? 'YES';
 
 /** "1 row", "2 rows". */
 export const rowCount = (n: number): string => plural(n, 'row', 'rows');
@@ -32,13 +32,13 @@ export const rowsWillChange = (n: number): string =>
 
 /** Server error for a large change sent without the typed confirmation. */
 export function confirmMessage(table: string | null, affected: number): string {
-  return `Zmiana obejmuje ${rowCount(affected)}. Aby potwierdzić, wpisz ${
-    table ? `nazwę tabeli „${table}”` : `„${confirmWord(table)}”`
+  return `This change affects ${rowCount(affected)}. To confirm, type ${
+    table ? `the table name “${table}”` : `“${confirmWord(table)}”`
   }.`;
 }
 
 /**
- * "Wykonaj" is enabled only for a pending preview whose text still equals
+ * "Go" is enabled only for a pending preview whose text still equals
  * the editor, with no request in flight and, above `threshold` rows, the
  * typed confirmation. The preview is cleared after every execute, so one
  * preview commits at most once.

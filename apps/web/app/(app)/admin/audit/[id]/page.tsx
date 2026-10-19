@@ -39,8 +39,8 @@ export default async function AdminAuditEntryPage({
       <ScreenHeader
         crumbs={[
           ADMIN_CRUMB,
-          { label: 'Dziennik', href: '/admin/audit' },
-          { kind: 'Wpis:', label: `#${row.id}`, href },
+          { label: 'Audit log', href: '/admin/audit' },
+          { kind: 'Entry:', label: `#${row.id}`, href },
         ]}
         tabs={adminTabs('audit')}
       />
@@ -50,15 +50,15 @@ export default async function AdminAuditEntryPage({
           className="inline-flex items-center gap-1 self-start text-accent-ink hover:text-accent-ink-hover hover:underline"
         >
           <ArrowLeft size={13} aria-hidden />
-          Dziennik
+          Audit log
         </Link>
         <h1 className="m-0 flex items-center gap-2 text-xl font-semibold tracking-[-0.01em]">
-          Wpis #{row.id}
+          Entry #{row.id}
           <AuditActionLabel action={row.action} />
         </h1>
 
         <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-1.5 rounded-md border border-line-strong px-3.5 py-3">
-          <dt className={dt}>Czas</dt>
+          <dt className={dt}>Time</dt>
           <dd className={`${dd} font-mono tabular-nums`}>
             {formatAuditTime(row.createdAt)}{' '}
             <span className="text-faint">(Europe/Warsaw)</span>
@@ -72,11 +72,11 @@ export default async function AdminAuditEntryPage({
               {row.userName}
             </Link>
           </dd>
-          <dt className={dt}>Tabela</dt>
+          <dt className={dt}>Table</dt>
           <dd className={`${dd} font-mono`}>
             {row.target ?? <span className="text-faint">—</span>}
           </dd>
-          <dt className={dt}>Zmienione wiersze</dt>
+          <dt className={dt}>Rows changed</dt>
           <dd className={`${dd} font-mono tabular-nums`}>
             {row.rowsAffected ?? <span className="text-faint">—</span>}
           </dd>
@@ -87,14 +87,14 @@ export default async function AdminAuditEntryPage({
           className="flex flex-col gap-1.5"
         >
           <h2 id="audit-statement" className="m-0 text-[13px] font-semibold">
-            Instrukcja
+            Statement
           </h2>
           {row.statement ? (
             <pre className="m-0 overflow-auto whitespace-pre-wrap break-words rounded-md border border-line-strong bg-surface px-3 py-2.5 font-mono text-[12.5px]">
               <SqlText sql={row.statement} />
             </pre>
           ) : (
-            <p className="m-0 text-muted">Brak instrukcji.</p>
+            <p className="m-0 text-muted">No statement.</p>
           )}
         </section>
 
@@ -104,7 +104,7 @@ export default async function AdminAuditEntryPage({
             className="flex flex-col gap-1.5"
           >
             <h2 id="audit-details" className="m-0 text-[13px] font-semibold">
-              Szczegóły
+              Details
             </h2>
             <pre className="m-0 overflow-auto rounded-md border border-line-strong bg-surface px-3 py-2.5 font-mono text-[12.5px]">
               {details}

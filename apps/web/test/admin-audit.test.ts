@@ -16,7 +16,7 @@ describe('parseAuditQuery', () => {
       parseAuditQuery({ user: '3', action: 'sql.rejected', page: '4' }),
     ).toEqual({ page: 4, userId: 3, action: 'sql.rejected' });
   });
-  it('reads the Admini filter', () => {
+  it('reads the Admins filter', () => {
     expect(parseAuditQuery({ who: 'admins' })).toEqual({
       page: 1,
       adminsOnly: true,

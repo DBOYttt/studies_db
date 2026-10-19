@@ -101,11 +101,11 @@ async function post(body: Record<string, unknown>): Promise<ApiResult | null> {
       return null;
     }
     if (!res.headers.get('content-type')?.includes('application/json')) {
-      return { ok: false, error: `Błąd serwera (${res.status}).` };
+      return { ok: false, error: `Server error (${res.status}).` };
     }
     return (await res.json()) as ApiResult;
   } catch {
-    return { ok: false, error: 'Nie udało się połączyć z serwerem.' };
+    return { ok: false, error: 'Could not reach the server.' };
   }
 }
 
@@ -115,8 +115,8 @@ const primaryBtn =
   'rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent transition-colors hover:bg-accent-fill-hover active:translate-y-px disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-accent-fill disabled:active:translate-y-0';
 
 /**
- * Admin write console (spec section 3, "SQL — zapis"): Podgląd runs the
- * statement in a rolled-back transaction, Wykonaj commits exactly the
+ * Admin write console (spec section 3, "SQL — write"): Preview runs the
+ * statement in a rolled-back transaction, Go commits exactly the
  * previewed text once. All checks are repeated by /api/admin/sql.
  */
 export function AdminSqlConsole({
@@ -231,7 +231,7 @@ export function AdminSqlConsole({
       editorTheme,
       syntaxHighlighting(sqlHighlight),
       EditorView.contentAttributes.of({
-        'aria-label': 'Instrukcja SQL (zapis)',
+        'aria-label': 'SQL statement (write)',
       }),
       Prec.highest(
         keymap.of([
@@ -275,18 +275,18 @@ export function AdminSqlConsole({
         <Warning weight="fill" size={16} className="shrink-0" aria-hidden />
         <span>
           <span className="font-semibold">
-            Zmiany są zapisywane w bazie i w dzienniku
+            Changes are written to the database and the audit log
           </span>
           <span className="max-sm:hidden">
             {' '}
-            · Podgląd niczego nie zmienia, zapis następuje dopiero po „Wykonaj”.
+            · Preview changes nothing; the write happens only after “Go”.
           </span>
         </span>
       </div>
 
       <fieldset className="m-0 min-w-0 rounded-md border border-line-strong bg-page p-0">
         <legend className="ml-2.5 px-1.5 font-semibold">
-          Zmień dane w bazie{' '}
+          Change data in the database{' '}
           <span className="font-mono text-accent-ink">studies_db</span>:
         </legend>
         <div className="px-3 pt-2 pb-3">
@@ -316,11 +316,11 @@ export function AdminSqlConsole({
             disabled={busy !== null}
             className={secondaryBtn}
           >
-            Wyczyść
+            Clear
           </button>
           <span className="text-xs text-pretty text-faint">
-            Jedna instrukcja: INSERT, UPDATE, DELETE, REPLACE lub SELECT, tylko
-            na tabelach treści.
+            One statement: INSERT, UPDATE, DELETE, REPLACE or SELECT, on content
+            tables only.
           </span>
           <div className="ml-auto flex items-center gap-2">
             <kbd className="font-mono text-xs text-faint max-md:hidden">
@@ -333,7 +333,7 @@ export function AdminSqlConsole({
               aria-busy={busy === 'preview'}
               className={`${secondaryBtn} px-3.5 py-1.5 font-semibold text-accent-ink`}
             >
-              {busy === 'preview' ? 'Podgląd…' : 'Podgląd'}
+              {busy === 'preview' ? 'Previewing…' : 'Preview'}
             </button>
             <button
               type="button"
@@ -343,20 +343,19 @@ export function AdminSqlConsole({
               aria-describedby="admin-sql-exec-hint"
               className={primaryBtn}
             >
-              {busy === 'execute' ? 'Wykonywanie…' : 'Wykonaj'}
+              {busy === 'execute' ? 'Running…' : 'Go'}
             </button>
           </div>
         </div>
       </fieldset>
 
       <p id="admin-sql-exec-hint" className="sr-only">
-        Wykonaj jest dostępne po podglądzie, dopóki treść instrukcji się nie
-        zmieni.
+        Go is available after a preview, until the statement text changes.
       </p>
 
       {preview && (
         <section
-          aria-label="Podgląd zmiany"
+          aria-label="Change preview"
           className="flex min-w-0 flex-col gap-3"
         >
           <div className="overflow-hidden rounded-md border border-line-strong">
@@ -365,11 +364,11 @@ export function AdminSqlConsole({
                 {KIND_LABEL[preview.kind]}
               </span>
               <span className="text-muted">
-                Tabela:{' '}
+                Table:{' '}
                 {preview.table ? (
                   <span className="font-mono text-fg">{preview.table}</span>
                 ) : (
-                  <span>nieznana</span>
+                  <span>unknown</span>
                 )}
               </span>
               <span
@@ -381,15 +380,15 @@ export function AdminSqlConsole({
             </div>
             {stale && (
               <p className="m-0 border-b border-line bg-warn-bg px-3 py-2 text-warn-fg">
-                Instrukcja zmieniła się od podglądu. Uruchom podgląd ponownie,
-                aby ją wykonać.
+                The statement changed since the preview. Run the preview again
+                to execute it.
               </p>
             )}
             {needsConfirm && (
               <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <label htmlFor="admin-sql-confirm" className="text-pretty">
-                  Zmiana obejmuje {rowCount(preview.affected)}. Aby potwierdzić,
-                  wpisz {preview.table ? 'nazwę tabeli ' : ''}
+                  This change affects {rowCount(preview.affected)}. To confirm,
+                  type {preview.table ? 'the table name ' : ''}
                   <code className="rounded bg-box-head px-1 font-mono font-semibold">
                     {confirmWord(preview.table)}
                   </code>
@@ -412,14 +411,12 @@ export function AdminSqlConsole({
               columns={preview.columns}
               rows={previewCells}
               sql={preview.sql}
-              name={`podglad-${csvStamp(new Date())}`}
+              name={`preview-${csvStamp(new Date())}`}
               editSqlHref={sqlHref('/admin/sql', preview.sql)}
               onRefresh={() => runPreview(preview.sql)}
             />
           ) : (
-            <p className="m-0 text-muted">
-              Brak wierszy do pokazania w podglądzie.
-            </p>
+            <p className="m-0 text-muted">No rows to show in the preview.</p>
           )}
         </section>
       )}
@@ -431,7 +428,7 @@ export function AdminSqlConsole({
         >
           <div className="flex items-center gap-1.5 font-semibold text-err-fg">
             <XCircle weight="fill" size={16} aria-hidden />
-            Błąd
+            Error
           </div>
           <pre className="m-0 whitespace-pre-wrap break-words rounded border border-err-line bg-page px-2.5 py-2 font-mono text-[12.5px]">
             <SqlText sql={outcome.sql} />
@@ -449,20 +446,20 @@ export function AdminSqlConsole({
         >
           <CheckCircle weight="fill" size={16} aria-hidden />
           <span className="font-semibold">
-            Zapisano: {KIND_LABEL[outcome.kind]}
+            Saved: {KIND_LABEL[outcome.kind]}
             {outcome.table && (
               <>
                 {' '}
-                na <span className="font-mono">{outcome.table}</span>
+                on <span className="font-mono">{outcome.table}</span>
               </>
             )}
-            , zmienione wiersze: {outcome.affected}.
+            , rows changed: {outcome.affected}.
           </span>
           <Link
             href={`/admin/audit/${outcome.auditId}`}
             className="ml-auto inline-flex items-center gap-1 text-accent-ink hover:text-accent-ink-hover hover:underline"
           >
-            Wpis w dzienniku #{outcome.auditId}
+            Audit log entry #{outcome.auditId}
             <ArrowRight size={13} aria-hidden />
           </Link>
         </div>
@@ -476,7 +473,7 @@ export function AdminSqlConsole({
               className="flex items-center gap-2 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
             >
               <Warning weight="fill" size={16} aria-hidden />
-              Wynik obcięty do pierwszych 500 wierszy (limit konsoli).
+              Result truncated to the first 500 rows (console limit).
             </div>
           )}
           <ResultGrid
@@ -484,7 +481,7 @@ export function AdminSqlConsole({
             columns={outcome.columns}
             rows={selectCells}
             sql={outcome.sql}
-            name={`zapytanie-${outcome.stamp}`}
+            name={`query-${outcome.stamp}`}
             editSqlHref={sqlHref('/admin/sql', outcome.sql)}
             onRefresh={() => runPreview(outcome.sql)}
           />

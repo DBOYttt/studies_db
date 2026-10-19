@@ -14,17 +14,17 @@ const box = 'overflow-hidden rounded-md border border-line-strong';
 const boxHead =
   'flex items-center gap-1.5 border-b border-line-strong bg-box-head px-3 py-[7px]';
 
-/** /admin "Przegląd": counts, admins and the newest audit entries. */
+/** /admin "Overview": counts, admins and the newest audit entries. */
 export default async function AdminOverviewPage() {
   await requireAdmin();
   const { admins, recent, counts } = await getAdminOverview(getDb());
   const stats: [string, number, string?][] = [
-    ['Przedmioty', counts.subjects],
-    ['Tematy', counts.topics],
-    ['Gotowe pliki', counts.readyFiles],
-    ['Zadania w kolejce', counts.jobsQueued],
+    ['Subjects', counts.subjects],
+    ['Topics', counts.topics],
+    ['Ready files', counts.readyFiles],
+    ['Jobs queued', counts.jobsQueued],
     [
-      'Zadania nieudane',
+      'Jobs failed',
       counts.jobsFailed,
       counts.jobsFailed > 0 ? 'text-err-fg' : undefined,
     ],
@@ -34,13 +34,16 @@ export default async function AdminOverviewPage() {
       <ScreenHeader crumbs={[ADMIN_CRUMB]} tabs={adminTabs('overview')} />
       <div className="flex max-w-[1200px] flex-col gap-4">
         <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">
-          Panel admina
+          Admin panel
         </h1>
 
         {/* Cells draw right/bottom dividers; the -1px margins push the
             outer ones under the box border, whatever the wrap. */}
         <div className={box}>
-          <dl aria-label="Stan bazy" className="-mr-px -mb-px flex flex-wrap">
+          <dl
+            aria-label="Database status"
+            className="-mr-px -mb-px flex flex-wrap"
+          >
             {stats.map(([label, value, tone]) => (
               <div
                 key={label}
@@ -64,19 +67,19 @@ export default async function AdminOverviewPage() {
           >
             <div className="flex items-baseline justify-between gap-3">
               <h2 id="admin-recent" className="m-0 text-[15px] font-semibold">
-                Ostatnie wpisy w dzienniku
+                Latest audit log entries
               </h2>
               <Link
                 href="/admin/audit"
                 className="inline-flex items-center gap-1 text-accent-ink hover:text-accent-ink-hover hover:underline"
               >
-                Cały dziennik
+                Full audit log
                 <ArrowRight size={13} aria-hidden />
               </Link>
             </div>
             <AuditTable
               rows={recent}
-              emptyText="Dziennik jest pusty. Zmiany z konsoli SQL — zapis pojawią się tutaj."
+              emptyText="The audit log is empty. Changes from the SQL — write console will appear here."
             />
           </section>
 
@@ -84,14 +87,14 @@ export default async function AdminOverviewPage() {
             <div className={boxHead}>
               <ShieldCheck size={15} className="text-accent-ink" aria-hidden />
               <h2 id="admin-admins" className="m-0 text-[13px] font-semibold">
-                Admini
+                Admins
               </h2>
               <span className="ml-auto font-mono text-[11px] text-faint">
                 {admins.length}
               </span>
             </div>
             {admins.length === 0 ? (
-              <p className="m-0 px-3 py-4 text-muted">Brak adminów.</p>
+              <p className="m-0 px-3 py-4 text-muted">No admins.</p>
             ) : (
               <ul>
                 {admins.map((a, i) => (

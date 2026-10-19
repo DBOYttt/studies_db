@@ -1,4 +1,4 @@
-/** Pure helpers for the /admin "Dziennik" (audit log) screens. */
+/** Pure helpers for the /admin "Audit log" screens. */
 import { historyLabel } from './sql-editor';
 
 export const AUDIT_PAGE_SIZE = 50;
@@ -8,8 +8,8 @@ export const AUDIT_ACTIONS = ['sql.execute', 'sql.rejected'] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
-  'sql.execute': 'Wykonanie SQL',
-  'sql.rejected': 'Odrzucone SQL',
+  'sql.execute': 'SQL executed',
+  'sql.rejected': 'SQL rejected',
 };
 
 export interface AuditQuery {

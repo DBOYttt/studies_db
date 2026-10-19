@@ -91,3 +91,14 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Egzamin / Kolokwium / Projekt (assessment) | Exam / Test / Project |
 | Sprawozdania (assessment) | Lab reports |
 | Zaliczenie (assessment) | Credit |
+
+## Added in task 4
+
+| Polish | English |
+|---|---|
+| Wykonaj / Podgląd (SQL — write console) | Go / Preview |
+| Wykonanie SQL / Odrzucone SQL (audit action labels) | SQL executed / SQL rejected |
+| Wpis (audit log entry) | Entry |
+| Czas / Akcja / Tabela / Wiersze / Instrukcja | Time / Action / Table / Rows / Statement |
+| Admini / Wszyscy | Admins / Everyone |
+| TAK (typed confirmation word) | YES |

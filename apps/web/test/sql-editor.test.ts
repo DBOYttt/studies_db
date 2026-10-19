@@ -92,7 +92,9 @@ describe('isDbMessage', () => {
   });
   it('rejects API refusals and the API own messages', async () => {
     const { connectionErrorMessage } = await import('../lib/sql-console');
-    expect(isDbMessage(429, 'Too many queries. Wait a moment.')).toBe(false);
+    expect(isDbMessage(429, 'Too many queries. Please wait a moment.')).toBe(
+      false,
+    );
     expect(isDbMessage(400, 'Invalid query.')).toBe(false);
     expect(isDbMessage(200, 'Empty query.')).toBe(false);
     expect(isDbMessage(200, 'Query timed out (5 s).')).toBe(false);

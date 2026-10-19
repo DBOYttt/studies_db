@@ -283,7 +283,7 @@ describe('handleAdminSqlRequest', () => {
       { now: () => t0 + TOKEN_TTL_MS + 1 },
     );
     expect(res.status).toBe(400);
-    expect((await json(res)).error).toMatch(/wygasł/);
+    expect((await json(res)).error).toMatch(/expired/);
     expect(await ectsOf('ASD')).toBe(9);
   });
 
@@ -297,7 +297,7 @@ describe('handleAdminSqlRequest', () => {
     const again = await call({ mode: 'execute', sql, token: preview.token });
     expect(again.status).toBe(400);
     expect((await json(again)).error).toBe(
-      'Token już użyty. Wykonaj podgląd ponownie.',
+      'Token already used. Run the preview again.',
     );
     expect(await ectsOf('ASD')).toBe(after);
     expect(await auditCount('sql.execute')).toBe(before);
@@ -396,7 +396,7 @@ describe('handleAdminSqlRequest', () => {
     const preview = await json(await call({ mode: 'preview', sql }));
     expect(preview.affected).toBe(101);
     expect(preview.rows).toHaveLength(50);
-    for (const confirm of [undefined, '', 'Subjects', 'TAK']) {
+    for (const confirm of [undefined, '', 'Subjects', 'YES']) {
       const res = await call({
         mode: 'execute',
         sql,
@@ -429,7 +429,7 @@ describe('handleAdminSqlRequest', () => {
     const res = await call({ mode: 'execute', sql, token });
     expect(res.status).toBe(400);
     expect((await json(res)).error).toMatch(
-      /zmieniła się od podglądu.*Wykonaj podgląd ponownie/,
+      /since the preview.*Run the preview again/,
     );
     expect(await ectsOf('B000')).toBe(2);
     expect(await auditCount('sql.execute')).toBe(before);
@@ -729,7 +729,7 @@ describe('handleAdminSqlRequest', () => {
       const res = await call({ mode: 'execute', sql, token: preview.token });
       expect(res.status).toBe(500);
       expect((await json(res)).error).toContain(
-        'Zmiana zapisana, ale nie udało się zapisać dziennika',
+        'The change was saved, but writing the audit log failed',
       );
       expect(err).toHaveBeenCalled();
     } finally {

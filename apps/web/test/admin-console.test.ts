@@ -26,9 +26,9 @@ const base = {
 };
 
 describe('confirmWord', () => {
-  it('is the table name, or TAK when unknown', () => {
+  it('is the table name, or YES when unknown', () => {
     expect(confirmWord('topics')).toBe('topics');
-    expect(confirmWord(null)).toBe('TAK');
+    expect(confirmWord(null)).toBe('YES');
   });
 });
 
@@ -54,7 +54,7 @@ describe('canExecute', () => {
       canExecute({ ...base, preview: { ...preview, affected: 100 } }),
     ).toBe(true);
     const unknown = { ...big, preview: { ...big.preview, table: null } };
-    expect(canExecute({ ...unknown, confirm: 'TAK' })).toBe(true);
+    expect(canExecute({ ...unknown, confirm: 'YES' })).toBe(true);
     expect(canExecute({ ...unknown, confirm: 'tak' })).toBe(false);
   });
 });
@@ -74,10 +74,10 @@ describe('row count wording', () => {
 
   it('confirmMessage agrees with the count', () => {
     expect(confirmMessage('subjects', 101)).toBe(
-      'Zmiana obejmuje 101 rows. Aby potwierdzić, wpisz nazwę tabeli „subjects”.',
+      'This change affects 101 rows. To confirm, type the table name “subjects”.',
     );
     expect(confirmMessage(null, 122)).toBe(
-      'Zmiana obejmuje 122 rows. Aby potwierdzić, wpisz „TAK”.',
+      'This change affects 122 rows. To confirm, type “YES”.',
     );
   });
 });

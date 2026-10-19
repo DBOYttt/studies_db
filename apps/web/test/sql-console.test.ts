@@ -454,7 +454,7 @@ describe('POST /api/sql', () => {
     expect(res?.status).toBe(429);
     expect(await res?.json()).toEqual({
       ok: false,
-      error: 'Too many queries. Wait a moment.',
+      error: 'Too many queries. Please wait a moment.',
     });
   });
 

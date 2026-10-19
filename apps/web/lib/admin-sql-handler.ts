@@ -48,9 +48,9 @@ export interface AdminSqlDeps {
 }
 
 export const DISABLED_ERROR =
-  'Konsola zapisu wyłączona (brak DATABASE_RW_URL).';
+  'The write console is disabled (DATABASE_RW_URL is not set).';
 export const AUDIT_FAILED_ERROR =
-  'Zmiana zapisana, ale nie udało się zapisać dziennika.';
+  'The change was saved, but writing the audit log failed.';
 
 const NO_STORE = { 'Cache-Control': 'private, no-store' };
 
@@ -75,8 +75,8 @@ function dbErrorMessage(err: unknown): string {
 const statusFor = (message: string) =>
   message === CONNECT_ERROR || message === BUSY_ERROR ? 503 : 400;
 
-export const TOKEN_USED_ERROR = 'Token już użyty. Wykonaj podgląd ponownie.';
-export const CROSS_ORIGIN_ERROR = 'Nieprawidłowe pochodzenie żądania.';
+export const TOKEN_USED_ERROR = 'Token already used. Run the preview again.';
+export const CROSS_ORIGIN_ERROR = 'Invalid request origin.';
 
 /**
  * MACs of preview tokens already sent to execute, with their expiry. A token
@@ -364,7 +364,7 @@ async function execute(
   if (!r.value) {
     return fail(
       400,
-      `Liczba wierszy zmieniła się od podglądu (teraz ${rowCount(overLimit)}). Wykonaj podgląd ponownie.`,
+      `The number of rows changed since the preview (now ${rowCount(overLimit)}). Run the preview again.`,
     );
   }
 
@@ -400,10 +400,10 @@ export async function handleAdminSqlRequest(
 ): Promise<Response> {
   if (isCrossOrigin(req)) return fail(403, CROSS_ORIGIN_ERROR);
   const body = await parseBody(req);
-  if (!body) return fail(400, 'Nieprawidłowe zapytanie.');
+  if (!body) return fail(400, 'Invalid query.');
   const limiter = deps.limiter ?? adminSqlRateLimiter;
   if (!limiter.check(String(user.id))) {
-    return fail(429, 'Za dużo zapytań. Odczekaj chwilę.');
+    return fail(429, 'Too many queries. Please wait a moment.');
   }
   const { rw } = deps;
   if (!rw) return fail(503, DISABLED_ERROR);

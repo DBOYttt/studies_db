@@ -28,7 +28,7 @@ export function AuditActionLabel({ action }: { action: string }) {
   );
 }
 
-/** Audit log rows (Przegląd and Dziennik): time, admin, action, target, rows, statement. */
+/** Audit log rows (Overview and Audit log): time, admin, action, target, rows, statement. */
 export function AuditTable({
   rows,
   emptyText,
@@ -52,22 +52,22 @@ export function AuditTable({
               #
             </th>
             <th scope="col" className={th}>
-              Czas
+              Time
             </th>
             <th scope="col" className={th}>
               Admin
             </th>
             <th scope="col" className={th}>
-              Akcja
+              Action
             </th>
             <th scope="col" className={th}>
-              Tabela
+              Table
             </th>
             <th scope="col" className={`${th} text-right`}>
-              Wiersze
+              Rows
             </th>
             <th scope="col" className={th}>
-              Instrukcja
+              Statement
             </th>
           </tr>
         </thead>
@@ -80,7 +80,7 @@ export function AuditTable({
               <td className={td}>
                 <Link
                   href={`/admin/audit/${r.id}`}
-                  aria-label={`Wpis ${r.id}`}
+                  aria-label={`Entry ${r.id}`}
                   className="text-accent-ink hover:text-accent-ink-hover hover:underline"
                 >
                   {r.id}

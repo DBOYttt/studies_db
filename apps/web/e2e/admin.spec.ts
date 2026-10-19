@@ -4,18 +4,18 @@ import { loginOnce } from './session';
 // One login per role; sessions are persisted per name by loginOnce.
 loginOnce('admin', process.env.E2E_TOKEN_ADMIN);
 
-test('admin sees the Admin entry and is listed on Przegląd', async ({
+test('admin sees the Admin entry and is listed on Overview', async ({
   page,
 }) => {
   await page.goto('/');
   await expect(page.getByRole('link', { name: 'Admin' })).toBeVisible();
   await page.goto('/admin');
   await expect(
-    page.getByRole('heading', { name: 'Panel admina' }),
+    page.getByRole('heading', { name: 'Admin panel' }),
   ).toBeVisible();
   await expect(
     page
-      .getByRole('region', { name: 'Admini' })
+      .getByRole('region', { name: 'Admins' })
       .getByText('Adam Administrator'),
   ).toBeVisible();
 });
@@ -23,22 +23,22 @@ test('admin sees the Admin entry and is listed on Przegląd', async ({
 test('SQL write console: preview, execute, audit log', async ({ page }) => {
   const statement = "UPDATE subjects SET ects = 7 WHERE code = 'MECH'";
   await page.goto('/admin/sql');
-  const editor = page.getByRole('textbox', { name: 'Instrukcja SQL (zapis)' });
+  const editor = page.getByRole('textbox', { name: 'SQL statement (write)' });
   await editor.click();
   await page.keyboard.type(statement);
-  await page.getByRole('button', { name: 'Podgląd', exact: true }).click();
-  const preview = page.getByRole('region', { name: 'Podgląd zmiany' });
-  await expect(preview.getByText(/zostan(ie|ą) zmienion/)).toContainText(
-    /(^|\D)1 wiersz\b/,
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'Change preview' });
+  await expect(preview.getByText(/will be changed/)).toContainText(
+    /(^|\D)1 row\b/,
   );
-  await page.getByRole('button', { name: 'Wykonaj', exact: true }).click();
-  await expect(page.getByText(/Zapisano:/)).toBeVisible();
+  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await expect(page.getByText(/Saved:/)).toBeVisible();
 
   await page.goto('/admin/audit');
   await expect(page.getByText(statement).first()).toBeVisible();
 });
 
-test('simple sidebar shows Panel admina for the admin', async ({ browser }) => {
+test('simple sidebar shows Admin panel for the admin', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'pl-PL' });
   try {
     const page = await context.newPage();
@@ -47,9 +47,7 @@ test('simple sidebar shows Panel admina for the admin', async ({ browser }) => {
     );
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(page).toHaveURL(/localhost:3100\/s$/);
-    await expect(
-      page.getByRole('link', { name: 'Panel admina' }),
-    ).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Admin panel' })).toBeVisible();
   } finally {
     await context.close();
   }
@@ -66,7 +64,7 @@ test.describe('non-admin', () => {
       expect(res?.status()).toBe(404);
     }
     await page.goto('/s');
-    await expect(page.getByRole('link', { name: 'Panel admina' })).toHaveCount(
+    await expect(page.getByRole('link', { name: 'Admin panel' })).toHaveCount(
       0,
     );
   });
@@ -93,12 +91,12 @@ test.describe('non-admin', () => {
       await expect(
         page.getByRole('link', { name: 'Admin', exact: true }),
       ).toHaveCount(0);
-      await expect(
-        page.getByRole('link', { name: 'Panel admina' }),
-      ).toHaveCount(0);
+      await expect(page.getByRole('link', { name: 'Admin panel' })).toHaveCount(
+        0,
+      );
     }
     const js = (await Promise.all(scripts)).join('\n');
-    expect(js).not.toContain('Panel admina');
+    expect(js).not.toContain('Admin panel');
     expect(js).not.toMatch(/title:\s*"Admin"/);
   });
 

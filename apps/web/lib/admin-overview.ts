@@ -27,7 +27,7 @@ export interface AdminOverview {
 
 const n = sql<number>`count(*)`;
 
-/** Data of the /admin "Przegląd" screen (main pool, read only). */
+/** Data of the /admin "Overview" screen (main pool, read only). */
 export async function getAdminOverview(db: Db): Promise<AdminOverview> {
   const [admins, audit, [s], [t], [f], jobRows] = await Promise.all([
     listAdmins(db),
