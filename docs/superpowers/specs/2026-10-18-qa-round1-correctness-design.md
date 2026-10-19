@@ -22,8 +22,9 @@ isolation a concurrent commit makes the statement fail with `ER_CHECKREAD` (errn
 wait timeouts (1205) are possible too. `POST /s/wydarzenia/nowe` returned 500 and nothing was saved.
 
 - New `withTxRetry(db, fn, { attempts = 3 })` in `packages/db/src/tx.ts`: runs `db.transaction(fn)` and retries the
-  whole transaction on errno 1020, 1213 or 1205 (also when wrapped in a Drizzle error's `cause`), with a random
-  20–80 ms pause. Other errors and the last failure are rethrown.
+  whole transaction on errno 1020 or 1213 (also when wrapped in a Drizzle error's `cause`), with a random
+  20–80 ms pause. Other errors and the last failure are rethrown. Lock wait timeouts (1205) are not retried: each
+  attempt already waited the full lock timeout.
 - Every transaction in `events.ts` and `event-series.ts` (add, edit, delete, restore, link, unlink, series add,
   edit, delete, link, unlink) uses it. `fn` must stay free of side effects outside the DB (it already is).
 - The enqueue stays inside the transaction, so a post update is never lost.

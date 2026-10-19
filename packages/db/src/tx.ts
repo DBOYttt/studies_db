@@ -2,8 +2,11 @@ import type { Db } from './client.js';
 
 export type Tx = Parameters<Parameters<Db['transaction']>[0]>[0];
 
-/** MariaDB: 1020 record changed since last read, 1213 deadlock, 1205 lock wait timeout. */
-const RETRYABLE_ERRNOS = new Set([1020, 1213, 1205]);
+/**
+ * MariaDB: 1020 record changed since last read, 1213 deadlock. Lock wait timeouts (1205) are not
+ * retried: each attempt already waited `innodb_lock_wait_timeout`, so retrying would hold a request for minutes.
+ */
+const RETRYABLE_ERRNOS = new Set([1020, 1213]);
 
 /** True when the error (or one of its `cause`s, up to 3 deep) is a retryable transaction conflict. */
 export function isRetryableTxError(err: unknown): boolean {

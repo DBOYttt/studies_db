@@ -1,5 +1,6 @@
 import { count, eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { writeAudit } from '../src/audit.js';
 import type { Db } from '../src/client.js';
 import { addEvent } from '../src/events.js';
 import { adminAudit, events, subjects, users } from '../src/schema.js';
@@ -20,14 +21,16 @@ const fakeDb = (errors: unknown[]) => {
 const noPause = { pause: async () => {} };
 
 describe('isRetryableTxError', () => {
-  it('detects 1020, 1213 and 1205 on the error or its cause chain', () => {
+  it('detects 1020 and 1213 on the error or its cause chain', () => {
     expect(isRetryableTxError({ errno: 1020 })).toBe(true);
     expect(isRetryableTxError({ cause: { errno: 1213 } })).toBe(true);
-    expect(isRetryableTxError({ cause: { cause: { errno: 1205 } } })).toBe(
+    expect(isRetryableTxError({ cause: { cause: { errno: 1020 } } })).toBe(
       true,
     );
   });
-  it('rejects other errors', () => {
+  it('rejects other errors, including lock wait timeouts (1205)', () => {
+    expect(isRetryableTxError({ errno: 1205 })).toBe(false);
+    expect(isRetryableTxError({ cause: { errno: 1205 } })).toBe(false);
     expect(isRetryableTxError({ errno: 1062 })).toBe(false);
     expect(isRetryableTxError(new Error('x'))).toBe(false);
     expect(isRetryableTxError(null)).toBe(false);
@@ -45,6 +48,12 @@ describe('withTxRetry', () => {
     const f = fakeDb([err, err, err, err, err]);
     await expect(withTxRetry(f.db, async () => 1, noPause)).rejects.toBe(err);
     expect(f.calls()).toBe(3);
+  });
+  it('does not retry a lock wait timeout', async () => {
+    const err = { errno: 1205 };
+    const f = fakeDb([err]);
+    await expect(withTxRetry(f.db, async () => 1, noPause)).rejects.toBe(err);
+    expect(f.calls()).toBe(1);
   });
   it('does not retry other errors', async () => {
     const err = { errno: 1062 };
@@ -81,6 +90,28 @@ describe('concurrent addEvent', () => {
         .values({ discordUserId: `d-${name}`, displayName: name })
         .$returningId()
     )[0].id;
+
+  it('a first attempt failing with 1020 rolls back: exactly one audit row after success', async () => {
+    const uid = await user('retry');
+    let attempts = 0;
+    const res = await withTxRetry(
+      db,
+      async (tx) => {
+        attempts++;
+        await writeAudit(tx, { userId: uid, action: 'test.retry' });
+        if (attempts === 1) throw { errno: 1020 };
+        return 'done';
+      },
+      noPause,
+    );
+    expect(res).toBe('done');
+    expect(attempts).toBe(2);
+    const [a] = await db
+      .select({ n: count() })
+      .from(adminAudit)
+      .where(eq(adminAudit.action, 'test.retry'));
+    expect(a.n).toBe(1);
+  });
 
   it('5 rounds of two parallel saves all succeed', async () => {
     const results = [];
