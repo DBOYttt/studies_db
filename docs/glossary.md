@@ -88,3 +88,6 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Pełny ekran | Full screen |
 | Strona główna | Home |
 | Drzewo bazy danych | Database tree |
+| Egzamin / Kolokwium / Projekt (assessment) | Exam / Test / Project |
+| Sprawozdania (assessment) | Lab reports |
+| Zaliczenie (assessment) | Credit |

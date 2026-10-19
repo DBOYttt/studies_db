@@ -89,7 +89,7 @@ describe('renderInfoPost', () => {
       '**Algorytmy i struktury danych** (ASD) — Semestr 1, 6 ECTS',
       'https://upel.example/asd',
       `${W}/s/subjects/ASD`,
-      'Egzamin',
+      'Exam',
       'próg 50%',
       'prof. Jan Kowalski',
       'jan@example.edu',

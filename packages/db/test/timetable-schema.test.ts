@@ -74,11 +74,11 @@ describe('timetable constants', () => {
       'zaliczenie',
     ]);
     expect(ASSESSMENT_NAMES).toEqual({
-      egzamin: 'Egzamin',
-      kolokwium: 'Kolokwium',
-      projekt: 'Projekt',
-      sprawozdania: 'Sprawozdania',
-      zaliczenie: 'Zaliczenie',
+      egzamin: 'Exam',
+      kolokwium: 'Test',
+      projekt: 'Project',
+      sprawozdania: 'Lab reports',
+      zaliczenie: 'Credit',
     });
   });
 

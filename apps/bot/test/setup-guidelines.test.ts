@@ -35,7 +35,7 @@ describe('renderGuidelines', () => {
       '6 ECTS',
       'https://upel.example.edu/course/asd',
       'Laboratorium',
-      'Sprawozdania',
+      'Lab reports',
       'co tydzień',
       'https://upel.example.edu/course/asd-lab',
       'dr inż. Tomasz Zieliński',

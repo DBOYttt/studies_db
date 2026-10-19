@@ -65,11 +65,11 @@ export const ASSESSMENTS = [
 ] as const;
 export type Assessment = (typeof ASSESSMENTS)[number];
 export const ASSESSMENT_NAMES: Record<Assessment, string> = {
-  egzamin: 'Egzamin',
-  kolokwium: 'Kolokwium',
-  projekt: 'Projekt',
-  sprawozdania: 'Sprawozdania',
-  zaliczenie: 'Zaliczenie',
+  egzamin: 'Exam',
+  kolokwium: 'Test',
+  projekt: 'Project',
+  sprawozdania: 'Lab reports',
+  zaliczenie: 'Credit',
 };
 
 export const EVENT_KIND_KEYS = [

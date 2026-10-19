@@ -314,7 +314,7 @@ describe('subjectCard', () => {
       '6 ECTS',
       '<#123456789012345678>',
       'Wykład',
-      'Egzamin',
+      'Exam',
       'pisemny',
       'dr Anna Nowak',
       'Laboratorium',
