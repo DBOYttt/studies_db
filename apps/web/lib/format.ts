@@ -1,3 +1,5 @@
+import { fixSept } from '@studies/db/text';
+
 const dateFmt = new Intl.DateTimeFormat('en-GB', {
   dateStyle: 'medium',
   timeZone: 'Europe/Warsaw',
@@ -5,7 +7,7 @@ const dateFmt = new Intl.DateTimeFormat('en-GB', {
 
 /** Accepts a Date or an ISO string (JSON APIs carry dates as strings). */
 export const formatDate = (d: Date | string): string =>
-  dateFmt.format(typeof d === 'string' ? new Date(d) : d);
+  fixSept(dateFmt.format(typeof d === 'string' ? new Date(d) : d));
 
 export function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;

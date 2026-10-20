@@ -34,6 +34,7 @@ import {
   topics,
   users,
 } from './schema.js';
+import { EVENT_NOT_FOUND } from './text.js';
 import { withTxRetry } from './tx.js';
 
 export type EventSource = 'web' | 'discord';
@@ -61,7 +62,7 @@ export const refused = (message: string): ActionResult => ({
   ok: false,
   message,
 });
-export const NOT_FOUND = 'Event not found.';
+export const NOT_FOUND = EVENT_NOT_FOUND;
 export const CONFLICT =
   "Someone changed this event while you were editing. Your changes weren't saved — reload to see the current version.";
 
@@ -124,7 +125,7 @@ export async function validateEvent(
     return bad('The title must be 1 to 100 characters.');
   }
   if (!Object.hasOwn(EVENT_KINDS, i.kind)) {
-    return bad('Unknown event kind.');
+    return bad('Unknown event type.');
   }
   const place = blankToNull(i.place);
   if (place && place.length > PLACE_MAX) {

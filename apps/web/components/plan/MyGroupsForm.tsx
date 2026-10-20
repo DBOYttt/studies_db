@@ -114,8 +114,8 @@ export function MyGroupsForm({
       </div>
       <p className="m-0 border-b border-line px-3 py-2 text-muted">
         Pick your group in each class that is split into groups. The week view
-        shows only those groups; lectures and classes you have not chosen for
-        stay visible. Your choice is saved to your account.
+        then shows only those groups. Lectures and classes you haven&apos;t
+        picked a group for stay visible. Your choice is saved to your account.
       </p>
       {options.length === 0 ? (
         <p className="m-0 px-3 py-6 text-center text-muted">

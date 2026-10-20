@@ -472,7 +472,7 @@ describe('event actions', () => {
       for (const kind of ['toString', 'constructor', '__proto__']) {
         expect(
           await addEvent(db, id.u, input({ kind: kind as never }), 'web'),
-        ).toEqual({ ok: false, message: 'Unknown event kind.' });
+        ).toEqual({ ok: false, message: 'Unknown event type.' });
       }
     });
 

@@ -2,6 +2,7 @@
 
 import { FloppyDisk } from '@phosphor-icons/react';
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
+import { EVENT_NOT_FOUND } from '@studies/db/text';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState, useTransition } from 'react';
@@ -31,7 +32,7 @@ export type EventFormValues = {
 };
 
 /** The refusal for an event that no longer exists (same text as the db's). */
-const GONE = 'Event not found.';
+const GONE = EVENT_NOT_FOUND;
 
 const input =
   'h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent';
@@ -41,7 +42,7 @@ const primaryBtn =
 
 /**
  * Add / edit form of an event. "When" is three inputs (date, start, end)
- * that the Server Action composes into `DD.MM.RRRR [GG:MM[-GG:MM]]`. Class and
+ * that the Server Action composes into `DD.MM.YYYY [HH:MM[-HH:MM]]`. Class and
  * group follow the chosen subject. A refusal is shown in place; success
  * redirects from the action.
  */
@@ -207,14 +208,14 @@ export function EventForm({
                 onChange={(e) => setRepeat(e.target.value)}
                 className={input}
               >
-                <option value="">no</option>
+                <option value="">Don&apos;t repeat</option>
                 <option value="weekly">every week</option>
                 <option value="biweekly">every 2 weeks</option>
               </select>
             </label>
             {repeat && (
               <label className={label}>
-                until
+                Until
                 <input type="date" name="until" required className={input} />
               </label>
             )}

@@ -621,7 +621,7 @@ describe('/panel', () => {
       'Timetable today',
       'This week',
       'My groups',
-      'Log in to the website',
+      'Sign in to the website',
       'Add event',
     ]);
   });

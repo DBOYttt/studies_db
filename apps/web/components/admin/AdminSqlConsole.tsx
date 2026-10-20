@@ -116,7 +116,7 @@ const primaryBtn =
 
 /**
  * Admin write console (spec section 3, "SQL — write"): Preview runs the
- * statement in a rolled-back transaction, Go commits exactly the
+ * statement in a rolled-back transaction, Run commits exactly the
  * previewed text once. All checks are repeated by /api/admin/sql.
  */
 export function AdminSqlConsole({
@@ -279,7 +279,7 @@ export function AdminSqlConsole({
           </span>
           <span className="max-sm:hidden">
             {' '}
-            · Preview changes nothing; the write happens only after “Go”.
+            · Preview changes nothing; the write happens only after “Run”.
           </span>
         </span>
       </div>
@@ -343,14 +343,14 @@ export function AdminSqlConsole({
               aria-describedby="admin-sql-exec-hint"
               className={primaryBtn}
             >
-              {busy === 'execute' ? 'Running…' : 'Go'}
+              {busy === 'execute' ? 'Running…' : 'Run'}
             </button>
           </div>
         </div>
       </fieldset>
 
       <p id="admin-sql-exec-hint" className="sr-only">
-        Go is available after a preview, until the statement text changes.
+        Run is available after a preview, until the statement text changes.
       </p>
 
       {preview && (

@@ -47,7 +47,7 @@ export interface SubjectInfo {
 
 export { KIND_ORDER };
 
-const NONE_NAME = 'Uncategorized';
+export const NONE_NAME = 'Uncategorized';
 
 function toDate(v: unknown): Date {
   return v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);

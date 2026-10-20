@@ -48,6 +48,7 @@ import {
   listSubjectClasses,
   listSubjectLecturers,
   listSubjectTags,
+  NONE_NAME,
   pageExplorerFiles,
   resolveSubjectSelection,
   type SubjectClass,
@@ -71,7 +72,6 @@ export const dynamic = 'force-dynamic';
 type SP = Record<string, string | string[] | undefined>;
 
 const MAX_PREFILL = 4000;
-const NONE_NAME = 'Uncategorized';
 
 const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
@@ -408,7 +408,7 @@ async function FilesTab({
           selectedId={sel.file}
           editSqlHref={sqlHref(sqlPath, gridSql)}
           csvHref={csvHref}
-          name={`${code}-pliki`}
+          name={`${code}-files`}
         />
       </div>
       {sel.file != null && (

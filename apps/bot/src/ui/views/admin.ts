@@ -10,6 +10,7 @@ import {
   CLASS_NAMES,
   type ClassKind,
 } from '@studies/db';
+import { fixSept } from '@studies/db/text';
 import {
   ActionRowBuilder,
   type ButtonBuilder,
@@ -584,7 +585,7 @@ export function userCard(u: UserCardData, isSelf: boolean): View {
         [
           `Admin: ${yesNo(u.isAdmin)}`,
           `Website access: ${u.isBanned ? 'blocked' : 'active'}`,
-          `First use: ${u.createdAt ? warsawDate.format(u.createdAt) : 'has not used the bot yet'}`,
+          `First use: ${u.createdAt ? fixSept(warsawDate.format(u.createdAt)) : 'has not used the bot yet'}`,
         ].join('\n'),
       ),
     )
@@ -610,8 +611,8 @@ export function banConfirm(u: UserCardData, banned: boolean): View {
       .addTextDisplayComponents(
         text(
           banned
-            ? `**${name}** will not be able to log in to the website.`
-            : `**${name}** will be able to log in to the website again.`,
+            ? `**${name}** will not be able to sign in to the website.`
+            : `**${name}** will be able to sign in to the website again.`,
         ),
       )
       .addSeparatorComponents(divider())

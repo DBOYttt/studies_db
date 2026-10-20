@@ -193,9 +193,13 @@ test('delete the event; an admin sees it with Restore', async ({
     await expect(p).toHaveURL(/localhost:3100\/s$/);
     adminCookies = await admin.cookies();
     await p.goto(`http://localhost:3100${eventUrl.replace('/s', '')}`);
-    await expect(p.getByText('This event is deleted')).toBeVisible();
+    await expect(
+      p.getByText('This event was deleted', { exact: true }),
+    ).toBeVisible();
     await p.getByRole('button', { name: 'Restore' }).click();
-    await expect(p.getByText('This event is deleted')).toBeHidden();
+    await expect(
+      p.getByText('This event was deleted', { exact: true }),
+    ).toBeHidden();
     await expect(p.getByText('Event restored')).toBeVisible();
   } finally {
     await admin.close();
@@ -215,7 +219,7 @@ test.describe('recurring event', () => {
     await page.getByLabel('From (time)').fill('12:00');
     await page.getByLabel('To (time)').fill('13:00');
     await page.getByLabel('Repeat').selectOption('weekly');
-    await page.getByLabel('until', { exact: true }).fill(dateIn(21));
+    await page.getByLabel('Until', { exact: true }).fill(dateIn(21));
     await page.getByRole('button', { name: 'Add event' }).click();
     await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
     await expect(page.getByText('Part of a series')).toBeVisible();

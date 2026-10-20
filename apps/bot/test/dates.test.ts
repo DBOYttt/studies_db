@@ -12,6 +12,13 @@ describe('dates', () => {
     );
   });
 
+  it('spells September "Sep"', () => {
+    expect(wallDate(d('2026-09-15'))).toBe('Tue 15 Sep 2026');
+    expect(instantDate(new Date('2026-09-15T10:00:00Z'))).toBe(
+      'Tue 15 Sep 2026',
+    );
+  });
+
   it('collapses the shared month and year in the week title', () => {
     expect(weekTitle(43, d('2026-10-19'), d('2026-10-25'))).toBe(
       'Week 43 · 19–25 Oct 2026',

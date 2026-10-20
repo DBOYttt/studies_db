@@ -50,6 +50,13 @@ describe('plan', () => {
     expect(planStatusText({ ...none, lastError: 'boom' }, now)).toBe(
       'Never synced.\nError: boom',
     );
+    // September is "Sep", not the en-GB "Sept"
+    expect(
+      planStatusText(
+        { ...none, lastOkAt: new Date('2026-09-14T08:00:00Z') },
+        now,
+      ),
+    ).toBe('Last sync: 14 Sep 2026, 10:00');
   });
 
   it('plan sync requests and reports status', async () => {

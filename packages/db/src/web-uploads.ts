@@ -8,7 +8,13 @@ import type { ActionResult } from './admin-actions.js';
 import { writeAudit } from './audit.js';
 import { enqueueBotRequest } from './bot-requests.js';
 import type { Db, DbExecutor } from './client.js';
-import { checkUser, getEvent, isRefusal, refused } from './events.js';
+import {
+  checkUser,
+  getEvent,
+  isRefusal,
+  NOT_FOUND,
+  refused,
+} from './events.js';
 import { webUploads } from './schema.js';
 
 export type WebUploadStatus = 'queued' | 'posting' | 'done' | 'failed';
@@ -105,7 +111,7 @@ export async function retryFailedUploads(
   const who = await checkUser(db, userId);
   if (isRefusal(who)) return who;
   const e = await getEvent(db, eventId);
-  if (!e || e.deletedAt) return refused('Event not found.');
+  if (!e || e.deletedAt) return refused(NOT_FOUND);
   const ids = await retryableUploadIds(db, eventId, fileExists);
   if (ids.length === 0) return refused('No files to retry.');
   await db.transaction(async (tx) => {

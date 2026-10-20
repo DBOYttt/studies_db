@@ -1,20 +1,9 @@
 /** Date wording shared by the bot's views and posts (en-GB, Warsaw wall clock). */
 
-export const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-export const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
+
+export const WEEKDAYS = WEEKDAYS_SHORT;
+export const MONTHS = MONTHS_SHORT;
 
 /** `20 Oct` of a wall Date (UTC fields = Warsaw wall clock). */
 export const dayMonth = (d: Date) =>

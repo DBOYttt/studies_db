@@ -6,7 +6,7 @@ descriptions, topic titles, seed data, and the class-type tags Wykład, Laborato
 and Discord channel names are unchanged.
 
 Every task follows this table and adds any term it introduces. Dates display as en-GB, 24-hour, Warsaw wall clock
-("Tue 20 Oct 2026, 10:00"); collation stays `'pl'`; plurals are English (`plural(n, 'file', 'files')`).
+("Tue 20 Oct 2026, 10:00"; all-day events "Tue 20 Oct 2026, all day"; September is "Sep", never "Sept"); collation stays `'pl'`; plurals are English (`plural(n, 'file', 'files')`).
 
 | Polish | English |
 |---|---|
@@ -83,7 +83,7 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Temat (forum topic) | Topic |
 | Zaliczenie (column) | Assessment |
 | Bez kategorii | Uncategorized |
-| Wykonaj (run / submit a query or search) | Go |
+| Wykonaj (search boxes, read-only SQL console) | Go |
 | Konsultacje | Office hours |
 | Pełny ekran | Full screen |
 | Strona główna | Home |
@@ -96,7 +96,7 @@ Every task follows this table and adds any term it introduces. Dates display as 
 
 | Polish | English |
 |---|---|
-| Wykonaj / Podgląd (SQL — write console) | Go / Preview |
+| Wykonaj / Podgląd (SQL — write console) | Run / Preview |
 | Wykonanie SQL / Odrzucone SQL (audit action labels) | SQL executed / SQL rejected |
 | Wpis (audit log entry) | Entry |
 | Czas / Akcja / Tabela / Wiersze / Instrukcja | Time / Action / Table / Rows / Statement |
@@ -115,7 +115,6 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Forma zaliczenia | Assessment |
 | Brak (usuń) | None (clear) |
 | Post informacyjny | Info post (pinned post titled "ℹ️ Subject info" / "ℹ️ Events") |
-| Tylko to / To i następne | Only this / This and following |
 
 ## Bot event posts, reminders, plan image
 
@@ -129,3 +128,15 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Przypomnienie / jutro / dziś / cały dzień | Reminder / tomorrow / today / all day |
 | Jutro: (digest header) / …i N więcej | Tomorrow: / …and N more |
 | (odwołane) (plan image) | (cancelled) |
+
+## Final fix wave
+
+| Polish | English |
+| --- | --- |
+| Link do logowania / Zaloguj się na stronie | Sign-in link / Sign in to the website |
+| Nie powtarzaj / Do (repeat until) | Don't repeat / Until |
+| Co tydzień / co 2 tygodnie (event page series row) | every week / every 2 weeks |
+| Wydarzenie usunięte (event page banner) | This event was deleted |
+| Nieznany rodzaj wydarzenia | Unknown event type. |
+| Nie znaleziono wydarzenia | Event not found. |
+| Download / CSV names (`przedmioty`, `…-pliki`, `plan-zajec`) | `subjects`, `…-files`, `timetable` |

@@ -8,6 +8,7 @@ import {
   EVENT_KINDS,
   type EventKind,
 } from '@studies/db/constants';
+import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 import {
   ActionRowBuilder,
   ButtonStyle,
@@ -42,33 +43,20 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const hhmm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 const ddmmyyyy = (d: Date) =>
   `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+const WEEKDAYS = WEEKDAYS_SHORT;
+const MONTHS = MONTHS_SHORT;
 /** `20 Oct 2026` */
 const dMonY = (d: Date) =>
   `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 
-/** `Tue 20 Oct 2026, 10:00–11:30`, or `… (all day)`. */
+/** `Tue 20 Oct 2026, 10:00–11:30`, or `…, all day`. */
 export function whenLabel(
   startsAt: Date,
   endsAt: Date | null,
   allDay: boolean,
 ): string {
   const day = `${WEEKDAYS[startsAt.getUTCDay()]} ${dMonY(startsAt)}`;
-  if (allDay) return `${day} (all day)`;
+  if (allDay) return `${day}, all day`;
   return endsAt
     ? `${day}, ${hhmm(startsAt)}–${hhmm(endsAt)}`
     : `${day}, ${hhmm(startsAt)}`;
@@ -195,7 +183,7 @@ export function eventCard(d: EventCardData): View {
 
 export type Scope = 'one' | 'following';
 
-/** "Only this" / "This and following" before an edit or a delete in a series. */
+/** "Only this one" / "This and following" before an edit or a delete in a series. */
 export function scopeChoice(
   action: 'edit' | 'del',
   id: number,
@@ -212,7 +200,7 @@ export function scopeChoice(
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
-          button(encodeId('evt', action, id, 'one'), 'Only this'),
+          button(encodeId('evt', action, id, 'one'), 'Only this one'),
           button(
             encodeId('evt', action, id, 'following'),
             'This and following',

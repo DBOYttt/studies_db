@@ -148,7 +148,7 @@ export function studentPanel(): View {
           ),
           button(encodeId('stu', 'plan', 'week'), 'This week'),
           button(encodeId('stu', 'groups', 'open'), 'My groups'),
-          button(encodeId('stu', 'login'), 'Log in to the website'),
+          button(encodeId('stu', 'login'), 'Sign in to the website'),
           button(encodeId('evt', 'new'), 'Add event'),
         ),
       ),

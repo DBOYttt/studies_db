@@ -1,4 +1,5 @@
 /** Pure helpers for the /admin "Audit log" screens. */
+import { fixSept } from '@studies/db/text';
 import { historyLabel } from './sql-editor';
 
 export const AUDIT_PAGE_SIZE = 50;
@@ -62,7 +63,7 @@ const timeFmt = new Intl.DateTimeFormat('en-GB', {
 
 /** Audit time as `D Mon YYYY, HH:mm:ss` in Europe/Warsaw. */
 export const formatAuditTime = (d: Date | string): string =>
-  timeFmt.format(typeof d === 'string' ? new Date(d) : d);
+  fixSept(timeFmt.format(typeof d === 'string' ? new Date(d) : d));
 
 /** One-line statement cut to 120 characters for the log table. */
 export const auditStatementPreview = (s: string | null): string =>

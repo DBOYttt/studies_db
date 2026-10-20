@@ -1,5 +1,6 @@
 import type { AuditRow } from '@studies/db';
 import { EVENT_KINDS } from '@studies/db/constants';
+import { MONTHS_SHORT } from '@studies/db/text';
 import { FileList } from '@/components/simple/FileList';
 import type { LinkedTopic } from '@/lib/event-queries';
 import { AUDIT_LABELS, auditSummary, whenLabel } from '@/lib/event-view';
@@ -66,10 +67,10 @@ export function EventDetails({
     rows.push(['Subject', `${e.subjectCode} · ${e.subjectName}`]);
   if (e.place) rows.push(['Place', e.place]);
   if (e.series) {
-    const [y, m, d] = e.series.until.split('-');
+    const [y, m, d] = e.series.until.split('-').map(Number);
     rows.push([
       'Part of a series',
-      `${e.series.rule === 'weekly' ? 'weekly' : 'every 2 weeks'} until ${d}.${m}.${y}`,
+      `${e.series.rule === 'weekly' ? 'every week' : 'every 2 weeks'} until ${d} ${MONTHS_SHORT[m - 1]} ${y}`,
     ]);
   }
   if (e.createdByName) rows.push(['Added by', e.createdByName]);
@@ -92,7 +93,7 @@ export function EventDetails({
           role="status"
           className="rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
         >
-          This event is deleted
+          This event was deleted
         </div>
       )}
       <dl className="m-0 grid max-w-xl grid-cols-[auto_1fr] gap-x-4 gap-y-1">

@@ -3,6 +3,7 @@
  * into the all-day strip and the hour grid, event links and the short
  * "when" label. Dates are wall Dates (see lib/plan.ts).
  */
+import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 import {
   formatIsoWeek,
   type IsoWeek,
@@ -78,12 +79,9 @@ export function dayColumns<S extends PlanSession>(
   });
 }
 
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const p2 = (n: number) => String(n).padStart(2, '0');
-
-/** `Tue 20.10 10:00` (no time for all-day events). */
+/** `Tue 20 Oct, 10:00` (no time for all-day events). */
 export function eventWhenShort(s: PlanSession): string {
   const d = s.startsAt;
-  const date = `${DOW[d.getUTCDay()]} ${p2(d.getUTCDate())}.${p2(d.getUTCMonth() + 1)}`;
-  return s.allDay ? date : `${date} ${wallTime(d)}`;
+  const date = `${WEEKDAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+  return s.allDay ? date : `${date}, ${wallTime(d)}`;
 }

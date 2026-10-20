@@ -129,7 +129,7 @@ describe('eventCard', () => {
 
   it('all-day events say so', () => {
     const v = eventCard(card({ allDay: true, endsAt: null }));
-    expect(allText(v)).toContain('(all day)');
+    expect(allText(v)).toContain('Tue 20 Oct 2026, all day');
   });
 });
 

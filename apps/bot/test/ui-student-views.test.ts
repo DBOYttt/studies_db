@@ -98,7 +98,7 @@ describe('studentPanel', () => {
       ['v1:stu:plan:day', 'Timetable today'],
       ['v1:stu:plan:week', 'This week'],
       ['v1:stu:groups:open', 'My groups'],
-      ['v1:stu:login', 'Log in to the website'],
+      ['v1:stu:login', 'Sign in to the website'],
       ['v1:evt:new', 'Add event'],
     ]);
     expect(allText(v)).toContain('Studies DB');

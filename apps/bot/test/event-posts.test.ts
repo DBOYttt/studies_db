@@ -867,8 +867,6 @@ describe('eventWhenText', () => {
     expect(eventWhenText(e({ endsAt: at('2026-10-21T09:00:00') }))).toBe(
       'Tue 20 Oct 2026, 10:00 – Wed 21 Oct 2026, 09:00',
     );
-    expect(eventWhenText(e({ allDay: true }))).toBe(
-      'Tue 20 Oct 2026 (all day)',
-    );
+    expect(eventWhenText(e({ allDay: true }))).toBe('Tue 20 Oct 2026, all day');
   });
 });

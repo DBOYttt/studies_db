@@ -4,6 +4,7 @@ import {
   type PlanSyncStatus,
   requestPlanSync,
 } from '@studies/db';
+import { fixSept } from '@studies/db/text';
 
 const fmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/Warsaw',
@@ -21,7 +22,7 @@ export function planStatusText(s: PlanSyncStatus, _now: Date): string {
   if (s.lastOkAt) {
     const st = s.stats;
     const counts = st ? ` (+${st.created} ~${st.updated} -${st.deleted})` : '';
-    lines.push(`Last sync: ${fmt.format(s.lastOkAt)}${counts}`);
+    lines.push(`Last sync: ${fixSept(fmt.format(s.lastOkAt))}${counts}`);
   } else {
     lines.push('Never synced.');
   }

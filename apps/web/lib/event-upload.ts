@@ -33,12 +33,13 @@ import {
   MAX_UPLOAD_TOTAL_BYTES,
   MAX_UPLOADS_PER_HOUR,
 } from '@studies/db/constants';
+import { EVENT_NOT_FOUND } from '@studies/db/text';
 import busboy from 'busboy';
 import { isCrossOrigin } from './same-origin';
 
 export const UPLOAD_ERRORS = {
   origin: 'Invalid request origin.',
-  notFound: 'Event not found.',
+  notFound: EVENT_NOT_FOUND,
   storage: 'File upload is unavailable.',
   none: 'No files selected.',
   count: `You can send at most ${MAX_UPLOAD_FILES} files at once.`,

@@ -405,10 +405,10 @@ export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('link')
-    .setDescription('Get a login link for the website'),
+    .setDescription('Get a sign-in link for the website'),
   new SlashCommandBuilder()
     .setName('panel')
-    .setDescription('Open the panel: timetable, My groups, login'),
+    .setDescription('Open the panel: timetable, My groups, sign in'),
   new SlashCommandBuilder()
     .setName('search')
     .setDescription('Search materials')

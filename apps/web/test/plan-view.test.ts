@@ -110,10 +110,11 @@ describe('labels', () => {
     expect(wallTime(W(2026, 10, 13, 7, 5))).toBe('07:05');
     expect(wallSqlText('2026-10-13T08:00:00.000Z')).toBe('2026-10-13 08:00:00');
     expect(dayHeader(W(2026, 10, 13))).toEqual({
-      name: 'Tuesday',
-      date: '13.10',
+      name: 'Tue',
+      date: '13 Oct',
     });
-    expect(dayHeader(W(2026, 10, 18)).name).toBe('Sunday');
+    expect(dayHeader(W(2026, 10, 18)).name).toBe('Sun');
+    expect(dayHeader(W(2026, 9, 15)).date).toBe('15 Sep');
     expect(wallLongDate(W(2026, 10, 13, 23, 30))).toBe(
       'Tuesday, 13 October 2026',
     );
@@ -140,6 +141,11 @@ describe('labels', () => {
   it('shows sync instants in Warsaw time', () => {
     // 2026-10-12 10:15 UTC = 12:15 in Warsaw (CEST).
     expect(formatSyncTime(new Date('2026-10-12T10:15:00Z'))).toContain('12:15');
+  });
+  it('spells September "Sep" in sync times', () => {
+    const s = formatSyncTime(new Date('2026-09-05T10:15:00Z'));
+    expect(s).toContain('5 Sep 2026');
+    expect(s).not.toContain('Sept');
   });
 });
 

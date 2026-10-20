@@ -55,6 +55,10 @@ describe('formatAuditTime', () => {
     expect(formatAuditTime(new Date(Date.UTC(2026, 6, 1, 22, 0, 0)))).toBe(
       '2 Jul 2026, 00:00:00',
     );
+    // September is "Sep", not the en-GB "Sept"
+    expect(formatAuditTime(new Date(Date.UTC(2026, 8, 7, 8, 0, 0)))).toBe(
+      '7 Sep 2026, 10:00:00',
+    );
   });
 });
 

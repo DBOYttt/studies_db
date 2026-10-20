@@ -31,7 +31,7 @@ test('SQL write console: preview, execute, audit log', async ({ page }) => {
   await expect(preview.getByText(/will be changed/)).toContainText(
     /(^|\D)1 row\b/,
   );
-  await page.getByRole('button', { name: 'Go', exact: true }).click();
+  await page.getByRole('button', { name: 'Run', exact: true }).click();
   await expect(page.getByText(/Saved:/)).toBeVisible();
 
   await page.goto('/admin/audit');

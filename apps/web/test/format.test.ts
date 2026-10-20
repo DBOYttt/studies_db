@@ -33,6 +33,9 @@ describe('formatDate', () => {
     expect(formatDate(iso)).toBe(formatDate(new Date(iso)));
     expect(formatDate(iso)).toMatch(/2026/);
   });
+  it('spells September "Sep", not "Sept"', () => {
+    expect(formatDate(new Date('2026-09-15T10:00:00Z'))).toBe('15 Sep 2026');
+  });
 });
 
 describe('safeExternalUrl', () => {

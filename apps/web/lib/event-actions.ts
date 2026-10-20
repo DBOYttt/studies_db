@@ -17,6 +17,7 @@ import {
   unlinkTopic,
 } from '@studies/db';
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
+import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { asc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
@@ -143,7 +144,7 @@ export async function updateEventAction(
   form: FormData,
 ): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Event not found.');
+  if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const input = readForm(form);
   if (isResult(input)) return input;
   const db = getDb();
@@ -182,7 +183,7 @@ export async function deleteEventAction(
   version?: number,
 ): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Event not found.');
+  if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const r = await deleteEvent(getDb(), user.id, id, 'web', scopeOf(scope), {
     expectedVersion:
       typeof version === 'number' &&
@@ -199,7 +200,7 @@ export async function deleteEventAction(
 /** Admin only (404 for everyone else). */
 export async function restoreEventAction(id: number): Promise<ActionResult> {
   const admin = await requireAdmin();
-  if (!isId(id)) return fail('Event not found.');
+  if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const r = await restoreEvent(getDb(), admin.id, id, 'web');
   if (r.ok) refresh(id);
   return r;
@@ -245,7 +246,7 @@ export async function searchTopicsAction(
  */
 export async function retryUploadsAction(id: number): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Event not found.');
+  if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const r = await retryFailedUploads(getDb(), user.id, id, uploadFileExists);
   if (r.ok) refresh(id);
   return r;
@@ -257,7 +258,7 @@ export async function retryUploadsAction(id: number): Promise<ActionResult> {
  */
 export async function retryPostAction(id: number): Promise<ActionResult> {
   const user = await requireUser();
-  if (!isId(id)) return fail('Event not found.');
+  if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const r = await retryEventPost(getDb(), user.id, id, 'web');
   if (r.ok) refresh(id);
   return r;

@@ -20,6 +20,7 @@ import {
   users,
 } from '@studies/db';
 import { EVENT_KIND_KEYS, type EventKind } from '@studies/db/constants';
+import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { and, count, desc, eq, isNull, ne } from 'drizzle-orm';
 import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import type { RouterDeps } from '../commands/router.js';
@@ -60,7 +61,7 @@ const attempt = <T>(f: () => T): T | null => {
 const ID_RE = /^[1-9]\d*$/;
 const PAGE_RE = /^\d+$/;
 const VERSION_RE = /^v\d+$/;
-export const NOT_FOUND_TEXT = 'Event not found.';
+export const NOT_FOUND_TEXT = EVENT_NOT_FOUND;
 export const DELETED_TEXT = 'Event deleted';
 
 type Action =

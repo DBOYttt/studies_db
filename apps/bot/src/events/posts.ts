@@ -90,7 +90,7 @@ export function seriesPostContent(
     .slice(0, MAX_LISTED_DATES);
   const later = dates.filter((d) => d >= next.startsAt).length;
   const time = base.allDay
-    ? '(all day)'
+    ? 'all day'
     : base.endsAt
       ? `${hm(base.startsAt)}–${hm(base.endsAt)}`
       : hm(base.startsAt);
@@ -119,7 +119,7 @@ export function seriesPostContent(
 
 /** "When" as text: a day, a day and hours, or a day and a time range. */
 export function eventWhenText(e: EventDetails): string {
-  if (e.allDay) return `${dmy(e.startsAt)} (all day)`;
+  if (e.allDay) return `${dmy(e.startsAt)}, all day`;
   const same = e.endsAt && dmy(e.endsAt) === dmy(e.startsAt);
   if (!e.endsAt) return `${dmy(e.startsAt)}, ${hm(e.startsAt)}`;
   if (same) return `${dmy(e.startsAt)}, ${hm(e.startsAt)}–${hm(e.endsAt)}`;

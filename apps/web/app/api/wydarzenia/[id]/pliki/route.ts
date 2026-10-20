@@ -1,4 +1,5 @@
 import { getEvent, listEventUploads } from '@studies/db';
+import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { getDb } from '@/lib/db';
 import { handleEventUpload } from '@/lib/event-upload';
 import { requireUser } from '@/lib/session';
@@ -32,13 +33,13 @@ export async function GET(_req: Request, ctx: Ctx) {
   const user = await requireUser();
   const { id } = await ctx.params;
   if (!/^[1-9]\d{0,9}$/.test(id)) {
-    return Response.json({ error: 'Event not found.' }, { status: 404 });
+    return Response.json({ error: EVENT_NOT_FOUND }, { status: 404 });
   }
   const db = getDb();
   const ev = await getEvent(db, Number(id));
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) {
     return Response.json(
-      { error: 'Event not found.' },
+      { error: EVENT_NOT_FOUND },
       { status: 404, headers: NO_STORE },
     );
   }

@@ -38,7 +38,7 @@ export function confirmMessage(table: string | null, affected: number): string {
 }
 
 /**
- * "Go" is enabled only for a pending preview whose text still equals
+ * "Run" is enabled only for a pending preview whose text still equals
  * the editor, with no request in flight and, above `threshold` rows, the
  * typed confirmation. The preview is cleared after every execute, so one
  * preview commits at most once.

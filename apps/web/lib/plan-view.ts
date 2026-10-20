@@ -7,6 +7,7 @@
  * UTC fields or formats with `timeZone: 'UTC'`. Only `formatSyncTime` takes a
  * real instant (plan_sync) and formats it in Europe/Warsaw.
  */
+import { fixSept, MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 import { explorerHref } from './explorer';
 import {
   formatIsoWeek,
@@ -135,35 +136,11 @@ export const wallDateKey = (d: Date): string => d.toISOString().slice(0, 10);
 export const wallSqlText = (iso: string): string =>
   iso.slice(0, 19).replace('T', ' ');
 
-const DAY_NAMES = [
-  'Monday',
-  'Tuesday',
-  'Wednesday',
-  'Thursday',
-  'Friday',
-  'Saturday',
-  'Sunday',
-];
-const MONTHS_SHORT = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-
-/** Column header parts of a wall day: `Tuesday`, `13.10`. */
+/** Column header parts of a wall day: `Tue`, `13 Oct` (shown "Tue 13 Oct"). */
 export function dayHeader(d: Date): { name: string; date: string } {
   return {
-    name: DAY_NAMES[(d.getUTCDay() + 6) % 7],
-    date: `${d.getUTCDate()}.${p2(d.getUTCMonth() + 1)}`,
+    name: WEEKDAYS_SHORT[d.getUTCDay()],
+    date: `${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`,
   };
 }
 
@@ -206,7 +183,7 @@ const syncFmt = new Intl.DateTimeFormat('en-GB', {
 });
 
 /** A plan_sync timestamp (a real UTC instant) in Warsaw time. */
-export const formatSyncTime = (d: Date): string => syncFmt.format(d);
+export const formatSyncTime = (d: Date): string => fixSept(syncFmt.format(d));
 
 /**
  * The last sync run failed: an error is recorded and no successful run

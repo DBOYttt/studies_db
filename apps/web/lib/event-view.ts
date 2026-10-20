@@ -3,6 +3,7 @@
  * from the form's inputs, showing stored wall times, labelling audit rows.
  */
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
+import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 
 const pad = (n: number) => String(n).padStart(2, '0');
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
@@ -45,21 +46,8 @@ export function formWhen(startsAt: Date, endsAt: Date | null, allDay: boolean) {
   };
 }
 
-const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
+const DAYS_SHORT = WEEKDAYS_SHORT;
+const MONTHS = MONTHS_SHORT;
 
 /** "Tue 20 Oct 2026, 10:00–11:30" (or ", all day" for all-day events). */
 export function whenLabel(
