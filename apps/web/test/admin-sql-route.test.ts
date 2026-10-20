@@ -396,6 +396,8 @@ describe('handleAdminSqlRequest', () => {
     const preview = await json(await call({ mode: 'preview', sql }));
     expect(preview.affected).toBe(101);
     expect(preview.rows).toHaveLength(50);
+    // 'YES' is only the word for statements whose table is unknown; a known
+    // table must be confirmed by its own name, so 'YES' is refused here.
     for (const confirm of [undefined, '', 'Subjects', 'YES']) {
       const res = await call({
         mode: 'execute',
@@ -433,6 +435,31 @@ describe('handleAdminSqlRequest', () => {
     );
     expect(await ectsOf('B000')).toBe(2);
     expect(await auditCount('sql.execute')).toBe(before);
+  });
+
+  it('more than 100 rows on an unknown table is confirmed with YES', async () => {
+    // The alias hides the target table from the analyser (table = null).
+    const sql = 'UPDATE subjects s SET s.ects = 4 WHERE s.semester = 7';
+    const preview = await json(await call({ mode: 'preview', sql }));
+    expect(preview.table).toBeNull();
+    expect(preview.affected).toBe(101);
+    const refused = await call({
+      mode: 'execute',
+      sql,
+      token: preview.token,
+      confirm: 'subjects',
+    });
+    expect(refused.status).toBe(400);
+    expect(await ectsOf('B000')).toBe(2);
+    const res = await call({
+      mode: 'execute',
+      sql,
+      token: preview.token,
+      confirm: 'YES',
+    });
+    expect(res.status).toBe(200);
+    expect((await json(res)).affected).toBe(101);
+    expect(await ectsOf('B000')).toBe(4);
   });
 
   it('tables outside the grants are refused with the permission message', async () => {

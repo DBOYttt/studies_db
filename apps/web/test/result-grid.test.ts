@@ -17,7 +17,7 @@ import {
 } from '../lib/result-grid';
 
 describe('resultMessage', () => {
-  it('shows the row range, total and timing with a decimal comma', () => {
+  it('shows the row range, total and timing with a decimal point', () => {
     expect(
       resultMessage({ start: 0, count: 25, total: 120, elapsedMs: 1.2 }),
     ).toBe('Showing rows 0 – 24 (120 total, query took 0.0012 s)');
@@ -69,14 +69,14 @@ describe('resultMessage', () => {
 });
 
 describe('formatSeconds', () => {
-  it('4 decimals, comma', () => {
+  it('4 decimals, decimal point', () => {
     expect(formatSeconds(0)).toBe('0.0000');
     expect(formatSeconds(1234.56)).toBe('1.2346');
   });
 });
 
 describe('footerText', () => {
-  it('uses the Polish plural of "wiersz"', () => {
+  it('uses the English plural of "row"', () => {
     expect(footerText(1, 1, 1)).toBe('1 row · page 1 / 1');
     expect(footerText(3, 1, 1)).toBe('3 rows · page 1 / 1');
     expect(footerText(12, 1, 1)).toBe('12 rows · page 1 / 1');
