@@ -309,7 +309,8 @@ describe('event uploads', () => {
     const [failed] = await rows();
     expect(failed).toMatchObject({
       status: 'failed',
-      error: 'The file is on Discord but did not reach the materials.',
+      error:
+        'The file was posted on Discord but could not be added to the materials.',
       sentAttachmentId: 'a-1',
     });
     expect(await db.select().from(materials)).toHaveLength(0);
@@ -375,7 +376,9 @@ describe('event uploads', () => {
     const all = await rows();
     expect(all.filter((r) => r.status === 'failed')).toHaveLength(12);
     expect(all.filter((r) => r.sentAttachmentId).map((r) => r.error)).toEqual(
-      Array(10).fill('The file is on Discord but did not reach the materials.'),
+      Array(10).fill(
+        'The file was posted on Discord but could not be added to the materials.',
+      ),
     );
     expect(all.filter((r) => !r.sentAttachmentId).map((r) => r.error)).toEqual(
       Array(2).fill('Could not send the file to Discord.'),

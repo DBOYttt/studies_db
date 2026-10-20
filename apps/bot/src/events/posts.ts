@@ -24,6 +24,8 @@ import { dayMonth, wallDate } from '../dates.js';
 import type { UploadSink } from './uploads.js';
 
 export const DELETED_TEXT = 'Event deleted';
+/** Discord audit-log reason of the bot's post edits. */
+const AUDIT_REASON = 'event';
 const MAX_THREAD_NAME = 100;
 const MAX_MESSAGE = 2000;
 
@@ -271,15 +273,15 @@ export function discordEventPostGuild(
         name: post.title,
         appliedTags: tagsFor(forum, [], post.tagName),
         message: { content: post.content, allowedMentions: { parse: [] } },
-        reason: 'wydarzenie',
+        reason: AUDIT_REASON,
       });
       return t.id;
     },
     async editFirstMessage(threadId, post) {
       const t = await threadOf(threadId);
       // Archived or locked threads reject edits; reopen first.
-      if (t.archived) await t.setArchived(false, 'wydarzenie');
-      if (t.locked) await t.setLocked(false, 'wydarzenie');
+      if (t.archived) await t.setArchived(false, AUDIT_REASON);
+      if (t.locked) await t.setLocked(false, AUDIT_REASON);
       const parent = t.parent;
       const tags =
         parent?.type === ChannelType.GuildForum
@@ -289,27 +291,27 @@ export function discordEventPostGuild(
         // Renames are rate limited (about 2 per 10 minutes): only when the
         // title changed, and a refusal doesn't stop the rest of the edit.
         if (t.name !== post.title) {
-          await t.setName(post.title, 'wydarzenie').catch((err) => {
+          await t.setName(post.title, AUDIT_REASON).catch((err) => {
             if (isGone(err)) throw err;
             console.error(`cannot rename event post ${t.id}:`, err);
           });
         }
         if (tags && tags.join() !== t.appliedTags.join()) {
-          await t.setAppliedTags(tags, 'wydarzenie');
+          await t.setAppliedTags(tags, AUDIT_REASON);
         }
       });
       await editStarter(t, post.content);
     },
     async archivePost(threadId, content) {
       const t = await threadOf(threadId);
-      if (t.archived) await t.setArchived(false, 'wydarzenie');
+      if (t.archived) await t.setArchived(false, AUDIT_REASON);
       await editStarter(t, content);
-      await t.setLocked(true, 'wydarzenie');
-      await t.setArchived(true, 'wydarzenie');
+      await t.setLocked(true, AUDIT_REASON);
+      await t.setArchived(true, AUDIT_REASON);
     },
     async sendFiles(threadId, content, files) {
       const t = await threadOf(threadId);
-      if (t.archived) await t.setArchived(false, 'wydarzenie');
+      if (t.archived) await t.setArchived(false, AUDIT_REASON);
       const msg = await t.send({
         content,
         files: files.map((f) => ({ attachment: f.path, name: f.name })),

@@ -803,7 +803,7 @@ describe('discordEventPostGuild only touches its own event posts', () => {
     await g.editFirstMessage('own-bd', post);
     expect(threads.get('own-bd')?.setLocked).toHaveBeenCalledWith(
       false,
-      'wydarzenie',
+      'event',
     );
   });
 
@@ -825,7 +825,7 @@ describe('discordEventPostGuild only touches its own event posts', () => {
     t.setAppliedTags = vi.fn(async () => undefined);
     const g = discordEventPostGuild(client, eventForumCheck(db));
     await g.editFirstMessage('own-ev', { ...post, tagName: 'Egzamin' });
-    expect(t.setAppliedTags).toHaveBeenCalledWith(['n', 'e'], 'wydarzenie');
+    expect(t.setAppliedTags).toHaveBeenCalledWith(['n', 'e'], 'event');
   });
 
   it.each(['foreign-owner', 'foreign-forum'])(

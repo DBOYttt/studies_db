@@ -352,7 +352,7 @@ const kindOf = (s: PlanSession) =>
 const join = (...parts: (string | null | undefined)[]) =>
   parts.filter((p): p is string => !!p).join(' · ');
 
-function weekLines(s: PlanSession, ink: string): Line[] {
+export function weekLines(s: PlanSession, ink: string): Line[] {
   const cancelled = s.status === 'cancelled';
   const lines: Line[] = [
     {
@@ -387,7 +387,7 @@ function weekLines(s: PlanSession, ink: string): Line[] {
   return lines;
 }
 
-function dayLines(s: PlanSession, ink: string): Line[] {
+export function dayLines(s: PlanSession, ink: string): Line[] {
   const cancelled = s.status === 'cancelled';
   const lines: Line[] = [
     {

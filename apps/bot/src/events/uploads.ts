@@ -31,7 +31,7 @@ export const MESSAGE_BYTES = 10 * 1024 * 1024 - 64 * 1024;
 
 export const TOO_BIG = 'The files are too big for the Discord server.';
 export const NOT_INGESTED =
-  'The file is on Discord but did not reach the materials.';
+  'The file was posted on Discord but could not be added to the materials.';
 export const SEND_FAILED = 'Could not send the file to Discord.';
 export const EVENT_DELETED = 'The event was deleted.';
 export const FILE_MISSING = 'The file does not exist on the server.';

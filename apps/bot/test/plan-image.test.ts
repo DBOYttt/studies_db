@@ -5,11 +5,13 @@ import { describe, expect, it } from 'vitest';
 import {
   DAY_IMAGE_WIDTH,
   dayGeometry,
+  dayLines,
   EVENT_COLORS,
   renderDayImage,
   renderWeekImage,
   WEEK_IMAGE_WIDTH,
   weekGeometry,
+  weekLines,
 } from '../src/ui/plan-image.js';
 
 const wall = (iso: string) => new Date(`${iso}Z`);
@@ -246,5 +248,19 @@ describe('events in the plan image', () => {
     expect(
       dayGeometry([allDay], wall('2026-10-15T00:00:00')).strip,
     ).toHaveLength(1);
+  });
+});
+
+describe('class and group labels', () => {
+  it('pass through unchanged in the text lines', () => {
+    const s = session('2026-10-14T10:00:00', '2026-10-14T11:30:00', {
+      classKind: 'laboratorium',
+      className: 'Laboratorium',
+      groupName: 'Gr. 2',
+    });
+    const texts = (l: { text: string }[]) => l.map((x) => x.text);
+    expect(texts(weekLines(s, '#fff'))).toContain('Laboratorium Gr. 2');
+    expect(texts(dayLines(s, '#fff')).join('|')).toContain('Laboratorium');
+    expect(texts(dayLines(s, '#fff')).join('|')).toContain('Gr. 2');
   });
 });
