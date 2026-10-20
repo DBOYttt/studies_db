@@ -102,3 +102,17 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Czas / Akcja / Tabela / Wiersze / Instrukcja | Time / Action / Table / Rows / Statement |
 | Admini / Wszyscy | Admins / Everyone |
 | TAK (typed confirmation word) | YES |
+
+## Added in task 5 (Discord bot)
+
+| Polish | English |
+|---|---|
+| Panel administratora / Panel www | Admin panel / Web panel |
+| Status i synchronizacja | Status and sync |
+| Powiąż posty | Link posts |
+| Zajęcia/grupa (event placement) | Class/group |
+| Całe zajęcia | Whole class |
+| Forma zaliczenia | Assessment |
+| Brak (usuń) | None (clear) |
+| Post informacyjny | Info post (pinned post titled "ℹ️ Subject info" / "ℹ️ Events") |
+| Tylko to / To i następne | Only this / This and following |

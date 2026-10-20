@@ -32,9 +32,9 @@ import {
   view,
 } from './parts.js';
 
-/** Materials listed on the card before "…i N więcej". */
+/** Materials listed on the card before "…and N more". */
 export const MAX_MATERIAL_LINES = 15;
-/** Subjects offered in the modal select ("— brak —" takes the 25th slot). */
+/** Subjects offered in the modal select ("— none —" takes the 25th slot). */
 export const MAX_MODAL_SUBJECTS = MAX_OPTIONS - 1;
 const NO_SUBJECT = '-';
 
@@ -42,22 +42,39 @@ const pad = (n: number) => String(n).padStart(2, '0');
 const hhmm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 const ddmmyyyy = (d: Date) =>
   `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}.${d.getUTCFullYear()}`;
-const WEEKDAYS = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+/** `20 Oct 2026` */
+const dMonY = (d: Date) =>
+  `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 
-/** `śr 20.10.2026 10:00–11:30`, or `… (cały dzień)`. */
+/** `Tue 20 Oct 2026, 10:00–11:30`, or `… (all day)`. */
 export function whenLabel(
   startsAt: Date,
   endsAt: Date | null,
   allDay: boolean,
 ): string {
-  const day = `${WEEKDAYS[startsAt.getUTCDay()]} ${ddmmyyyy(startsAt)}`;
-  if (allDay) return `${day} (cały dzień)`;
+  const day = `${WEEKDAYS[startsAt.getUTCDay()]} ${dMonY(startsAt)}`;
+  if (allDay) return `${day} (all day)`;
   return endsAt
-    ? `${day} ${hhmm(startsAt)}–${hhmm(endsAt)}`
-    : `${day} ${hhmm(startsAt)}`;
+    ? `${day}, ${hhmm(startsAt)}–${hhmm(endsAt)}`
+    : `${day}, ${hhmm(startsAt)}`;
 }
 
-/** The "Kiedy" text that parses back to the same time. */
+/** The "When" text that parses back to the same time. */
 export function whenInput(
   startsAt: Date,
   endsAt: Date | null,
@@ -88,7 +105,7 @@ export interface EventCardData {
   webBaseUrl: string;
   /** https://discord.com/channels/… of the event's post; null without one. */
   postUrl: string | null;
-  /** "co tydzień" / "co 2 tygodnie" for an occurrence of a series. */
+  /** "every week" / "every 2 weeks" for an occurrence of a series. */
   seriesLabel?: string | null;
 }
 
@@ -99,11 +116,11 @@ const fileUrl = (webBaseUrl: string, m: { id: number; previewKind: string }) =>
   `${base(webBaseUrl)}/files/${m.id}/${m.previewKind === 'none' ? 'original' : 'preview'}`;
 
 const esc = (s: string) => escapeMarkdown(s);
-const MORE = (n: number) => `…i ${n} więcej — otwórz na stronie`;
+const MORE = (n: number) => `…and ${n} more. Open the website`;
 
-/** The Materiały block, within `budget` characters. */
+/** The Materials block, within `budget` characters. */
 function materialsText(d: EventCardData, budget: number): string {
-  const head = `**Materiały (${d.materials.length})**`;
+  const head = `**Materials (${d.materials.length})**`;
   if (d.materials.length === 0) return head;
   const lines: string[] = [];
   let used = head.length + 1;
@@ -128,22 +145,22 @@ export function eventCard(d: EventCardData): View {
     ? `${d.subjectCode} ${d.subjectName ?? ''}`.trim()
     : null;
   const info = [
-    `**Kiedy** ${whenLabel(d.startsAt, d.endsAt, d.allDay)}`,
-    d.place ? `**Miejsce** ${esc(d.place)}` : null,
-    d.placement ? `**Zajęcia** ${esc(d.placement)}` : null,
+    `**When** ${whenLabel(d.startsAt, d.endsAt, d.allDay)}`,
+    d.place ? `**Place** ${esc(d.place)}` : null,
+    d.placement ? `**Class** ${esc(d.placement)}` : null,
     d.note ? esc(d.note) : null,
   ]
     .filter((l): l is string => !!l)
     .join('\n');
   const who = [
-    d.createdByName ? `Dodał(a): ${esc(d.createdByName)}` : null,
+    d.createdByName ? `Added by: ${esc(d.createdByName)}` : null,
     d.updatedByName && d.updatedByName !== d.createdByName
-      ? `ostatnio edytował(a): ${esc(d.updatedByName)}`
+      ? `last edited by: ${esc(d.updatedByName)}`
       : null,
   ]
     .filter((l): l is string => !!l)
     .join(' · ');
-  const head = `## ${symbol} ${esc(d.title)}\n-# ${[label, subject && esc(subject), d.seriesLabel ? `Część serii: ${d.seriesLabel}` : null].filter(Boolean).join(' · ')}`;
+  const head = `## ${symbol} ${esc(d.title)}\n-# ${[label, subject && esc(subject), d.seriesLabel ? `Part of a series: ${d.seriesLabel}` : null].filter(Boolean).join(' · ')}`;
   const tail = who ? `-# ${who}` : '';
   const budget = MAX_TEXT - head.length - info.length - tail.length - 40;
 
@@ -151,8 +168,8 @@ export function eventCard(d: EventCardData): View {
   const noSubject = (b: ReturnType<typeof button>) =>
     needsSubject ? b.setDisabled(true) : b;
   const links = [
-    d.postUrl ? linkButton(d.postUrl, 'Otwórz post') : null,
-    linkButton(eventPageUrl(d.webBaseUrl, d.id), 'Otwórz na stronie'),
+    d.postUrl ? linkButton(d.postUrl, 'Open post') : null,
+    linkButton(eventPageUrl(d.webBaseUrl, d.id), 'Open on the website'),
   ].filter((b) => b !== null);
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
@@ -163,10 +180,10 @@ export function eventCard(d: EventCardData): View {
     .addSeparatorComponents(divider())
     .addActionRowComponents(
       row(
-        noSubject(button(encodeId('evt', 'grp', d.id), 'Zajęcia/grupa')),
-        noSubject(button(encodeId('evt', 'link', d.id), 'Powiąż posty')),
-        button(encodeId('evt', 'edit', d.id), 'Edytuj'),
-        button(encodeId('evt', 'del', d.id), 'Usuń', ButtonStyle.Danger),
+        noSubject(button(encodeId('evt', 'grp', d.id), 'Class/group')),
+        noSubject(button(encodeId('evt', 'link', d.id), 'Link posts')),
+        button(encodeId('evt', 'edit', d.id), 'Edit'),
+        button(encodeId('evt', 'del', d.id), 'Delete', ButtonStyle.Danger),
       ),
       row(...links),
     );
@@ -178,7 +195,7 @@ export function eventCard(d: EventCardData): View {
 
 export type Scope = 'one' | 'following';
 
-/** "Tylko to" / "To i następne" before an edit or a delete in a series. */
+/** "Only this" / "This and following" before an edit or a delete in a series. */
 export function scopeChoice(
   action: 'edit' | 'del',
   id: number,
@@ -188,16 +205,19 @@ export function scopeChoice(
     new ContainerBuilder()
       .addTextDisplayComponents(
         text(
-          `## ${action === 'edit' ? 'Edytować' : 'Usunąć'} wydarzenie z serii\n${esc(clip(title, 100))}`,
+          `## ${action === 'edit' ? 'Edit' : 'Delete'} event in a series\n${esc(clip(title, 100))}`,
         ),
-        text('-# Dotyczy tylko tego wystąpienia czy także następnych?'),
+        text('-# Apply to this occurrence only, or to the following ones too?'),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
-          button(encodeId('evt', action, id, 'one'), 'Tylko to'),
-          button(encodeId('evt', action, id, 'following'), 'To i następne'),
-          button(encodeId('evt', 'show', id), 'Anuluj'),
+          button(encodeId('evt', action, id, 'one'), 'Only this'),
+          button(
+            encodeId('evt', action, id, 'following'),
+            'This and following',
+          ),
+          button(encodeId('evt', 'show', id), 'Cancel'),
         ),
       ),
   );
@@ -222,18 +242,18 @@ export function deleteConfirm(
   return view(
     new ContainerBuilder()
       .addTextDisplayComponents(
-        text(`## Usunąć wydarzenie?\n${esc(clip(title, 100))}`),
-        text('-# Post na Discordzie zostanie zarchiwizowany, pliki zostają.'),
+        text(`## Delete event?\n${esc(clip(title, 100))}`),
+        text('-# The Discord post will be archived; files are kept.'),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
           button(
             encodeId('evt', 'delok', ...scopeVersion(id, scope, version)),
-            'Usuń',
+            'Delete',
             ButtonStyle.Danger,
           ),
-          button(encodeId('evt', 'show', id), 'Anuluj'),
+          button(encodeId('evt', 'show', id), 'Cancel'),
         ),
       ),
   );
@@ -256,7 +276,7 @@ export function placementView(
 ): View {
   const opts: StringSelectMenuOptionBuilder[] = [
     new StringSelectMenuOptionBuilder()
-      .setLabel('— brak —')
+      .setLabel('— none —')
       .setValue('0')
       .setDefault(current.classId === null && current.groupId === null),
   ];
@@ -279,16 +299,16 @@ export function placementView(
   const shown = opts.slice(0, MAX_OPTIONS);
   const cut = opts.length - shown.length;
   const container = new ContainerBuilder().addTextDisplayComponents(
-    text(`## Zajęcia/grupa\n${esc(clip(title, 100))}`),
+    text(`## Class/group\n${esc(clip(title, 100))}`),
   );
   if (classes.length === 0) {
-    container.addTextDisplayComponents(text('-# Ten przedmiot nie ma zajęć.'));
+    container.addTextDisplayComponents(text('-# This subject has no classes.'));
   }
   container.addActionRowComponents(
     new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
       new StringSelectMenuBuilder()
         .setCustomId(encodeId('evt', 'grp', eventId))
-        .setPlaceholder('Wybierz zajęcia lub grupę')
+        .setPlaceholder('Choose a class or group')
         .addOptions(shown),
     ),
   );
@@ -297,7 +317,7 @@ export function placementView(
     container
       .addSeparatorComponents(divider())
       .addActionRowComponents(
-        row(button(encodeId('evt', 'show', eventId), '◀ Wróć')),
+        row(button(encodeId('evt', 'show', eventId), '◀ Back')),
       ),
   );
 }
@@ -321,18 +341,18 @@ export function linkView(
 ): View {
   const container = new ContainerBuilder().addTextDisplayComponents(
     text(
-      `## Powiąż posty\n${esc(clip(title, 100))}\n-# Wybierz post, aby go powiązać lub odpiąć. Powiązane: ${linkedCount}`,
+      `## Link posts\n${esc(clip(title, 100))}\n-# Choose a post to link or unlink it. Linked: ${linkedCount}`,
     ),
   );
   if (topics.length === 0) {
-    container.addTextDisplayComponents(text('-# Brak postów tego przedmiotu.'));
+    container.addTextDisplayComponents(text('-# This subject has no posts.'));
   } else {
     container.addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(encodeId('evt', 'link', eventId, page))
           .setPlaceholder(
-            pages > 1 ? `Posty (${page + 1}/${pages})` : 'Posty przedmiotu',
+            pages > 1 ? `Posts (${page + 1}/${pages})` : 'Subject posts',
           )
           .addOptions(
             topics
@@ -347,12 +367,12 @@ export function linkView(
     );
   }
   const nav = [
-    button(encodeId('evt', 'show', eventId), '◀ Wróć'),
+    button(encodeId('evt', 'show', eventId), '◀ Back'),
     ...(page > 0
-      ? [button(encodeId('evt', 'link', eventId, page - 1), 'Nowsze')]
+      ? [button(encodeId('evt', 'link', eventId, page - 1), 'Newer')]
       : []),
     ...(page + 1 < pages
-      ? [button(encodeId('evt', 'link', eventId, page + 1), 'Starsze')]
+      ? [button(encodeId('evt', 'link', eventId, page + 1), 'Older')]
       : []),
   ];
   return view(
@@ -382,7 +402,7 @@ export interface ModalCurrent {
 
 /**
  * `evt:save:<id|new>`. Fields: kind (select), title, subject (select with
- * "— brak —", or a code text field past 24 subjects), when, place_note.
+ * "— none —", or a code text field past 24 subjects), when, place_note.
  */
 export function eventModal(
   eventId: number | null,
@@ -404,13 +424,13 @@ export function eventModal(
     );
   const subject =
     subjects.length <= MAX_MODAL_SUBJECTS
-      ? new LabelBuilder().setLabel('Przedmiot').setStringSelectMenuComponent(
+      ? new LabelBuilder().setLabel('Subject').setStringSelectMenuComponent(
           new StringSelectMenuBuilder()
             .setCustomId('subject')
             .setRequired(true)
             .addOptions(
               new StringSelectMenuOptionBuilder()
-                .setLabel('— brak —')
+                .setLabel('— none —')
                 .setValue(NO_SUBJECT)
                 .setDefault(!cur?.subjectCode),
               ...subjects.map((s) =>
@@ -423,7 +443,7 @@ export function eventModal(
         )
       : field({
           id: 'subject',
-          label: 'Przedmiot (kod, puste = brak)',
+          label: 'Subject (code, empty = none)',
           max: 50,
           value: cur?.subjectCode,
         });
@@ -433,12 +453,12 @@ export function eventModal(
     : (cur?.place ?? '');
   return modal(
     encodeId('evt', 'save', ...scopeVersion(eventId ?? 'new', scope, version)),
-    eventId === null ? 'Dodaj wydarzenie' : 'Edytuj wydarzenie',
+    eventId === null ? 'Add event' : 'Edit event',
     [
-      new LabelBuilder().setLabel('Rodzaj').setStringSelectMenuComponent(kind),
+      new LabelBuilder().setLabel('Type').setStringSelectMenuComponent(kind),
       field({
         id: 'title',
-        label: 'Tytuł',
+        label: 'Title',
         max: 100,
         value: cur?.title,
         required: true,
@@ -446,7 +466,7 @@ export function eventModal(
       subject,
       field({
         id: 'when',
-        label: 'Kiedy (DD.MM[.RRRR] [GG:MM[-GG:MM]])',
+        label: 'When (DD.MM[.YYYY] [HH:MM[-HH:MM]])',
         max: 40,
         value: cur ? whenInput(cur.startsAt, cur.endsAt, cur.allDay) : null,
         required: true,
@@ -454,7 +474,7 @@ export function eventModal(
       }),
       field({
         id: 'place_note',
-        label: 'Miejsce / notatka (pierwsza linia = miejsce)',
+        label: 'Place / note (first line = place)',
         max: 1101,
         value: placeNote,
         long: true,

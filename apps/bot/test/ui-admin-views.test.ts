@@ -178,11 +178,11 @@ describe('adminPanel', () => {
     const v = adminPanel();
     expectValid(v);
     expect(buttons(v).map((b) => [b.custom_id, b.label])).toEqual([
-      ['v1:adm:status', 'Status i synchronizacja'],
-      ['v1:adm:subj:list:0', 'Przedmioty'],
-      ['v1:adm:lect:list:0', 'Prowadzący'],
-      ['v1:adm:user:open', 'Użytkownicy'],
-      ['v1:adm:web', 'Panel www'],
+      ['v1:adm:status', 'Status and sync'],
+      ['v1:adm:subj:list:0', 'Subjects'],
+      ['v1:adm:lect:list:0', 'Lecturers'],
+      ['v1:adm:user:open', 'Users'],
+      ['v1:adm:web', 'Web panel'],
     ]);
   });
 });
@@ -190,24 +190,24 @@ describe('adminPanel', () => {
 describe('statusCard', () => {
   it('shows plan text, job counts and pending materials with the actions', () => {
     const v = statusCard({
-      planText: 'Ostatnia synchronizacja: 14.10 08:00 (ok)',
+      planText: 'Last sync: 14.10 08:00 (ok)',
       jobs: { queued: 3, running: 1, failed: 2 },
       pending: 5,
     });
     expectValid(v);
     const t = allText(v);
-    expect(t).toContain('Ostatnia synchronizacja: 14.10 08:00 (ok)');
-    expect(t).toMatch(/W kolejce: 3/);
-    expect(t).toMatch(/W toku: 1/);
-    expect(t).toMatch(/Błędy: 2/);
+    expect(t).toContain('Last sync: 14.10 08:00 (ok)');
+    expect(t).toMatch(/Queued: 3/);
+    expect(t).toMatch(/Running: 1/);
+    expect(t).toMatch(/Failed: 2/);
     expect(t).toMatch(/5/);
     expect(buttons(v).map((b) => [b.custom_id, b.label])).toEqual(
       expect.arrayContaining([
-        ['v1:adm:plan:sync', 'Synchronizuj plan'],
-        ['v1:adm:setup:dry', 'Podgląd /setup'],
-        ['v1:adm:setup:ask', 'Uruchom /setup'],
-        ['v1:adm:resync', 'Pobierz z Discorda'],
-        ['v1:adm:status', 'Odśwież'],
+        ['v1:adm:plan:sync', 'Sync timetable'],
+        ['v1:adm:setup:dry', 'Preview /setup'],
+        ['v1:adm:setup:ask', 'Run /setup'],
+        ['v1:adm:resync', 'Fetch from Discord'],
+        ['v1:adm:status', 'Refresh'],
       ]),
     );
     expect(buttons(v)).toHaveLength(5);
@@ -228,17 +228,17 @@ describe('setupConfirm', () => {
     const v = setupConfirm();
     expectValid(v);
     const ok = button(v, 'v1:adm:setup:run');
-    expect(ok.label).toBe('Tak, uruchom');
+    expect(ok.label).toBe('Yes, run it');
     expect(ok.style).toBe(4);
-    expect(button(v, 'v1:adm:status').label).toBe('Anuluj');
+    expect(button(v, 'v1:adm:status').label).toBe('Cancel');
   });
 });
 
 describe('reportView', () => {
   it('shows the title and text', () => {
-    const v = reportView('Podgląd /setup', 'No changes.');
+    const v = reportView('/setup preview', 'No changes.');
     expectValid(v);
-    expect(allText(v)).toContain('Podgląd /setup');
+    expect(allText(v)).toContain('/setup preview');
     expect(allText(v)).toContain('No changes.');
   });
 
@@ -266,7 +266,7 @@ describe('subjectPicker', () => {
       expect.arrayContaining([
         ['v1:adm:subj:list:-1', '◀', true],
         ['v1:adm:subj:list:1', '▶', false],
-        ['v1:adm:subj:add', 'Dodaj przedmiot', false],
+        ['v1:adm:subj:add', 'Add subject', false],
       ]),
     );
 
@@ -288,7 +288,7 @@ describe('subjectPicker', () => {
       buttons(one).filter((b) => b.label === '◀' || b.label === '▶'),
     ).toHaveLength(2);
     expect(
-      buttons(one).every((b) => b.label === 'Dodaj przedmiot' || b.disabled),
+      buttons(one).every((b) => b.label === 'Add subject' || b.disabled),
     ).toBe(true);
     const none = subjectPicker([], 0);
     expectValid(none);
@@ -310,7 +310,7 @@ describe('subjectCard', () => {
     for (const s of [
       'AM1',
       'Analiza matematyczna',
-      'Semestr 1',
+      'Semester 1',
       '6 ECTS',
       '<#123456789012345678>',
       'Wykład',
@@ -322,16 +322,16 @@ describe('subjectCard', () => {
     ]) {
       expect(t).toContain(s);
     }
-    expect(button(v, 'v1:adm:subj:edit:AM1').label).toBe('Edytuj');
+    expect(button(v, 'v1:adm:subj:edit:AM1').label).toBe('Edit');
     const [sel] = selects(v);
     expect(sel.custom_id).toBe('v1:adm:class:pick:AM1');
     expect(sel.options.map((o: Json) => o.value)).toEqual([...CLASS_KINDS]);
   });
 
-  it('says "brak forum" without a channel', () => {
+  it('says "no forum" without a channel', () => {
     const v = subjectCard({ ...AM, channelId: null, classes: [] });
     expectValid(v);
-    expect(allText(v)).toContain('brak forum');
+    expect(allText(v)).toContain('no forum');
   });
 
   it('stays within the limits with huge content', () => {
@@ -359,10 +359,10 @@ describe('classActions', () => {
     const v = classActions('AM1', 'laboratorium');
     expectValid(v);
     expect(button(v, 'v1:adm:class:edit:AM1:laboratorium').label).toBe(
-      'Edytuj zajęcia',
+      'Edit class',
     );
     expect(button(v, 'v1:adm:assign:start:AM1:laboratorium').label).toBe(
-      'Przypisz prowadzącego',
+      'Assign lecturer',
     );
     expect(allText(v)).toContain('Laboratorium');
   });
@@ -392,7 +392,7 @@ describe('assignPicker', () => {
     expect(lect.options.find((o: Json) => o.default)?.value).toBe('2');
     expect(grp.custom_id).toBe('v1:adm:assign:grp:AM1:laboratorium:2');
     expect(grp.options.map((o: Json) => [o.value, o.label])).toEqual([
-      ['0', 'Całe zajęcia'],
+      ['0', 'Whole class'],
       ['1', 'Gr. 1'],
       ['2', 'Gr. 2'],
     ]);
@@ -408,11 +408,11 @@ describe('assignPicker', () => {
     });
     expectValid(v);
     expect(selects(v)[1].options).toHaveLength(25);
-    expect(allText(v)).toContain('…i 6 więcej — użyj /lecturer assign');
+    expect(allText(v)).toContain('…and 6 more. Use /lecturer assign');
     const few = assignPicker('AM1', 'laboratorium', lecturers(3), groups, {
       lecturerId: 2,
     });
-    expect(allText(few)).not.toContain('więcej');
+    expect(allText(few)).not.toContain('more');
   });
 
   it('pages lecturers by 25 and keeps the chosen one on its page', () => {
@@ -434,11 +434,11 @@ describe('assignPicker', () => {
       '28',
     );
     expect(selects(chosen)[1].options).toEqual([
-      expect.objectContaining({ value: '0', label: 'Całe zajęcia' }),
+      expect.objectContaining({ value: '0', label: 'Whole class' }),
     ]);
   });
 
-  it('caps groups at 24 next to "Całe zajęcia"', () => {
+  it('caps groups at 24 next to "Whole class"', () => {
     const many = Array.from({ length: 40 }, (_, i) => ({
       number: i + 1,
       name: `Gr. ${i + 1}`,
@@ -461,7 +461,7 @@ describe('lecturerPicker / lecturerCard', () => {
     expect(sel.options[0].value).toBe('1');
     expect(button(first, 'v1:adm:lect:list:-1').disabled).toBe(true);
     expect(button(first, 'v1:adm:lect:list:1').disabled).toBeFalsy();
-    expect(button(first, 'v1:adm:lect:add').label).toBe('Dodaj prowadzącego');
+    expect(button(first, 'v1:adm:lect:add').label).toBe('Add lecturer');
     const last = lecturerPicker(all, 1);
     expectValid(last);
     expect(selects(last)[0].options).toHaveLength(5);
@@ -475,7 +475,7 @@ describe('lecturerPicker / lecturerCard', () => {
     for (const s of ['dr Anna Nowak', 'anna.nowak@example.edu', 'wt 10–12']) {
       expect(t).toContain(s);
     }
-    expect(button(v, 'v1:adm:lect:edit:7').label).toBe('Edytuj');
+    expect(button(v, 'v1:adm:lect:edit:7').label).toBe('Edit');
   });
 });
 
@@ -492,15 +492,15 @@ describe('users', () => {
     expectValid(v);
     const t = allText(v);
     expect(t).toContain('Ola');
-    expect(t).toContain('01.10.2026');
+    expect(t).toContain('1 Oct 2026');
     const ban = button(v, `v1:adm:user:ban:${USER.discordUserId}`);
-    expect(ban.label).toBe('Zablokuj');
+    expect(ban.label).toBe('Block');
     expect(ban.disabled).toBeFalsy();
     const banned = userCard({ ...USER, isBanned: true }, false);
     expectValid(banned);
     expect(
       button(banned, `v1:adm:user:unban:${USER.discordUserId}`).label,
-    ).toBe('Odblokuj');
+    ).toBe('Unblock');
   });
 
   it('userCard disables the ban button for yourself', () => {
@@ -517,7 +517,7 @@ describe('users', () => {
     expect(
       button(ban, `v1:adm:user:banok:${USER.discordUserId}`),
     ).toBeDefined();
-    expect(button(ban, 'v1:adm:user:open').label).toBe('Anuluj');
+    expect(button(ban, 'v1:adm:user:open').label).toBe('Cancel');
     const unban = banConfirm(USER, false);
     expectValid(unban);
     expect(
@@ -689,7 +689,7 @@ describe('prefill and display names', () => {
 
   it('shows a user who never used the bot', () => {
     expect(allText(userCard({ ...USER, createdAt: null }, false))).toContain(
-      'Pierwsze użycie: jeszcze nie korzystał z bota',
+      'First use: has not used the bot yet',
     );
   });
 });

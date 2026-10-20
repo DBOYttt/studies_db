@@ -92,11 +92,11 @@ describe('studentPanel', () => {
     expectValid(v);
     const b = buttons(v);
     expect(b.map((x) => [x.custom_id, x.label])).toEqual([
-      ['v1:stu:plan:day', 'Plan dziś'],
-      ['v1:stu:plan:week', 'Ten tydzień'],
-      ['v1:stu:groups:open', 'Moje grupy'],
-      ['v1:stu:login', 'Zaloguj się na stronie'],
-      ['v1:evt:new', 'Dodaj wydarzenie'],
+      ['v1:stu:plan:day', 'Timetable today'],
+      ['v1:stu:plan:week', 'This week'],
+      ['v1:stu:groups:open', 'My groups'],
+      ['v1:stu:login', 'Log in to the website'],
+      ['v1:evt:new', 'Add event'],
     ]);
     expect(allText(v)).toContain('Studies DB');
   });
@@ -130,7 +130,7 @@ describe('planDay', () => {
     );
     expectValid(v);
     const text = allText(v);
-    expect(text).toContain('Plan — śr 14.10');
+    expect(text).toContain('Timetable — Wed 14 Oct');
     expect(text).not.toContain('Wczoraj');
     expect(text).not.toContain('Jutro');
     const first =
@@ -140,7 +140,7 @@ describe('planDay', () => {
     expect(text).toContain(first);
     expect(text).toContain(second);
     expect(text.indexOf(first)).toBeLessThan(text.indexOf(second));
-    expect(text).not.toContain('Ustaw Moje grupy');
+    expect(text).not.toContain('Set My groups');
   });
 
   it('strikes through cancelled sessions', () => {
@@ -154,7 +154,7 @@ describe('planDay', () => {
       true,
       WEB,
     );
-    expect(allText(v)).toMatch(/~~08:00–09:30 · AM1 .*~~ \(odwołane\)/);
+    expect(allText(v)).toMatch(/~~08:00–09:30 · AM1 .*~~ \(cancelled\)/);
   });
 
   it('navigates by day and links to the web week', () => {
@@ -170,23 +170,21 @@ describe('planDay', () => {
     );
     const labels = buttons(v).map((b) => b.label);
     expect(labels).toEqual(
-      expect.arrayContaining(['Dziś', 'Tydzień', 'Otwórz na stronie']),
+      expect.arrayContaining(['Today', 'Week', 'Open on the website']),
     );
     const link = buttons(v).find((b) => b.url);
     expect(link.url).toBe(`${WEB}/s/plan?week=2026-W42`);
   });
 
-  it('shows "Brak zajęć" for an empty day', () => {
+  it('shows "No classes" for an empty day', () => {
     const v = planDay([], day, true, WEB);
     expectValid(v);
-    expect(allText(v)).toContain('Brak zajęć');
+    expect(allText(v)).toContain('No classes');
   });
 
   it('shows the hint without saved groups', () => {
     const v = planDay([], day, false, WEB);
-    expect(allText(v)).toContain(
-      'Ustaw Moje grupy, aby widzieć tylko swoje zajęcia',
-    );
+    expect(allText(v)).toContain('Set My groups to see only your classes');
   });
 
   it('stops at the limits and says how many are left', () => {
@@ -199,7 +197,7 @@ describe('planDay', () => {
       const v = planDay(many, day, hasGroups, WEB);
       expectValid(v);
       const text = allText(v);
-      const m = /…i (\d+) więcej — otwórz na stronie/.exec(text);
+      const m = /…and (\d+) more\. Open the website/.exec(text);
       expect(m).not.toBeNull();
       const shown = (text.match(/Przedmiot \d+/g) ?? []).length;
       expect(shown + Number(m?.[1])).toBe(60);
@@ -249,9 +247,9 @@ describe('planWeek', () => {
     );
     expectValid(v);
     const text = allText(v);
-    expect(text).toContain('Plan — tydzień 12.10–18.10');
-    const mon = text.indexOf('pn 12.10');
-    const wed = text.indexOf('śr 14.10');
+    expect(text).toContain('Timetable — week 12 Oct – 18 Oct');
+    const mon = text.indexOf('Mon 12 Oct');
+    const wed = text.indexOf('Wed 14 Oct');
     expect(mon).toBeGreaterThanOrEqual(0);
     expect(wed).toBeGreaterThan(text.indexOf('Poniedziałkowy'));
     expect(text.indexOf('Środowy A')).toBeGreaterThan(wed);
@@ -259,7 +257,7 @@ describe('planWeek', () => {
       text.indexOf('Środowy A'),
     );
     // The day block holds both Wednesday sessions together.
-    const wedBlock = texts(v).find((t) => t.includes('śr 14.10'));
+    const wedBlock = texts(v).find((t) => t.includes('Wed 14 Oct'));
     expect(wedBlock).toContain('Środowy A');
     expect(wedBlock).toContain('Środowy B');
   });
@@ -273,15 +271,15 @@ describe('planWeek', () => {
         'v1:stu:plan:week:2026-W43',
       ]),
     );
-    expect(buttons(v).map((b) => b.label)).toContain('Dzień');
+    expect(buttons(v).map((b) => b.label)).toContain('Day');
     expect(buttons(v).find((b) => b.url).url).toBe(
       `${WEB}/s/plan?week=2026-W42`,
     );
-    expect(allText(v)).toContain('Brak zajęć');
-    expect(allText(v)).toContain('Ustaw Moje grupy');
+    expect(allText(v)).toContain('No classes');
+    expect(allText(v)).toContain('Set My groups');
   });
 
-  it('"Dzień" opens today in the current week, else the Monday', () => {
+  it('"Day" opens today in the current week, else the Monday', () => {
     const dayId = (v: View) =>
       customIds(v).find((id) => id.startsWith('v1:stu:plan:day:'));
     const today = wall('2026-10-14T23:30:00');
@@ -305,7 +303,7 @@ describe('planWeek', () => {
     const v = planWeek(many, week, true, WEB);
     expectValid(v);
     const text = allText(v);
-    const m = /…i (\d+) więcej — otwórz na stronie/.exec(text);
+    const m = /…and (\d+) more\. Open the website/.exec(text);
     const shown = (text.match(/Przedmiot \d+/g) ?? []).length;
     expect(shown + Number(m?.[1])).toBe(200);
   });
@@ -333,8 +331,8 @@ describe('plan image', () => {
       ['plan-2026-10-14.png', png],
     ]);
     const text = allText(v);
-    expect(text).toContain('Plan — śr 14.10');
-    expect(text).toContain('Zajęcia: 2 · Moje grupy: tak');
+    expect(text).toContain('Timetable — Wed 14 Oct');
+    expect(text).toContain('Classes: 2 · My groups: yes');
     expect(text).not.toContain('08:00–09:30');
     // Same navigation as the text view.
     expect(customIds(v)).toEqual(customIds(planDay(two, day, true, WEB)));
@@ -351,13 +349,13 @@ describe('plan image', () => {
     );
     expect(v.files?.map((f) => f.name)).toEqual(['plan-2026-W42.png']);
     const text = allText(v);
-    expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
-    expect(text).toContain('Ustaw Moje grupy');
+    expect(text).toContain('Classes: 3 · My groups: no');
+    expect(text).toContain('Set My groups');
     expect(customIds(v)).toEqual(customIds(planWeek(two, week, false, WEB)));
   });
 
   it('shows the hidden-by-Moje-grupy note under the image and in the text', () => {
-    const note = 'Ukryte zajęcia: 3 — uzupełnij Moje grupy';
+    const note = 'Hidden classes: 3. Fill in My groups';
     const withImg = planDay(two, day, true, WEB, png, 3);
     expectValid(withImg);
     expect(allText(withImg)).toContain(note);
@@ -386,13 +384,13 @@ describe('plan image', () => {
       }),
     ];
     expect(allText(planDay(list, day, true, WEB, png))).toContain(
-      'Zajęcia: 2 (odwołane: 1) · Moje grupy: tak',
+      'Classes: 2 (cancelled: 1) · My groups: yes',
     );
     expect(allText(planWeek(list, week, false, WEB, undefined, png))).toContain(
-      'Zajęcia: 3 (odwołane: 1) · Moje grupy: nie',
+      'Classes: 3 (cancelled: 1) · My groups: no',
     );
     expect(allText(planDay(two, day, true, WEB, png))).not.toContain(
-      'odwołane',
+      'cancelled',
     );
   });
 
@@ -408,11 +406,11 @@ describe('plan image', () => {
     ];
     const alt = (v: View) => gallery(v)[0].items[0].description as string;
     expect(alt(planDay(list, day, true, WEB, png))).toBe(
-      'Plan — śr 14.10: 08:00–09:30 AM1 Laboratorium Gr. 2; ' +
-        '10:00–11:30 AM1 Laboratorium Gr. 2; 12:00–13:30 PO Wykład (odwołane)',
+      'Timetable — Wed 14 Oct: 08:00–09:30 AM1 Laboratorium Gr. 2; ' +
+        '10:00–11:30 AM1 Laboratorium Gr. 2; 12:00–13:30 PO Wykład (cancelled)',
     );
     expect(alt(planWeek(list, week, true, WEB, undefined, png))).toMatch(
-      /^Plan — tydzień 12\.10–18\.10: śr 14\.10 08:00–09:30 AM1 Laboratorium Gr\. 2; .*; cz 15\.10 10:00–11:30 AM1 Laboratorium Gr\. 2$/,
+      /^Timetable — week 12 Oct – 18 Oct: Wed 14 Oct 08:00–09:30 AM1 Laboratorium Gr\. 2; .*; Thu 15 Oct 10:00–11:30 AM1 Laboratorium Gr\. 2$/,
     );
   });
 
@@ -441,14 +439,14 @@ describe('plan image', () => {
     expect(planWeek(two, week, true, WEB).files).toEqual([]);
   });
 
-  it('an empty day or week says "Brak zajęć" and has no image', () => {
+  it('an empty day or week says "No classes" and has no image', () => {
     for (const v of [
       planDay([], day, true, WEB, png),
       planWeek([], week, true, WEB, undefined, png),
     ]) {
       expect(gallery(v)).toHaveLength(0);
       expect(v.files).toEqual([]);
-      expect(allText(v)).toContain('Brak zajęć');
+      expect(allText(v)).toContain('No classes');
     }
   });
 });
@@ -484,11 +482,11 @@ describe('groupsView', () => {
     const day = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:day:0:0');
     const hour = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:hour:1:0');
     expect([day?.label, day?.style]).toEqual([
-      'Przypomnienie 24 h: wł.',
+      'Reminder 24 h: on',
       ButtonStyle.Success,
     ]);
     expect([hour?.label, hour?.style]).toEqual([
-      'Przypomnienie 1 h: wył.',
+      'Reminder 1 h: off',
       ButtonStyle.Secondary,
     ]);
     const none = groupsView(options, null, {});
@@ -516,7 +514,7 @@ describe('groupsView', () => {
       'v1:stu:groups:set:2',
     ]);
     const lab = classSelects[0];
-    expect(lab.options[0]).toMatchObject({ label: '— brak —', value: '0' });
+    expect(lab.options[0]).toMatchObject({ label: '— none —', value: '0' });
     expect(lab.options.filter((o: Json) => o.default)).toEqual([
       expect.objectContaining({ value: '102' }),
     ]);
@@ -525,10 +523,10 @@ describe('groupsView', () => {
       expect.objectContaining({ value: '0' }),
     ]);
     expect(buttons(v).map((b) => [b.custom_id, b.label])).toEqual([
-      ['v1:stu:rem:day:1:0', 'Przypomnienie 24 h: wył.'],
-      ['v1:stu:rem:hour:1:0', 'Przypomnienie 1 h: wył.'],
-      ['v1:stu:groups:clear', 'Wyczyść'],
-      ['v1:stu:plan:day', 'Pokaż mój plan'],
+      ['v1:stu:rem:day:1:0', 'Reminder 24 h: off'],
+      ['v1:stu:rem:hour:1:0', 'Reminder 1 h: off'],
+      ['v1:stu:groups:clear', 'Clear'],
+      ['v1:stu:plan:day', 'Show my timetable'],
     ]);
     expect(allText(v)).toContain('Gr. 2');
   });
@@ -562,14 +560,14 @@ describe('groupsView', () => {
     );
     const v = groupsView(options, 'Analiza', {});
     expectValid(v);
-    expect(allText(v)).toMatch(/…i \d+ więcej — otwórz na stronie/);
+    expect(allText(v)).toMatch(/…and \d+ more\. Open the website/);
   });
 });
 
 describe('notice', () => {
   it('is a single text view', () => {
-    const v = notice('Brak uprawnień.');
+    const v = notice('You do not have permission.');
     expectValid(v);
-    expect(texts(v)).toEqual(['Brak uprawnień.']);
+    expect(texts(v)).toEqual(['You do not have permission.']);
   });
 });

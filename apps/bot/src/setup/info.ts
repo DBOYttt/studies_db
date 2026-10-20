@@ -7,24 +7,29 @@ import type {
   SubjectSpec,
 } from './types.js';
 
-export const INFO_TITLE = 'ℹ️ Informacje o przedmiocie';
-export const EVENTS_INFO_TITLE = 'ℹ️ Wydarzenia';
+export const INFO_TITLE = 'ℹ️ Subject info';
+/** Titles earlier versions gave the pinned posts; still recognised. */
+export const LEGACY_INFO_TITLES = [
+  'ℹ️ Informacje o przedmiocie',
+  'ℹ️ Wydarzenia',
+];
+export const EVENTS_INFO_TITLE = 'ℹ️ Events';
 export const EVENTS_FORUM_NAME = 'wydarzenia';
 export const EVENTS_FORUM_TOPIC =
-  'Kolokwia, egzaminy, wyjazdy i inne wydarzenia bez przedmiotu. Każde wydarzenie ma tu swój post, a pliki dodane w poście trafiają na stronę.';
+  'Tests, exams, trips and other events without a subject. Every event has its own post here, and files added to a post end up on the website.';
 
 /** The pinned post of #wydarzenia. */
 export function renderEventsInfoPost(webBaseUrl: string): string {
   return [
-    '**Wydarzenia** — kolokwia, egzaminy, wyjazdy i zajęcia dodatkowe.',
-    'Wydarzenia przedmiotów mają posty w forum swojego przedmiotu, a wydarzenia bez przedmiotu tutaj. Posty zakłada i aktualizuje bot — nie edytuj ich ręcznie.',
-    'Pliki dodane w poście wydarzenia (np. zakres materiału) trafiają do materiałów wydarzenia na stronie.',
-    `Dodaj wydarzenie: ${webBaseUrl}/s/wydarzenia/nowe`,
-    `Plan zajęć: ${webBaseUrl}/s/plan`,
+    '**Events**: tests, exams, trips and extra classes.',
+    "Events of a subject have posts in that subject's forum, and events without a subject are posted here. The bot creates and updates the posts, so do not edit them by hand.",
+    "Files added to an event post (e.g. the scope of the material) go to the event's materials on the website.",
+    `Add an event: ${webBaseUrl}/s/wydarzenia/nowe`,
+    `Timetable: ${webBaseUrl}/s/plan`,
   ].join('\n\n');
 }
 const MAX_MESSAGE = 2000;
-const WEEKDAYS = ['niedz.', 'pon.', 'wt.', 'śr.', 'czw.', 'pt.', 'sob.'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const hm = (d: Date) =>
   `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
@@ -39,8 +44,8 @@ function lecturerLine(l: LecturerSpec): string {
     (l.group === null ? '' : ` (${groupName(l.group)})`);
   const contact = [
     l.email,
-    l.officeHours && `konsultacje: ${l.officeHours}`,
-    l.room && `pokój ${l.room}`,
+    l.officeHours && `office hours: ${l.officeHours}`,
+    l.room && `room ${l.room}`,
   ].filter(Boolean);
   return `• ${who}${contact.length > 0 ? ` — ${contact.join(' · ')}` : ''}`;
 }
@@ -59,7 +64,7 @@ function classBlock(c: ClassSpec): string {
 const sessionName = (s: SessionSpec) =>
   s.classKind
     ? `${CLASS_NAMES[s.classKind]}${s.group === null ? '' : ` ${groupName(s.group)}`}`
-    : (s.label ?? 'Zajęcia');
+    : (s.label ?? 'Class');
 
 function planBlock(sessions: SessionSpec[], webBaseUrl: string): string | null {
   if (sessions.length === 0) return null;
@@ -78,21 +83,21 @@ function planBlock(sessions: SessionSpec[], webBaseUrl: string): string | null {
   const cancelled = sessions
     .filter((s) => s.status === 'cancelled')
     .sort((a, b) => +a.startsAt - +b.startsAt)
-    .map((s) => `odwołane: ${ymd(s.startsAt)} ${sessionName(s)}`);
+    .map((s) => `cancelled: ${ymd(s.startsAt)} ${sessionName(s)}`);
   return [
-    '**Plan zajęć**',
+    '**Timetable**',
     ...slots,
     ...cancelled,
-    `Pełny plan: ${webBaseUrl}/s/plan`,
+    `Full timetable: ${webBaseUrl}/s/plan`,
   ].join('\n');
 }
 
 export function renderInfoPost(s: SubjectSpec, webBaseUrl: string): string {
   const subjectUrl = `${webBaseUrl}/s/subjects/${encodeURIComponent(s.code)}`;
   const head = [
-    `**${s.name}** (${s.code}) — Semestr ${s.semester}, ${s.ects} ECTS`,
-    ...(s.platformUrl ? [`Platforma: ${s.platformUrl}`] : []),
-    `Strona: ${subjectUrl}`,
+    `**${s.name}** (${s.code}) — Semester ${s.semester}, ${s.ects} ECTS`,
+    ...(s.platformUrl ? [`Platform: ${s.platformUrl}`] : []),
+    `Website: ${subjectUrl}`,
   ].join('\n');
   const plan = planBlock(s.sessions ?? [], webBaseUrl);
   const text = [
@@ -101,6 +106,6 @@ export function renderInfoPost(s: SubjectSpec, webBaseUrl: string): string {
     ...(plan ? [plan] : []),
   ].join('\n\n');
   if (text.length <= MAX_MESSAGE) return text;
-  const more = `\n…\nWięcej: ${subjectUrl}`;
+  const more = `\n…\nMore: ${subjectUrl}`;
   return text.slice(0, MAX_MESSAGE - more.length) + more;
 }

@@ -44,21 +44,35 @@ export { notice, type View, type ViewComponent } from './parts.js';
 
 export type RemindersState = { dayBefore: boolean; hourBefore: boolean };
 export const REMINDERS_OFF_NOTICE =
-  'Przypomnienia wyłączone: DM zamknięte — włącz wiadomości prywatne i ustaw je ponownie w Moje grupy.';
+  'Reminders turned off: DMs closed. Enable direct messages and set them again in My groups.';
 
-export const NO_GROUPS_HINT =
-  'Ustaw Moje grupy, aby widzieć tylko swoje zajęcia';
-export const EMPTY_DAY = 'Brak zajęć';
-const more = (n: number) => `…i ${n} więcej — otwórz na stronie`;
+export const NO_GROUPS_HINT = 'Set My groups to see only your classes';
+export const EMPTY_DAY = 'No classes';
+const more = (n: number) => `…and ${n} more. Open the website`;
 
 /* ---------- formatting ---------- */
 
 const DAY_MS = 86_400_000;
-const WEEKDAYS = ['nd', 'pn', 'wt', 'śr', 'cz', 'pt', 'sb'];
+const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const hhmm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-const ddmm = (d: Date) => `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}`;
-/** `śr 14.10` */
+const MONTHS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+/** `14 Oct` */
+const ddmm = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+/** `Wed 14 Oct` */
 const dayLabel = (d: Date) => `${WEEKDAYS[d.getUTCDay()]} ${ddmm(d)}`;
 /** `2026-10-14` */
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
@@ -67,7 +81,7 @@ const midnight = (d: Date) =>
 
 /**
  * `HH:MM–HH:MM · <code> <subject> · <class>[ · <group>][ · <room>][ · <lecturer>]`;
- * cancelled sessions are struck through and marked "(odwołane)".
+ * cancelled sessions are struck through and marked "(cancelled)".
  */
 export function sessionLine(s: PlanSession): string {
   if (s.type === 'event') return eventLine(s);
@@ -80,14 +94,14 @@ export function sessionLine(s: PlanSession): string {
     s.lecturerName,
   ].filter((p): p is string => !!p);
   const line = parts.join(' · ');
-  return s.status === 'cancelled' ? `~~${line}~~ (odwołane)` : line;
+  return s.status === 'cancelled' ? `~~${line}~~ (cancelled)` : line;
 }
 
-/** `HH:MM–HH:MM · 📝 Tytuł · <code> <subject> · <class> · <group> · <place>` */
+/** `HH:MM–HH:MM · 📝 Title · <code> <subject> · <class> · <group> · <place>` */
 function eventLine(s: PlanSession): string {
   const kind = s.eventKind ? EVENT_KINDS[s.eventKind].symbol : '📌';
   const time = s.allDay
-    ? 'cały dzień'
+    ? 'all day'
     : s.endsAt > s.startsAt
       ? `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`
       : hhmm(s.startsAt);
@@ -138,22 +152,20 @@ export function studentPanel(): View {
     new ContainerBuilder()
       .addTextDisplayComponents(
         text('## 📚 Studies DB'),
-        text(
-          'Plan zajęć, wydarzenia i Moje grupy. Odpowiedzi widzisz tylko Ty.',
-        ),
+        text('Timetable, events and My groups. Only you see the replies.'),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
           button(
             encodeId('stu', 'plan', 'day'),
-            'Plan dziś',
+            'Timetable today',
             ButtonStyle.Primary,
           ),
-          button(encodeId('stu', 'plan', 'week'), 'Ten tydzień'),
-          button(encodeId('stu', 'groups', 'open'), 'Moje grupy'),
-          button(encodeId('stu', 'login'), 'Zaloguj się na stronie'),
-          button(encodeId('evt', 'new'), 'Dodaj wydarzenie'),
+          button(encodeId('stu', 'plan', 'week'), 'This week'),
+          button(encodeId('stu', 'groups', 'open'), 'My groups'),
+          button(encodeId('stu', 'login'), 'Log in to the website'),
+          button(encodeId('evt', 'new'), 'Add event'),
         ),
       ),
   );
@@ -179,12 +191,12 @@ interface PlanImage {
   hasGroups: boolean;
 }
 
-/** `HH:MM–HH:MM KOD rodzaj[ grupa][ (odwołane)]` */
+/** `HH:MM–HH:MM CODE type[ group][ (cancelled)]` */
 function altSession(s: PlanSession): string {
   if (s.type === 'event') {
     return [
-      s.allDay ? 'cały dzień' : hhmm(s.startsAt),
-      s.eventKind ? EVENT_KINDS[s.eventKind].label : 'Wydarzenie',
+      s.allDay ? 'all day' : hhmm(s.startsAt),
+      s.eventKind ? EVENT_KINDS[s.eventKind].label : 'Event',
       s.eventTitle ?? s.label,
     ].join(' ');
   }
@@ -195,7 +207,7 @@ function altSession(s: PlanSession): string {
     s.subjectCode || s.subjectName,
     kind,
     s.groupName,
-    s.status === 'cancelled' ? '(odwołane)' : null,
+    s.status === 'cancelled' ? '(cancelled)' : null,
   ]
     .filter((p): p is string => !!p)
     .join(' ');
@@ -209,27 +221,27 @@ function altText(image: PlanImage): string {
   return clip(`${image.title}: ${items.join('; ')}`, MAX_ALT);
 }
 
-/** `Zajęcia: N[ (odwołane: k)] · Moje grupy: tak|nie`; N counts active ones. */
+/** `Classes: N[ (cancelled: k)] · My groups: yes|no`; N counts active ones. */
 function countLine(image: PlanImage): string {
   const classes = image.sessions.filter((s) => s.type !== 'event');
   const events = image.sessions.length - classes.length;
   const cancelled = classes.filter((s) => s.status === 'cancelled').length;
   const active = classes.length - cancelled;
-  const off = cancelled > 0 ? ` (odwołane: ${cancelled})` : '';
-  const ev = events > 0 ? ` · Wydarzenia: ${events}` : '';
-  return `-# Zajęcia: ${active}${off}${ev} · Moje grupy: ${image.hasGroups ? 'tak' : 'nie'}`;
+  const off = cancelled > 0 ? ` (cancelled: ${cancelled})` : '';
+  const ev = events > 0 ? ` · Events: ${events}` : '';
+  return `-# Classes: ${active}${off}${ev} · My groups: ${image.hasGroups ? 'yes' : 'no'}`;
 }
 
-/** The note under a plan when "Moje grupy" hides sessions; '' for none. */
+/** The note under a plan when "My groups" hides sessions; '' for none. */
 const hiddenNote = (hidden: number) =>
-  hidden > 0 ? `-# Ukryte zajęcia: ${hidden} — uzupełnij Moje grupy` : '';
+  hidden > 0 ? `-# Hidden classes: ${hidden}. Fill in My groups` : '';
 
 const noteCost = (hidden: number) =>
   hidden > 0 ? hiddenNote(hidden).length + 1 : 0;
 
 /**
  * Plan layout: heading, divider, then the image with a count line, or the
- * body blocks (or "Brak zajęć") with an overflow line; divider, navigation
+ * body blocks (or "No classes") with an overflow line; divider, navigation
  * row.
  */
 function planView(
@@ -270,7 +282,7 @@ function planView(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(encodeId('evt', 'open'))
-          .setPlaceholder('Wydarzenia')
+          .setPlaceholder('Events')
           .addOptions(
             shown.map((e) =>
               new StringSelectMenuOptionBuilder()
@@ -291,7 +303,7 @@ function planView(
     );
     if (events.length > shown.length) {
       container.addTextDisplayComponents(
-        text(`-# …i ${events.length - shown.length} więcej`),
+        text(`-# …and ${events.length - shown.length} more`),
       );
     }
   }
@@ -337,20 +349,20 @@ export function planDay(
     .sort(byStart);
   const lines = daySessions.map(sessionLine);
   const dayEvents = eventsOf(daySessions);
-  const title = `Plan — ${dayLabel(d)}`;
+  const title = `Timetable — ${dayLabel(d)}`;
   const week = isoWeekOf(d);
   const nav = [
     button(
       encodeId('stu', 'plan', 'day', dayKey(new Date(d.getTime() - DAY_MS))),
       '◀',
     ),
-    button(encodeId('stu', 'plan', 'day'), 'Dziś'),
+    button(encodeId('stu', 'plan', 'day'), 'Today'),
     button(
       encodeId('stu', 'plan', 'day', dayKey(new Date(d.getTime() + DAY_MS))),
       '▶',
     ),
-    button(encodeId('stu', 'plan', 'week', formatIsoWeek(week)), 'Tydzień'),
-    linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
+    button(encodeId('stu', 'plan', 'week', formatIsoWeek(week)), 'Week'),
+    linkButton(webPlanUrl(webBaseUrl, week), 'Open on the website'),
   ];
   const head = heading(title, hasGroups);
   if (image && lines.length > 0) {
@@ -373,7 +385,7 @@ export function planDay(
   }
   const { shown, rest } = takeFitting(
     lines,
-    (l) => l.length,
+    (l) => l.length + 1,
     MAX_TEXT -
       head.length -
       noteCost(hidden) -
@@ -388,7 +400,7 @@ export function planDay(
 
 /**
  * One ISO week: the rendered `image` of it, or without one a text block per
- * day with a line per session. "Dzień" opens `today` (a wall Date) when it
+ * day with a line per session. "Day" opens `today` (a wall Date) when it
  * falls in the week, else the Monday.
  */
 export function planWeek(
@@ -413,7 +425,7 @@ export function planWeek(
     line: sessionLine(s),
     first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
   }));
-  const title = `Plan — tydzień ${ddmm(monday)}–${ddmm(sunday)}`;
+  const title = `Timetable — week ${ddmm(monday)} – ${ddmm(sunday)}`;
   const head = heading(title, hasGroups);
   // At most 7 day blocks, far below the component limit; text decides.
   const { shown, rest } = takeFitting(
@@ -441,8 +453,8 @@ export function planWeek(
       encodeId('stu', 'plan', 'week', formatIsoWeek(shiftWeek(week, 1))),
       '▶',
     ),
-    button(encodeId('stu', 'plan', 'day', dayKey(dayTarget)), 'Dzień'),
-    linkButton(webPlanUrl(webBaseUrl, week), 'Otwórz na stronie'),
+    button(encodeId('stu', 'plan', 'day', dayKey(dayTarget)), 'Day'),
+    linkButton(webPlanUrl(webBaseUrl, week), 'Open on the website'),
   ];
   if (image && lines.length > 0) {
     return planView(
@@ -465,7 +477,7 @@ export function planWeek(
   return planView(head, blocks, rest, nav, null, hidden, weekEvents);
 }
 
-/* ---------- Moje grupy ---------- */
+/* ---------- My groups ---------- */
 
 /**
  * Distinct subject names that have at least one class with groups, in the
@@ -492,7 +504,7 @@ function classSelect(o: MyGroupOption, chosen: number | undefined) {
     .setPlaceholder(clip(o.className))
     .addOptions(
       new StringSelectMenuOptionBuilder()
-        .setLabel('— brak —')
+        .setLabel('— none —')
         .setValue('0')
         .setDefault(selected === 0),
       ...groups.map((g) =>
@@ -506,7 +518,7 @@ function classSelect(o: MyGroupOption, chosen: number | undefined) {
 
 /**
  * Subject select(s) (25 per select), then for the selected subject one
- * labelled select per class with its groups and "— brak —" (value 0).
+ * labelled select per class with its groups and "— none —" (value 0).
  */
 export function groupsView(
   options: MyGroupOption[],
@@ -524,7 +536,7 @@ export function groupsView(
   }
   let summaryText = summary.length
     ? summary.join('\n')
-    : '-# Wybierz przedmiot, a potem swoją grupę na każdych zajęciach.';
+    : '-# Pick a subject, then your group for each class.';
   if (summaryText.length > 1000) {
     const { shown, rest } = takeFitting(
       summary,
@@ -541,7 +553,7 @@ export function groupsView(
     selectedSubject === null ? -1 : subjects.indexOf(selectedSubject);
   const subjArgs = subjIdx >= 0 ? [subjIdx] : [];
   const container = new ContainerBuilder()
-    .addTextDisplayComponents(text('## Moje grupy'), text(summaryText))
+    .addTextDisplayComponents(text('## My groups'), text(summaryText))
     .addSeparatorComponents(divider());
 
   const subjectPages = chunk(subjects.slice(0, MAX_OPTIONS * 3), MAX_OPTIONS);
@@ -556,8 +568,8 @@ export function groupsView(
           )
           .setPlaceholder(
             subjectPages.length > 1
-              ? `Wybierz przedmiot (${p + 1}/${subjectPages.length})`
-              : 'Wybierz przedmiot',
+              ? `Choose a subject (${p + 1}/${subjectPages.length})`
+              : 'Choose a subject',
           )
           .addOptions(
             page.map((name, i) =>
@@ -607,22 +619,22 @@ export function groupsView(
         row(
           button(
             encodeId('stu', 'rem', 'day', rem.dayBefore ? 0 : 1, ...subjArgs),
-            `Przypomnienie 24 h: ${rem.dayBefore ? 'wł.' : 'wył.'}`,
+            `Reminder 24 h: ${rem.dayBefore ? 'on' : 'off'}`,
             rem.dayBefore ? ButtonStyle.Success : ButtonStyle.Secondary,
           ),
           button(
             encodeId('stu', 'rem', 'hour', rem.hourBefore ? 0 : 1, ...subjArgs),
-            `Przypomnienie 1 h: ${rem.hourBefore ? 'wł.' : 'wył.'}`,
+            `Reminder 1 h: ${rem.hourBefore ? 'on' : 'off'}`,
             rem.hourBefore ? ButtonStyle.Success : ButtonStyle.Secondary,
           ),
         ),
       )
       .addActionRowComponents(
         row(
-          button(encodeId('stu', 'groups', 'clear'), 'Wyczyść'),
+          button(encodeId('stu', 'groups', 'clear'), 'Clear'),
           button(
             encodeId('stu', 'plan', 'day'),
-            'Pokaż mój plan',
+            'Show my timetable',
             ButtonStyle.Primary,
           ),
         ),

@@ -115,7 +115,9 @@ describe('router', () => {
       config,
     });
     await handler(asI(i));
-    expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+    expect(i.reply.mock.calls[0]?.[0].content).toBe(
+      'You do not have permission.',
+    );
   });
 
   it('any command syncs users.is_admin from the member roles', async () => {
@@ -296,7 +298,7 @@ describe('router', () => {
     const [s] = await db.select().from(subjects);
     expect(s?.code).toBe('ALG');
     expect(i.followUp.mock.calls[0]?.[0].content).toContain(
-      'bot nie widzi tego forum',
+      'the bot cannot see this forum',
     );
   });
 
@@ -325,11 +327,11 @@ describe('router', () => {
     expect(send).toHaveBeenCalledTimes(1);
     const msg = send.mock.calls[0]?.[0];
     expect(msg.content).toMatch(
-      /^Twój link do Studies DB \(ważny 15 minut, jednorazowy\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
+      /^Your Studies DB link \(valid for 15 minutes, single use\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
     );
     expect(msg.flags).toBe(MessageFlags.SuppressEmbeds);
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(
-      'Wysłałem Ci link w wiadomości prywatnej.',
+      'I sent you the link in a direct message.',
     );
   });
 });
@@ -359,7 +361,7 @@ describe('/resync', () => {
     await held;
     expect(deferReply).not.toHaveBeenCalled();
     expect(i.reply.mock.calls[0]?.[0]).toMatchObject({
-      content: '/setup już trwa — spróbuj za chwilę.',
+      content: '/setup is already running. Try again in a moment.',
       flags: MessageFlags.Ephemeral,
     });
   });
@@ -538,7 +540,7 @@ describe('/setup', () => {
     await handlerFor()(asI(i));
     expect(fetchMessages).toHaveBeenCalled();
     const text = i.editReply.mock.calls[0]?.[0].content;
-    expect(text).toContain('ASD: doślij 1 plików do tematu „Lab 1”');
+    expect(text).toContain('ASD: send 1 more files to topic "Lab 1"');
   });
 
   it('reports forums the bot cannot read and still plans the rest', async () => {
@@ -602,9 +604,9 @@ describe('/setup', () => {
     });
     await handlerFor()(asI(i));
     const text = i.editReply.mock.calls[0]?.[0].content;
-    expect(text).toContain('nie może odczytać forum #aaa-ukryte');
-    expect(text).toContain('nie może odczytać forum #bbb-zepsute');
-    expect(text).toContain('z forum #ccc-dobre');
+    expect(text).toContain('the bot cannot read forum #aaa-ukryte');
+    expect(text).toContain('the bot cannot read forum #bbb-zepsute');
+    expect(text).toContain('from forum #ccc-dobre');
     expect(text).not.toContain('z forum #aaa-ukryte');
   });
 
@@ -756,8 +758,8 @@ describe('/setup', () => {
       flags: MessageFlags.Ephemeral,
     });
     const text = i.editReply.mock.calls[0]?.[0].content;
-    expect(text).toContain('Plan (bez zmian):');
-    expect(text).toContain('nadaj Ci rolę Studies Admin');
+    expect(text).toContain('Plan (no changes made):');
+    expect(text).toContain('give you the role Studies Admin');
   });
 
   it('refuses a second /setup while one is running, and allows it afterwards', async () => {
@@ -787,7 +789,7 @@ describe('/setup', () => {
     await handlerFor()(asI(second));
     expect(second.deferReply).not.toHaveBeenCalled();
     expect(second.reply.mock.calls[0]?.[0]).toMatchObject({
-      content: '/setup już trwa — spróbuj za chwilę.',
+      content: '/setup is already running. Try again in a moment.',
       flags: MessageFlags.Ephemeral,
     });
 
@@ -826,7 +828,9 @@ describe('/setup', () => {
       options: { getBoolean: () => true },
     });
     await handlerFor()(asI(i));
-    expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+    expect(i.reply.mock.calls[0]?.[0].content).toBe(
+      'You do not have permission.',
+    );
   });
 
   it('refuses a same-name role when no role id is stored, but still allows /setup via Manage Server', async () => {
@@ -849,7 +853,9 @@ describe('/setup', () => {
       options: { getSubcommand: () => 'list' },
     });
     await handlerFor()(asI(sub));
-    expect(sub.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+    expect(sub.reply.mock.calls[0]?.[0].content).toBe(
+      'You do not have permission.',
+    );
 
     const setup = mkInteraction({
       commandName: 'setup',
@@ -863,7 +869,7 @@ describe('/setup', () => {
     await handlerFor()(asI(setup));
     expect(setup.reply).not.toHaveBeenCalled();
     expect(setup.editReply.mock.calls[0]?.[0].content).toContain(
-      'zapisz rolę Studies Admin jako rolę admina',
+      'save role Studies Admin as the admin role',
     );
   });
 
@@ -875,7 +881,9 @@ describe('/setup', () => {
       options: { getSubcommand: () => 'list' },
     });
     await handlerFor()(asI(i));
-    expect(i.reply.mock.calls[0]?.[0].content).not.toBe('Brak uprawnień.');
+    expect(i.reply.mock.calls[0]?.[0].content).not.toBe(
+      'You do not have permission.',
+    );
   });
 
   it('keeps other admin commands role-only', async () => {
@@ -886,7 +894,9 @@ describe('/setup', () => {
       options: { getSubcommand: () => 'list' },
     });
     await handlerFor()(asI(i));
-    expect(i.reply.mock.calls[0]?.[0].content).toBe('Brak uprawnień.');
+    expect(i.reply.mock.calls[0]?.[0].content).toBe(
+      'You do not have permission.',
+    );
   });
 
   it('imports unlinked forums, pulls their posts and finishes them in a second pass', async () => {
@@ -970,10 +980,10 @@ describe('/setup', () => {
     expect(fizInfoThread.pin).toHaveBeenCalled();
     const text = i.editReply.mock.calls[0]?.[0].content;
     expect(text).toContain('FIZ');
-    expect(text).toContain('wytyczne');
-    expect(text).toContain('Pobrano');
-    expect(text).toContain('post informacyjny');
-    expect(text).not.toContain('Błędy');
+    expect(text).toContain('guidelines');
+    expect(text).toContain('Fetched posts');
+    expect(text).toContain('info post');
+    expect(text).not.toContain('Errors');
   });
 
   it('skips catch-up when nothing was imported', async () => {
@@ -1004,13 +1014,13 @@ describe('/setup', () => {
     // The panels and #wydarzenia (its info post comes from the second pass).
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(
       [
-        '**Utworzono**',
-        '- kanał #panel',
-        '- kanał #admin-panel',
-        '- panel w #panel',
-        '- panel w #admin-panel',
+        '**Created**',
+        '- channel #panel',
+        '- channel #admin-panel',
+        '- panel in #panel',
+        '- panel in #admin-panel',
         '- #wydarzenia: forum #wydarzenia',
-        '- #wydarzenia: post informacyjny',
+        '- #wydarzenia: info post',
       ].join('\n'),
     );
   });

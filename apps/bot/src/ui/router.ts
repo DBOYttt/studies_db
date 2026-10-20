@@ -24,7 +24,7 @@ import { notice, REMINDERS_OFF_NOTICE, studentPanel } from './views/student.js';
 
 export { STALE_TEXT, type UiInteraction } from './respond.js';
 
-export const BANNED_TEXT = 'Twój dostęp do strony jest zablokowany.';
+export const BANNED_TEXT = 'Your access to the website is blocked.';
 
 /** /panel: the student panel, privately. Allowed for banned users too. */
 export async function openStudentPanel(

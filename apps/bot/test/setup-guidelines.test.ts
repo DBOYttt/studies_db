@@ -31,7 +31,7 @@ describe('renderGuidelines', () => {
     const g = renderGuidelines(ASD);
     for (const part of [
       'Algorytmy i struktury danych',
-      'Semestr 3',
+      'Semester 3',
       '6 ECTS',
       'https://upel.example.edu/course/asd',
       'Laboratorium',
@@ -65,7 +65,7 @@ describe('renderGuidelines', () => {
     expect(g).not.toMatch(/null|undefined/);
     expect(g).toContain('Jan Nowak');
     const bare = renderGuidelines({ ...ASD, platformUrl: null, classes: [] });
-    expect(bare).not.toMatch(/null|undefined|Prowadzący/);
+    expect(bare).not.toMatch(/null|undefined|Lecturers/);
     expect(bare).not.toMatch(/\n\n\n/);
   });
 

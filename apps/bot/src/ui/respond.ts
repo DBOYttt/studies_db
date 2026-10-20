@@ -13,7 +13,7 @@ export type UiInteraction =
   | MessageComponentInteraction
   | ModalSubmitInteraction;
 
-export const STALE_TEXT = 'Ten panel jest nieaktualny — otwórz go ponownie.';
+export const STALE_TEXT = 'This panel is out of date. Open it again.';
 
 export const NO_MENTIONS = { parse: [] as never[] };
 

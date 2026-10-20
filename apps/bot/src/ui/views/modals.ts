@@ -79,7 +79,7 @@ export function subjectModal(
   const fields = [
     field({
       id: 'name',
-      label: 'Nazwa',
+      label: 'Name',
       max: FIELD_MAX.subjectName,
       value: s?.name,
       required: true,
@@ -89,7 +89,7 @@ export function subjectModal(
     fields.push(
       field({
         id: 'code',
-        label: 'Kod',
+        label: 'Code',
         max: FIELD_MAX.subjectCode,
         required: true,
       }),
@@ -98,21 +98,21 @@ export function subjectModal(
   fields.push(
     field({
       id: 'semester',
-      label: `Semestr (${SEMESTERS.join(' lub ')})`,
+      label: `Semester (${SEMESTERS.join(' or ')})`,
       max: String(Math.max(...SEMESTERS)).length,
       value: s ? String(s.semester) : null,
       required: true,
     }),
     field({
       id: 'ects',
-      label: `Punkty ECTS (${ECTS_MIN}–${ECTS_MAX})`,
+      label: `ECTS points (${ECTS_MIN}–${ECTS_MAX})`,
       max: String(ECTS_MAX).length,
       value: s ? String(s.ects) : null,
       required: true,
     }),
     field({
       id: 'description',
-      label: 'Opis',
+      label: 'Description',
       max: FIELD_MAX.description,
       value: s?.description,
       long: true,
@@ -122,7 +122,7 @@ export function subjectModal(
     fields.push(
       field({
         id: 'platform_url',
-        label: 'Adres platformy',
+        label: 'Platform URL',
         max: FIELD_MAX.platformUrl,
         value: s.platformUrl,
         placeholder: 'https://…',
@@ -131,7 +131,7 @@ export function subjectModal(
   }
   return modal(
     encodeId('adm', 'subj', 'save', s ? s.code : 'new'),
-    s ? `Edytuj przedmiot ${s.code}` : 'Nowy przedmiot',
+    s ? `Edit subject ${s.code}` : 'New subject',
     fields,
   );
 }
@@ -151,7 +151,7 @@ export function classModal(
     .setRequired(true)
     .addOptions(
       new StringSelectMenuOptionBuilder()
-        .setLabel('Brak')
+        .setLabel('None')
         .setValue('brak')
         .setDefault(current.assessment === null),
       ...ASSESSMENTS.map((a) =>
@@ -166,18 +166,18 @@ export function classModal(
     `${code} · ${CLASS_NAMES[kind]}`,
     [
       new LabelBuilder()
-        .setLabel('Forma zaliczenia')
+        .setLabel('Assessment')
         .setStringSelectMenuComponent(assessment),
       field({
         id: 'note',
-        label: 'Uwagi',
+        label: 'Notes',
         max: FIELD_MAX.classNote,
         value: current.assessmentNote,
         long: true,
       }),
       field({
         id: 'platform_url',
-        label: 'Adres platformy',
+        label: 'Platform URL',
         max: FIELD_MAX.platformUrl,
         value: current.platformUrl,
         placeholder: 'https://…',
@@ -190,38 +190,38 @@ export function classModal(
 export function lecturerModal(l?: LecturerCardData): ModalBuilder {
   return modal(
     encodeId('adm', 'lect', 'save', l ? l.id : 'new'),
-    l ? 'Edytuj prowadzącego' : 'Nowy prowadzący',
+    l ? 'Edit lecturer' : 'New lecturer',
     [
       field({
         id: 'name',
-        label: 'Imię i nazwisko',
+        label: 'Full name',
         max: FIELD_MAX.lecturerName,
         value: l?.name,
         required: true,
       }),
       field({
         id: 'title',
-        label: 'Tytuł',
+        label: 'Title',
         max: FIELD_MAX.lecturerTitle,
         value: l?.title,
         placeholder: 'dr',
       }),
       field({
         id: 'email',
-        label: 'E-mail',
+        label: 'Email',
         max: FIELD_MAX.email,
         value: l?.email,
       }),
       field({
         id: 'office_hours',
-        label: 'Konsultacje',
+        label: 'Office hours',
         max: FIELD_MAX.officeHours,
         value: l?.officeHours,
         long: true,
       }),
       field({
         id: 'room',
-        label: 'Pokój',
+        label: 'Room',
         max: FIELD_MAX.room,
         value: l?.room,
       }),

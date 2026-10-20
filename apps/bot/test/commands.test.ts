@@ -35,26 +35,26 @@ describe('plan', () => {
       lastError: null,
       stats: null,
     };
-    expect(planStatusText(none, now)).toBe('Nigdy nie synchronizowano.');
+    expect(planStatusText(none, now)).toBe('Never synced.');
     const ok = {
       ...none,
       lastOkAt: new Date('2026-10-12T10:30:00Z'),
       stats: { created: 3, updated: 2, deleted: 1, unchanged: 9, warnings: [] },
     };
     expect(planStatusText(ok, now)).toBe(
-      'Ostatnia synchronizacja: 12.10.2026, 12:30 (+3 ~2 -1)',
+      'Last sync: 12 Oct 2026, 12:30 (+3 ~2 -1)',
     );
     expect(planStatusText({ ...ok, lastError: 'boom' }, now)).toBe(
-      'Ostatnia synchronizacja: 12.10.2026, 12:30 (+3 ~2 -1)\nBłąd: boom',
+      'Last sync: 12 Oct 2026, 12:30 (+3 ~2 -1)\nError: boom',
     );
     expect(planStatusText({ ...none, lastError: 'boom' }, now)).toBe(
-      'Nigdy nie synchronizowano.\nBłąd: boom',
+      'Never synced.\nError: boom',
     );
   });
 
   it('plan sync requests and reports status', async () => {
     expect(await planSyncReply(db, new Date())).toBe(
-      'Zlecono synchronizację planu (wykona ją worker w ciągu minuty).\nNigdy nie synchronizowano.',
+      'Timetable sync requested (the worker will run it within a minute).\nNever synced.',
     );
   });
 });
@@ -88,7 +88,7 @@ describe('link and ban', () => {
 describe('searchReply', () => {
   it('empty', async () => {
     expect(await searchReply(db, 'https://x.pl', 'abc')).toBe(
-      'Brak wyników dla „abc”.',
+      'No results for "abc".',
     );
   });
   it('max 5 lines', async () => {
@@ -140,7 +140,7 @@ describe('searchReply', () => {
 describe('escaping and mentions', () => {
   it('escapes markdown in the echoed query', async () => {
     expect(await searchReply(db, 'https://x.pl', '@everyone *x*')).toBe(
-      'Brak wyników dla „@everyone \\*x\\*”.',
+      'No results for "@everyone \\*x\\*".',
     );
   });
   it('replyOptions never allows mentions', () => {

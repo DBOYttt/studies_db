@@ -190,8 +190,8 @@ const textOf = (payload: Json) =>
       .map((n) => n.content),
   ].join('\n');
 
-const STALE = 'Ten panel jest nieaktualny — otwórz go ponownie.';
-const BANNED = 'Twój dostęp do strony jest zablokowany.';
+const STALE = 'This panel is out of date. Open it again.';
+const BANNED = 'Your access to the website is blocked.';
 
 describe('handleUi', () => {
   it('answers a stale id with the notice', async () => {
@@ -233,9 +233,9 @@ describe('handleUi', () => {
       'attachment://plan-2026-10-14.png',
     );
     const text = textOf(view);
-    expect(text).toContain('Plan — śr 14.10');
-    expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
-    expect(text).toContain('Ustaw Moje grupy');
+    expect(text).toContain('Timetable — Wed 14 Oct');
+    expect(text).toContain('Classes: 3 · My groups: no');
+    expect(text).toContain('Set My groups');
   });
 
   it('plan from an ephemeral view updates it in place, filtered by my groups', async () => {
@@ -250,8 +250,8 @@ describe('handleUi', () => {
     await handler()(i);
     expect(i.calls).toEqual(['deferUpdate', 'editReply']);
     const text = textOf(i.editReply.mock.calls[0][0]);
-    expect(text).toContain('Zajęcia: 2 · Moje grupy: tak');
-    expect(text).not.toContain('Ustaw Moje grupy');
+    expect(text).toContain('Classes: 2 · My groups: yes');
+    expect(text).not.toContain('Set My groups');
   });
 
   it('◀/▶ swap the image in place: new files, previous attachments dropped', async () => {
@@ -275,13 +275,13 @@ describe('handleUi', () => {
     ]);
   });
 
-  it('an empty day renders no image and says "Brak zajęć"', async () => {
+  it('an empty day renders no image and says "No classes"', async () => {
     const i = component('v1:stu:plan:day:2026-10-13', { ephemeral: true });
     await handler()(i);
     const payload = i.editReply.mock.calls[0][0];
     expect(payload.files).toEqual([]);
     expect(gallery(payload)).toHaveLength(0);
-    expect(textOf(payload)).toContain('Brak zajęć');
+    expect(textOf(payload)).toContain('No classes');
   });
 
   it('falls back to the text list when rendering fails', async () => {
@@ -323,14 +323,14 @@ describe('handleUi', () => {
     const i = component('v1:stu:plan:day:2026-10-14', { ephemeral: true });
     await handler()(i);
     const text = textOf(i.editReply.mock.calls[0][0]);
-    expect(text).toContain('Zajęcia: 3 · Moje grupy: nie');
+    expect(text).toContain('Classes: 3 · My groups: no');
   });
 
-  it('plan week: the Dzień button targets today in the current week', async () => {
+  it('plan week: the Day button targets today in the current week', async () => {
     const i = component('v1:stu:plan:week', { ephemeral: true });
     await handler()(i);
     const view = i.editReply.mock.calls[0][0];
-    expect(textOf(view)).toContain('Plan — tydzień 12.10–18.10');
+    expect(textOf(view)).toContain('Timetable — week 12 Oct – 18 Oct');
     const ids = nodes(view).map((n) => n.custom_id);
     expect(ids).toContain('v1:stu:plan:day:2026-10-14');
     const j = component('v1:stu:plan:week:2026-W44', { ephemeral: true });
@@ -344,7 +344,7 @@ describe('handleUi', () => {
     const open = component('v1:stu:groups:open');
     await handler()(open);
     expect(open.calls).toEqual(['deferReply', 'editReply']);
-    expect(textOf(open.editReply.mock.calls[0][0])).toContain('Moje grupy');
+    expect(textOf(open.editReply.mock.calls[0][0])).toContain('My groups');
 
     const subj = component('v1:stu:groups:subj', {
       ephemeral: true,
@@ -432,7 +432,7 @@ describe('handleUi', () => {
       nodes(view)
         .filter((n) => n.type === 2)
         .map((n) => n.label),
-    ).toContain('Przypomnienie 24 h: wł.');
+    ).toContain('Reminder 24 h: on');
     await handler()(component('v1:stu:rem:hour:1', { ephemeral: true }));
     // A stale or double click sets the state its button showed.
     await handler()(component('v1:stu:rem:hour:1', { ephemeral: true }));
@@ -459,7 +459,7 @@ describe('handleUi', () => {
     await handler()(first);
     expect(first.calls).toEqual(['deferUpdate', 'editReply', 'followUp']);
     expect(textOf(first.followUp.mock.calls[0][0])).toContain(
-      'Przypomnienia wyłączone: DM zamknięte',
+      'Reminders turned off: DMs closed',
     );
     expect(await getReminderPrefs(db, u.id)).toEqual({
       dayBefore: false,
@@ -502,13 +502,13 @@ describe('handleUi', () => {
     await handler()(i);
     expect(i.calls).toEqual(['deferReply', 'editReply']);
     expect(i.user.send.mock.calls[0][0].content).toMatch(
-      /^Twój link do Studies DB \(ważny 15 minut, jednorazowy\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
+      /^Your Studies DB link \(valid for 15 minutes, single use\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
     );
     expect(i.user.send.mock.calls[0][0].flags).toBe(
       MessageFlags.SuppressEmbeds,
     );
     expect(textOf(i.editReply.mock.calls[0][0])).toContain(
-      'Wysłałem Ci link w wiadomości prywatnej.',
+      'I sent you the link in a direct message.',
     );
   });
 
@@ -517,7 +517,7 @@ describe('handleUi', () => {
     i.user.send = vi.fn().mockRejectedValue(new Error('Cannot send'));
     await handler()(i);
     expect(textOf(i.editReply.mock.calls[0][0])).toContain(
-      'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.',
+      'I cannot send a DM. Enable direct messages from server members.',
     );
   });
 
@@ -549,7 +549,7 @@ describe('handleUi', () => {
     expect(u?.isAdmin).toBe(true);
   });
 
-  const ERROR = 'Wystąpił błąd. Spróbuj ponownie później.';
+  const ERROR = 'Something went wrong. Try again later.';
 
   for (const ephemeral of [false, true]) {
     it(`replaces the deferred response with a V2 error notice (ephemeral view: ${ephemeral})`, async () => {
@@ -618,11 +618,11 @@ describe('/panel', () => {
     expect(arg.flags & MessageFlags.IsComponentsV2).toBeTruthy();
     const buttons = nodes(arg).filter((n) => n.type === 2);
     expect(buttons.map((b) => b.label)).toEqual([
-      'Plan dziś',
-      'Ten tydzień',
-      'Moje grupy',
-      'Zaloguj się na stronie',
-      'Dodaj wydarzenie',
+      'Timetable today',
+      'This week',
+      'My groups',
+      'Log in to the website',
+      'Add event',
     ]);
   });
 

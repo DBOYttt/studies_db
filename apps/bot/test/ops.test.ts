@@ -67,7 +67,7 @@ describe('runSetup', () => {
       .values({ code: 'FIZ', name: 'Fizyka', semester: 1, ects: 5 });
     const audit = vi.fn().mockResolvedValue(undefined);
     const text = await runSetup(deps(), guild(['r']), 'u1', true, audit);
-    expect(text).toContain('Plan (bez zmian):');
+    expect(text).toContain('Plan (no changes made):');
     expect(text).toContain('FIZ');
     expect(audit).toHaveBeenCalledWith('bot.setup_dry_run', null, {
       actions: expect.any(Number),
@@ -80,7 +80,7 @@ describe('runSetup', () => {
       .values({ discordUserId: 'u1', displayName: 'u1', isAdmin: false });
     const audit = vi.fn().mockResolvedValue(undefined);
     const text = await runSetup(deps(), guild(['r']), 'u1', false, audit);
-    expect(text).not.toContain('Błędy');
+    expect(text).not.toContain('Errors');
     const [u] = await db
       .select()
       .from(users)
@@ -116,7 +116,7 @@ describe('runResync', () => {
   it('returns the summary and audits bot.resync', async () => {
     const audit = vi.fn().mockResolvedValue(undefined);
     expect(await runResync(deps(), audit)).toBe(
-      'Zsynchronizowano: 0 tematów, 0 nowych plików, 0 błędów.',
+      'Synced: 0 topics, 0 new files, 0 errors.',
     );
     expect(audit).toHaveBeenCalledWith('bot.resync', null, {
       topics: 0,

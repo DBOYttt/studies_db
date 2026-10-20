@@ -69,34 +69,34 @@ describe('eventCard', () => {
     expectValid(v);
     const t = allText(v);
     expect(t).toContain('📝 Kolokwium z całek');
-    expect(t).toContain('wt 20.10.2026 10:00–11:30');
+    expect(t).toContain('Tue 20 Oct 2026, 10:00–11:30');
     expect(t).toContain('C-13 1.23');
-    expect(t).toContain('Dodał(a): Ala');
-    expect(t).toContain('ostatnio edytował(a): Ola');
+    expect(t).toContain('Added by: Ala');
+    expect(t).toContain('last edited by: Ola');
     const b = nodes(v).filter((n) => n.type === 2);
     expect(b.map((x) => x.label)).toEqual([
-      'Zajęcia/grupa',
-      'Powiąż posty',
-      'Edytuj',
-      'Usuń',
-      'Otwórz post',
-      'Otwórz na stronie',
+      'Class/group',
+      'Link posts',
+      'Edit',
+      'Delete',
+      'Open post',
+      'Open on the website',
     ]);
     expect(b[4].url).toBe('https://discord.com/channels/1/2');
     expect(b[5].url).toBe('https://x.pl/s/wydarzenia/7');
   });
 
-  it('omits "Otwórz post" without a post and disables class/links without a subject', () => {
+  it('omits "Open post" without a post and disables class/links without a subject', () => {
     const v = eventCard(
       card({ postUrl: null, subjectCode: null, subjectName: null }),
     );
     const b = nodes(v).filter((n) => n.type === 2);
-    expect(b.map((x) => x.label)).not.toContain('Otwórz post');
+    expect(b.map((x) => x.label)).not.toContain('Open post');
     expect(b[0].disabled).toBe(true);
     expect(b[1].disabled).toBe(true);
   });
 
-  it('stays within the limits with 30 materials: 15 lines, then "…i N więcej"', () => {
+  it('stays within the limits with 30 materials: 15 lines, then "…and N more"', () => {
     const materials = Array.from({ length: 30 }, (_, i) => ({
       id: i + 1,
       filename: `${'x'.repeat(120)}-${i}.pdf`,
@@ -105,9 +105,9 @@ describe('eventCard', () => {
     const v = eventCard(card({ materials, note: 'n'.repeat(1000) }));
     expectValid(v);
     const t = allText(v);
-    expect(t).toContain('Materiały (30)');
+    expect(t).toContain('Materials (30)');
     expect(t.match(/^• /gm)?.length).toBeLessThanOrEqual(15);
-    expect(t).toContain('…i 15 więcej — otwórz na stronie');
+    expect(t).toContain('…and 15 more. Open the website');
     expect(t).toContain('https://x.pl/files/2/preview');
     expect(t).toContain('https://x.pl/files/1/original');
   });
@@ -126,7 +126,7 @@ describe('eventCard', () => {
 
   it('all-day events say so', () => {
     const v = eventCard(card({ allDay: true, endsAt: null }));
-    expect(allText(v)).toContain('(cały dzień)');
+    expect(allText(v)).toContain('(all day)');
   });
 });
 
@@ -142,7 +142,7 @@ describe('eventModal', () => {
     const inner = j.components.map((c: Json) => c.component.custom_id);
     expect(inner).toEqual(['kind', 'title', 'subject', 'when', 'place_note']);
     const sel = j.components[2].component;
-    expect(sel.options[0].label).toBe('— brak —');
+    expect(sel.options[0].label).toBe('— none —');
     expect(sel.options).toHaveLength(4);
   });
 
@@ -221,7 +221,7 @@ describe('pickers', () => {
     }));
     const v = placementView(5, 'X', classes, { classId: null, groupId: null });
     expectValid(v);
-    expect(allText(v)).toContain('więcej');
+    expect(allText(v)).toContain('more');
   });
 
   it('link view toggles with a select and pages', () => {
@@ -279,14 +279,14 @@ describe('plan views list events', () => {
     const v = planDay([e], wall('2026-10-20T00:00:00'), true, 'https://x.pl');
     expectValid(v);
     const sel = nodes(v).find((x) => x.custom_id === 'v1:evt:open');
-    expect(sel.placeholder).toBe('Wydarzenia');
+    expect(sel.placeholder).toBe('Events');
     expect(sel.options).toHaveLength(1);
     expect(sel.options[0].value).toBe(String(e.id));
     expect(sel.options[0].label).toBe('🚌 Wyjazd integracyjny');
     expect(allText(v)).toContain('🚌 Wyjazd integracyjny');
   });
 
-  it('week: earliest first, at most 25, "…i N więcej" for the rest', () => {
+  it('week: earliest first, at most 25, "…and N more" for the rest', () => {
     const list = Array.from({ length: 30 }, (_, i) =>
       ev(
         `2026-10-${String(20 + (i % 5)).padStart(2, '0')}T${String(8 + (i % 8)).padStart(2, '0')}:00:00`,
@@ -296,7 +296,7 @@ describe('plan views list events', () => {
     expectValid(v);
     const sel = nodes(v).find((x) => x.custom_id === 'v1:evt:open');
     expect(sel.options).toHaveLength(25);
-    expect(allText(v)).toContain('…i 5 więcej');
+    expect(allText(v)).toContain('…and 5 more');
     const vals = sel.options.map((o: Json) => Number(o.value));
     const startOf = (id: number) =>
       list.find((s) => s.id === id)?.startsAt.getTime() as number;

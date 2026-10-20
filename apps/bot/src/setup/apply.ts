@@ -151,7 +151,7 @@ async function relinkFiles(
 }
 
 const unlinkedFiles = (code: string, title: string, n: number) =>
-  `${code}: „${title}”: Discord nie potwierdził ${n} plików — zostały wysłane, ale nie są połączone w bazie`;
+  `${code}: "${title}": Discord did not confirm ${n} files. They were sent but are not linked in the database`;
 
 export async function applySetup(
   db: Db,
@@ -167,7 +167,7 @@ export async function applySetup(
       try {
         await access(path);
       } catch {
-        throw new Error(`brak pliku ${f.name} w magazynie`);
+        throw new Error(`file ${f.name} is missing from storage`);
       }
       out.push({ path, name: f.name });
     }
@@ -199,28 +199,28 @@ export async function applySetup(
       switch (a.type) {
         case 'createRole':
           createdRoleId = await guild.createRole(a.name);
-          report.created.push(`rola ${a.name}`);
+          report.created.push(`role ${a.name}`);
           await storeAdminRole(db, createdRoleId);
           break;
         case 'adoptRole':
           await storeAdminRole(db, a.roleId);
-          report.updated.push(`rola ${a.name} zapisana jako rola admina`);
+          report.updated.push(`role ${a.name} saved as the admin role`);
           break;
         case 'assignRole': {
           const roleId = a.roleId ?? createdRoleId;
-          if (!roleId) throw new Error(`brak roli ${a.roleName}`);
+          if (!roleId) throw new Error(`missing role ${a.roleName}`);
           await guild.addRoleToMember(a.userId, roleId);
           report.assignedRoleId = roleId;
-          report.updated.push(`nadano Ci rolę ${a.roleName}`);
+          report.updated.push(`gave you the role ${a.roleName}`);
           break;
         }
         case 'createCategory':
           categories.set(a.name, await guild.createCategory(a.name));
-          report.created.push(`kategoria ${a.name}`);
+          report.created.push(`category ${a.name}`);
           break;
         case 'createForum': {
           const parentId = categories.get(a.categoryName);
-          if (!parentId) throw new Error(`brak kategorii ${a.categoryName}`);
+          if (!parentId) throw new Error(`missing category ${a.categoryName}`);
           const forum = await guild.createForum({
             name: a.name,
             parentId,
@@ -235,7 +235,7 @@ export async function applySetup(
               .where(eq(subjects.id, a.subjectId));
           } catch (err) {
             throw new Error(
-              `utworzono forum #${a.name}, ale nie udało się go połączyć (${errText(err)})`,
+              `created forum #${a.name}, but could not link it (${errText(err)})`,
             );
           }
           await syncForumTags(db, a.subjectId, forum.tags);
@@ -245,12 +245,12 @@ export async function applySetup(
         case 'addTags': {
           const all = await guild.addForumTags(a.channelId, a.tags);
           await syncForumTags(db, a.subjectId, all);
-          report.updated.push(`${a.code}: tagi ${a.tags.join(', ')}`);
+          report.updated.push(`${a.code}: tags ${a.tags.join(', ')}`);
           break;
         }
         case 'setGuidelines':
           await guild.setForumTopic(a.channelId, a.topic);
-          report.updated.push(`${a.code}: wytyczne forum`);
+          report.updated.push(`${a.code}: forum guidelines`);
           break;
         case 'importForum': {
           const [{ id }] = await db
@@ -266,14 +266,14 @@ export async function applySetup(
           for (const kind of a.classKinds) await ensureClass(db, id, kind);
           await syncForumTags(db, id, a.tags);
           report.created.push(
-            `${a.code}: przedmiot „${a.name}” z forum #${a.forumName} (ECTS 0 — popraw przez /subject edit)`,
+            `${a.code}: subject "${a.name}" from forum #${a.forumName} (ECTS 0, fix it with /subject edit)`,
           );
           break;
         }
         case 'addClasses':
           for (const kind of a.kinds) await ensureClass(db, a.subjectId, kind);
           report.updated.push(
-            `${a.code}: zajęcia ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`,
+            `${a.code}: classes ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`,
           );
           break;
         case 'postTopic': {
@@ -308,7 +308,7 @@ export async function applySetup(
             }
           }
           const n = prepared.reduce((k, m) => k + m.files.length, 0);
-          report.created.push(`${a.code}: post „${a.title}” (${n} plików)`);
+          report.created.push(`${a.code}: post "${a.title}" (${n} files)`);
           if (unlinked > 0) {
             report.failures.push(unlinkedFiles(a.code, a.title, unlinked));
           }
@@ -330,7 +330,7 @@ export async function applySetup(
             }
           }
           const n = prepared.reduce((k, m) => k + m.files.length, 0);
-          report.updated.push(`${a.code}: „${a.title}”: dosłano ${n} plików`);
+          report.updated.push(`${a.code}: "${a.title}": sent ${n} more files`);
           if (unlinked > 0) {
             report.failures.push(unlinkedFiles(a.code, a.title, unlinked));
           }
@@ -340,7 +340,7 @@ export async function applySetup(
           if (a.existingId !== null) {
             await setSetting(db, EVENTS_FORUM_SETTING, a.existingId);
             report.updated.push(
-              `${a.code}: istniejące forum zapisane jako forum wydarzeń`,
+              `${a.code}: existing forum saved as the events forum`,
             );
             break;
           }
@@ -354,7 +354,7 @@ export async function applySetup(
             await setSetting(db, EVENTS_FORUM_SETTING, forum.id);
           } catch (err) {
             throw new Error(
-              `utworzono forum #${a.name}, ale nie udało się go zapisać (${errText(err)})`,
+              `created forum #${a.name}, but could not save it (${errText(err)})`,
             );
           }
           report.created.push(`${a.code}: forum #${a.name}`);
@@ -362,7 +362,7 @@ export async function applySetup(
         }
         case 'addEventsTags':
           await guild.addForumTags(a.channelId, a.tags);
-          report.updated.push(`${a.code}: tagi ${a.tags.join(', ')}`);
+          report.updated.push(`${a.code}: tags ${a.tags.join(', ')}`);
           break;
         case 'upsertEventsInfoPost':
         case 'upsertInfoPost': {
@@ -376,20 +376,20 @@ export async function applySetup(
               content: a.content,
               files: [],
             });
-            report.created.push(`${a.code}: post informacyjny`);
+            report.created.push(`${a.code}: info post`);
             if (a.pin) {
               try {
                 await guild.pinThread(t.threadId);
               } catch (err) {
                 report.warnings.push(
-                  `${a.code}: nie udało się przypiąć posta informacyjnego (${errText(err)})`,
+                  `${a.code}: could not pin the info post (${errText(err)})`,
                 );
               }
             }
             break;
           }
           await guild.editMessage(e.threadId, e.messageId, a.content);
-          report.updated.push(`${a.code}: post informacyjny`);
+          report.updated.push(`${a.code}: info post`);
           break;
         }
         case 'ensurePanelChannel': {
@@ -398,7 +398,7 @@ export async function applySetup(
             await setSetting(db, keys.channel, a.existingId);
             panelChannels[a.which] = a.existingId;
             report.updated.push(
-              `kanał #${a.name} zapisany jako kanał panelu (uprawnienia bez zmian)`,
+              `channel #${a.name} saved as a panel channel (permissions unchanged)`,
             );
             const adopted = snapshot.textChannels.find(
               (c) => c.id === a.existingId,
@@ -407,7 +407,7 @@ export async function applySetup(
               // Not a leak (every adm interaction re-checks the role), but
               // the admin panel is meant to be hidden.
               report.warnings.push(
-                `kanał #${a.name} widzą wszyscy — ogranicz go do roli admina`,
+                `everyone can see channel #${a.name}. Restrict it to the admin role`,
               );
             }
             break;
@@ -417,7 +417,7 @@ export async function applySetup(
               ? (createdRoleId ?? (await getSetting(db, ADMIN_ROLE_SETTING)))
               : null;
           if (a.which === 'admin' && adminRoleId === null) {
-            throw new Error('brak roli admina — kanał nie został utworzony');
+            throw new Error('no admin role, so the channel was not created');
           }
           const id = await guild.createTextChannel({
             name: a.name,
@@ -427,15 +427,15 @@ export async function applySetup(
           });
           await setSetting(db, keys.channel, id);
           panelChannels[a.which] = id;
-          report.created.push(`kanał #${a.name}`);
+          report.created.push(`channel #${a.name}`);
           break;
         }
         case 'syncAdminPanelPerms': {
           const roleId = a.roleId ?? createdRoleId;
-          if (!roleId) throw new Error('brak roli admina');
+          if (!roleId) throw new Error('no admin role');
           await guild.syncAdminPanelPerms(a.channelId, roleId);
           report.updated.push(
-            `kanał #${PANEL_CHANNEL_NAMES.admin}: uprawnienia dla roli admina`,
+            `channel #${PANEL_CHANNEL_NAMES.admin}: permissions for the admin role`,
           );
           break;
         }
@@ -443,17 +443,17 @@ export async function applySetup(
           const keys = PANEL_SETTINGS[a.which];
           const name = PANEL_CHANNEL_NAMES[a.which];
           const channelId = a.channelId ?? panelChannels[a.which];
-          if (!channelId) throw new Error('brak kanału panelu');
+          if (!channelId) throw new Error('no panel channel');
           const view = PANEL_VIEWS[a.which]();
           const notPinned = () =>
             report.warnings.push(
-              `nie udało się przypiąć panelu w #${name} (bot potrzebuje uprawnienia Pin Messages)`,
+              `could not pin the panel in #${name} (the bot needs the Pin Messages permission)`,
             );
           const edited =
             a.messageId !== null &&
             (await guild.editPanel(channelId, a.messageId, view));
           if (edited) {
-            report.updated.push(`panel w #${name}`);
+            report.updated.push(`panel in #${name}`);
             if (!edited.pinned) notPinned();
             break;
           }
@@ -461,7 +461,7 @@ export async function applySetup(
           // Accepted risk: if storing the id fails, the next run cannot find
           // this message and posts a second panel.
           await setSetting(db, keys.message, posted.id);
-          report.created.push(`panel w #${name}`);
+          report.created.push(`panel in #${name}`);
           if (!posted.pinned) notPinned();
           break;
         }

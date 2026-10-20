@@ -22,44 +22,44 @@ import {
 
 const subject = new SlashCommandBuilder()
   .setName('subject')
-  .setDescription('Zarządzanie przedmiotami')
+  .setDescription('Manage subjects')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
       .setName('add')
-      .setDescription('Dodaj przedmiot')
+      .setDescription('Add a subject')
       .addChannelOption((o) =>
         o
           .setName('channel')
-          .setDescription('Kanał forum')
+          .setDescription('Forum channel')
           .addChannelTypes(ChannelType.GuildForum)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('name')
-          .setDescription('Nazwa')
+          .setDescription('Name')
           .setMaxLength(FIELD_MAX.subjectName)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('code')
-          .setDescription('Kod')
+          .setDescription('Code')
           .setMaxLength(FIELD_MAX.subjectCode)
           .setRequired(true),
       )
       .addIntegerOption((o) =>
         o
           .setName('semester')
-          .setDescription('Semestr')
+          .setDescription('Semester')
           .addChoices(...SEMESTERS.map((n) => ({ name: String(n), value: n })))
           .setRequired(true),
       )
       .addIntegerOption((o) =>
         o
           .setName('ects')
-          .setDescription('Punkty ECTS')
+          .setDescription('ECTS points')
           .setMinValue(ECTS_MIN)
           .setMaxValue(ECTS_MAX)
           .setRequired(true),
@@ -67,153 +67,153 @@ const subject = new SlashCommandBuilder()
       .addStringOption((o) =>
         o
           .setName('description')
-          .setDescription('Opis')
+          .setDescription('Description')
           .setMaxLength(FIELD_MAX.description),
       ),
   )
   .addSubcommand((s) =>
     s
       .setName('edit')
-      .setDescription('Edytuj przedmiot')
+      .setDescription('Edit a subject')
       .addStringOption((o) =>
         o
           .setName('code')
-          .setDescription('Kod przedmiotu')
+          .setDescription('Subject code')
           .setAutocomplete(true)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('name')
-          .setDescription('Nazwa')
+          .setDescription('Name')
           .setMaxLength(FIELD_MAX.subjectName),
       )
       .addIntegerOption((o) =>
         o
           .setName('semester')
-          .setDescription('Semestr')
+          .setDescription('Semester')
           .addChoices(...SEMESTERS.map((n) => ({ name: String(n), value: n }))),
       )
       .addIntegerOption((o) =>
         o
           .setName('ects')
-          .setDescription('Punkty ECTS')
+          .setDescription('ECTS points')
           .setMinValue(ECTS_MIN)
           .setMaxValue(ECTS_MAX),
       )
       .addStringOption((o) =>
         o
           .setName('description')
-          .setDescription('Opis')
+          .setDescription('Description')
           .setMaxLength(FIELD_MAX.description),
       )
       .addStringOption((o) =>
         o
           .setName('platform_url')
-          .setDescription('Adres platformy (- usuwa)')
+          .setDescription('Platform URL (- clears)')
           .setMaxLength(FIELD_MAX.platformUrl),
       ),
   )
-  .addSubcommand((s) => s.setName('list').setDescription('Lista przedmiotów'));
+  .addSubcommand((s) => s.setName('list').setDescription('List subjects'));
 
 const lecturer = new SlashCommandBuilder()
   .setName('lecturer')
-  .setDescription('Zarządzanie prowadzącymi')
+  .setDescription('Manage lecturers')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
       .setName('add')
-      .setDescription('Dodaj prowadzącego')
+      .setDescription('Add a lecturer')
       .addStringOption((o) =>
         o
           .setName('name')
-          .setDescription('Imię i nazwisko')
+          .setDescription('Full name')
           .setMaxLength(FIELD_MAX.lecturerName)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('title')
-          .setDescription('Tytuł')
+          .setDescription('Title')
           .setMaxLength(FIELD_MAX.lecturerTitle),
       )
       .addStringOption((o) =>
         o
           .setName('email')
-          .setDescription('E-mail')
+          .setDescription('Email')
           .setMaxLength(FIELD_MAX.email),
       )
       .addStringOption((o) =>
         o
           .setName('office_hours')
-          .setDescription('Konsultacje')
+          .setDescription('Office hours')
           .setMaxLength(FIELD_MAX.officeHours),
       )
       .addStringOption((o) =>
-        o.setName('room').setDescription('Pokój').setMaxLength(FIELD_MAX.room),
+        o.setName('room').setDescription('Room').setMaxLength(FIELD_MAX.room),
       ),
   )
   .addSubcommand((s) =>
     s
       .setName('edit')
-      .setDescription('Edytuj prowadzącego (- usuwa pole)')
+      .setDescription('Edit a lecturer (- clears the field)')
       .addStringOption((o) =>
         o
           .setName('lecturer')
-          .setDescription('Prowadzący')
+          .setDescription('Lecturer')
           .setAutocomplete(true)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('name')
-          .setDescription('Imię i nazwisko')
+          .setDescription('Full name')
           .setMaxLength(FIELD_MAX.lecturerName),
       )
       .addStringOption((o) =>
         o
           .setName('title')
-          .setDescription('Tytuł')
+          .setDescription('Title')
           .setMaxLength(FIELD_MAX.lecturerTitle),
       )
       .addStringOption((o) =>
         o
           .setName('email')
-          .setDescription('E-mail')
+          .setDescription('Email')
           .setMaxLength(FIELD_MAX.email),
       )
       .addStringOption((o) =>
         o
           .setName('office_hours')
-          .setDescription('Konsultacje')
+          .setDescription('Office hours')
           .setMaxLength(FIELD_MAX.officeHours),
       )
       .addStringOption((o) =>
-        o.setName('room').setDescription('Pokój').setMaxLength(FIELD_MAX.room),
+        o.setName('room').setDescription('Room').setMaxLength(FIELD_MAX.room),
       ),
   )
   .addSubcommand((s) =>
     s
       .setName('assign')
-      .setDescription('Przypisz prowadzącego do przedmiotu')
+      .setDescription('Assign a lecturer to a subject')
       .addStringOption((o) =>
         o
           .setName('subject')
-          .setDescription('Przedmiot')
+          .setDescription('Subject')
           .setAutocomplete(true)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('lecturer')
-          .setDescription('Prowadzący')
+          .setDescription('Lecturer')
           .setAutocomplete(true)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('class')
-          .setDescription('Rodzaj zajęć')
+          .setDescription('Class type')
           .addChoices(
             ...CLASS_KINDS.map((k) => ({ name: CLASS_NAMES[k], value: k })),
           )
@@ -222,7 +222,7 @@ const lecturer = new SlashCommandBuilder()
       .addIntegerOption((o) =>
         o
           .setName('group')
-          .setDescription('Numer grupy')
+          .setDescription('Group number')
           .setMinValue(GROUP_MIN)
           .setMaxValue(GROUP_MAX),
       ),
@@ -230,23 +230,23 @@ const lecturer = new SlashCommandBuilder()
 
 const classCmd = new SlashCommandBuilder()
   .setName('class')
-  .setDescription('Zarządzanie zajęciami')
+  .setDescription('Manage classes')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
     s
       .setName('edit')
-      .setDescription('Edytuj zajęcia (- usuwa pole)')
+      .setDescription('Edit a class (- clears the field)')
       .addStringOption((o) =>
         o
           .setName('subject')
-          .setDescription('Przedmiot')
+          .setDescription('Subject')
           .setAutocomplete(true)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('kind')
-          .setDescription('Rodzaj zajęć')
+          .setDescription('Class type')
           .addChoices(
             ...CLASS_KINDS.map((k) => ({ name: CLASS_NAMES[k], value: k })),
           )
@@ -255,38 +255,38 @@ const classCmd = new SlashCommandBuilder()
       .addStringOption((o) =>
         o
           .setName('assessment')
-          .setDescription('Forma zaliczenia')
+          .setDescription('Assessment')
           .addChoices(
             ...ASSESSMENTS.map((a) => ({
               name: ASSESSMENT_NAMES[a],
               value: a,
             })),
-            { name: 'Brak (usuń)', value: 'brak' },
+            { name: 'None (clear)', value: 'brak' },
           ),
       )
       .addStringOption((o) =>
         o
           .setName('note')
-          .setDescription('Uwagi')
+          .setDescription('Notes')
           .setMaxLength(FIELD_MAX.classNote),
       )
       .addStringOption((o) =>
         o
           .setName('platform_url')
-          .setDescription('Adres platformy')
+          .setDescription('Platform URL')
           .setMaxLength(FIELD_MAX.platformUrl),
       ),
   );
 
 const planCmd = new SlashCommandBuilder()
   .setName('plan')
-  .setDescription('Synchronizacja planu zajęć')
+  .setDescription('Timetable sync')
   .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
   .addSubcommand((s) =>
-    s.setName('sync').setDescription('Zleć synchronizację planu'),
+    s.setName('sync').setDescription('Request a timetable sync'),
   )
   .addSubcommand((s) =>
-    s.setName('status').setDescription('Status synchronizacji planu'),
+    s.setName('status').setDescription('Timetable sync status'),
   );
 
 const userCmd = (name: string, description: string) =>
@@ -295,20 +295,20 @@ const userCmd = (name: string, description: string) =>
     .setDescription(description)
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addUserOption((o) =>
-      o.setName('user').setDescription('Użytkownik').setRequired(true),
+      o.setName('user').setDescription('User').setRequired(true),
     );
 
 const eventCmd = new SlashCommandBuilder()
   .setName('event')
-  .setDescription('Wydarzenia: kolokwia, egzaminy, wyjazdy')
+  .setDescription('Events: tests, exams, trips')
   .addSubcommand((s) =>
     s
       .setName('add')
-      .setDescription('Dodaj wydarzenie')
+      .setDescription('Add an event')
       .addStringOption((o) =>
         o
           .setName('kind')
-          .setDescription('Rodzaj')
+          .setDescription('Type')
           .addChoices(
             ...EVENT_KIND_KEYS.map((k) => ({
               name: EVENT_KINDS[k].label,
@@ -320,7 +320,7 @@ const eventCmd = new SlashCommandBuilder()
       .addStringOption((o) =>
         o
           .setName('title')
-          .setDescription('Tytuł')
+          .setDescription('Title')
           .setMinLength(1)
           .setMaxLength(100)
           .setRequired(true),
@@ -328,26 +328,26 @@ const eventCmd = new SlashCommandBuilder()
       .addStringOption((o) =>
         o
           .setName('when')
-          .setDescription('Kiedy: DD.MM[.RRRR] [GG:MM[-GG:MM]]')
+          .setDescription('When: DD.MM[.YYYY] [HH:MM[-HH:MM]]')
           .setMaxLength(40)
           .setRequired(true),
       )
       .addStringOption((o) =>
         o
           .setName('subject')
-          .setDescription('Przedmiot (kod)')
+          .setDescription('Subject (code)')
           .setAutocomplete(true),
       )
       .addStringOption((o) =>
-        o.setName('place').setDescription('Miejsce').setMaxLength(100),
+        o.setName('place').setDescription('Place').setMaxLength(100),
       )
       .addStringOption((o) =>
-        o.setName('note').setDescription('Notatka').setMaxLength(1000),
+        o.setName('note').setDescription('Note').setMaxLength(1000),
       )
       .addStringOption((o) =>
         o
           .setName('class')
-          .setDescription('Zajęcia przedmiotu')
+          .setDescription('Class of the subject')
           .addChoices(
             ...CLASS_KINDS.map((k) => ({ name: CLASS_NAMES[k], value: k })),
           ),
@@ -355,23 +355,23 @@ const eventCmd = new SlashCommandBuilder()
       .addIntegerOption((o) =>
         o
           .setName('group')
-          .setDescription('Numer grupy')
+          .setDescription('Group number')
           .setMinValue(GROUP_MIN)
           .setMaxValue(GROUP_MAX),
       )
       .addStringOption((o) =>
         o
           .setName('repeat')
-          .setDescription('Powtarzanie')
+          .setDescription('Repeat')
           .addChoices(
-            { name: 'co tydzień', value: 'weekly' },
-            { name: 'co 2 tygodnie', value: 'biweekly' },
+            { name: 'every week', value: 'weekly' },
+            { name: 'every 2 weeks', value: 'biweekly' },
           ),
       )
       .addStringOption((o) =>
         o
           .setName('until')
-          .setDescription('Powtarzaj do: DD.MM[.RRRR]')
+          .setDescription('Repeat until: DD.MM[.YYYY]')
           .setMaxLength(20),
       ),
   );
@@ -382,33 +382,37 @@ export const commandDefinitions: RESTPostAPIApplicationCommandsJSONBody[] = [
   classCmd,
   planCmd,
   eventCmd,
-  userCmd('ban', 'Zablokuj dostęp użytkownika do strony'),
-  userCmd('unban', 'Odblokuj dostęp użytkownika do strony'),
+  userCmd('ban', "Block a user's access to the website"),
+  userCmd('unban', "Unblock a user's access to the website"),
   new SlashCommandBuilder()
     .setName('setup')
-    .setDescription('Utwórz fora, tagi, kategorie i rolę admina z bazy')
+    .setDescription(
+      'Create forums, tags, categories and the admin role from the database',
+    )
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
     .addBooleanOption((o) =>
-      o.setName('dry_run').setDescription('Tylko pokaż plan, bez zmian'),
+      o
+        .setName('dry_run')
+        .setDescription('Only show the plan, make no changes'),
     ),
   new SlashCommandBuilder()
     .setName('resync')
-    .setDescription('Zsynchronizuj fora z bazą')
+    .setDescription('Sync the forums with the database')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('admin')
-    .setDescription('Otwórz panel administratora')
+    .setDescription('Open the admin panel')
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild),
   new SlashCommandBuilder()
     .setName('link')
-    .setDescription('Otrzymaj link do logowania na stronie'),
+    .setDescription('Get a login link for the website'),
   new SlashCommandBuilder()
     .setName('panel')
-    .setDescription('Otwórz panel: plan zajęć, Moje grupy, logowanie'),
+    .setDescription('Open the panel: timetable, My groups, login'),
   new SlashCommandBuilder()
     .setName('search')
-    .setDescription('Szukaj materiałów')
+    .setDescription('Search materials')
     .addStringOption((o) =>
-      o.setName('query').setDescription('Zapytanie').setRequired(true),
+      o.setName('query').setDescription('Query').setRequired(true),
     ),
 ].map((c) => c.toJSON());

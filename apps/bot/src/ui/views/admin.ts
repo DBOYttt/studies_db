@@ -93,10 +93,10 @@ const card = (head: string, sub?: string) =>
 export const lecturerLabel = (l: { title: string | null; name: string }) =>
   l.title ? `${l.title} ${l.name}` : l.name;
 
-const warsawDate = new Intl.DateTimeFormat('pl-PL', {
+const warsawDate = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/Warsaw',
-  day: '2-digit',
-  month: '2-digit',
+  day: 'numeric',
+  month: 'short',
   year: 'numeric',
 });
 
@@ -130,24 +130,22 @@ const pageHint = (page: number, pages: number) =>
 
 export function adminPanel(): View {
   return view(
-    card('Panel administratora', 'Odpowiedzi widzisz tylko Ty.')
+    card('Admin panel', 'Only you see the replies.')
       .addTextDisplayComponents(
-        text(
-          'Synchronizacja planu i serwera, przedmioty, prowadzący i dostęp użytkowników.',
-        ),
+        text('Timetable and server sync, subjects, lecturers and user access.'),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
           button(
             encodeId('adm', 'status'),
-            'Status i synchronizacja',
+            'Status and sync',
             ButtonStyle.Primary,
           ),
-          button(encodeId('adm', 'subj', 'list', 0), 'Przedmioty'),
-          button(encodeId('adm', 'lect', 'list', 0), 'Prowadzący'),
-          button(encodeId('adm', 'user', 'open'), 'Użytkownicy'),
-          button(encodeId('adm', 'web'), 'Panel www'),
+          button(encodeId('adm', 'subj', 'list', 0), 'Subjects'),
+          button(encodeId('adm', 'lect', 'list', 0), 'Lecturers'),
+          button(encodeId('adm', 'user', 'open'), 'Users'),
+          button(encodeId('adm', 'web'), 'Web panel'),
         ),
       ),
   );
@@ -156,29 +154,29 @@ export function adminPanel(): View {
 export function statusCard(s: StatusData): View {
   const { queued, running, failed } = s.jobs;
   return view(
-    card('Status i synchronizacja')
+    card('Status and sync')
       .addSeparatorComponents(divider())
       .addTextDisplayComponents(
-        text(`**Plan zajęć**\n${clip(s.planText, 2000)}`),
+        text(`**Timetable**\n${clip(s.planText, 2000)}`),
         text(
-          `**Zadania**\nW kolejce: ${queued} · W toku: ${running} · Błędy: ${failed}`,
+          `**Jobs**\nQueued: ${queued} · Running: ${running} · Failed: ${failed}`,
         ),
-        text(`**Materiały w przetwarzaniu**\n${s.pending}`),
+        text(`**Materials being processed**\n${s.pending}`),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
           button(
             encodeId('adm', 'plan', 'sync'),
-            'Synchronizuj plan',
+            'Sync timetable',
             ButtonStyle.Primary,
           ),
-          button(encodeId('adm', 'resync'), 'Pobierz z Discorda'),
-          button(encodeId('adm', 'status'), 'Odśwież'),
+          button(encodeId('adm', 'resync'), 'Fetch from Discord'),
+          button(encodeId('adm', 'status'), 'Refresh'),
         ),
         row(
-          button(encodeId('adm', 'setup', 'dry'), 'Podgląd /setup'),
-          button(encodeId('adm', 'setup', 'ask'), 'Uruchom /setup'),
+          button(encodeId('adm', 'setup', 'dry'), 'Preview /setup'),
+          button(encodeId('adm', 'setup', 'ask'), 'Run /setup'),
         ),
       ),
   );
@@ -186,10 +184,10 @@ export function statusCard(s: StatusData): View {
 
 export function setupConfirm(): View {
   return view(
-    card('Uruchomić /setup?')
+    card('Run /setup?')
       .addTextDisplayComponents(
         text(
-          'Bot utworzy brakujące fora, tagi, kategorie i rolę admina z bazy oraz zaktualizuje przypięte panele.',
+          'The bot will create the missing forums, tags, categories and the admin role from the database, and update the pinned panels.',
         ),
       )
       .addSeparatorComponents(divider())
@@ -197,10 +195,10 @@ export function setupConfirm(): View {
         row(
           button(
             encodeId('adm', 'setup', 'run'),
-            'Tak, uruchom',
+            'Yes, run it',
             ButtonStyle.Danger,
           ),
-          button(encodeId('adm', 'status'), 'Anuluj'),
+          button(encodeId('adm', 'status'), 'Cancel'),
         ),
       ),
   );
@@ -227,10 +225,10 @@ export function reportView(
           a === 'setup'
             ? button(
                 encodeId('adm', 'setup', 'ask'),
-                'Uruchom /setup',
+                'Run /setup',
                 ButtonStyle.Primary,
               )
-            : button(encodeId('adm', 'status'), 'Wróć'),
+            : button(encodeId('adm', 'status'), 'Back'),
         ),
       ),
     );
@@ -243,15 +241,15 @@ export function reportView(
 export function subjectPicker(subjects: SubjectOption[], page: number): View {
   const pg = pageOf(subjects, page);
   const c = card(
-    'Przedmioty',
-    subjects.length ? `${subjects.length} w bazie` : 'Brak przedmiotów.',
+    'Subjects',
+    subjects.length ? `${subjects.length} in the database` : 'No subjects.',
   );
   if (pg.items.length) {
     c.addActionRowComponents(
       selectRow(
         new StringSelectMenuBuilder()
           .setCustomId(encodeId('adm', 'subj', 'pick'))
-          .setPlaceholder(`Wybierz przedmiot${pageHint(pg.page, pg.pages)}`)
+          .setPlaceholder(`Choose a subject${pageHint(pg.page, pg.pages)}`)
           .addOptions(
             pg.items.map((s) =>
               new StringSelectMenuOptionBuilder()
@@ -274,7 +272,7 @@ export function subjectPicker(subjects: SubjectOption[], page: number): View {
           ),
           button(
             encodeId('adm', 'subj', 'add'),
-            'Dodaj przedmiot',
+            'Add subject',
             ButtonStyle.Primary,
           ),
         ),
@@ -285,25 +283,25 @@ export function subjectPicker(subjects: SubjectOption[], page: number): View {
 function classBlock(c: SubjectCardData['classes'][number]): string {
   const assessment = c.assessment
     ? ASSESSMENT_NAMES[c.assessment]
-    : 'bez formy zaliczenia';
+    : 'no assessment';
   const lines = [
     `**${CLASS_NAMES[c.kind]}** · ${assessment}${c.assessmentNote ? ` — ${c.assessmentNote}` : ''}`,
     c.lecturers.length
       ? c.lecturers
           .map((l) => (l.groupName ? `${l.name} (${l.groupName})` : l.name))
           .join(', ')
-      : '-# brak prowadzących',
+      : '-# no lecturers',
   ];
-  if (c.platformUrl) lines.push(`-# Platforma: ${c.platformUrl}`);
+  if (c.platformUrl) lines.push(`-# Platform: ${c.platformUrl}`);
   return lines.join('\n');
 }
 
 export function subjectCard(s: SubjectCardData): View {
-  const forum = s.channelId ? `<#${s.channelId}>` : 'brak forum';
-  const head = `## ${s.code} · ${clip(s.name, 200)}\n-# Semestr ${s.semester} · ${s.ects} ECTS · ${forum}`;
+  const forum = s.channelId ? `<#${s.channelId}>` : 'no forum';
+  const head = `## ${s.code} · ${clip(s.name, 200)}\n-# Semester ${s.semester} · ${s.ects} ECTS · ${forum}`;
   const about = [
     s.description ? clip(s.description, 1000) : null,
-    s.platformUrl ? `Platforma: ${s.platformUrl}` : null,
+    s.platformUrl ? `Platform: ${s.platformUrl}` : null,
   ]
     .filter((x): x is string => x !== null)
     .join('\n');
@@ -320,7 +318,7 @@ export function subjectCard(s: SubjectCardData): View {
     (a, b) => CLASS_KINDS.indexOf(a.kind) - CLASS_KINDS.indexOf(b.kind),
   );
   if (classes.length === 0) {
-    c.addTextDisplayComponents(text('-# Brak zajęć'));
+    c.addTextDisplayComponents(text('-# No classes'));
   } else {
     const each = Math.floor((MAX_TEXT - used) / classes.length) - 1;
     for (const cls of classes) {
@@ -336,7 +334,7 @@ export function subjectCard(s: SubjectCardData): View {
         selectRow(
           new StringSelectMenuBuilder()
             .setCustomId(encodeId('adm', 'class', 'pick', s.code))
-            .setPlaceholder('Wybierz zajęcia')
+            .setPlaceholder('Choose a class')
             .addOptions(
               CLASS_KINDS.map((kind) => {
                 const x = existing.get(kind);
@@ -345,10 +343,10 @@ export function subjectCard(s: SubjectCardData): View {
                   .setValue(kind)
                   .setDescription(
                     !x
-                      ? 'Jeszcze nie ma tych zajęć'
+                      ? 'This class does not exist yet'
                       : x.assessment
                         ? ASSESSMENT_NAMES[x.assessment]
-                        : 'Bez formy zaliczenia',
+                        : 'No assessment',
                   );
               }),
             ),
@@ -358,10 +356,10 @@ export function subjectCard(s: SubjectCardData): View {
         row(
           button(
             encodeId('adm', 'subj', 'edit', s.code),
-            'Edytuj',
+            'Edit',
             ButtonStyle.Primary,
           ),
-          button(encodeId('adm', 'subj', 'list', 0), 'Wszystkie przedmioty'),
+          button(encodeId('adm', 'subj', 'list', 0), 'All subjects'),
         ),
       ),
   );
@@ -369,18 +367,18 @@ export function subjectCard(s: SubjectCardData): View {
 
 export function classActions(code: string, kind: ClassKind): View {
   return view(
-    card(`${code} · ${CLASS_NAMES[kind]}`, 'Co chcesz zmienić?')
+    card(`${code} · ${CLASS_NAMES[kind]}`, 'What do you want to change?')
       .addSeparatorComponents(divider())
       .addActionRowComponents(
         row(
           button(
             encodeId('adm', 'class', 'edit', code, kind),
-            'Edytuj zajęcia',
+            'Edit class',
             ButtonStyle.Primary,
           ),
           button(
             encodeId('adm', 'assign', 'start', code, kind),
-            'Przypisz prowadzącego',
+            'Assign lecturer',
           ),
         ),
       ),
@@ -406,16 +404,16 @@ export function assignPicker(
   );
   const c = card(
     `${code} · ${CLASS_NAMES[kind]}`,
-    'Przypisz prowadzącego',
+    'Assign lecturer',
   ).addSeparatorComponents(divider());
   if (pg.items.length === 0) {
-    c.addTextDisplayComponents(text('Brak prowadzących. Dodaj ich w panelu.'));
+    c.addTextDisplayComponents(text('No lecturers. Add them in the panel.'));
   } else {
     c.addActionRowComponents(
       selectRow(
         new StringSelectMenuBuilder()
           .setCustomId(encodeId('adm', 'assign', 'lect', code, kind))
-          .setPlaceholder(`Prowadzący${pageHint(pg.page, pg.pages)}`)
+          .setPlaceholder(`Lecturer${pageHint(pg.page, pg.pages)}`)
           .addOptions(
             pg.items.map((l) =>
               new StringSelectMenuOptionBuilder()
@@ -441,10 +439,10 @@ export function assignPicker(
               lecturers[chosenAt].id,
             ),
           )
-          .setPlaceholder('Grupa')
+          .setPlaceholder('Group')
           .addOptions(
             new StringSelectMenuOptionBuilder()
-              .setLabel('Całe zajęcia')
+              .setLabel('Whole class')
               .setValue('0'),
             ...groups
               .slice(0, MAX_OPTIONS - 1)
@@ -456,11 +454,11 @@ export function assignPicker(
           ),
       ),
     );
-    // One option is "Całe zajęcia"; later groups only via the slash command.
+    // One option is "Whole class"; later groups only via the slash command.
     const hidden = groups.length - (MAX_OPTIONS - 1);
     if (hidden > 0) {
       c.addTextDisplayComponents(
-        text(`-# …i ${hidden} więcej — użyj /lecturer assign`),
+        text(`-# …and ${hidden} more. Use /lecturer assign`),
       );
     }
   }
@@ -486,15 +484,15 @@ export function lecturerPicker(
 ): View {
   const pg = pageOf(lecturers, page);
   const c = card(
-    'Prowadzący',
-    lecturers.length ? `${lecturers.length} w bazie` : 'Brak prowadzących.',
+    'Lecturers',
+    lecturers.length ? `${lecturers.length} in the database` : 'No lecturers.',
   );
   if (pg.items.length) {
     c.addActionRowComponents(
       selectRow(
         new StringSelectMenuBuilder()
           .setCustomId(encodeId('adm', 'lect', 'pick'))
-          .setPlaceholder(`Wybierz prowadzącego${pageHint(pg.page, pg.pages)}`)
+          .setPlaceholder(`Choose a lecturer${pageHint(pg.page, pg.pages)}`)
           .addOptions(
             pg.items.map((l) =>
               new StringSelectMenuOptionBuilder()
@@ -517,7 +515,7 @@ export function lecturerPicker(
           ),
           button(
             encodeId('adm', 'lect', 'add'),
-            'Dodaj prowadzącego',
+            'Add lecturer',
             ButtonStyle.Primary,
           ),
         ),
@@ -527,9 +525,9 @@ export function lecturerPicker(
 
 export function lecturerCard(l: LecturerCardData): View {
   const lines = [
-    ['E-mail', l.email],
-    ['Konsultacje', l.officeHours],
-    ['Pokój', l.room],
+    ['Email', l.email],
+    ['Office hours', l.officeHours],
+    ['Room', l.room],
   ].map(([k, v]) => `${k}: ${v ?? '—'}`);
   return view(
     card(clip(lecturerLabel(l), 250))
@@ -539,10 +537,10 @@ export function lecturerCard(l: LecturerCardData): View {
         row(
           button(
             encodeId('adm', 'lect', 'edit', l.id),
-            'Edytuj',
+            'Edit',
             ButtonStyle.Primary,
           ),
-          button(encodeId('adm', 'lect', 'list', 0), 'Wszyscy prowadzący'),
+          button(encodeId('adm', 'lect', 'list', 0), 'All lecturers'),
         ),
       ),
   );
@@ -552,17 +550,17 @@ export function lecturerCard(l: LecturerCardData): View {
 
 export function userPicker(): View {
   return view(
-    card('Użytkownicy', 'Wybierz osobę z serwera.').addActionRowComponents(
+    card('Users', 'Choose a person from the server.').addActionRowComponents(
       new ActionRowBuilder<UserSelectMenuBuilder>().addComponents(
         new UserSelectMenuBuilder()
           .setCustomId(encodeId('adm', 'user', 'pick'))
-          .setPlaceholder('Użytkownik'),
+          .setPlaceholder('User'),
       ),
     ),
   );
 }
 
-const yesNo = (b: boolean) => (b ? 'tak' : 'nie');
+const yesNo = (b: boolean) => (b ? 'yes' : 'no');
 
 /** A display name for one-line headings and bold text. */
 const oneLine = (s: string) =>
@@ -572,12 +570,12 @@ export function userCard(u: UserCardData, isSelf: boolean): View {
   const action: ButtonBuilder = u.isBanned
     ? button(
         encodeId('adm', 'user', 'unban', u.discordUserId),
-        'Odblokuj',
+        'Unblock',
         ButtonStyle.Primary,
       )
     : button(
         encodeId('adm', 'user', 'ban', u.discordUserId),
-        'Zablokuj',
+        'Block',
         ButtonStyle.Danger,
       );
   const c = card(oneLine(u.displayName), `<@${u.discordUserId}>`)
@@ -585,20 +583,20 @@ export function userCard(u: UserCardData, isSelf: boolean): View {
       text(
         [
           `Admin: ${yesNo(u.isAdmin)}`,
-          `Dostęp do strony: ${u.isBanned ? 'zablokowany' : 'aktywny'}`,
-          `Pierwsze użycie: ${u.createdAt ? warsawDate.format(u.createdAt) : 'jeszcze nie korzystał z bota'}`,
+          `Website access: ${u.isBanned ? 'blocked' : 'active'}`,
+          `First use: ${u.createdAt ? warsawDate.format(u.createdAt) : 'has not used the bot yet'}`,
         ].join('\n'),
       ),
     )
     .addSeparatorComponents(divider());
   if (isSelf) {
-    c.addTextDisplayComponents(text('-# Nie możesz zablokować siebie.'));
+    c.addTextDisplayComponents(text('-# You cannot block yourself.'));
   }
   return view(
     c.addActionRowComponents(
       row(
         action.setDisabled(isSelf),
-        button(encodeId('adm', 'user', 'open'), 'Inny użytkownik'),
+        button(encodeId('adm', 'user', 'open'), 'Another user'),
       ),
     ),
   );
@@ -608,12 +606,12 @@ export function userCard(u: UserCardData, isSelf: boolean): View {
 export function banConfirm(u: UserCardData, banned: boolean): View {
   const name = oneLine(u.displayName);
   return view(
-    card(banned ? 'Zablokować dostęp?' : 'Odblokować dostęp?')
+    card(banned ? 'Block access?' : 'Unblock access?')
       .addTextDisplayComponents(
         text(
           banned
-            ? `**${name}** nie będzie mógł zalogować się na stronie.`
-            : `**${name}** znowu będzie mógł zalogować się na stronie.`,
+            ? `**${name}** will not be able to log in to the website.`
+            : `**${name}** will be able to log in to the website again.`,
         ),
       )
       .addSeparatorComponents(divider())
@@ -622,15 +620,15 @@ export function banConfirm(u: UserCardData, banned: boolean): View {
           banned
             ? button(
                 encodeId('adm', 'user', 'banok', u.discordUserId),
-                'Tak, zablokuj',
+                'Yes, block',
                 ButtonStyle.Danger,
               )
             : button(
                 encodeId('adm', 'user', 'unbanok', u.discordUserId),
-                'Tak, odblokuj',
+                'Yes, unblock',
                 ButtonStyle.Primary,
               ),
-          button(encodeId('adm', 'user', 'open'), 'Anuluj'),
+          button(encodeId('adm', 'user', 'open'), 'Cancel'),
         ),
       ),
   );

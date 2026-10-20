@@ -155,7 +155,7 @@ async function planData(ctx: StudentContext, week: IsoWeek, day?: Date) {
   return {
     sessions: filterMyGroups(sessions, my),
     hasGroups,
-    /** Sessions (of `day` when given, else of the week) that Moje grupy hides. */
+    /** Sessions (of `day` when given, else of the week) that My groups hides. */
     hidden: hiddenByMyGroups(
       day
         ? sessions.filter(

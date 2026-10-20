@@ -1,4 +1,4 @@
-/** `/event add`: the slash-command twin of the "Dodaj wydarzenie" modal. */
+/** `/event add`: the slash-command twin of the "Add event" modal. */
 import {
   addEvent,
   addSeries,
@@ -16,8 +16,9 @@ import { cardView } from '../ui/events.js';
 import { replyOptions } from './reply.js';
 import type { RouterDeps } from './router.js';
 
-export const UNTIL_MISSING = 'Podaj, do kiedy powtarzać (opcja until).';
-export const REPEAT_MISSING = 'Opcja until działa tylko z opcją repeat.';
+export const UNTIL_MISSING = 'Say how long to repeat (the until option).';
+export const REPEAT_MISSING =
+  'The until option only works with the repeat option.';
 
 export async function runEventAdd(
   deps: RouterDeps,
@@ -39,7 +40,7 @@ export async function runEventAdd(
       .select({ id: subjects.id })
       .from(subjects)
       .where(eq(subjects.code, code));
-    if (!s) return void (await say(`Nie znaleziono przedmiotu ${code}.`));
+    if (!s) return void (await say(`Subject ${code} not found.`));
     subjectId = s.id;
   }
   let classId: number | null = null;
@@ -48,7 +49,9 @@ export async function runEventAdd(
   const groupNo = i.options.getInteger('group');
   if (classKind) {
     if (subjectId === null) {
-      return void (await say('Zajęcia można wybrać tylko z przedmiotem.'));
+      return void (await say(
+        'A class can only be chosen together with a subject.',
+      ));
     }
     const [c] = await db
       .select({ id: classes.id })
@@ -59,7 +62,7 @@ export async function runEventAdd(
           eq(classes.kind, classKind as never),
         ),
       );
-    if (!c) return void (await say('Ten przedmiot nie ma takich zajęć.'));
+    if (!c) return void (await say('This subject has no such class.'));
     classId = c.id;
     if (groupNo !== null) {
       const [g] = await db
@@ -68,11 +71,13 @@ export async function runEventAdd(
         .where(
           and(eq(classGroups.classId, c.id), eq(classGroups.number, groupNo)),
         );
-      if (!g) return void (await say(`Nie znaleziono grupy ${groupNo}.`));
+      if (!g) return void (await say(`Group ${groupNo} not found.`));
       groupId = g.id;
     }
   } else if (groupNo !== null) {
-    return void (await say('Grupę można wybrać tylko razem z zajęciami.'));
+    return void (await say(
+      'A group can only be chosen together with a class.',
+    ));
   }
 
   const input = {

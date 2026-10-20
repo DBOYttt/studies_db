@@ -29,10 +29,10 @@ export async function linkFor(
   };
 }
 
-export const LINK_BANNED = 'Twój dostęp do strony jest zablokowany.';
-export const LINK_SENT = 'Wysłałem Ci link w wiadomości prywatnej.';
+export const LINK_BANNED = 'Your access to the website is blocked.';
+export const LINK_SENT = 'I sent you the link in a direct message.';
 export const LINK_DM_CLOSED =
-  'Nie mogę wysłać DM — włącz wiadomości prywatne od członków serwera.';
+  'I cannot send a DM. Enable direct messages from server members.';
 
 /**
  * DMs the one-time login URL; false when the user's DMs are closed. `<url>`
@@ -42,7 +42,7 @@ export const LINK_DM_CLOSED =
 export async function sendLoginDm(user: User, url: string): Promise<boolean> {
   try {
     await user.send({
-      content: `Twój link do Studies DB (ważny 15 minut, jednorazowy): <${url}>`,
+      content: `Your Studies DB link (valid for 15 minutes, single use): <${url}>`,
       flags: MessageFlags.SuppressEmbeds,
     });
     return true;
@@ -57,7 +57,7 @@ export async function searchReply(
   q: string,
 ): Promise<string> {
   const hits = await searchAll(db, { q, limit: 5 });
-  if (hits.length === 0) return `Brak wyników dla „${escapeMarkdown(q)}”.`;
+  if (hits.length === 0) return `No results for "${escapeMarkdown(q)}".`;
   return hits
     .slice(0, 5)
     .map((h) => {

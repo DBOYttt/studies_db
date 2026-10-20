@@ -63,7 +63,7 @@ const isPanel = (a: Action) =>
   a.type === 'ensurePanelChannel' ||
   a.type === 'ensurePanelMessage' ||
   a.type === 'syncAdminPanelPerms' ||
-  (a.type === 'warn' && a.message.includes('kanałów tekstowych'));
+  (a.type === 'warn' && a.message.includes('text channels'));
 /** The plan without the panel actions (covered in 'planSetup: panels'). */
 const planSetup: typeof planWithPanels = (...args) =>
   planWithPanels(...args).filter((a) => !isPanel(a));
@@ -533,7 +533,7 @@ describe('planSetup: posts', () => {
     });
     expect(p?.type === 'postTopic' && p.messages).toEqual([
       {
-        content: 'Dodane przez Ola · 2026-10-05 (z bazy Studies DB)',
+        content: 'Added by Ola · 2026-10-05 (from the Studies DB database)',
         files: [],
       },
     ]);
@@ -608,8 +608,8 @@ describe('planSetup: posts', () => {
       const total = m.files.reduce((n, f) => n + f.sizeBytes, 0);
       expect(total).toBeLessThanOrEqual(24 * MiB);
     }
-    expect(p.messages[0].content).toContain('Dodane przez');
-    expect(p.messages[1].content).toBe('Pliki (cd.)');
+    expect(p.messages[0].content).toContain('Added by');
+    expect(p.messages[1].content).toBe('Files (continued)');
   });
 
   it('posts a topic whose only file is too big, as a link', () => {
@@ -727,7 +727,9 @@ describe('planSetup: posts', () => {
       [2, 5, 6],
       [7],
     ]);
-    expect(p.messages.every((x) => x.content === 'Pliki (cd.)')).toBe(true);
+    expect(p.messages.every((x) => x.content === 'Files (continued)')).toBe(
+      true,
+    );
   });
 
   it('does not re-send files for threads it has no message list for', () => {
@@ -806,7 +808,7 @@ describe('planSetup: posts', () => {
     });
     const warn = actions.find((a) => a.type === 'warn');
     expect(warn).toMatchObject({ type: 'warn', code: 'ASD' });
-    expect(warn?.type === 'warn' && warn.message).toContain('przypięty');
+    expect(warn?.type === 'warn' && warn.message).toContain('pinned');
   });
 });
 
@@ -1048,7 +1050,7 @@ describe('planSetup: panels', () => {
           type: 'warn',
           code: null,
           message:
-            'jest kilka kanałów tekstowych o nazwie #admin-panel — panel nie został utworzony; zostaw jeden (albo zmień nazwy pozostałych) i uruchom /setup ponownie',
+            'there are several text channels named #admin-panel, so the panel was not created. Keep one (or rename the others) and run /setup again',
         },
         message('panel', null, null),
       ],
@@ -1151,8 +1153,8 @@ describe('planSetup: panels', () => {
 describe('renderEventsInfoPost', () => {
   it('links the new-event page and the plan', () => {
     const t = renderEventsInfoPost('https://x.pl');
-    expect(t).toContain('Dodaj wydarzenie: https://x.pl/s/wydarzenia/nowe');
-    expect(t).toContain('Plan zajęć: https://x.pl/s/plan');
+    expect(t).toContain('Add an event: https://x.pl/s/wydarzenia/nowe');
+    expect(t).toContain('Timetable: https://x.pl/s/plan');
     expect(t).not.toMatch(/s\/wydarzenia(\s|$)/);
   });
 });
@@ -1265,7 +1267,7 @@ describe('planSetup: #wydarzenia', () => {
       expect.objectContaining({
         type: 'warn',
         code: '#wydarzenia',
-        message: expect.stringContaining('limit 20'),
+        message: expect.stringContaining('limit of 20'),
       }),
     ]);
   });

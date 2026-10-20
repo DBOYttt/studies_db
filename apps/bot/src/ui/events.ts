@@ -1,5 +1,5 @@
 /**
- * `evt` interactions: the "Dodaj wydarzenie" modal, the event card and its
+ * `evt` interactions: the "Add event" modal, the event card and its
  * pickers. Mutations go through the shared `@studies/db` event actions, which
  * refuse banned users, audit with `source: 'discord'` and queue the post.
  */
@@ -60,8 +60,8 @@ const attempt = <T>(f: () => T): T | null => {
 const ID_RE = /^[1-9]\d*$/;
 const PAGE_RE = /^\d+$/;
 const VERSION_RE = /^v\d+$/;
-export const NOT_FOUND_TEXT = 'Nie znaleziono wydarzenia.';
-export const DELETED_TEXT = 'Wydarzenie usunięte';
+export const NOT_FOUND_TEXT = 'Event not found.';
+export const DELETED_TEXT = 'Event deleted';
 
 type Action =
   | { kind: 'new' }
@@ -224,7 +224,7 @@ const modalSubjects = (db: RouterDeps['ingest']['db']) =>
     .from(subjects)
     .orderBy(subjects.semester, subjects.code);
 
-/** Splits "Miejsce / notatka": the first line is the place, the rest the note. */
+/** Splits "Place / note": the first line is the place, the rest the note. */
 export function splitPlaceNote(s: string): {
   place: string | null;
   note: string | null;
@@ -350,7 +350,7 @@ export async function handleEvent(
           .select({ id: subjects.id })
           .from(subjects)
           .where(eq(subjects.code, chosen));
-        if (!s) return fail(`Nie znaleziono przedmiotu o kodzie ${chosen}.`);
+        if (!s) return fail(`No subject with code ${chosen}.`);
         subjectId = s.id;
       }
       const { place, note } = splitPlaceNote(
@@ -369,7 +369,7 @@ export async function handleEvent(
         if (!r.ok || r.id === undefined) return fail(r.message);
         return showCard(r.id);
       }
-      // Only what differs from the prefilled values: an unchanged "Kiedy" is
+      // Only what differs from the prefilled values: an unchanged "When" is
       // not range-checked again, an unchanged submit is a no-op.
       const e = await getEvent(db, action.id);
       if (!e || e.deletedAt) return fail(e ? DELETED_TEXT : NOT_FOUND_TEXT);
@@ -515,7 +515,7 @@ async function linkPage(
   const { db } = deps.ingest;
   const e = await getEvent(db, eventId);
   if (!e || e.deletedAt) return notice(e ? DELETED_TEXT : NOT_FOUND_TEXT);
-  if (e.subjectId === null) return notice('Wydarzenie nie ma przedmiotu.');
+  if (e.subjectId === null) return notice('The event has no subject.');
   const where = and(
     eq(topics.subjectId, e.subjectId),
     isNull(topics.deletedAt),

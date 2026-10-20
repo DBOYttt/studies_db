@@ -5,10 +5,14 @@ import {
   requestPlanSync,
 } from '@studies/db';
 
-const fmt = new Intl.DateTimeFormat('pl-PL', {
+const fmt = new Intl.DateTimeFormat('en-GB', {
   timeZone: 'Europe/Warsaw',
-  dateStyle: 'short',
-  timeStyle: 'short',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
 });
 
 // `now` is accepted for testability/future relative formatting; timestamps are UTC instants.
@@ -17,11 +21,11 @@ export function planStatusText(s: PlanSyncStatus, _now: Date): string {
   if (s.lastOkAt) {
     const st = s.stats;
     const counts = st ? ` (+${st.created} ~${st.updated} -${st.deleted})` : '';
-    lines.push(`Ostatnia synchronizacja: ${fmt.format(s.lastOkAt)}${counts}`);
+    lines.push(`Last sync: ${fmt.format(s.lastOkAt)}${counts}`);
   } else {
-    lines.push('Nigdy nie synchronizowano.');
+    lines.push('Never synced.');
   }
-  if (s.lastError) lines.push(`Błąd: ${s.lastError}`);
+  if (s.lastError) lines.push(`Error: ${s.lastError}`);
   return lines.join('\n');
 }
 
@@ -31,5 +35,5 @@ export async function planStatusReply(db: Db, now: Date): Promise<string> {
 
 export async function planSyncReply(db: Db, now: Date): Promise<string> {
   await requestPlanSync(db, now);
-  return `Zlecono synchronizację planu (wykona ją worker w ciągu minuty).\n${await planStatusReply(db, now)}`;
+  return `Timetable sync requested (the worker will run it within a minute).\n${await planStatusReply(db, now)}`;
 }

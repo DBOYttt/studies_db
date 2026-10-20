@@ -722,7 +722,7 @@ describe('applySetup: posts', () => {
       [
         post(topicId, [
           { content: 'hdr', files: [file(a, 'a.pdf')] },
-          { content: 'Pliki (cd.)', files: [file(b, 'b.pdf')] },
+          { content: 'Files (continued)', files: [file(b, 'b.pdf')] },
         ]),
       ],
       snapshot,
@@ -784,10 +784,10 @@ describe('applySetup: posts', () => {
         post(topicId, [
           { content: 'hdr', files: [file(a, 'a.pdf')] },
           {
-            content: 'Pliki (cd.)',
+            content: 'Files (continued)',
             files: [file(b, 'b.pdf'), file(c, 'c.pdf')],
           },
-          { content: 'Pliki (cd.)', files: [file(d, 'd.pdf')] },
+          { content: 'Files (continued)', files: [file(d, 'd.pdf')] },
         ]),
       ],
       snapshot,
@@ -826,8 +826,11 @@ describe('applySetup: posts', () => {
       threadId: 'th-9',
       title: 'Lab 1',
       messages: [
-        { content: 'Pliki (cd.)', files: [file(a, 'a.pdf'), file(b, 'b.pdf')] },
-        { content: 'Pliki (cd.)', files: [file(c, 'c.pdf')] },
+        {
+          content: 'Files (continued)',
+          files: [file(a, 'a.pdf'), file(b, 'b.pdf')],
+        },
+        { content: 'Files (continued)', files: [file(c, 'c.pdf')] },
       ],
     };
     const r = await applySetup(
@@ -874,7 +877,7 @@ describe('applySetup: posts', () => {
           threadId: 'th-9',
           title: 'Lab 1',
           messages: [
-            { content: 'Pliki (cd.)', files: [file(gone, 'gone.pdf')] },
+            { content: 'Files (continued)', files: [file(gone, 'gone.pdf')] },
           ],
         },
         {
@@ -980,7 +983,7 @@ describe('applySetup: posts', () => {
       storageDir,
     );
     expect(r.failures).toEqual([]);
-    expect(r.created.join('\n')).toContain('post informacyjny');
+    expect(r.created.join('\n')).toContain('info post');
     expect(r.warnings).toHaveLength(1);
     expect(r.warnings[0]).toContain('ASD');
     expect(r.warnings[0]).toContain('Missing Permissions');
@@ -990,10 +993,10 @@ describe('applySetup: posts', () => {
 
 describe('format', () => {
   it('says everything is up to date for an empty plan', () => {
-    expect(formatPlan([])).toBe('Wszystko jest aktualne.');
+    expect(formatPlan([])).toBe('Everything is up to date.');
     expect(
       formatReport({ created: [], updated: [], warnings: [], failures: [] }),
-    ).toBe('Wszystko jest aktualne.');
+    ).toBe('Everything is up to date.');
   });
   it('notes that imported forums get tags and guidelines in the real run', () => {
     const text = formatPlan([
@@ -1009,12 +1012,12 @@ describe('format', () => {
       },
     ]);
     expect(text).toContain('FIZ');
-    expect(text).toContain('tagi i wytyczne');
+    expect(text).toContain('tags and guidelines');
   });
   it('keeps long plans within 2000 characters', () => {
     const many = Array.from({ length: 500 }, (_, i) => forum(i, `S${i}`));
     const text = formatPlan(many);
-    expect(text.startsWith('Plan (bez zmian):')).toBe(true);
+    expect(text.startsWith('Plan (no changes made):')).toBe(true);
     expect(text.length).toBeLessThanOrEqual(2000);
   });
 });
@@ -1190,9 +1193,9 @@ describe('applySetup: panel pins and adopted channels', () => {
     g.refusePin = true;
     const r = await applySetup(db, g, [message(null)], snapshot);
     expect(r.failures).toEqual([]);
-    expect(r.created).toEqual(['panel w #panel']);
+    expect(r.created).toEqual(['panel in #panel']);
     expect(r.warnings).toEqual([
-      'nie udało się przypiąć panelu w #panel (bot potrzebuje uprawnienia Pin Messages)',
+      'could not pin the panel in #panel (the bot needs the Pin Messages permission)',
     ]);
     expect(await getSetting(db, 'panel_message_id')).toBe('panel-msg-1');
   });
@@ -1208,7 +1211,7 @@ describe('applySetup: panel pins and adopted channels', () => {
     h.refusePin = true;
     const r2 = await applySetup(db, h, [message('m-p')], snapshot);
     expect(h.calls.map((c) => c[0])).toEqual(['editPanel']);
-    expect(r2.warnings[0]).toContain('nie udało się przypiąć panelu w #panel');
+    expect(r2.warnings[0]).toContain('could not pin the panel in #panel');
   });
 
   it('warns when an adopted #admin-panel is visible to everyone', async () => {
@@ -1252,7 +1255,7 @@ describe('applySetup: panel pins and adopted channels', () => {
       snap,
     );
     expect(open.warnings).toEqual([
-      'kanał #admin-panel widzą wszyscy — ogranicz go do roli admina',
+      'everyone can see channel #admin-panel. Restrict it to the admin role',
     ]);
     const hidden = await applySetup(
       db,
@@ -1284,7 +1287,7 @@ describe('applySetup: #admin-panel permissions', () => {
       ['syncAdminPanelPerms', 'ch-a', 'role-new'],
     ]);
     expect(r.updated).toEqual([
-      'kanał #admin-panel: uprawnienia dla roli admina',
+      'channel #admin-panel: permissions for the admin role',
     ]);
     expect(r.failures).toEqual([]);
   });
@@ -1299,7 +1302,7 @@ describe('applySetup: #admin-panel permissions', () => {
     const g = fakeGuild();
     const r = await applySetup(db, g, [sync(null)], snapshot);
     expect(g.calls).toEqual([]);
-    expect(r.failures).toEqual(['#admin-panel: brak roli admina']);
+    expect(r.failures).toEqual(['#admin-panel: no admin role']);
   });
 
   it('re-grants a kept #admin-panel after the admin role was replaced', async () => {
@@ -1328,7 +1331,7 @@ describe('applySetup: #admin-panel permissions', () => {
     const r = await applySetup(db, g, actions, snap);
     expect(g.calls).toContainEqual(['syncAdminPanelPerms', 'ch-a', 'role-new']);
     expect(r.updated).toContain(
-      'kanał #admin-panel: uprawnienia dla roli admina',
+      'channel #admin-panel: permissions for the admin role',
     );
   });
 });
@@ -1339,7 +1342,7 @@ describe('formatPlan: #admin-panel permissions', () => {
       formatPlan([
         { type: 'syncAdminPanelPerms', channelId: 'c', roleId: null },
       ]),
-    ).toContain('ustaw uprawnienia #admin-panel dla roli admina');
+    ).toContain('set permissions of #admin-panel for the admin role');
   });
 });
 
@@ -1366,9 +1369,9 @@ describe('formatPlan: panels', () => {
         messageId: 'm',
       },
     ]);
-    expect(text).toContain('utwórz kanał #admin-panel');
-    expect(text).toContain('opublikuj panel w #admin-panel');
-    expect(text).toContain('odśwież panel w #panel');
+    expect(text).toContain('create channel #admin-panel');
+    expect(text).toContain('post the panel in #admin-panel');
+    expect(text).toContain('refresh the panel in #panel');
   });
 });
 

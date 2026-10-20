@@ -97,13 +97,13 @@ function fitTags(existingCount: number, wanted: string[]) {
 const unreadableWarn = (code: string | null, f: { name: string }): Action => ({
   type: 'warn',
   code,
-  message: `bot nie może odczytać forum #${f.name} (sprawdź View Channel i Read Message History) — pominięto`,
+  message: `the bot cannot read forum #${f.name} (check View Channel and Read Message History); skipped`,
 });
 
 const tooManyTags = (code: string, dropped: string[]): Action => ({
   type: 'warn',
   code,
-  message: `limit ${MAX_FORUM_TAGS} tagów — pominięto: ${dropped.join(', ')}`,
+  message: `limit of ${MAX_FORUM_TAGS} tags; skipped: ${dropped.join(', ')}`,
 });
 
 export const MAX_POST_TAGS = 5;
@@ -135,7 +135,7 @@ export function chunkFiles(files: PostFile[]): PostFile[][] {
 }
 const MAX_THREAD_NAME = 100;
 
-const FILES_CONTINUED = 'Pliki (cd.)';
+const FILES_CONTINUED = 'Files (continued)';
 
 const postFile = (m: MaterialSpec): PostFile => ({
   materialId: m.id,
@@ -146,15 +146,15 @@ const postFile = (m: MaterialSpec): PostFile => ({
 
 /** Starter (+ follow-up) messages for a DB topic posted by the bot. */
 function topicMessages(t: TopicSpec, webBaseUrl: string): PostMessage[] {
-  const header = `Dodane przez ${t.authorName ?? 'nieznanego autora'} · ${t.createdAt
+  const header = `Added by ${t.authorName ?? 'an unknown author'} · ${t.createdAt
     .toISOString()
-    .slice(0, 10)} (z bazy Studies DB)`;
+    .slice(0, 10)} (from the Studies DB database)`;
   const upload = t.materials.filter((m) => m.sizeBytes <= MAX_UPLOAD_BYTES);
   const linked = t.materials.filter((m) => m.sizeBytes > MAX_UPLOAD_BYTES);
   const links =
     linked.length > 0
       ? [
-          'Za duże do wysłania na Discord:',
+          'Too large to send to Discord:',
           ...linked.map(
             (m) => `${m.filename}: ${webBaseUrl}/files/${m.id}/original`,
           ),
@@ -248,7 +248,7 @@ function planPosts(
         type: 'warn',
         code: s.code,
         message:
-          'nie przypięto posta informacyjnego, bo w forum jest już przypięty inny post',
+          'info post not pinned because the forum already has another pinned post',
       });
     }
   } else if (info.content !== content) {
@@ -333,7 +333,7 @@ function planRole(
       {
         type: 'warn',
         code: null,
-        message: `jest kilka ról o nazwie „${name}” — rola admina nie została ustawiona; zostaw jedną (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+        message: `there are several roles named "${name}", so the admin role was not set. Keep one (or rename the others) and run /setup again`,
       },
     ],
     roleId: undefined,
@@ -390,7 +390,7 @@ function planPanels(
       channels.push({
         type: 'warn',
         code: null,
-        message: `jest kilka kanałów tekstowych o nazwie #${name} — panel nie został utworzony; zostaw jeden (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+        message: `there are several text channels named #${name}, so the panel was not created. Keep one (or rename the others) and run /setup again`,
       });
       continue;
     }
@@ -441,7 +441,7 @@ function planEventsForum(
         {
           type: 'warn',
           code,
-          message: `jest kilka forów o nazwie #${EVENTS_FORUM_NAME} — nie wybrano żadnego; zostaw jedno (albo zmień nazwy pozostałych) i uruchom /setup ponownie`,
+          message: `there are several forums named #${EVENTS_FORUM_NAME}, so none was chosen. Keep one (or rename the others) and run /setup again`,
         },
       ];
     }
@@ -501,7 +501,7 @@ function planEventsForum(
         type: 'warn',
         code,
         message:
-          'nie przypięto posta informacyjnego, bo w forum jest już przypięty inny post',
+          'info post not pinned because the forum already has another pinned post',
       });
     }
   } else if (info.content !== content) {
@@ -567,7 +567,7 @@ export function planSetup(
         type: 'warn',
         code: s.code,
         message:
-          'nie znaleziono połączonego forum (usunięte lub bot go nie widzi) — pominięto',
+          'linked forum not found (deleted, or the bot cannot see it); skipped',
       });
       continue;
     }
@@ -625,7 +625,7 @@ export function planSetup(
       actions.push({
         type: 'warn',
         code: null,
-        message: `#${f.name}: nie da się ustalić kodu przedmiotu — pominięto`,
+        message: `#${f.name}: cannot work out the subject code; skipped`,
       });
       continue;
     }
@@ -633,7 +633,7 @@ export function planSetup(
       actions.push({
         type: 'warn',
         code: parsed.code,
-        message: `kod zajęty, forum #${f.name} pominięto`,
+        message: `code already taken, forum #${f.name} skipped`,
       });
       continue;
     }

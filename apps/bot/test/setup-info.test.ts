@@ -39,7 +39,7 @@ const ASD: SubjectSpec = {
           title: 'prof.',
           group: null,
           email: 'jan@example.edu',
-          officeHours: 'śr. 10:00-11:30',
+          officeHours: 'Wed 10:00-11:30',
           room: 'B-1 301',
         },
       ],
@@ -80,33 +80,33 @@ const ASD: SubjectSpec = {
 
 describe('renderInfoPost', () => {
   it('has the fixed title', () => {
-    expect(INFO_TITLE).toBe('ℹ️ Informacje o przedmiocie');
+    expect(INFO_TITLE).toBe('ℹ️ Subject info');
   });
 
   it('renders subject, classes, lecturers and the weekly plan', () => {
     const t = renderInfoPost(ASD, W);
     for (const part of [
-      '**Algorytmy i struktury danych** (ASD) — Semestr 1, 6 ECTS',
+      '**Algorytmy i struktury danych** (ASD) — Semester 1, 6 ECTS',
       'https://upel.example/asd',
       `${W}/s/subjects/ASD`,
       'Exam',
       'próg 50%',
       'prof. Jan Kowalski',
       'jan@example.edu',
-      'śr. 10:00-11:30',
+      'Wed 10:00-11:30',
       'B-1 301',
       'mgr Michał Kamiński (Gr. 1)',
       'https://upel.example/asd-lab',
-      'pon. 08:00–09:30 · Wykład · A-1 101',
-      'wt. 10:00–11:30 · Laboratorium Gr. 1 · C-2 015',
-      'odwołane: 2026-10-20 Wykład',
+      'Mon 08:00–09:30 · Wykład · A-1 101',
+      'Tue 10:00–11:30 · Laboratorium Gr. 1 · C-2 015',
+      'cancelled: 2026-10-20 Wykład',
       `${W}/s/plan`,
     ]) {
       expect(t).toContain(part);
     }
     // one line per series, Monday before Tuesday
-    expect(t.match(/pon\. 08:00/g)).toHaveLength(1);
-    expect(t.indexOf('pon. 08:00')).toBeLessThan(t.indexOf('wt. 10:00'));
+    expect(t.match(/Mon 08:00/g)).toHaveLength(1);
+    expect(t.indexOf('Mon 08:00')).toBeLessThan(t.indexOf('Tue 10:00'));
   });
 
   it('omits empty parts and never prints null/undefined', () => {
@@ -114,7 +114,7 @@ describe('renderInfoPost', () => {
       { ...ASD, platformUrl: null, classes: [], sessions: [] },
       W,
     );
-    expect(t).not.toMatch(/null|undefined|Plan zajęć|Prowadzący/);
+    expect(t).not.toMatch(/null|undefined|Timetable|Lecturers/);
     expect(t).toContain(`${W}/s/subjects/ASD`);
   });
 
@@ -124,7 +124,7 @@ describe('renderInfoPost', () => {
       title: 'prof. dr hab.',
       group: null,
       email: `w${i}@example.edu`,
-      officeHours: 'pon. 10:00-12:00',
+      officeHours: 'Mon 10:00-12:00',
       room: 'X-1 100',
     }));
     const t = renderInfoPost(
@@ -132,6 +132,6 @@ describe('renderInfoPost', () => {
       W,
     );
     expect(t.length).toBeLessThanOrEqual(2000);
-    expect(t.endsWith(`Więcej: ${W}/s/subjects/ASD`)).toBe(true);
+    expect(t.endsWith(`More: ${W}/s/subjects/ASD`)).toBe(true);
   });
 });

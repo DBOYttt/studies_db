@@ -87,16 +87,16 @@ import {
 } from './views/modals.js';
 import { notice, type View } from './views/parts.js';
 
-export const NO_PERMISSION = 'Brak uprawnień.';
-export const WORKING = 'Pracuję…';
-export const SEMESTER_TEXT = 'Semestr musi wynosić 1 lub 2.';
-export const ECTS_TEXT = 'ECTS musi być liczbą od 0 do 30.';
+export const NO_PERMISSION = 'You do not have permission.';
+export const WORKING = 'Working…';
+export const SEMESTER_TEXT = 'Semester must be 1 or 2.';
+export const ECTS_TEXT = 'ECTS must be a number from 0 to 30.';
 export const CODE_TEXT =
-  'Kod może zawierać tylko litery, cyfry, kropkę, myślnik i podkreślenie (do 20 znaków).';
-export const EMPTY_NAME = 'Nazwa nie może być pusta.';
-export const SELF_BAN = 'Nie możesz zablokować siebie.';
+  'The code may contain only letters, digits, dots, hyphens and underscores (up to 20 characters).';
+export const EMPTY_NAME = 'The name cannot be empty.';
+export const SELF_BAN = 'You cannot block yourself.';
 const UNRENDERABLE =
-  'Tego przedmiotu nie da się pokazać w panelu: jego kod zawiera niedozwolone znaki. Zmień go na stronie.';
+  'This subject cannot be shown in the panel: its code contains characters that are not allowed. Change it on the website.';
 
 const CODE_RE = /^[A-Za-z0-9._-]{1,20}$/;
 const ID_RE = /^[1-9]\d*$/;
@@ -326,9 +326,7 @@ async function showSubject(ctx: Ctx, code: string): Promise<void> {
   const data = await subjectCardData(ctx.db, code);
   await show(
     ctx.i,
-    data
-      ? safe(() => subjectCard(data))
-      : notice(`Nie znaleziono przedmiotu ${code}.`),
+    data ? safe(() => subjectCard(data)) : notice(`Subject ${code} not found.`),
   );
 }
 
@@ -336,11 +334,11 @@ async function showLecturer(ctx: Ctx, id: number): Promise<void> {
   const l = await lecturerRow(ctx.db, id);
   await show(
     ctx.i,
-    l ? lecturerCard(l) : notice(`Nie znaleziono prowadzącego o id ${id}.`),
+    l ? lecturerCard(l) : notice(`Lecturer with id ${id} not found.`),
   );
 }
 
-/** setup / resync: "Pracuję…", then the report, under the /setup lock. */
+/** setup / resync: "Working…", then the report, under the /setup lock. */
 async function longRun(
   ctx: Ctx,
   title: string,
@@ -392,8 +390,8 @@ async function saveSubject(ctx: Ctx, code: string | null): Promise<void> {
     await show(
       i,
       reportView(
-        'Nowy przedmiot',
-        `${r.message}\nUruchom /setup, aby utworzyć jego forum.`,
+        'New subject',
+        `${r.message}\nRun /setup to create its forum.`,
         ['setup'],
       ),
     );
@@ -401,7 +399,7 @@ async function saveSubject(ctx: Ctx, code: string | null): Promise<void> {
   }
 
   const cur = await subjectRow(db, code as string);
-  if (!cur) return void (await say(i, `Nie znaleziono przedmiotu ${code}.`));
+  if (!cur) return void (await say(i, `Subject ${code} not found.`));
   // Only what was changed: an untouched (possibly clipped) prefill is kept.
   const patch: Parameters<typeof editSubject>[2] = {};
   if (name !== cur.name) patch.name = name;
@@ -488,8 +486,7 @@ async function saveLecturer(ctx: Ctx, id: number | null): Promise<void> {
     return;
   }
   const cur = await lecturerRow(db, id);
-  if (!cur)
-    return void (await say(i, `Nie znaleziono prowadzącego o id ${id}.`));
+  if (!cur) return void (await say(i, `Lecturer with id ${id} not found.`));
   const patch: Parameters<typeof editLecturer>[2] = {};
   if (name !== cur.name) patch.name = name;
   for (const [key, field, max] of LECTURER_FIELDS) {
@@ -534,10 +531,10 @@ async function run(ctx: Ctx, a: AdminAction): Promise<void> {
       await ack(i);
       const text = await planSyncReply(db, new Date());
       await ctx.audit('plan.sync', null, {});
-      return show(i, reportView('Synchronizacja planu', text, ['status']));
+      return show(i, reportView('Timetable sync', text, ['status']));
     }
     case 'resync':
-      return longRun(ctx, 'Pobieranie z Discorda', () =>
+      return longRun(ctx, 'Fetching from Discord', () =>
         runResync(deps, ctx.audit),
       );
     case 'setupAsk':
@@ -546,7 +543,7 @@ async function run(ctx: Ctx, a: AdminAction): Promise<void> {
     case 'setup': {
       const guild = i.guild;
       if (!guild) throw new Error('admin panel outside a guild');
-      return longRun(ctx, a.dryRun ? 'Podgląd /setup' : 'Wynik /setup', () =>
+      return longRun(ctx, a.dryRun ? '/setup preview' : '/setup result', () =>
         runSetup(deps, guild, i.user.id, a.dryRun, ctx.audit),
       );
     }
@@ -573,8 +570,7 @@ async function run(ctx: Ctx, a: AdminAction): Promise<void> {
       return openModal(i, () => subjectModal());
     case 'subjEdit': {
       const s = await subjectRow(db, a.code);
-      if (!s)
-        return void (await reply(i, `Nie znaleziono przedmiotu ${a.code}.`));
+      if (!s) return void (await reply(i, `Subject ${a.code} not found.`));
       return openModal(i, () => subjectModal(s));
     }
     case 'subjSave':
@@ -648,10 +644,7 @@ async function run(ctx: Ctx, a: AdminAction): Promise<void> {
     case 'lectEdit': {
       const l = await lecturerRow(db, a.id);
       if (!l)
-        return void (await reply(
-          i,
-          `Nie znaleziono prowadzącego o id ${a.id}.`,
-        ));
+        return void (await reply(i, `Lecturer with id ${a.id} not found.`));
       return openModal(i, () => lecturerModal(l));
     }
     case 'lectSave':
@@ -688,7 +681,7 @@ async function run(ctx: Ctx, a: AdminAction): Promise<void> {
 
 /**
  * An `adm` interaction: stale ids get the stale notice, non-admins (by the
- * stored role, re-checked every time) "Brak uprawnień.", both before anything
+ * stored role, re-checked every time) "You do not have permission.", both before anything
  * else happens.
  */
 export async function handleAdmin(

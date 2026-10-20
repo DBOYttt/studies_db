@@ -23,7 +23,7 @@ export type Audit = (
   details: object,
 ) => Promise<void>;
 
-export const BUSY_TEXT = '/setup już trwa — spróbuj za chwilę.';
+export const BUSY_TEXT = '/setup is already running. Try again in a moment.';
 
 let setupRunning = false;
 
@@ -111,7 +111,7 @@ export async function runSetup(
       ignoreWatermark: true,
     });
     report.updated.push(
-      `Pobrano posty: ${r.topics} tematów, ${r.created} plików, ${r.failed} błędów`,
+      `Fetched posts: ${r.topics} topics, ${r.created} files, ${r.failed} errors`,
     );
   }
   if (needsSecondPass(first.actions)) {
@@ -167,5 +167,5 @@ export async function runResync(
     created: r.created,
     failed: r.failed,
   });
-  return `Zsynchronizowano: ${r.topics} tematów, ${r.created} nowych plików, ${r.failed} błędów.`;
+  return `Synced: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`;
 }

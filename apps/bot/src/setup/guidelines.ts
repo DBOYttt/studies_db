@@ -4,7 +4,7 @@ import type { ClassSpec, LecturerSpec, SubjectSpec } from './types.js';
 
 export const MAX_GUIDELINES = 4096;
 const TAGGING_HINT =
-  'Oznaczaj posty tagiem zajęć i grupy, np. Laboratorium + Gr. 1.';
+  'Tag posts with the class and group, e.g. Laboratorium + Gr. 1.';
 
 const lecturer = (l: LecturerSpec) =>
   [l.title, l.name].filter(Boolean).join(' ') +
@@ -16,15 +16,15 @@ function classBlock(c: ClassSpec): string[] {
     : '';
   const lines = [`${c.name}${assessment}`];
   if (c.lecturers.length > 0) {
-    lines.push(`Prowadzący: ${c.lecturers.map(lecturer).join(', ')}`);
+    lines.push(`Lecturers: ${c.lecturers.map(lecturer).join(', ')}`);
   }
   if (c.platformUrl) lines.push(c.platformUrl);
   return lines;
 }
 
 export function renderGuidelines(s: SubjectSpec): string {
-  const head = [`${s.name} — Semestr ${s.semester}, ${s.ects} ECTS`];
-  if (s.platformUrl) head.push(`Platforma: ${s.platformUrl}`);
+  const head = [`${s.name} — Semester ${s.semester}, ${s.ects} ECTS`];
+  if (s.platformUrl) head.push(`Platform: ${s.platformUrl}`);
   const blocks = [head, ...s.classes.map(classBlock)].map((b) => b.join('\n'));
   const body = blocks.join('\n\n');
   // The hint stays last even when the body has to be cut.

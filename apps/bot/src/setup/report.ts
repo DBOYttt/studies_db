@@ -4,12 +4,12 @@ import { PANEL_CHANNEL_NAMES } from './plan.js';
 import type { Action } from './types.js';
 
 const MAX_LEN = 2000;
-const UP_TO_DATE = 'Wszystko jest aktualne.';
+const UP_TO_DATE = 'Everything is up to date.';
 
 function fitLines(lines: string[]): string {
   let out = '';
   for (const [i, line] of lines.entries()) {
-    const more = `\n… i ${lines.length - i} więcej`;
+    const more = `\n… and ${lines.length - i} more`;
     const next = out ? `${out}\n${line}` : line;
     if (next.length + more.length > MAX_LEN) return `${out}${more}`;
     out = next;
@@ -32,10 +32,10 @@ export function mergeReports(a: SetupReport, b: SetupReport): SetupReport {
 
 export function formatReport(r: SetupReport): string {
   const lines = [
-    ...section('Utworzono', r.created),
-    ...section('Zaktualizowano', r.updated),
-    ...section('Ostrzeżenia', r.warnings),
-    ...section('Błędy', r.failures),
+    ...section('Created', r.created),
+    ...section('Updated', r.updated),
+    ...section('Warnings', r.warnings),
+    ...section('Errors', r.failures),
   ];
   return lines.length === 0 ? UP_TO_DATE : fitLines(lines);
 }
@@ -43,53 +43,53 @@ export function formatReport(r: SetupReport): string {
 function describeAction(a: Action): string {
   switch (a.type) {
     case 'createRole':
-      return `utwórz rolę ${a.name}`;
+      return `create role ${a.name}`;
     case 'adoptRole':
-      return `zapisz rolę ${a.name} jako rolę admina`;
+      return `save role ${a.name} as the admin role`;
     case 'assignRole':
-      return `nadaj Ci rolę ${a.roleName}`;
+      return `give you the role ${a.roleName}`;
     case 'createCategory':
-      return `utwórz kategorię ${a.name}`;
+      return `create category ${a.name}`;
     case 'createForum':
-      return `${a.code}: utwórz forum #${a.name} (${a.categoryName}) z tagami ${a.tags.join(', ')}`;
+      return `${a.code}: create forum #${a.name} (${a.categoryName}) with tags ${a.tags.join(', ')}`;
     case 'addTags':
-      return `${a.code}: dodaj tagi ${a.tags.join(', ')}`;
+      return `${a.code}: add tags ${a.tags.join(', ')}`;
     case 'setGuidelines':
-      return `${a.code}: zaktualizuj wytyczne forum`;
+      return `${a.code}: update the forum guidelines`;
     case 'importForum':
-      return `${a.code}: dodaj do bazy przedmiot „${a.name}” (sem. ${a.semester}) z forum #${a.forumName}${a.classKinds.length > 0 ? ` z zajęciami ${a.classKinds.map((k) => CLASS_NAMES[k]).join(', ')}` : ''}`;
+      return `${a.code}: add subject "${a.name}" (sem. ${a.semester}) to the database from forum #${a.forumName}${a.classKinds.length > 0 ? ` with classes ${a.classKinds.map((k) => CLASS_NAMES[k]).join(', ')}` : ''}`;
     case 'addClasses':
-      return `${a.code}: dodaj do bazy zajęcia ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`;
+      return `${a.code}: add classes to the database: ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`;
     case 'postTopic': {
       const n = a.messages.reduce((k, m) => k + m.files.length, 0);
-      return `${a.code}: opublikuj temat „${a.title}” (${n} plików)`;
+      return `${a.code}: post topic "${a.title}" (${n} files)`;
     }
     case 'postFiles': {
       const n = a.messages.reduce((k, m) => k + m.files.length, 0);
-      return `${a.code}: doślij ${n} plików do tematu „${a.title}”`;
+      return `${a.code}: send ${n} more files to topic "${a.title}"`;
     }
     case 'upsertInfoPost':
-      return `${a.code}: ${a.existing ? 'zaktualizuj' : 'utwórz'} post informacyjny`;
+      return `${a.code}: ${a.existing ? 'update' : 'create'} the info post`;
     case 'ensurePanelChannel':
       return a.existingId
-        ? `zapisz kanał #${a.name} jako kanał panelu`
-        : `utwórz kanał #${a.name}`;
+        ? `save channel #${a.name} as a panel channel`
+        : `create channel #${a.name}`;
     case 'syncAdminPanelPerms':
-      return `ustaw uprawnienia #${PANEL_CHANNEL_NAMES.admin} dla roli admina`;
+      return `set permissions of #${PANEL_CHANNEL_NAMES.admin} for the admin role`;
     case 'ensurePanelMessage':
       return a.messageId
-        ? `odśwież panel w #${PANEL_CHANNEL_NAMES[a.which]} (albo opublikuj go ponownie, jeśli zniknął)`
-        : `opublikuj panel w #${PANEL_CHANNEL_NAMES[a.which]}`;
+        ? `refresh the panel in #${PANEL_CHANNEL_NAMES[a.which]} (or post it again if it is gone)`
+        : `post the panel in #${PANEL_CHANNEL_NAMES[a.which]}`;
     case 'ensureEventsForum':
       return a.existingId
-        ? `${a.code}: zapisz istniejące forum jako forum wydarzeń`
-        : `${a.code}: utwórz forum #${a.name} z tagami ${a.tags.join(', ')}`;
+        ? `${a.code}: save the existing forum as the events forum`
+        : `${a.code}: create forum #${a.name} with tags ${a.tags.join(', ')}`;
     case 'addEventsTags':
-      return `${a.code}: dodaj tagi ${a.tags.join(', ')}`;
+      return `${a.code}: add tags ${a.tags.join(', ')}`;
     case 'upsertEventsInfoPost':
-      return `${a.code}: ${a.existing ? 'zaktualizuj' : 'utwórz'} post informacyjny`;
+      return `${a.code}: ${a.existing ? 'update' : 'create'} the info post`;
     case 'warn':
-      return `uwaga — ${a.code ? `${a.code}: ` : ''}${a.message}`;
+      return `warning: ${a.code ? `${a.code}: ` : ''}${a.message}`;
   }
 }
 
@@ -97,11 +97,11 @@ export function formatPlan(actions: Action[]): string {
   if (actions.length === 0) return UP_TO_DATE;
   const note = actions.some((a) => a.type === 'importForum')
     ? [
-        'Po imporcie /setup pobierze posty z tych forów i doda im tagi i wytyczne.',
+        'After the import, /setup will fetch the posts from those forums and add tags and guidelines to them.',
       ]
     : [];
   return fitLines([
-    'Plan (bez zmian):',
+    'Plan (no changes made):',
     ...actions.map((a) => `- ${describeAction(a)}`),
     ...note,
   ]);

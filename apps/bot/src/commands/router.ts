@@ -72,9 +72,9 @@ const ADMIN_COMMANDS = new Set([
   'resync',
   'admin',
 ]);
-const ERROR_TEXT = 'Wystąpił błąd. Spróbuj ponownie później.';
+const ERROR_TEXT = 'Something went wrong. Try again later.';
 const FORUM_VISIBILITY_WARNING =
-  'Uwaga: bot nie widzi tego forum — sprawdź uprawnienia (View Channel, Read Message History).';
+  'Warning: the bot cannot see this forum. Check its permissions (View Channel, Read Message History).';
 const MAX_LEN = 2000;
 
 /** A V2 text notice (no `content`), for editing a deferred V2 response. */
@@ -207,7 +207,7 @@ async function runCommand(
       ? canRunSetup(i, roleId)
       : !needsAdmin || isAdmin(i, roleId);
   if (!allowed) {
-    await reply('Brak uprawnień.');
+    await reply('You do not have permission.');
     return;
   }
 
@@ -290,7 +290,7 @@ async function runCommand(
       if (lsub === 'edit') {
         const id = Number(i.options.getString('lecturer', true));
         if (!Number.isInteger(id)) {
-          await reply('Wybierz prowadzącego z listy podpowiedzi.');
+          await reply('Choose a lecturer from the suggestions.');
           return;
         }
         const patch = {
@@ -311,7 +311,7 @@ async function runCommand(
       }
       const lecturerId = Number(i.options.getString('lecturer', true));
       if (!Number.isInteger(lecturerId)) {
-        await reply('Wybierz prowadzącego z listy podpowiedzi.');
+        await reply('Choose a lecturer from the suggestions.');
         return;
       }
       const subjectCode = i.options.getString('subject', true);

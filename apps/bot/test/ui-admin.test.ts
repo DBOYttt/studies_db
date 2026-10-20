@@ -164,8 +164,8 @@ const ids = (payload: Json) =>
     .filter(Boolean);
 const lastEdit = (i: Json) => i.editReply.mock.calls.at(-1)[0];
 
-const STALE = 'Ten panel jest nieaktualny — otwórz go ponownie.';
-const BUSY = '/setup już trwa — spróbuj za chwilę.';
+const STALE = 'This panel is out of date. Open it again.';
+const BUSY = '/setup is already running. Try again in a moment.';
 
 const subjectFields = (over: Record<string, string> = {}) => ({
   name: 'Algorytmy',
@@ -181,13 +181,13 @@ const subject = async (code = 'ASD') =>
   (await db.select().from(subjects).where(eq(subjects.code, code)))[0];
 
 describe('admin check', () => {
-  it('a non-admin pressing banok gets "Brak uprawnień." and nothing changes', async () => {
+  it('a non-admin pressing banok gets "You do not have permission." and nothing changes', async () => {
     await db.insert(users).values({ discordUserId: '999', displayName: '999' });
     const i = interaction('v1:adm:user:banok:999', { admin: false });
     await handler()(i);
     expect(i.calls).toEqual(['reply']);
     const arg = i.reply.mock.calls[0][0];
-    expect(textOf(arg)).toBe('Brak uprawnień.');
+    expect(textOf(arg)).toBe('You do not have permission.');
     expect(arg.flags & MessageFlags.Ephemeral).toBeTruthy();
     expect(arg.allowedMentions).toEqual({ parse: [] });
     const [v] = await db
@@ -203,7 +203,9 @@ describe('admin check', () => {
     const i = interaction('v1:adm:subj:edit:ASD', { admin: false });
     await handler()(i);
     expect(i.calls).toEqual(['reply']);
-    expect(textOf(i.reply.mock.calls[0][0])).toBe('Brak uprawnień.');
+    expect(textOf(i.reply.mock.calls[0][0])).toBe(
+      'You do not have permission.',
+    );
   });
 
   it('answers malformed admin ids as stale', async () => {
@@ -230,7 +232,7 @@ describe('subjects', () => {
     await handler()(i);
     expect(i.calls).toEqual(['reply']);
     const arg = i.reply.mock.calls[0][0];
-    expect(textOf(arg)).toBe('ECTS musi być liczbą od 0 do 30.');
+    expect(textOf(arg)).toBe('ECTS must be a number from 0 to 30.');
     expect(arg.flags & MessageFlags.Ephemeral).toBeTruthy();
     expect(await subject()).toMatchObject({ name: 'Algorytmy', ects: 5 });
     expect(await auditRows()).toHaveLength(0);
@@ -242,9 +244,7 @@ describe('subjects', () => {
       fields: subjectFields({ semester: '3' }),
     });
     await handler()(i);
-    expect(textOf(i.reply.mock.calls[0][0])).toBe(
-      'Semestr musi wynosić 1 lub 2.',
-    );
+    expect(textOf(i.reply.mock.calls[0][0])).toBe('Semester must be 1 or 2.');
   });
 
   it('saves an edit, audits subject.edit once and re-renders the card', async () => {
@@ -382,7 +382,7 @@ describe('subjects', () => {
     await handler()(i);
     expect(i.calls).toEqual(['reply']);
     expect(textOf(i.reply.mock.calls[0][0])).toBe(
-      'Kod może zawierać tylko litery, cyfry, kropkę, myślnik i podkreślenie (do 20 znaków).',
+      'The code may contain only letters, digits, dots, hyphens and underscores (up to 20 characters).',
     );
     expect(await db.select().from(subjects)).toHaveLength(1);
   });
@@ -407,7 +407,7 @@ describe('subjects', () => {
       values: ['X:Y'],
     });
     await handler()(i);
-    expect(textOf(lastEdit(i))).toContain('nie da się pokazać');
+    expect(textOf(lastEdit(i))).toContain('cannot be shown');
     err.mockRestore();
   });
 
@@ -416,7 +416,7 @@ describe('subjects', () => {
     await handler()(i);
     expect(i.calls).toEqual(['deferReply', 'editReply']);
     expect(i.deferReply.mock.calls[0][0].flags).toBe(MessageFlags.Ephemeral);
-    expect(textOf(lastEdit(i))).toContain('1 w bazie');
+    expect(textOf(lastEdit(i))).toContain('1 in the database');
   });
 });
 
@@ -508,9 +508,7 @@ describe('users', () => {
     const i = interaction('v1:adm:user:banok:1000');
     await handler()(i);
     expect(i.calls).toEqual(['reply']);
-    expect(textOf(i.reply.mock.calls[0][0])).toBe(
-      'Nie możesz zablokować siebie.',
-    );
+    expect(textOf(i.reply.mock.calls[0][0])).toBe('You cannot block yourself.');
     const [me] = await db
       .select()
       .from(users)
@@ -558,7 +556,7 @@ describe('users', () => {
     await handler()(i);
     const text = textOf(lastEdit(i));
     expect(text).toContain('## 555');
-    expect(text).toContain('jeszcze nie korzystał z bota');
+    expect(text).toContain('has not used the bot yet');
   });
 });
 
@@ -596,15 +594,15 @@ describe('status, setup and web', () => {
     const i = interaction('v1:adm:status', { ephemeral: false });
     await handler()(i);
     const text = textOf(lastEdit(i));
-    expect(text).toContain('Nigdy nie synchronizowano.');
-    expect(text).toContain('W kolejce: 1 · W toku: 0 · Błędy: 1');
-    expect(text).toContain('**Materiały w przetwarzaniu**\n1');
+    expect(text).toContain('Never synced.');
+    expect(text).toContain('Queued: 1 · Running: 0 · Failed: 1');
+    expect(text).toContain('**Materials being processed**\n1');
   });
 
   it('plan sync audits plan.sync', async () => {
     const i = interaction('v1:adm:plan:sync');
     await handler()(i);
-    expect(textOf(lastEdit(i))).toContain('Zlecono synchronizację planu');
+    expect(textOf(lastEdit(i))).toContain('Timetable sync requested');
     expect((await auditRows())[0]).toMatchObject({ action: 'plan.sync' });
   });
 
@@ -621,7 +619,7 @@ describe('status, setup and web', () => {
     release();
     await held;
     expect(i.calls).toEqual(['deferUpdate', 'editReply', 'editReply']);
-    expect(textOf(i.editReply.mock.calls[0][0])).toBe('Pracuję…');
+    expect(textOf(i.editReply.mock.calls[0][0])).toBe('Working…');
     expect(textOf(lastEdit(i))).toBe(BUSY);
     expect(await auditRows()).toHaveLength(0);
   });
@@ -644,10 +642,10 @@ describe('status, setup and web', () => {
     };
     const i = interaction('v1:adm:setup:dry', { guild });
     await handler()(i);
-    expect(textOf(i.editReply.mock.calls[0][0])).toBe('Pracuję…');
+    expect(textOf(i.editReply.mock.calls[0][0])).toBe('Working…');
     const text = textOf(lastEdit(i));
-    expect(text).toContain('Podgląd /setup');
-    expect(text).toContain('Plan (bez zmian):');
+    expect(text).toContain('/setup preview');
+    expect(text).toContain('Plan (no changes made):');
     expect(ids(lastEdit(i))).toContain('v1:adm:status');
     expect((await auditRows())[0]).toMatchObject({
       action: 'bot.setup_dry_run',
@@ -661,7 +659,7 @@ describe('status, setup and web', () => {
     const dm = i.user.send.mock.calls[0][0].content;
     expect(dm).toMatch(/token=[^&>]+&next=%2Fadmin>/);
     expect(textOf(lastEdit(i))).toBe(
-      'Wysłałem Ci link w wiadomości prywatnej.',
+      'I sent you the link in a direct message.',
     );
   });
 });
@@ -701,6 +699,8 @@ describe('/admin', () => {
   it('refuses a non-admin', async () => {
     const i = command([]);
     await handler()(i);
-    expect(i.reply.mock.calls[0][0].content).toBe('Brak uprawnień.');
+    expect(i.reply.mock.calls[0][0].content).toBe(
+      'You do not have permission.',
+    );
   });
 });

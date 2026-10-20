@@ -220,7 +220,7 @@ describe('evt:save', () => {
     expect(e.subjectId).toBeNull();
   });
 
-  it('an invalid "Kiedy" answers with the parseWhen message and adds nothing', async () => {
+  it('an invalid "When" answers with the parseWhen message and adds nothing', async () => {
     const i = save('new', fields({ when: 'jutro' }));
     await handler()(i);
     expect(textOf(lastEdit(i))).toBe(WHEN_FORMAT_MESSAGE);
@@ -286,11 +286,11 @@ describe('card actions', () => {
     expect(textOf(lastEdit(i))).toContain('Kolokwium z pętli');
   });
 
-  it('a deleted event shows "Wydarzenie usunięte"', async () => {
+  it('a deleted event shows "Event deleted"', async () => {
     await db.update(events).set({ deletedAt: new Date() });
     const i = interaction(`v1:evt:show:${id}`);
     await handler()(i);
-    expect(textOf(lastEdit(i))).toBe('Wydarzenie usunięte');
+    expect(textOf(lastEdit(i))).toBe('Event deleted');
   });
 
   it('sets class and group', async () => {
@@ -351,14 +351,14 @@ describe('card actions', () => {
     expect((await db.select().from(events))[0].deletedAt).toBeNull();
     const ok = interaction(`v1:evt:delok:${id}:one:v0`);
     await handler()(ok);
-    expect(textOf(lastEdit(ok))).toBe('Wydarzenie usunięte');
+    expect(textOf(lastEdit(ok))).toBe('Event deleted');
     expect((await db.select().from(events))[0].deletedAt).not.toBeNull();
   });
 
   it('a stale id is answered as stale', async () => {
     const i = interaction('v1:evt:nope:1');
     await handler()(i);
-    expect(textOf(i.reply.mock.calls[0][0])).toContain('nieaktualny');
+    expect(textOf(i.reply.mock.calls[0][0])).toContain('out of date');
   });
 });
 
@@ -535,7 +535,7 @@ describe('/event add', () => {
     expect(rows).toHaveLength(3);
     expect(new Set(rows.map((e) => e.seriesId)).size).toBe(1);
     expect(textOf(i.editReply.mock.calls[0][0])).toContain(
-      'Część serii: co tydzień',
+      'Part of a series: ',
     );
     const reqs = await db.select().from(botRequests);
     expect(reqs.map((r) => r.target)).toEqual([`series:${rows[0].seriesId}`]);
@@ -744,6 +744,6 @@ describe('series scope', () => {
   it('a bad scope argument is stale', async () => {
     const i = interaction('v1:evt:del:1:everything');
     await handler()(i);
-    expect(textOf(i.reply.mock.calls[0][0])).toContain('nieaktualny');
+    expect(textOf(i.reply.mock.calls[0][0])).toContain('out of date');
   });
 });

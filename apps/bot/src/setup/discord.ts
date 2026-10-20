@@ -14,7 +14,7 @@ import {
   type TextChannel,
 } from 'discord.js';
 import type { SetupGuild } from './apply.js';
-import { EVENTS_INFO_TITLE, INFO_TITLE } from './info.js';
+import { EVENTS_INFO_TITLE, INFO_TITLE, LEGACY_INFO_TITLES } from './info.js';
 import type {
   ForumSnapshot,
   GuildSnapshot,
@@ -147,7 +147,9 @@ async function infoPostOf(
   const t = threads.find(
     (x) =>
       x.ownerId === botId &&
-      (x.name === INFO_TITLE || x.name === EVENTS_INFO_TITLE),
+      (x.name === INFO_TITLE ||
+        x.name === EVENTS_INFO_TITLE ||
+        LEGACY_INFO_TITLES.includes(x.name)),
   );
   if (!t) return null;
   const starter = await t.fetchStarterMessage().catch(() => null);
@@ -162,13 +164,13 @@ async function infoPostOf(
 async function forum(guild: Guild, id: string): Promise<ForumChannel> {
   const c = await guild.channels.fetch(id);
   if (c?.type !== ChannelType.GuildForum)
-    throw new Error(`${id} nie jest forum`);
+    throw new Error(`${id} is not a forum`);
   return c;
 }
 
 async function thread(guild: Guild, id: string): Promise<AnyThreadChannel> {
   const c = await guild.channels.fetch(id);
-  if (!c?.isThread()) throw new Error(`${id} nie jest wątkiem`);
+  if (!c?.isThread()) throw new Error(`${id} is not a thread`);
   return c;
 }
 
@@ -182,7 +184,7 @@ async function openThread(guild: Guild, id: string): Promise<AnyThreadChannel> {
 async function textChannel(guild: Guild, id: string): Promise<TextChannel> {
   const c = await guild.channels.fetch(id);
   if (c?.type !== ChannelType.GuildText)
-    throw new Error(`${id} nie jest kanałem tekstowym`);
+    throw new Error(`${id} is not a text channel`);
   return c;
 }
 
@@ -247,7 +249,7 @@ function panelOverwrites(
       bot,
     ];
   }
-  if (o.adminRoleId === null) throw new Error('brak roli admina');
+  if (o.adminRoleId === null) throw new Error('no admin role');
   return [
     { id: everyoneId, type: OverwriteType.Role, deny: [ViewChannel] },
     adminOverwrite(o.adminRoleId),
