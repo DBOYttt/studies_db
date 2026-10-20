@@ -72,15 +72,15 @@ export type ReminderDeps = {
 const pad = (n: number) => String(n).padStart(2, '0');
 const hm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 
-/** `Przypomnienie: 📝 Kolokwium · Fizyka · jutro 10:00 · C-12` + link. */
+/** `Reminder: 📝 Test · Physics · tomorrow 10:00 · C-12` + link. */
 export function dmText(
   e: PlanSession,
   kind: 'day' | 'hour',
   webBaseUrl: string,
 ): string {
   const when = e.allDay
-    ? 'jutro (cały dzień)'
-    : `${kind === 'day' ? 'jutro' : 'dziś'} ${hm(e.startsAt)}`;
+    ? 'tomorrow (all day)'
+    : `${kind === 'day' ? 'tomorrow' : 'today'} ${hm(e.startsAt)}`;
   const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
   const head = [
     `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
@@ -90,29 +90,29 @@ export function dmText(
   ]
     .filter(Boolean)
     .join(' · ');
-  return `Przypomnienie: ${head}\n${webBaseUrl}/s/wydarzenia/${e.id}`;
+  return `Reminder: ${head}\n${webBaseUrl}/s/wydarzenia/${e.id}`;
 }
 
-/** `Jutro:` and a line per event, at most 2000 characters. */
+/** `Tomorrow:` and a line per event, at most 2000 characters. */
 export function digestText(events: PlanSession[]): string {
   const lines = events.map((e) => {
     const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
     return [
       `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
       e.subjectCode ? escapeMarkdown(e.subjectCode) : null,
-      e.allDay ? 'cały dzień' : hm(e.startsAt),
+      e.allDay ? 'all day' : hm(e.startsAt),
       e.room ? escapeMarkdown(e.room) : null,
     ]
       .filter(Boolean)
       .join(' · ');
   });
-  let out = 'Jutro:';
+  let out = 'Tomorrow:';
   for (let n = 0; n < lines.length; n++) {
     const rest = lines.length - n - 1;
     const next = `${out}\n${lines[n]}`;
-    const tail = rest > 0 ? `\n…i ${rest} więcej` : '';
+    const tail = rest > 0 ? `\n…and ${rest} more` : '';
     if (next.length + tail.length > MAX_MESSAGE) {
-      return `${out}\n…i ${lines.length - n} więcej`;
+      return `${out}\n…and ${lines.length - n} more`;
     }
     out = next;
   }
@@ -125,7 +125,7 @@ function undeliverableReason(err: unknown): string | null {
   if (code === RESTJSONErrorCodes.CannotSendMessagesToThisUser) {
     return DM_DISABLED_REASON;
   }
-  if (code === RESTJSONErrorCodes.UnknownUser) return 'Nieznany użytkownik';
+  if (code === RESTJSONErrorCodes.UnknownUser) return 'Unknown user';
   return null;
 }
 

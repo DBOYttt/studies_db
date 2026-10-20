@@ -59,9 +59,9 @@ export type EventPostDeps = {
 /** A failure whose message is meant for the event page. */
 export class EventPostError extends Error {}
 
-const GENERIC_FAILURE = 'Nie udało się zaktualizować posta na Discordzie.';
+const GENERIC_FAILURE = 'Could not update the post on Discord.';
 
-/** The short Polish text stored on the request. */
+/** The short text stored on the request. */
 export function failureMessage(err: unknown): string {
   if (err instanceof EventPostError) return err.message;
   if (err instanceof DiscordAPIError) {
@@ -69,10 +69,10 @@ export function failureMessage(err: unknown): string {
       err.code === RESTJSONErrorCodes.MissingPermissions ||
       err.code === RESTJSONErrorCodes.MissingAccess
     ) {
-      return 'Bot nie ma uprawnień do tego forum — sprawdź uprawnienia kanału.';
+      return 'The bot lacks permissions for this forum. Check the channel permissions.';
     }
     if (err.code === RESTJSONErrorCodes.UnknownChannel) {
-      return 'Forum nie istnieje na Discordzie — uruchom /setup.';
+      return 'The forum does not exist on Discord. Run /setup.';
     }
   }
   return GENERIC_FAILURE;
@@ -83,7 +83,7 @@ export const targetOf = (
   target: string,
 ): { type: 'event' | 'series'; id: number } => {
   const m = /^(event|series):(\d+)$/.exec(target);
-  if (!m) throw new EventPostError('Nieprawidłowe zlecenie.');
+  if (!m) throw new EventPostError('Invalid request.');
   return { type: m[1] as 'event' | 'series', id: Number(m[2]) };
 };
 
@@ -91,7 +91,7 @@ async function targetForum(db: Db, e: EventDetails): Promise<string> {
   if (e.subjectId === null) {
     const id = await getSetting(db, EVENTS_FORUM_SETTING);
     if (!id) {
-      throw new EventPostError('Brak forum #wydarzenia — uruchom /setup.');
+      throw new EventPostError('The #wydarzenia forum is missing. Run /setup.');
     }
     return id;
   }
@@ -101,7 +101,7 @@ async function targetForum(db: Db, e: EventDetails): Promise<string> {
     .where(eq(subjects.id, e.subjectId));
   if (!s?.channel) {
     throw new EventPostError(
-      'Brak forum przedmiotu na Discordzie — uruchom /setup.',
+      'The subject forum is missing on Discord. Run /setup.',
     );
   }
   return s.channel;
@@ -435,7 +435,7 @@ async function handleUpload(
     !Number.isInteger(p?.eventId) ||
     ids.length === 0
   ) {
-    throw new EventPostError('Nieprawidłowe zlecenie.');
+    throw new EventPostError('Invalid request.');
   }
   let failed: string | null;
   try {

@@ -6,6 +6,7 @@ import {
   botSettings,
   type Db,
   deleteEvent,
+  type EventDetails,
   editEvent,
   enqueueBotRequest,
   eventSeries,
@@ -39,6 +40,7 @@ import {
   eventForumCheck,
   eventPostContent,
   eventPostTitle,
+  eventWhenText,
   PostGoneError,
   seriesPostContent,
   seriesPostTitle,
@@ -99,7 +101,7 @@ function fakeGuild(delayMs = 0) {
 }
 
 const pad = (n: number) => String(n).padStart(2, '0');
-/** "Kiedy" text for a day `days` from now at 10:00. */
+/** "When" text for a day `days` from now at 10:00. */
 const when = (days: number) => {
   const d = new Date(Date.now() + days * 86_400_000);
   return `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}.${d.getUTCFullYear()} 10:00-11:30`;
@@ -193,7 +195,7 @@ describe('event posts', () => {
     const [post] = [...guild.posts.entries()];
     expect(post[1].forumId).toBe('f-bd');
     expect(post[1].tagName).toBe('Kolokwium');
-    expect(post[1].title).toMatch(/^📝 Kolokwium 1 — \d\d\.\d\d$/);
+    expect(post[1].title).toMatch(/^📝 Kolokwium 1 — \d{1,2} [A-Z][a-z]{2}$/);
     expect(post[1].content).toContain(`https://x.pl/s/wydarzenia/${id}`);
     const e = await eventRow(id);
     const [t] = await db.select().from(topics);
@@ -222,7 +224,7 @@ describe('event posts', () => {
     const p = guild.posts.get(threadId);
     expect(p?.title).toMatch(/^🎓 Poprawka — /);
     expect(p?.tagName).toBe('Egzamin');
-    expect(p?.content).toContain('Miejsce: sala 5');
+    expect(p?.content).toContain('Place: sala 5');
     const [t] = await db.select().from(topics);
     expect(t.title).toBe(p?.title);
   });
@@ -348,7 +350,7 @@ describe('event posts', () => {
     const [r] = await requests();
     expect(r.status).toBe('failed');
     expect(r.error).toBe(
-      'Brak forum przedmiotu na Discordzie — uruchom /setup.',
+      'The subject forum is missing on Discord. Run /setup.',
     );
     expect(guild.posts.size).toBe(0);
   });
@@ -359,7 +361,7 @@ describe('event posts', () => {
     await drain();
     const [r] = await requests();
     expect(r.status).toBe('failed');
-    expect(r.error).toBe('Brak forum #wydarzenia — uruchom /setup.');
+    expect(r.error).toBe('The #wydarzenia forum is missing. Run /setup.');
   });
 
   it('a Discord failure gives a generic Polish error and logs the details', async () => {
@@ -368,7 +370,7 @@ describe('event posts', () => {
     await drain();
     const [r] = await requests();
     expect(r.status).toBe('failed');
-    expect(r.error).toBe('Nie udało się zaktualizować posta na Discordzie.');
+    expect(r.error).toBe('Could not update the post on Discord.');
     expect(log).toHaveBeenCalled();
     expect(await db.select().from(topics)).toHaveLength(0);
   });
@@ -455,16 +457,16 @@ describe('event post fixes', () => {
       createdByName: 'A'.repeat(500),
       updatedByName: 'B'.repeat(500),
     };
-    const link = `Szczegóły i pliki: https://x.pl/s/wydarzenia/${id}`;
+    const link = `Details and files: https://x.pl/s/wydarzenia/${id}`;
     const c = eventPostContent(long, 'https://x.pl');
     expect(c.length).toBeLessThanOrEqual(2000);
     expect(c.endsWith(link)).toBe(true);
-    expect(c).toContain('Notatka: ż');
+    expect(c).toContain('Note: ż');
     expect(c).toContain('…\n');
     // A short note is untouched.
     expect(
       eventPostContent({ ...e, note: 'krótka' }, 'https://x.pl'),
-    ).toContain('Notatka: krótka\n');
+    ).toContain('Note: krótka\n');
   });
 
   it('escapes markdown in place, note and names, not in the link', async () => {
@@ -475,12 +477,12 @@ describe('event post fixes', () => {
       { ...e, createdByName: 'A_b_', updatedByName: '~~c~~' },
       'https://x.pl',
     );
-    expect(c).toContain('Miejsce: \\*sala\\*');
-    expect(c).toContain('Notatka: \\_\\_ważne\\_\\_ \\`x\\`');
-    expect(c).toContain('Dodane przez A\\_b\\_');
-    expect(c).toContain('Ostatnio edytowane przez \\~\\~c\\~\\~');
+    expect(c).toContain('Place: \\*sala\\*');
+    expect(c).toContain('Note: \\_\\_ważne\\_\\_ \\`x\\`');
+    expect(c).toContain('Added by A\\_b\\_');
+    expect(c).toContain('Last edited by \\~\\~c\\~\\~');
     expect(
-      c.endsWith(`Szczegóły i pliki: https://x.pl/s/wydarzenia/${id}`),
+      c.endsWith(`Details and files: https://x.pl/s/wydarzenia/${id}`),
     ).toBe(true);
     const sc = seriesPostContent(
       { ...e, createdByName: 'A_b_' },
@@ -489,8 +491,8 @@ describe('event post fixes', () => {
       [e.startsAt],
       'https://x.pl',
     );
-    expect(sc).toContain('Miejsce: \\*sala\\*');
-    expect(sc).toContain('Dodane przez A\\_b\\_');
+    expect(sc).toContain('Place: \\*sala\\*');
+    expect(sc).toContain('Added by A\\_b\\_');
   });
 
   it('boot recovery fails interrupted event requests, then the poller proceeds', async () => {
@@ -535,7 +537,7 @@ describe('eventPostTitle', () => {
     const e = await getEvent(db, id);
     if (!e) throw new Error('no event');
     expect(eventPostTitle(e).length).toBeLessThanOrEqual(100);
-    expect(eventPostTitle(e)).toMatch(/ — \d\d\.\d\d$/);
+    expect(eventPostTitle(e)).toMatch(/ — \d{1,2} [A-Z][a-z]{2}$/);
   });
 
   it('does not split surrogate pairs when clipping', async () => {
@@ -578,9 +580,9 @@ describe('series posts', () => {
 
   it('titles: code-point clip, weekly and biweekly', () => {
     expect(seriesPostTitle('Konsultacje', 'weekly')).toBe(
-      '🔁 Konsultacje — co tydzień',
+      '🔁 Konsultacje — every week',
     );
-    expect(seriesPostTitle('K', 'biweekly')).toBe('🔁 K — co 2 tygodnie');
+    expect(seriesPostTitle('K', 'biweekly')).toBe('🔁 K — every 2 weeks');
     const long = seriesPostTitle('😀'.repeat(150), 'weekly');
     expect(long.length).toBeLessThanOrEqual(100);
     for (const n of [40, 41, 42, 43]) {
@@ -589,7 +591,7 @@ describe('series posts', () => {
       expect(t).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
       expect(t).not.toMatch(/(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/);
     }
-    expect(long.endsWith(' — co tydzień')).toBe(true);
+    expect(long.endsWith(' — every week')).toBe(true);
     expect(long).not.toMatch(/\uFFFD/);
   });
 
@@ -611,9 +613,9 @@ describe('series posts', () => {
     await drain();
     expect(guild.posts.size).toBe(1);
     const p = [...guild.posts.values()][0];
-    expect(p.title).toBe('🔁 Konsultacje — co tydzień');
+    expect(p.title).toBe('🔁 Konsultacje — every week');
     expect(p.tagName).toBe('Zajęcia dodatkowe');
-    expect(p.content).toContain('Cykl: co tydzień');
+    expect(p.content).toContain('Repeats: every week');
     const [s] = await db.select().from(eventSeries);
     expect(s.topicId).not.toBeNull();
     for (const e of await occ(sid)) expect(e.topicId).toBeNull();
@@ -622,7 +624,7 @@ describe('series posts', () => {
     expect(guild.posts.size).toBe(1);
   });
 
-  it('"Najbliższe" counts from the Warsaw wall clock, not UTC', async () => {
+  it('"Next" counts from the Warsaw wall clock, not UTC', async () => {
     const sid = await mk();
     const [first, second] = await occ(sid);
     // Wall time 10 minutes after the UTC clock: already past in Warsaw.
@@ -657,7 +659,7 @@ describe('series posts', () => {
     expect(all).toHaveLength(2);
     expect(new Set(all.map((x) => x.topicId)).size).toBe(1);
     const p = [...guild.posts.values()][0];
-    expect(p.title).toBe('🔁 Zmiana — co tydzień');
+    expect(p.title).toBe('🔁 Zmiana — every week');
     // the old series is deleted entirely: the post stays for the other one
     await deleteEvent(db, userId, a.id, 'web', 'following');
     await drain();
@@ -721,7 +723,7 @@ describe('series posts', () => {
     await drain();
     expect(guild.posts.size).toBe(1);
     expect(await db.select().from(topics)).toHaveLength(1);
-    expect([...guild.posts.values()][0].title).toBe('🔁 C — co tydzień');
+    expect([...guild.posts.values()][0].title).toBe('🔁 C — every week');
   });
 
   it('a deleted series archives its post; a restore reopens it', async () => {
@@ -846,4 +848,27 @@ describe('discordEventPostGuild only touches its own event posts', () => {
       expect(t?.send).not.toHaveBeenCalled();
     },
   );
+});
+
+describe('eventWhenText', () => {
+  const at = (iso: string) => new Date(`${iso}Z`);
+  const e = (o: object) =>
+    ({
+      startsAt: at('2026-10-20T10:00:00'),
+      endsAt: null,
+      allDay: false,
+      ...o,
+    }) as unknown as EventDetails;
+  it('formats en-GB wall-clock dates', () => {
+    expect(eventWhenText(e({}))).toBe('Tue 20 Oct 2026, 10:00');
+    expect(eventWhenText(e({ endsAt: at('2026-10-20T11:30:00') }))).toBe(
+      'Tue 20 Oct 2026, 10:00–11:30',
+    );
+    expect(eventWhenText(e({ endsAt: at('2026-10-21T09:00:00') }))).toBe(
+      'Tue 20 Oct 2026, 10:00 – Wed 21 Oct 2026, 09:00',
+    );
+    expect(eventWhenText(e({ allDay: true }))).toBe(
+      'Tue 20 Oct 2026 (all day)',
+    );
+  });
 });

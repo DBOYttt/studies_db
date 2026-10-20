@@ -85,9 +85,9 @@ client.once(Events.ClientReady, async (c) => {
   catchUp(ingest, discordForumSource(client), { ignoreWatermark: false }).then(
     (r) =>
       console.log(
-        `Catch-up: ${r.topics} tematów, ${r.created} nowych plików, ${r.failed} błędów.`,
+        `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,
       ),
-    (err) => console.error('Catch-up nie powiódł się:', err),
+    (err) => console.error('Catch-up failed:', err),
   );
 });
 
@@ -123,7 +123,7 @@ try {
   await client.login(config.discordToken);
 } catch (err) {
   console.error(
-    `Nie udało się zalogować bota: ${err instanceof Error ? err.message : err}`,
+    `Could not log in the bot: ${err instanceof Error ? err.message : err}`,
   );
   await shutdown(1);
 }

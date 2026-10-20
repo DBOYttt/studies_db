@@ -97,33 +97,33 @@ describe('reminder texts', () => {
   } as unknown as PlanSession;
   it('DM: day, hour, all-day, missing parts', () => {
     expect(dmText(base, 'day', 'https://x.pl')).toBe(
-      'Przypomnienie: 📝 Kolos · Bazy · jutro 10:00 · C-12\nhttps://x.pl/s/wydarzenia/7',
+      'Reminder: 📝 Kolos · Bazy · tomorrow 10:00 · C-12\nhttps://x.pl/s/wydarzenia/7',
     );
-    expect(dmText(base, 'hour', 'https://x.pl')).toContain('dziś 10:00');
+    expect(dmText(base, 'hour', 'https://x.pl')).toContain('today 10:00');
     expect(
       dmText(
         { ...base, allDay: true, room: null, subjectName: '' },
         'day',
         'u',
       ),
-    ).toBe('Przypomnienie: 📝 Kolos · jutro (cały dzień)\nu/s/wydarzenia/7');
+    ).toBe('Reminder: 📝 Kolos · tomorrow (all day)\nu/s/wydarzenia/7');
   });
   it('escapes markdown in titles and places', () => {
     const e = { ...base, eventTitle: '*Kolos*', room: '_C_' } as PlanSession;
     expect(dmText(e, 'day', 'u')).toContain(
-      '\\*Kolos\\* · Bazy · jutro 10:00 · \\_C\\_',
+      '\\*Kolos\\* · Bazy · tomorrow 10:00 · \\_C\\_',
     );
     expect(digestText([e])).toContain('\\*Kolos\\*');
   });
   it('digest: lines, truncated to 2000 characters', () => {
-    expect(digestText([base])).toBe('Jutro:\n📝 Kolos · BD · 10:00 · C-12');
+    expect(digestText([base])).toBe('Tomorrow:\n📝 Kolos · BD · 10:00 · C-12');
     const many = Array.from({ length: 200 }, (_, i) => ({
       ...base,
       eventTitle: `Wydarzenie numer ${i}`,
     }));
     const t = digestText(many);
     expect(t.length).toBeLessThanOrEqual(2000);
-    expect(t).toMatch(/…i \d+ więcej$/);
+    expect(t).toMatch(/…and \d+ more$/);
   });
 });
 
@@ -190,7 +190,7 @@ describe('runReminderTick', () => {
       .mockRejectedValue(Object.assign(new Error('x'), { code: 10013 }));
     await runReminderTick(deps(g.guild), W(2026, 10, 19, 10));
     expect((await getReminderPrefs(db, uid)).disabledReason).toBe(
-      'Nieznany użytkownik',
+      'Unknown user',
     );
     expect(await db.select().from(reminderLog)).toHaveLength(1);
   });
@@ -200,7 +200,7 @@ describe('runReminderTick', () => {
     const a = fakeGuild();
     await runReminderTick(deps(a.guild), W(2026, 10, 19, 10));
     expect(a.dms.map((d) => d.to)).toEqual(['d1']);
-    expect(a.dms[0].content).toMatch(/^Przypomnienie: 📝 Kolos/);
+    expect(a.dms[0].content).toMatch(/^Reminder: 📝 Kolos/);
     expect(await db.select().from(reminderLog)).toHaveLength(1);
     const b = fakeGuild();
     await runReminderTick(deps(b.guild), W(2026, 10, 19, 10, 1));
@@ -243,7 +243,7 @@ describe('runReminderTick', () => {
     await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 2));
     expect(g.digests).toHaveLength(1);
     expect(g.digests[0]).toMatchObject({ forum: 'forum-1', thread: null });
-    expect(g.digests[0].content).toMatch(/^Jutro:\n/);
+    expect(g.digests[0].content).toMatch(/^Tomorrow:\n/);
     expect(await getSetting(db, DIGEST_THREAD_SETTING)).toBe('thread-1');
     // An event added later that evening gets its own short message, same thread.
     await event(W(2026, 10, 20, 12), { title: 'Nowy' });

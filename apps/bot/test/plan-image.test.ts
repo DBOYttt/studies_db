@@ -108,14 +108,14 @@ describe('renderWeekImage', () => {
     expect(weekGeometry([lab, sat], W42, null).columns).toHaveLength(6);
   });
 
-  it('marks today and labels days "Pon 12.10"', () => {
+  it('marks today and labels days "Mon 12 Oct"', () => {
     const g = weekGeometry([lab], W42, wall('2026-10-14T12:00:00'));
     expect(g.columns.map((c) => c.label)).toEqual([
-      'Pon 12.10',
-      'Wt 13.10',
-      'Śr 14.10',
-      'Czw 15.10',
-      'Pt 16.10',
+      'Mon 12 Oct',
+      'Tue 13 Oct',
+      'Wed 14 Oct',
+      'Thu 15 Oct',
+      'Fri 16 Oct',
     ]);
     expect(g.columns.map((c) => c.today)).toEqual([
       false,

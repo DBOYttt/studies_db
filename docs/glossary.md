@@ -116,3 +116,16 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Brak (usuń) | None (clear) |
 | Post informacyjny | Info post (pinned post titled "ℹ️ Subject info" / "ℹ️ Events") |
 | Tylko to / To i następne | Only this / This and following |
+
+## Bot event posts, reminders, plan image
+
+| Polish | English |
+| --- | --- |
+| Cykl / co tydzień / co 2 tygodnie (series post line) | Repeats / every week / every 2 weeks |
+| Najbliższe | Next |
+| Szczegóły i pliki | Details and files |
+| Dodane przez / Ostatnio edytowane przez | Added by / Last edited by |
+| Plik od <name> (przez stronę) | File from <name> (via the website) |
+| Przypomnienie / jutro / dziś / cały dzień | Reminder / tomorrow / today / all day |
+| Jutro: (digest header) / …i N więcej | Tomorrow: / …and N more |
+| (odwołane) (plan image) | (cancelled) |

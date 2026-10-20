@@ -186,7 +186,9 @@ describe('event uploads', () => {
     const ids = await queueUploads(id, ['a.pdf', 'b.png']);
     await drain();
     expect(guild.sent).toHaveLength(1);
-    expect(guild.sent[0].content).toBe('Plik od Ala \\*x\\* (przez stronę)');
+    expect(guild.sent[0].content).toBe(
+      'File from Ala \\*x\\* (via the website)',
+    );
     expect(guild.sent[0].names).toEqual(['a.pdf', 'b.png']);
     const r = await rows();
     expect(r.map((x) => x.status)).toEqual(['done', 'done']);
@@ -236,7 +238,7 @@ describe('event uploads', () => {
     const [r] = await rows();
     expect(r).toMatchObject({
       status: 'failed',
-      error: 'Plik nie istnieje na serwerze.',
+      error: 'The file does not exist on the server.',
     });
     expect(guild.sent).toEqual([]);
     expect(await readdir(join(dir, 'materials'))).toEqual(['x.pdf']);
@@ -271,7 +273,7 @@ describe('event uploads', () => {
     await queueUploads(id, ['a.pdf']);
     await drain();
     const [r] = await rows();
-    expect(r.error).toBe('Pliki są za duże dla serwera Discord.');
+    expect(r.error).toBe('The files are too big for the Discord server.');
   });
 
   it('a retried failed row is picked up again', async () => {
@@ -307,7 +309,7 @@ describe('event uploads', () => {
     const [failed] = await rows();
     expect(failed).toMatchObject({
       status: 'failed',
-      error: 'Plik jest na Discordzie, ale nie trafił do materiałów.',
+      error: 'The file is on Discord but did not reach the materials.',
       sentAttachmentId: 'a-1',
     });
     expect(await db.select().from(materials)).toHaveLength(0);
@@ -373,10 +375,10 @@ describe('event uploads', () => {
     const all = await rows();
     expect(all.filter((r) => r.status === 'failed')).toHaveLength(12);
     expect(all.filter((r) => r.sentAttachmentId).map((r) => r.error)).toEqual(
-      Array(10).fill('Plik jest na Discordzie, ale nie trafił do materiałów.'),
+      Array(10).fill('The file is on Discord but did not reach the materials.'),
     );
     expect(all.filter((r) => !r.sentAttachmentId).map((r) => r.error)).toEqual(
-      Array(2).fill('Nie udało się wysłać pliku na Discorda.'),
+      Array(2).fill('Could not send the file to Discord.'),
     );
   });
 
@@ -410,7 +412,7 @@ describe('event uploads', () => {
     await drain();
     const [r] = await rows();
     expect(r.status).toBe('failed');
-    expect(r.error).toBe('Nie udało się wysłać pliku na Discorda.');
+    expect(r.error).toBe('Could not send the file to Discord.');
     expect(r.error).not.toContain('secret');
     expect(await readdir(join(dir, 'uploads'))).toHaveLength(1);
     const [req] = await db.select().from(botRequests);
@@ -429,7 +431,7 @@ describe('event uploads', () => {
     await drain();
     const [r] = await rows();
     expect(r.status).toBe('failed');
-    expect(r.error).toBe('Wydarzenie zostało usunięte.');
+    expect(r.error).toBe('The event was deleted.');
     expect(await readdir(join(dir, 'uploads'))).toEqual([]);
     expect(guild.sent).toEqual([]);
   });
@@ -447,7 +449,7 @@ describe('event uploads', () => {
     expect(after).toMatchObject({
       id: rowId,
       status: 'failed',
-      error: 'Plik nie istnieje na serwerze.',
+      error: 'The file does not exist on the server.',
     });
     expect(guild.sent).toEqual([]);
   });
@@ -463,7 +465,7 @@ describe('event uploads', () => {
     await drain();
     const r = await rows();
     expect(r.map((x) => x.status)).toEqual(['failed', 'done']);
-    expect(r[0].error).toBe('Plik nie istnieje na serwerze.');
+    expect(r[0].error).toBe('The file does not exist on the server.');
     expect(ids).toHaveLength(2);
   });
 });

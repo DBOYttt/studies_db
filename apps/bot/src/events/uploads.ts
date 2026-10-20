@@ -29,13 +29,13 @@ export const CLEANUP_INTERVAL_MS = 10 * 60_000;
 /** Total bytes per message: Discord's 10 MiB with room for the overhead. */
 export const MESSAGE_BYTES = 10 * 1024 * 1024 - 64 * 1024;
 
-export const TOO_BIG = 'Pliki są za duże dla serwera Discord.';
+export const TOO_BIG = 'The files are too big for the Discord server.';
 export const NOT_INGESTED =
-  'Plik jest na Discordzie, ale nie trafił do materiałów.';
-export const SEND_FAILED = 'Nie udało się wysłać pliku na Discorda.';
-export const EVENT_DELETED = 'Wydarzenie zostało usunięte.';
-export const FILE_MISSING = 'Plik nie istnieje na serwerze.';
-export const INTERRUPTED = 'Przerwane: bot został zrestartowany.';
+  'The file is on Discord but did not reach the materials.';
+export const SEND_FAILED = 'Could not send the file to Discord.';
+export const EVENT_DELETED = 'The event was deleted.';
+export const FILE_MISSING = 'The file does not exist on the server.';
+export const INTERRUPTED = 'Interrupted: the bot was restarted.';
 
 /** A failure whose message is safe to show on the event page. */
 export class UploadError extends Error {}
@@ -162,7 +162,7 @@ async function uploaderOf(db: Db, userId: number) {
     displayName: u?.displayName ?? '',
     avatarUrl: u?.avatarUrl ?? null,
   };
-  const content = `Plik od ${escapeMarkdown(u?.displayName ?? 'użytkownika')} (przez stronę)`;
+  const content = `File from ${escapeMarkdown(u?.displayName ?? 'a user')} (via the website)`;
   return { uploader, content };
 }
 

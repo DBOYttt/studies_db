@@ -71,7 +71,7 @@ topics, attachments (deduplicated by hash), slash commands and one-time web logi
 A relative `STORAGE_DIR` is resolved against the repo root (not the current directory).
 
 Missing env vars make the process exit with `Missing env: ...`; a login failure logs
-`Nie udało się zalogować bota: ...` and exits with code 1.
+`Could not log in the bot: ...` and exits with code 1.
 
 ## Upgrading to schedule events
 

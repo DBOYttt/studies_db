@@ -535,7 +535,7 @@ describe('/event add', () => {
     expect(rows).toHaveLength(3);
     expect(new Set(rows.map((e) => e.seriesId)).size).toBe(1);
     expect(textOf(i.editReply.mock.calls[0][0])).toContain(
-      'Part of a series: ',
+      'Part of a series: every week',
     );
     const reqs = await db.select().from(botRequests);
     expect(reqs.map((r) => r.target)).toEqual([`series:${rows[0].seriesId}`]);

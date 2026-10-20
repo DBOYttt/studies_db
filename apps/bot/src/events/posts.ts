@@ -8,6 +8,7 @@ import {
   getSetting,
   subjects,
 } from '@studies/db';
+import { plural } from '@studies/db/text';
 import {
   type AnyThreadChannel,
   ChannelType,
@@ -19,15 +20,16 @@ import {
 } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { EVENTS_FORUM_SETTING } from '../config.js';
+import { dayMonth, wallDate } from '../dates.js';
 import type { UploadSink } from './uploads.js';
 
-export const DELETED_TEXT = 'Wydarzenie usunięte';
+export const DELETED_TEXT = 'Event deleted';
 const MAX_THREAD_NAME = 100;
 const MAX_MESSAGE = 2000;
 
 const pad = (n: number) => String(n).padStart(2, '0');
-const dm = (d: Date) => `${pad(d.getUTCDate())}.${pad(d.getUTCMonth() + 1)}`;
-const dmy = (d: Date) => `${dm(d)}.${d.getUTCFullYear()}`;
+const dm = dayMonth;
+const dmy = wallDate;
 const hm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
 
 /**
@@ -42,7 +44,7 @@ export function clipTitle(title: string, room: number): string {
   return `${title.slice(0, end)}…`;
 }
 
-/** `<symbol> <Tytuł> — DD.MM`, at most 100 characters (the title is cut). */
+/** `<symbol> <Title> — 20 Oct`, at most 100 characters (the title is cut). */
 export function eventPostTitle(e: EventDetails): string {
   const tail = ` — ${dm(e.startsAt)}`;
   const head = `${EVENT_KINDS[e.kind].symbol} `;
@@ -51,11 +53,11 @@ export function eventPostTitle(e: EventDetails): string {
 }
 
 export const RULE_LABELS = {
-  weekly: 'co tydzień',
-  biweekly: 'co 2 tygodnie',
+  weekly: 'every week',
+  biweekly: 'every 2 weeks',
 } as const;
 
-/** `🔁 <Tytuł> — co tydzień`, at most 100 characters (the title is cut, never inside a surrogate pair). */
+/** `🔁 <Title> — every week`, at most 100 characters (the title is cut, never inside a surrogate pair). */
 export function seriesPostTitle(
   title: string,
   rule: keyof typeof RULE_LABELS,
@@ -86,25 +88,25 @@ export function seriesPostContent(
     .slice(0, MAX_LISTED_DATES);
   const later = dates.filter((d) => d >= next.startsAt).length;
   const time = base.allDay
-    ? '(cały dzień)'
+    ? '(all day)'
     : base.endsAt
       ? `${hm(base.startsAt)}–${hm(base.endsAt)}`
       : hm(base.startsAt);
   const lines = [
     `**${EVENT_KINDS[base.kind].label}**${base.subjectCode ? ` · ${base.subjectCode}${base.subjectName ? ` — ${base.subjectName}` : ''}` : ''}`,
-    `Cykl: ${RULE_LABELS[rule]}, ${time}, ${dates.length} wystąpień (${dm(dates[0])} – ${dmy(dates[dates.length - 1])})`,
-    `Najbliższe: ${upcoming.map(dm).join(', ')}${later > upcoming.length ? ', …' : ''}`,
-    ...(base.place ? [`Miejsce: ${escapeMarkdown(base.place)}`] : []),
-    ...(base.note ? [`Notatka: ${escapeMarkdown(base.note)}`] : []),
+    `Repeats: ${RULE_LABELS[rule]}, ${time}, ${plural(dates.length, 'occurrence', 'occurrences')} (${dm(dates[0])} – ${dmy(dates[dates.length - 1])})`,
+    `Next: ${upcoming.map(dm).join(', ')}${later > upcoming.length ? ', …' : ''}`,
+    ...(base.place ? [`Place: ${escapeMarkdown(base.place)}`] : []),
+    ...(base.note ? [`Note: ${escapeMarkdown(base.note)}`] : []),
     ...(base.createdByName
-      ? [`Dodane przez ${escapeMarkdown(base.createdByName)}`]
+      ? [`Added by ${escapeMarkdown(base.createdByName)}`]
       : []),
-    `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${next.id}`,
+    `Details and files: ${webBaseUrl}/s/wydarzenia/${next.id}`,
   ];
   const full = lines.join('\n');
   if (full.length <= MAX_MESSAGE) return full;
   // Too long: trim the note, never the link.
-  const noteAt = lines.findIndex((l) => l.startsWith('Notatka: '));
+  const noteAt = lines.findIndex((l) => l.startsWith('Note: '));
   if (noteAt >= 0) {
     const room = MAX_MESSAGE - (full.length - lines[noteAt].length) - 1;
     lines[noteAt] =
@@ -113,39 +115,39 @@ export function seriesPostContent(
   return lines.join('\n').slice(0, MAX_MESSAGE);
 }
 
-/** "Kiedy" as text: a day, a day and hours, or a day and a time range. */
+/** "When" as text: a day, a day and hours, or a day and a time range. */
 export function eventWhenText(e: EventDetails): string {
-  if (e.allDay) return `${dmy(e.startsAt)} (cały dzień)`;
+  if (e.allDay) return `${dmy(e.startsAt)} (all day)`;
   const same = e.endsAt && dmy(e.endsAt) === dmy(e.startsAt);
-  if (!e.endsAt) return `${dmy(e.startsAt)} ${hm(e.startsAt)}`;
-  if (same) return `${dmy(e.startsAt)} ${hm(e.startsAt)}–${hm(e.endsAt)}`;
-  return `${dmy(e.startsAt)} ${hm(e.startsAt)} – ${dmy(e.endsAt)} ${hm(e.endsAt)}`;
+  if (!e.endsAt) return `${dmy(e.startsAt)}, ${hm(e.startsAt)}`;
+  if (same) return `${dmy(e.startsAt)}, ${hm(e.startsAt)}–${hm(e.endsAt)}`;
+  return `${dmy(e.startsAt)}, ${hm(e.startsAt)} – ${dmy(e.endsAt)}, ${hm(e.endsAt)}`;
 }
 
 /** The first message: details plus the link to the event page. */
 export function eventPostContent(e: EventDetails, webBaseUrl: string): string {
-  const link = `Szczegóły i pliki: ${webBaseUrl}/s/wydarzenia/${e.id}`;
+  const link = `Details and files: ${webBaseUrl}/s/wydarzenia/${e.id}`;
   // User text is escaped so it can't format the post; the link stays raw.
   const md = (t: string | null) => (t ? escapeMarkdown(t) : t);
   const tail = [
-    ...(e.createdByName ? [`Dodane przez ${md(e.createdByName)}`] : []),
+    ...(e.createdByName ? [`Added by ${md(e.createdByName)}`] : []),
     ...(e.updatedByName && e.updatedByName !== e.createdByName
-      ? [`Ostatnio edytowane przez ${md(e.updatedByName)}`]
+      ? [`Last edited by ${md(e.updatedByName)}`]
       : []),
     link,
   ];
   const head = [
     `**${EVENT_KINDS[e.kind].label}**${e.subjectCode ? ` · ${e.subjectCode}${e.subjectName ? ` — ${e.subjectName}` : ''}` : ''}`,
-    `Kiedy: ${eventWhenText(e)}`,
-    ...(e.place ? [`Miejsce: ${md(e.place)}`] : []),
+    `When: ${eventWhenText(e)}`,
+    ...(e.place ? [`Place: ${md(e.place)}`] : []),
   ];
   const join = (note: string | null) =>
-    [...head, ...(note ? [`Notatka: ${note}`] : []), ...tail].join('\n');
+    [...head, ...(note ? [`Note: ${note}`] : []), ...tail].join('\n');
   const escNote = md(e.note);
   const full = join(escNote);
   if (full.length <= MAX_MESSAGE || !escNote) return full.slice(0, MAX_MESSAGE);
   // Too long: trim the note, never the link.
-  const room = MAX_MESSAGE - join('').length - 'Notatka: …\n'.length;
+  const room = MAX_MESSAGE - join('').length - 'Note: …\n'.length;
   const note = [...escNote].slice(0, Math.max(0, room - 1)).join('');
   return join(`${note}…`).slice(0, MAX_MESSAGE);
 }
@@ -177,7 +179,7 @@ const isGone = (err: unknown) =>
   (err.code === RESTJSONErrorCodes.UnknownChannel ||
     err.code === RESTJSONErrorCodes.UnknownMessage);
 
-const KIND_LABELS = new Set(
+const KIND_TAGS = new Set(
   Object.values(EVENT_KINDS).map((k) => k.tag.toLowerCase()),
 );
 
@@ -189,7 +191,7 @@ function tagsFor(
 ): string[] {
   const isKind = (id: string) => {
     const t = forum.availableTags.find((x) => x.id === id);
-    return !!t && KIND_LABELS.has(t.name.toLowerCase());
+    return !!t && KIND_TAGS.has(t.name.toLowerCase());
   };
   const wanted = forum.availableTags.find(
     (t) => t.name.toLowerCase() === tagName.toLowerCase(),

@@ -29,6 +29,7 @@ import {
   slotRange,
   weekDays,
 } from '@studies/db/plan';
+import { dayMonth, WEEKDAYS } from '../dates.js';
 
 /** Device pixels per layout unit. */
 const SCALE = 2;
@@ -80,10 +81,8 @@ function ensureFonts(): void {
 const pad2 = (n: number) => String(n).padStart(2, '0');
 const hhmm = (d: Date) => `${pad2(d.getUTCHours())}:${pad2(d.getUTCMinutes())}`;
 const dayKey = (d: Date) => d.toISOString().slice(0, 10);
-const DAY_NAMES = ['Nd', 'Pon', 'Wt', 'Śr', 'Czw', 'Pt', 'Sob'];
-/** `Pon 12.10` */
-const dayLabel = (d: Date) =>
-  `${DAY_NAMES[d.getUTCDay()]} ${pad2(d.getUTCDate())}.${pad2(d.getUTCMonth() + 1)}`;
+/** `Mon 12 Oct` */
+const dayLabel = (d: Date) => `${WEEKDAYS[d.getUTCDay()]} ${dayMonth(d)}`;
 const midnight = (d: Date) =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
@@ -365,7 +364,12 @@ function weekLines(s: PlanSession, ink: string): Line[] {
     },
   ];
   if (cancelled) {
-    lines.push({ text: '(odwołane)', weight: 500, size: 10.5, color: C.errFg });
+    lines.push({
+      text: '(cancelled)',
+      weight: 500,
+      size: 10.5,
+      color: C.errFg,
+    });
   }
   const kind = [kindOf(s), s.groupName].filter(Boolean).join(' ');
   if (kind) lines.push({ text: kind, weight: 400, size: 10.5, color: C.fg });
@@ -401,7 +405,12 @@ function dayLines(s: PlanSession, ink: string): Line[] {
     },
   ];
   if (cancelled) {
-    lines.push({ text: '(odwołane)', weight: 500, size: 11.5, color: C.errFg });
+    lines.push({
+      text: '(cancelled)',
+      weight: 500,
+      size: 11.5,
+      color: C.errFg,
+    });
   }
   const kind = join(kindOf(s), s.groupName);
   if (kind) lines.push({ text: kind, weight: 400, size: 11.5, color: C.fg });
@@ -588,7 +597,9 @@ function draw(g: Geometry, lines: LinesFn): Canvas {
   ctx.textAlign = 'left';
   ctx.textBaseline = 'middle';
   for (const c of cols) {
-    const [name, date] = c.label.split(' ');
+    const sp = c.label.indexOf(' ');
+    const name = c.label.slice(0, sp);
+    const date = c.label.slice(sp + 1);
     ctx.font = font(600, 12);
     ctx.fillStyle = C.fg;
     ctx.fillText(name, c.x + 8, headerH / 2);
