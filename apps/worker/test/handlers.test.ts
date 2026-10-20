@@ -248,7 +248,7 @@ describe('storage containment', () => {
       const j = await jobOf(materialId);
       expect(j.status).toBe('failed');
       expect(j.attempts).toBe(1);
-      expect(j.lastError).toBe('Nieprawidłowa ścieżka pliku');
+      expect(j.lastError).toBe('Invalid file path');
       expect(await processOne(deps())).toBe(false);
     } finally {
       await rm(secret, { force: true });
@@ -268,9 +268,7 @@ describe('storage containment', () => {
       .where(eq(materials.id, materialId));
     await processOne(deps());
     expect((await material(materialId)).extractedText).toBeNull();
-    expect((await jobOf(materialId)).lastError).toBe(
-      'Nieprawidłowa ścieżka pliku',
-    );
+    expect((await jobOf(materialId)).lastError).toBe('Invalid file path');
   });
 
   it('refuses a preview_path that escapes', async () => {
@@ -287,7 +285,7 @@ describe('storage containment', () => {
     await processOne(deps());
     const j = await jobOf(materialId);
     expect(j.status).toBe('failed');
-    expect(j.lastError).toBe('Nieprawidłowa ścieżka pliku');
+    expect(j.lastError).toBe('Invalid file path');
   });
 
   it('refuses convert when sha256 is malformed', async () => {
@@ -309,7 +307,7 @@ describe('storage containment', () => {
     const j = await jobOf(materialId);
     expect(j.status).toBe('failed');
     expect(j.attempts).toBe(1);
-    expect(j.lastError).toBe('Nieprawidłowa ścieżka pliku');
+    expect(j.lastError).toBe('Invalid file path');
   });
 });
 

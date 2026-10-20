@@ -33,6 +33,7 @@ const ALLOW_LINES = [
     /Wykład|Ćwiczenia|Zajęcia praktyczne|tag: 'Zajęcia dodatkowe'/,
   ],
   [/^packages\/db\/src\/search\.ts$/, /replace\(\/[łŁ]\//],
+  [/^apps\/web\/lib\/simple\.ts$/, /replace\(\/[łŁ]\//],
 ];
 
 function* walk(p) {
@@ -47,9 +48,10 @@ function* walk(p) {
 
 const isComment = (t) => /^(\/\/|\*|\/\*|\{\/\*)/.test(t);
 
-const targets = (
-  process.argv.slice(2).length ? process.argv.slice(2) : DEFAULT_SCOPE
-).map((p) => resolve(process.cwd(), p));
+const args = process.argv.slice(2);
+const targets = args.length
+  ? args.map((p) => resolve(process.cwd(), p))
+  : DEFAULT_SCOPE.map((p) => resolve(ROOT, p));
 
 let hits = 0;
 for (const t of targets) {

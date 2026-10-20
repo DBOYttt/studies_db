@@ -122,6 +122,11 @@ Details (admin command visibility, panel channels) are in `apps/bot/README.md`.
 4. Website uploads write to `$STORAGE_DIR/uploads`, which the `migrate` service prepares with the right owner
    (see Configure above). The bot removes sent files and cleans up anything older than 24 h.
 
+### Upgrading to the English interface (round 1b)
+
+After deploying, run `pnpm --filter @studies/bot register` once (command descriptions changed), then re-run `/setup`: it
+renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` topic.
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these
