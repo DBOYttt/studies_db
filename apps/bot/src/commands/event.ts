@@ -16,7 +16,7 @@ import { cardView } from '../ui/events.js';
 import { replyOptions } from './reply.js';
 import type { RouterDeps } from './router.js';
 
-export const UNTIL_MISSING = 'Say how long to repeat (the until option).';
+export const UNTIL_MISSING = 'Choose how long to repeat (the until option).';
 export const REPEAT_MISSING =
   'The until option only works with the repeat option.';
 

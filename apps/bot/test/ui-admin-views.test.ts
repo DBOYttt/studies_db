@@ -71,6 +71,9 @@ function expectValid(v: View) {
   expect(allText(v).length).toBeLessThanOrEqual(MAX_TEXT);
   for (const n of nodes(v)) {
     if (n.type === 1) expect(n.components.length).toBeLessThanOrEqual(5);
+    if (n.type === 2) expect(n.label.length).toBeLessThanOrEqual(80);
+    if (n.type === 3 && n.placeholder)
+      expect(n.placeholder.length).toBeLessThanOrEqual(150);
     if (n.type === 3) {
       expect(n.options.length).toBeGreaterThan(0);
       expect(n.options.length).toBeLessThanOrEqual(MAX_OPTIONS);

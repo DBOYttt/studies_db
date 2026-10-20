@@ -38,6 +38,9 @@ function expectValid(v: View) {
   for (const n of nodes(v)) {
     if (n.custom_id) expect(n.custom_id.length).toBeLessThanOrEqual(100);
     if (n.type === 1) expect(n.components.length).toBeLessThanOrEqual(5);
+    if (n.type === 2) expect(n.label.length).toBeLessThanOrEqual(80);
+    if (n.type === 3 && n.placeholder)
+      expect(n.placeholder.length).toBeLessThanOrEqual(150);
     if (n.type === 3) expect(n.options.length).toBeLessThanOrEqual(MAX_OPTIONS);
   }
 }
@@ -144,6 +147,32 @@ describe('eventModal', () => {
     const sel = j.components[2].component;
     expect(sel.options[0].label).toBe('— none —');
     expect(sel.options).toHaveLength(4);
+  });
+
+  it('keeps the title and every label within the modal limits', () => {
+    const cur = {
+      kind: 'egzamin' as const,
+      title: 'T',
+      subjectCode: 'S0',
+      startsAt: new Date('2026-10-20T10:00:00Z'),
+      endsAt: null,
+      allDay: false,
+      place: null,
+      note: null,
+    };
+    for (const m of [
+      eventModal(null, subs(3)),
+      eventModal(null, subs(25)),
+      eventModal(9, subs(3), cur),
+    ]) {
+      const j = json(m);
+      expect(j.title.length).toBeLessThanOrEqual(45);
+      for (const c of j.components) {
+        expect(c.label.length).toBeLessThanOrEqual(45);
+        if (c.component.placeholder)
+          expect(c.component.placeholder.length).toBeLessThanOrEqual(100);
+      }
+    }
   });
 
   it('offers a code text field past 24 subjects', () => {

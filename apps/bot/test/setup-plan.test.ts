@@ -1,6 +1,11 @@
 import { CLASS_KINDS, CLASS_NAMES, classifyTags, groupName } from '@studies/db';
 import { describe, expect, it } from 'vitest';
-import { renderEventsInfoPost } from '../src/setup/info.js';
+import {
+  EVENTS_FORUM_TOPIC,
+  EVENTS_INFO_TITLE,
+  INFO_TITLE,
+  renderEventsInfoPost,
+} from '../src/setup/info.js';
 import {
   desiredTags,
   forumSlug,
@@ -53,6 +58,7 @@ const render = (s: SubjectSpec) => `G:${s.code}`;
 const isEvents = (a: Action) =>
   a.type === 'ensureEventsForum' ||
   a.type === 'addEventsTags' ||
+  a.type === 'setEventsForumTopic' ||
   a.type === 'upsertEventsInfoPost' ||
   (a.type === 'warn' && a.code === '#wydarzenia');
 /** The plan without the #wydarzenia actions (covered in 'planSetup: #wydarzenia'). */
@@ -533,7 +539,7 @@ describe('planSetup: posts', () => {
     });
     expect(p?.type === 'postTopic' && p.messages).toEqual([
       {
-        content: 'Added by Ola · 2026-10-05 (from the Studies DB database)',
+        content: 'Added by Ola · Mon 5 Oct 2026 (from Studies DB)',
         files: [],
       },
     ]);
@@ -792,6 +798,33 @@ describe('planSetup: posts', () => {
         pin: false,
       },
     ]);
+  });
+
+  it('renames a legacy-titled info post while editing it, then plans nothing', () => {
+    const s = subject([]);
+    const plan = (g: GuildSnapshot) =>
+      planSetup([s], g, ROLE, render, { webBaseUrl: W }).filter(
+        (a) => a.type === 'upsertInfoPost',
+      );
+    const [created] = plan(guildWith());
+    const content = created?.type === 'upsertInfoPost' ? created.content : '';
+    const legacy = {
+      threadId: 'i1',
+      messageId: 'i1',
+      name: 'ℹ️ Informacje o przedmiocie',
+      content,
+    };
+    // Same content, legacy title: one edit with a rename, no second create.
+    expect(plan(guildWith({ infoPost: legacy }))).toEqual([
+      expect.objectContaining({
+        existing: { threadId: 'i1', messageId: 'i1', renameTo: INFO_TITLE },
+        pin: false,
+      }),
+    ]);
+    // After the rename the next run has nothing to do.
+    expect(
+      plan(guildWith({ infoPost: { ...legacy, name: INFO_TITLE } })),
+    ).toEqual([]);
   });
 
   it('creates the info post unpinned with a warning when another post is pinned', () => {
@@ -1169,7 +1202,7 @@ describe('planSetup: #wydarzenia', () => {
     name: 'wydarzenia',
     parentId: 'c3',
     tags: KINDS.map((name) => ({ id: `t-${name}`, name })),
-    topic: null,
+    topic: EVENTS_FORUM_TOPIC,
     ...over,
   });
   const opts = { webBaseUrl: 'https://x.pl' };
@@ -1225,6 +1258,61 @@ describe('planSetup: #wydarzenia', () => {
       ],
     });
     expect(only(planAll([], g, ROLE, render, opts))).toEqual([]);
+  });
+
+  it('renames a legacy events info post once', () => {
+    const content = renderEventsInfoPost(opts.webBaseUrl);
+    const g = (name: string) =>
+      withRole({
+        eventsForumId: 'f-ev',
+        forums: [
+          eventsForum({
+            infoPost: { threadId: 'th', messageId: 'th', name, content },
+            pinnedThreadId: 'th',
+          }),
+        ],
+      });
+    expect(only(planAll([], g('ℹ️ Wydarzenia'), ROLE, render, opts))).toEqual([
+      expect.objectContaining({
+        type: 'upsertEventsInfoPost',
+        existing: {
+          threadId: 'th',
+          messageId: 'th',
+          renameTo: EVENTS_INFO_TITLE,
+        },
+      }),
+    ]);
+    expect(only(planAll([], g(EVENTS_INFO_TITLE), ROLE, render, opts))).toEqual(
+      [],
+    );
+  });
+
+  it('updates a stale #wydarzenia forum description, and only that', () => {
+    const content = renderEventsInfoPost(opts.webBaseUrl);
+    const g = (topic: string | null) =>
+      withRole({
+        eventsForumId: 'f-ev',
+        forums: [
+          eventsForum({
+            topic,
+            infoPost: { threadId: 'th', messageId: 'th', content },
+            pinnedThreadId: 'th',
+          }),
+        ],
+      });
+    expect(
+      only(planAll([], g('Kolokwia, egzaminy'), ROLE, render, opts)),
+    ).toEqual([
+      {
+        type: 'setEventsForumTopic',
+        code: '#wydarzenia',
+        channelId: 'f-ev',
+        topic: EVENTS_FORUM_TOPIC,
+      },
+    ]);
+    expect(
+      only(planAll([], g(EVENTS_FORUM_TOPIC), ROLE, render, opts)),
+    ).toEqual([]);
   });
 
   it('edits a stale info post and never unpins another pinned post', () => {

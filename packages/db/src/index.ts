@@ -15,6 +15,7 @@ export * from './reminders.js';
 export * from './schema.js';
 export * from './search.js';
 export * from './settings.js';
+export { plural } from './text.js';
 export * from './tx.js';
 export * from './unitime/index.js';
 export * from './web-uploads.js';

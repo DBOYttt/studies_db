@@ -3,7 +3,12 @@
  * panel: /setup and the forum re-sync, plus the lock that keeps /setup to one
  * run at a time.
  */
-import { enqueueMissingEventPosts, getSetting, users } from '@studies/db';
+import {
+  enqueueMissingEventPosts,
+  getSetting,
+  plural,
+  users,
+} from '@studies/db';
 import type { Guild } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { catchUp, discordForumSource } from './catchup.js';
@@ -111,7 +116,7 @@ export async function runSetup(
       ignoreWatermark: true,
     });
     report.updated.push(
-      `Fetched posts: ${r.topics} topics, ${r.created} files, ${r.failed} errors`,
+      `Fetched posts: ${plural(r.topics, 'topic', 'topics')}, ${plural(r.created, 'file', 'files')}, ${plural(r.failed, 'error', 'errors')}`,
     );
   }
   if (needsSecondPass(first.actions)) {
@@ -167,5 +172,5 @@ export async function runResync(
     created: r.created,
     failed: r.failed,
   });
-  return `Synced: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`;
+  return `Synced: ${plural(r.topics, 'topic', 'topics')}, ${plural(r.created, 'new file', 'new files')}, ${plural(r.failed, 'error', 'errors')}.`;
 }

@@ -86,8 +86,17 @@ export type ForumSnapshot = {
 
 export type InfoPostSnapshot = {
   threadId: string;
+  /** The thread's name; compared with the current title (legacy renames). */
+  name?: string;
   messageId: string;
   content: string;
+};
+
+/** The info post to edit; `renameTo` also renames a legacy-titled thread. */
+export type ExistingInfoPost = {
+  threadId: string;
+  messageId: string;
+  renameTo?: string;
 };
 
 export type PostFile = {
@@ -202,7 +211,7 @@ export type Action =
       channelId: string;
       content: string;
       /** Set: edit this message. Null: create the post. */
-      existing: { threadId: string; messageId: string } | null;
+      existing: ExistingInfoPost | null;
       /** Pin a newly created post (only when no other post is pinned). */
       pin: boolean;
     }
@@ -254,7 +263,13 @@ export type Action =
       code: string;
       channelId: string;
       content: string;
-      existing: { threadId: string; messageId: string } | null;
+      existing: ExistingInfoPost | null;
       pin: boolean;
+    }
+  | {
+      type: 'setEventsForumTopic';
+      code: string;
+      channelId: string;
+      topic: string;
     }
   | { type: 'warn'; code: string | null; message: string };

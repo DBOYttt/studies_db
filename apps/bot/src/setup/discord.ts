@@ -156,6 +156,7 @@ async function infoPostOf(
   if (!starter) return null;
   return {
     threadId: t.id,
+    name: t.name,
     messageId: starter.id,
     content: starter.content,
   };
@@ -339,6 +340,9 @@ export function discordSetupGuild(guild: Guild): SetupGuild {
         allowedMentions: { parse: [] },
       });
       return { messageId: msg.id, attachmentIds: [...msg.attachments.keys()] };
+    },
+    async renameThread(threadId, name) {
+      await (await openThread(guild, threadId)).setName(name, '/setup');
     },
     async editMessage(threadId, messageId, content) {
       const t = await openThread(guild, threadId);

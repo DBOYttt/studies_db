@@ -99,7 +99,7 @@ describe('renderInfoPost', () => {
       'https://upel.example/asd-lab',
       'Mon 08:00–09:30 · Wykład · A-1 101',
       'Tue 10:00–11:30 · Laboratorium Gr. 1 · C-2 015',
-      'cancelled: 2026-10-20 Wykład',
+      'cancelled: Tue 20 Oct 2026 Wykład',
       `${W}/s/plan`,
     ]) {
       expect(t).toContain(part);

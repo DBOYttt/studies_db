@@ -47,6 +47,9 @@ function expectValid(v: View) {
   expect(allText(v).length).toBeLessThanOrEqual(MAX_TEXT);
   for (const n of nodes(v)) {
     if (n.type === 1) expect(n.components.length).toBeLessThanOrEqual(5);
+    if (n.type === 2) expect(n.label.length).toBeLessThanOrEqual(80);
+    if (n.type === 3 && n.placeholder)
+      expect(n.placeholder.length).toBeLessThanOrEqual(150);
     if (n.type === 3) {
       expect(n.options.length).toBeLessThanOrEqual(MAX_OPTIONS);
       for (const o of n.options) {
@@ -247,7 +250,7 @@ describe('planWeek', () => {
     );
     expectValid(v);
     const text = allText(v);
-    expect(text).toContain('Timetable — week 12 Oct – 18 Oct');
+    expect(text).toContain('Timetable — Week 42 · 12–18 Oct 2026');
     const mon = text.indexOf('Mon 12 Oct');
     const wed = text.indexOf('Wed 14 Oct');
     expect(mon).toBeGreaterThanOrEqual(0);
@@ -410,7 +413,7 @@ describe('plan image', () => {
         '10:00–11:30 AM1 Laboratorium Gr. 2; 12:00–13:30 PO Wykład (cancelled)',
     );
     expect(alt(planWeek(list, week, true, WEB, undefined, png))).toMatch(
-      /^Timetable — week 12 Oct – 18 Oct: Wed 14 Oct 08:00–09:30 AM1 Laboratorium Gr\. 2; .*; Thu 15 Oct 10:00–11:30 AM1 Laboratorium Gr\. 2$/,
+      /^Timetable — Week 42 · 12–18 Oct 2026: Wed 14 Oct 08:00–09:30 AM1 Laboratorium Gr\. 2; .*; Thu 15 Oct 10:00–11:30 AM1 Laboratorium Gr\. 2$/,
     );
   });
 

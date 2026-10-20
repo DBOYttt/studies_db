@@ -1,5 +1,7 @@
 // The pinned "subject info" post /setup keeps in every forum.
+
 import { ASSESSMENT_NAMES, CLASS_NAMES, groupName } from '@studies/db';
+import { WEEKDAYS, wallDate } from '../dates.js';
 import type {
   ClassSpec,
   LecturerSpec,
@@ -29,11 +31,9 @@ export function renderEventsInfoPost(webBaseUrl: string): string {
   ].join('\n\n');
 }
 const MAX_MESSAGE = 2000;
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 
 const hm = (d: Date) =>
   `${String(d.getUTCHours()).padStart(2, '0')}:${String(d.getUTCMinutes()).padStart(2, '0')}`;
-const ymd = (d: Date) => d.toISOString().slice(0, 10);
 /** Monday-first sort key for a wall Date. */
 const weekKey = (d: Date) =>
   ((d.getUTCDay() + 6) % 7) * 1440 + d.getUTCHours() * 60 + d.getUTCMinutes();
@@ -83,7 +83,7 @@ function planBlock(sessions: SessionSpec[], webBaseUrl: string): string | null {
   const cancelled = sessions
     .filter((s) => s.status === 'cancelled')
     .sort((a, b) => +a.startsAt - +b.startsAt)
-    .map((s) => `cancelled: ${ymd(s.startsAt)} ${sessionName(s)}`);
+    .map((s) => `cancelled: ${wallDate(s.startsAt)} ${sessionName(s)}`);
   return [
     '**Timetable**',
     ...slots,

@@ -26,6 +26,7 @@ import {
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
+import { dayMonth as ddmm, WEEKDAYS, weekTitle } from '../../dates.js';
 import { encodeId } from '../ids.js';
 import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../limits.js';
 import {
@@ -53,25 +54,8 @@ const more = (n: number) => `…and ${n} more. Open the website`;
 /* ---------- formatting ---------- */
 
 const DAY_MS = 86_400_000;
-const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const pad = (n: number) => String(n).padStart(2, '0');
 const hhmm = (d: Date) => `${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
-const MONTHS = [
-  'Jan',
-  'Feb',
-  'Mar',
-  'Apr',
-  'May',
-  'Jun',
-  'Jul',
-  'Aug',
-  'Sep',
-  'Oct',
-  'Nov',
-  'Dec',
-];
-/** `14 Oct` */
-const ddmm = (d: Date) => `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
 /** `Wed 14 Oct` */
 const dayLabel = (d: Date) => `${WEEKDAYS[d.getUTCDay()]} ${ddmm(d)}`;
 /** `2026-10-14` */
@@ -425,7 +409,7 @@ export function planWeek(
     line: sessionLine(s),
     first: i === 0 || dayKey(all[i - 1].startsAt) !== dayKey(s.startsAt),
   }));
-  const title = `Timetable — week ${ddmm(monday)} – ${ddmm(sunday)}`;
+  const title = `Timetable — ${weekTitle(week.week, monday, sunday)}`;
   const head = heading(title, hasGroups);
   // At most 7 day blocks, far below the component limit; text decides.
   const { shown, rest } = takeFitting(

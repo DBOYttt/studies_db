@@ -9,10 +9,13 @@ import {
   groupName,
   stripMarks,
 } from '@studies/db';
+import { instantDate } from '../dates.js';
 import type { ForumTag } from '../types.js';
 import {
   EVENTS_FORUM_NAME,
   EVENTS_FORUM_TOPIC,
+  EVENTS_INFO_TITLE,
+  INFO_TITLE,
   renderEventsInfoPost,
   renderInfoPost,
 } from './info.js';
@@ -21,6 +24,7 @@ import type {
   AdminRole,
   ForumSnapshot,
   GuildSnapshot,
+  InfoPostSnapshot,
   MaterialSpec,
   PanelWhich,
   PostFile,
@@ -94,6 +98,16 @@ function fitTags(existingCount: number, wanted: string[]) {
   return { fit: wanted.slice(0, room), dropped: wanted.slice(room) };
 }
 
+/** A found info post whose thread name is not the current title. */
+const renameNeeded = (info: InfoPostSnapshot, title: string) =>
+  info.name !== undefined && info.name !== title;
+
+const existingOf = (info: InfoPostSnapshot, title: string) => ({
+  threadId: info.threadId,
+  messageId: info.messageId,
+  ...(renameNeeded(info, title) ? { renameTo: title } : {}),
+});
+
 const unreadableWarn = (code: string | null, f: { name: string }): Action => ({
   type: 'warn',
   code,
@@ -146,9 +160,7 @@ const postFile = (m: MaterialSpec): PostFile => ({
 
 /** Starter (+ follow-up) messages for a DB topic posted by the bot. */
 function topicMessages(t: TopicSpec, webBaseUrl: string): PostMessage[] {
-  const header = `Added by ${t.authorName ?? 'an unknown author'} · ${t.createdAt
-    .toISOString()
-    .slice(0, 10)} (from the Studies DB database)`;
+  const header = `Added by ${t.authorName ?? 'an unknown author'} · ${instantDate(t.createdAt)} (from Studies DB)`;
   const upload = t.materials.filter((m) => m.sizeBytes <= MAX_UPLOAD_BYTES);
   const linked = t.materials.filter((m) => m.sizeBytes > MAX_UPLOAD_BYTES);
   const links =
@@ -251,10 +263,10 @@ function planPosts(
           'info post not pinned because the forum already has another pinned post',
       });
     }
-  } else if (info.content !== content) {
+  } else if (info.content !== content || renameNeeded(info, INFO_TITLE)) {
     out.push({
       ...base,
-      existing: { threadId: info.threadId, messageId: info.messageId },
+      existing: existingOf(info, INFO_TITLE),
       pin: false,
     });
   }
@@ -484,6 +496,14 @@ function planEventsForum(
     out.push({ type: 'addEventsTags', code, channelId: forum.id, tags: fit });
   }
   if (dropped.length > 0) out.push(tooManyTags(code, dropped));
+  if (forum.topic !== EVENTS_FORUM_TOPIC) {
+    out.push({
+      type: 'setEventsForumTopic',
+      code,
+      channelId: forum.id,
+      topic: EVENTS_FORUM_TOPIC,
+    });
+  }
   if (!opts) return out;
   const content = renderEventsInfoPost(opts.webBaseUrl);
   const info = forum.infoPost ?? null;
@@ -504,10 +524,13 @@ function planEventsForum(
           'info post not pinned because the forum already has another pinned post',
       });
     }
-  } else if (info.content !== content) {
+  } else if (
+    info.content !== content ||
+    renameNeeded(info, EVENTS_INFO_TITLE)
+  ) {
     out.push({
       ...base,
-      existing: { threadId: info.threadId, messageId: info.messageId },
+      existing: existingOf(info, EVENTS_INFO_TITLE),
       pin: false,
     });
   }

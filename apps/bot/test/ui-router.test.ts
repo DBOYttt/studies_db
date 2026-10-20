@@ -330,7 +330,7 @@ describe('handleUi', () => {
     const i = component('v1:stu:plan:week', { ephemeral: true });
     await handler()(i);
     const view = i.editReply.mock.calls[0][0];
-    expect(textOf(view)).toContain('Timetable — week 12 Oct – 18 Oct');
+    expect(textOf(view)).toContain('Timetable — Week 42 · 12–18 Oct 2026');
     const ids = nodes(view).map((n) => n.custom_id);
     expect(ids).toContain('v1:stu:plan:day:2026-10-14');
     const j = component('v1:stu:plan:week:2026-W44', { ephemeral: true });

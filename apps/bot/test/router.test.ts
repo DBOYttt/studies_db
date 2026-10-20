@@ -540,7 +540,7 @@ describe('/setup', () => {
     await handlerFor()(asI(i));
     expect(fetchMessages).toHaveBeenCalled();
     const text = i.editReply.mock.calls[0]?.[0].content;
-    expect(text).toContain('ASD: send 1 more files to topic "Lab 1"');
+    expect(text).toContain('ASD: send 1 more file to topic "Lab 1"');
   });
 
   it('reports forums the bot cannot read and still plans the rest', async () => {

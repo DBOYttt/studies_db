@@ -1,3 +1,4 @@
+import { plural } from '@studies/db';
 import { CLASS_NAMES } from '@studies/db/constants';
 import type { SetupReport } from './apply.js';
 import { PANEL_CHANNEL_NAMES } from './plan.js';
@@ -62,14 +63,14 @@ function describeAction(a: Action): string {
       return `${a.code}: add classes to the database: ${a.kinds.map((k) => CLASS_NAMES[k]).join(', ')}`;
     case 'postTopic': {
       const n = a.messages.reduce((k, m) => k + m.files.length, 0);
-      return `${a.code}: post topic "${a.title}" (${n} files)`;
+      return `${a.code}: post topic "${a.title}" (${plural(n, 'file', 'files')})`;
     }
     case 'postFiles': {
       const n = a.messages.reduce((k, m) => k + m.files.length, 0);
-      return `${a.code}: send ${n} more files to topic "${a.title}"`;
+      return `${a.code}: send ${plural(n, 'more file', 'more files')} to topic "${a.title}"`;
     }
     case 'upsertInfoPost':
-      return `${a.code}: ${a.existing ? 'update' : 'create'} the info post`;
+      return `${a.code}: ${a.existing ? (a.existing.renameTo ? 'rename and update' : 'update') : 'create'} the info post`;
     case 'ensurePanelChannel':
       return a.existingId
         ? `save channel #${a.name} as a panel channel`
@@ -84,10 +85,12 @@ function describeAction(a: Action): string {
       return a.existingId
         ? `${a.code}: save the existing forum as the events forum`
         : `${a.code}: create forum #${a.name} with tags ${a.tags.join(', ')}`;
+    case 'setEventsForumTopic':
+      return `${a.code}: update the forum description`;
     case 'addEventsTags':
       return `${a.code}: add tags ${a.tags.join(', ')}`;
     case 'upsertEventsInfoPost':
-      return `${a.code}: ${a.existing ? 'update' : 'create'} the info post`;
+      return `${a.code}: ${a.existing ? (a.existing.renameTo ? 'rename and update' : 'update') : 'create'} the info post`;
     case 'warn':
       return `warning: ${a.code ? `${a.code}: ` : ''}${a.message}`;
   }

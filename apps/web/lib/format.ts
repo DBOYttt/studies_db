@@ -13,10 +13,7 @@ export function formatSize(bytes: number): string {
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** English plural with the count: plural(2, 'file', 'files') -> "2 files". */
-export function plural(n: number, one: string, many: string): string {
-  return `${n} ${Math.abs(n) === 1 ? one : many}`;
-}
+export { plural } from '@studies/db/text';
 
 /**
  * An external link target from user/DB data: the trimmed URL when it is an

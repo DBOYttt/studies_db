@@ -9,6 +9,7 @@ import {
   ensureClass,
   getSetting,
   materials,
+  plural,
   setSetting,
   subjects,
   topics,
@@ -61,6 +62,8 @@ export interface SetupGuild {
     messageId: string,
     content: string,
   ): Promise<void>;
+  /** Renames a thread (legacy info posts get the current title). */
+  renameThread(threadId: string, name: string): Promise<void>;
   pinThread(threadId: string): Promise<void>;
   /**
    * New text channel. private false: everyone reads, nobody but the bot
@@ -151,7 +154,7 @@ async function relinkFiles(
 }
 
 const unlinkedFiles = (code: string, title: string, n: number) =>
-  `${code}: "${title}": Discord did not confirm ${n} files. They were sent but are not linked in the database`;
+  `${code}: "${title}": Discord did not confirm ${plural(n, 'file', 'files')}. They were sent but are not linked in the database`;
 
 export async function applySetup(
   db: Db,
@@ -308,7 +311,9 @@ export async function applySetup(
             }
           }
           const n = prepared.reduce((k, m) => k + m.files.length, 0);
-          report.created.push(`${a.code}: post "${a.title}" (${n} files)`);
+          report.created.push(
+            `${a.code}: post "${a.title}" (${plural(n, 'file', 'files')})`,
+          );
           if (unlinked > 0) {
             report.failures.push(unlinkedFiles(a.code, a.title, unlinked));
           }
@@ -330,7 +335,9 @@ export async function applySetup(
             }
           }
           const n = prepared.reduce((k, m) => k + m.files.length, 0);
-          report.updated.push(`${a.code}: "${a.title}": sent ${n} more files`);
+          report.updated.push(
+            `${a.code}: "${a.title}": sent ${plural(n, 'more file', 'more files')}`,
+          );
           if (unlinked > 0) {
             report.failures.push(unlinkedFiles(a.code, a.title, unlinked));
           }
@@ -360,6 +367,10 @@ export async function applySetup(
           report.created.push(`${a.code}: forum #${a.name}`);
           break;
         }
+        case 'setEventsForumTopic':
+          await guild.setForumTopic(a.channelId, a.topic);
+          report.updated.push(`${a.code}: forum description`);
+          break;
         case 'addEventsTags':
           await guild.addForumTags(a.channelId, a.tags);
           report.updated.push(`${a.code}: tags ${a.tags.join(', ')}`);
@@ -388,6 +399,7 @@ export async function applySetup(
             }
             break;
           }
+          if (e.renameTo) await guild.renameThread(e.threadId, e.renameTo);
           await guild.editMessage(e.threadId, e.messageId, a.content);
           report.updated.push(`${a.code}: info post`);
           break;

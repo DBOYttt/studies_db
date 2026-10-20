@@ -111,6 +111,9 @@ function fakeGuild(failForum?: string): SetupGuild & {
         attachmentIds: o.files.map((_, i) => `${id}-att-${i}`),
       };
     },
+    async renameThread(threadId, name) {
+      calls.push(['renameThread', threadId, name]);
+    },
     async editMessage(threadId, messageId, content) {
       calls.push(['editMessage', threadId, messageId, content]);
     },
@@ -959,6 +962,54 @@ describe('applySetup: posts', () => {
       ],
       ['editMessage', 'i2', 'i2', 'INFO'],
     ]);
+  });
+
+  it('renames a legacy-titled info post before editing it, and sets the events topic', async () => {
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        info({ threadId: 'i3', messageId: 'i3', renameTo: INFO_TITLE }),
+        {
+          type: 'setEventsForumTopic',
+          code: '#wydarzenia',
+          channelId: 'f-ev',
+          topic: 'T',
+        },
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(g.calls).toEqual([
+      ['renameThread', 'i3', INFO_TITLE],
+      ['editMessage', 'i3', 'i3', 'INFO'],
+      ['setForumTopic', 'f-ev', 'T'],
+    ]);
+    expect(r.failures).toEqual([]);
+  });
+
+  it('counts files with English plurals', () => {
+    expect(
+      formatPlan([
+        {
+          type: 'postFiles',
+          subjectId: 1,
+          code: 'ASD',
+          threadId: 't',
+          topicId: 1,
+          title: 'Lab',
+          messages: [
+            {
+              content: 'x',
+              files: [
+                { materialId: 1, name: 'a', storagePath: 'a', sizeBytes: 1 },
+              ],
+            },
+          ],
+        },
+      ]),
+    ).toContain('send 1 more file to topic');
   });
 
   it('turns a failed pin into a warning and carries on with the subject', async () => {
