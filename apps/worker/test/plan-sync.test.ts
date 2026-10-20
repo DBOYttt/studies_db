@@ -15,6 +15,7 @@ import {
   fetchTimetable,
   planSyncDue,
   runPlanSyncOnce,
+  SafeSyncError,
 } from '../src/plan-sync.js';
 
 const ics = readFileSync(
@@ -56,6 +57,8 @@ afterAll(async () => {
   await new Promise((r) => server.close(r));
 });
 
+const host = () => new URL(base).host;
+
 describe('fetchTimetable', () => {
   it('returns the body for text/calendar', async () => {
     expect(await fetchTimetable(`${base}/ok?x=secret`)).toContain(
@@ -66,27 +69,56 @@ describe('fetchTimetable', () => {
     const err = await fetchTimetable(`${base}/err/secretpath?x=secret`).catch(
       (e: Error) => e,
     );
-    expect(err).toBeInstanceOf(Error);
-    const msg = (err as Error).message;
-    expect(msg).toContain('127.0.0.1');
-    expect(msg).toContain('500');
-    expect(msg).not.toContain('secret');
-    expect(msg).not.toContain('?x=');
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(`HTTP 500 from ${host()}`);
   });
   it('rejects text/html', async () => {
-    await expect(fetchTimetable(`${base}/html?x=secret`)).rejects.toThrow(
-      /Nieprawidłowy typ/,
+    const err = await fetchTimetable(`${base}/html?x=secret`).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(
+      `Unexpected response type (text/html) from ${host()}`,
     );
   });
+  it('rejects an empty response', async () => {
+    const fetchImpl = (async () =>
+      new Response(null, {
+        status: 200,
+        headers: { 'content-type': 'text/calendar' },
+      })) as typeof fetch;
+    const err = await fetchTimetable(`${base}/x?x=secret`, { fetchImpl }).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(`Empty response from ${host()}`);
+  });
   it('rejects oversized bodies', async () => {
-    await expect(fetchTimetable(`${base}/big?x=secret`)).rejects.toThrow();
+    const err = await fetchTimetable(`${base}/big?x=secret`).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(
+      `The response from ${host()} is too large`,
+    );
   });
   it('rejects on timeout', async () => {
     const err = await fetchTimetable(`${base}/slow?x=secret`, {
       timeoutMs: 100,
     }).catch((e: Error) => e);
-    expect(err).toBeInstanceOf(Error);
-    expect((err as Error).message).not.toContain('secret');
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(`Timed out waiting for ${host()}`);
+  });
+  it('replaces an unexpected error with a generic message (no URL leak)', async () => {
+    const url = `${base}/x/secretpath?x=secret`;
+    const fetchImpl = (async () => {
+      throw new Error(`connect failed for ${url}`);
+    }) as typeof fetch;
+    const err = await fetchTimetable(url, { fetchImpl }).catch((e: Error) => e);
+    expect(err).toBeInstanceOf(SafeSyncError);
+    const msg = (err as Error).message;
+    expect(msg).toBe(`Could not download the timetable from ${host()}`);
+    expect(msg).not.toContain('secret');
   });
 });
 

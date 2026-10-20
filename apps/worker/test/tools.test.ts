@@ -8,11 +8,11 @@ describe('checkTools', () => {
         sofficeBin: 'no-such-soffice-bin',
         pdftotextBin: 'pdftotext',
       }),
-    ).rejects.toThrow(/brak narzędzia no-such-soffice-bin/);
+    ).rejects.toThrow(/missing tool no-such-soffice-bin/);
   });
   it('rejects on missing pdftotext', async () => {
     await expect(
       checkTools({ sofficeBin: 'true', pdftotextBin: 'no-such-pdftotext' }),
-    ).rejects.toThrow(/brak narzędzia no-such-pdftotext/);
+    ).rejects.toThrow(/missing tool no-such-pdftotext/);
   });
 });

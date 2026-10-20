@@ -16,8 +16,17 @@ function hostOf(url: string): string {
   try {
     return new URL(url).host;
   } catch {
-    return 'nieznany host';
+    return 'unknown host';
   }
+}
+
+/**
+ * A fetch failure whose message we wrote ourselves and that names only the
+ * host, so it may be shown to users (`/plan sync`, admin panel) as is.
+ * Any other error may embed the URL and is replaced by a generic message.
+ */
+export class SafeSyncError extends Error {
+  override name = 'SafeSyncError';
 }
 
 export async function fetchTimetable(
@@ -30,14 +39,15 @@ export async function fetchTimetable(
   const signal = AbortSignal.timeout(o.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
     const res = await doFetch(url, { signal, redirect: 'follow' });
-    if (res.status >= 400) throw new Error(`HTTP ${res.status} z ${host}`);
+    if (res.status >= 400)
+      throw new SafeSyncError(`HTTP ${res.status} from ${host}`);
     const type = res.headers.get('content-type') ?? '';
     if (!type.toLowerCase().includes('text/calendar')) {
-      throw new Error(
-        `Nieprawidłowy typ odpowiedzi (${type || 'brak'}) z ${host}`,
+      throw new SafeSyncError(
+        `Unexpected response type (${type || 'none'}) from ${host}`,
       );
     }
-    if (!res.body) throw new Error(`Pusta odpowiedź z ${host}`);
+    if (!res.body) throw new SafeSyncError(`Empty response from ${host}`);
     const reader = res.body.getReader();
     const chunks: Uint8Array[] = [];
     let total = 0;
@@ -47,24 +57,17 @@ export async function fetchTimetable(
       total += value.byteLength;
       if (total > maxBytes) {
         await reader.cancel().catch(() => {});
-        throw new Error(`Odpowiedź z ${host} jest zbyt duża`);
+        throw new SafeSyncError(`The response from ${host} is too large`);
       }
       chunks.push(value);
     }
     return Buffer.concat(chunks).toString('utf8');
   } catch (err) {
     if (signal.aborted)
-      throw new Error(`Przekroczono czas oczekiwania na ${host}`);
+      throw new SafeSyncError(`Timed out waiting for ${host}`);
     // Only our own host-only messages pass through; anything else may embed the URL.
-    if (
-      err instanceof Error &&
-      /(^HTTP \d+ z |^Nieprawidłowy typ|^Pusta odpowiedź|zbyt duża$)/.test(
-        err.message,
-      )
-    ) {
-      throw err;
-    }
-    throw new Error(`Nie udało się pobrać planu z ${host}`);
+    if (err instanceof SafeSyncError) throw err;
+    throw new SafeSyncError(`Could not download the timetable from ${host}`);
   }
 }
 

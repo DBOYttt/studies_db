@@ -14,7 +14,7 @@ export async function checkTools(deps: {
       await run(bin, args, 30_000);
     } catch (e) {
       throw new Error(
-        `Worker: brak narzędzia ${bin}: ${e instanceof Error ? e.message : String(e)}`,
+        `Worker: missing tool ${bin}: ${e instanceof Error ? e.message : String(e)}`,
       );
     }
   }

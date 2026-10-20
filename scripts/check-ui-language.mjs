@@ -12,6 +12,7 @@ const DEFAULT_SCOPE = [
   'apps/web/components',
   'apps/web/lib',
   'apps/bot/src',
+  'apps/worker/src',
   'packages/db/src',
 ];
 const EXT = /\.(ts|tsx|mjs|js|jsx)$/;
@@ -47,6 +48,9 @@ function* walk(p) {
 }
 
 const isComment = (t) => /^(\/\/|\*|\/\*|\{\/\*)/.test(t);
+/** Open minus closed parentheses (a rough count; enough for log calls). */
+const parenDepth = (t) =>
+  (t.match(/\(/g)?.length ?? 0) - (t.match(/\)/g)?.length ?? 0);
 
 const args = process.argv.slice(2);
 const targets = args.length
@@ -61,10 +65,23 @@ for (const t of targets) {
     const lineAllow = ALLOW_LINES.filter(([f]) => f.test(rel)).map(
       ([, l]) => l,
     );
+    // Lines of a `console.*(` call that the formatter wrapped are log text too.
+    let inConsole = 0;
     readFileSync(file, 'utf8')
       .split('\n')
       .forEach((line, i) => {
         const text = line.trim();
+        if (inConsole > 0) {
+          inConsole += parenDepth(text);
+          return;
+        }
+        if (/console\./.test(text)) {
+          inConsole = Math.max(
+            0,
+            parenDepth(text.slice(text.indexOf('console.'))),
+          );
+          return;
+        }
         if (isComment(text) || SKIP_LINE.test(text)) return;
         // A trailing `// comment` is not UI copy.
         const code = text.replace(/\s\/\/.*$/, '');
