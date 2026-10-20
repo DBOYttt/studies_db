@@ -174,7 +174,7 @@ async function ListTab({ grid }: { grid: EntityGridParams }) {
         dir: 'asc',
         sortKeys: page.columns.map(() => null),
       }}
-      name="plan-zajec"
+      name="timetable"
     />
   );
 }

@@ -160,7 +160,7 @@ export default async function LecturerPage({
             tab="files"
             grid={grid}
             load={() => lecturerFiles(pool, id, grid)}
-            name={`prowadzacy-${id}-materialy`}
+            name={`lecturer-${id}-materials`}
           />
         )}
         {tab === 'plan' && (

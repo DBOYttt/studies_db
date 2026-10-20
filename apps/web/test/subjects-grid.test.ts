@@ -91,18 +91,18 @@ describe('querySubjectsGrid', () => {
     const rows = await querySubjectsGrid(pool);
     expect(rows.map((r) => r.code)).toEqual(['ALG', 'BIO', 'FIZ']);
     const fiz = rows.find((r) => r.code === 'FIZ');
-    expect(fiz?.zajecia).toBe('Wykład, Ćwiczenia, Projekt');
-    expect(rows.find((r) => r.code === 'ALG')?.zajecia).toBeNull();
+    expect(fiz?.classes).toBe('Wykład, Ćwiczenia, Projekt');
+    expect(rows.find((r) => r.code === 'ALG')?.classes).toBeNull();
   });
 
   it('counts live files only (no join fan-out)', async () => {
     const rows = await querySubjectsGrid(pool);
     const fiz = rows.find((r) => r.code === 'FIZ');
-    expect(fiz?.pliki).toBe(2);
-    expect(fiz?.ostatnio).toBeInstanceOf(Date);
+    expect(fiz?.files).toBe(2);
+    expect(fiz?.latest).toBeInstanceOf(Date);
     const alg = rows.find((r) => r.code === 'ALG');
-    expect(alg?.pliki).toBe(0);
-    expect(alg?.ostatnio).toBeNull();
+    expect(alg?.files).toBe(0);
+    expect(alg?.latest).toBeNull();
   });
 
   it('reads public views only', () => {

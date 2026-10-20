@@ -13,7 +13,7 @@ import { runReadonlyQuery } from '@/lib/sql-console';
 
 export const dynamic = 'force-dynamic';
 
-/** CSV of one ready-made report (`?r=0..2`), headed by the Polish labels. */
+/** CSV of one ready-made report (`?r=0..2`), headed by the English labels. */
 export async function GET(req: Request) {
   await requireUser();
   const r = parseReportIndex(new URL(req.url).searchParams.getAll('r'));

@@ -105,7 +105,7 @@ export default async function TagPage({
             tab={null}
             grid={grid}
             load={() => tagTopics(pool, id, grid)}
-            name={`tag-${id}-tematy`}
+            name={`tag-${id}-topics`}
           />
         )}
         {tab === 'files' && (
@@ -114,7 +114,7 @@ export default async function TagPage({
             tab="files"
             grid={grid}
             load={() => tagFiles(pool, id, grid)}
-            name={`tag-${id}-pliki`}
+            name={`tag-${id}-files`}
           />
         )}
       </div>

@@ -50,9 +50,9 @@ export const REPORT_META: { icon: 'Books' | 'Medal' | 'Exam'; desc: string }[] =
 export const REPORT_LABELS: Record<string, string> = {
   code: 'Code',
   name: 'Subject',
-  materialy: 'Materials',
+  materials: 'Materials',
   display_name: 'Author',
-  liczba_plikow: 'Files',
+  files: 'Files',
   id: 'No.',
   title: 'Topic',
   created_at: 'Added',
@@ -306,9 +306,9 @@ export const MAX_ROWS = 1000;
 
 /** CSV file names of the three ready-made reports (same order as EXAMPLE_QUERIES). */
 export const REPORT_SLUGS = [
-  'materialy-na-przedmiot',
-  'najaktywniejsi-uploaderzy',
-  'kolokwia-30-dni',
+  'materials-per-subject',
+  'most-active-uploaders',
+  'tests-last-30-days',
 ] as const;
 
 /** `?r=0|1|2`; anything else (missing, junk, out of range) is the first report. */

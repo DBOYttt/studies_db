@@ -110,7 +110,7 @@ export default async function UserPage({
             tab={null}
             grid={grid}
             load={() => userFiles(pool, id, grid)}
-            name={`uzytkownik-${id}-pliki`}
+            name={`user-${id}-files`}
           />
         )}
         {tab === 'topics' && (
@@ -119,7 +119,7 @@ export default async function UserPage({
             tab="topics"
             grid={grid}
             load={() => userTopics(pool, id, grid)}
-            name={`uzytkownik-${id}-tematy`}
+            name={`user-${id}-topics`}
           />
         )}
       </div>

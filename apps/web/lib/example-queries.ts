@@ -6,20 +6,20 @@ export interface ExampleQuery {
 export const EXAMPLE_QUERIES: readonly ExampleQuery[] = [
   {
     name: 'Materials per subject',
-    sql: `SELECT s.code, s.name, COUNT(m.id) AS materialy
+    sql: `SELECT s.code, s.name, COUNT(m.id) AS materials
 FROM v_subjects s
 LEFT JOIN v_topics t ON t.subject_id = s.id
 LEFT JOIN v_materials m ON m.topic_id = t.id
 GROUP BY s.id, s.code, s.name
-ORDER BY materialy DESC`,
+ORDER BY materials DESC`,
   },
   {
     name: 'Most active uploaders',
-    sql: `SELECT u.display_name, COUNT(*) AS liczba_plikow
+    sql: `SELECT u.display_name, COUNT(*) AS files
 FROM v_materials m
 JOIN v_users u ON u.id = m.uploader_id
 GROUP BY u.id, u.display_name
-ORDER BY liczba_plikow DESC
+ORDER BY files DESC
 LIMIT 10`,
   },
   {

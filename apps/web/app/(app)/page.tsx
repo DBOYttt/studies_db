@@ -32,10 +32,10 @@ export default async function Home() {
     { text: s.name, href: `/subjects/${encodeURIComponent(s.code)}` },
     s.semester,
     s.ects,
-    s.zajecia,
-    s.pliki,
-    s.ostatnio
-      ? { text: formatDate(s.ostatnio), sort: s.ostatnio.toISOString() }
+    s.classes,
+    s.files,
+    s.latest
+      ? { text: formatDate(s.latest), sort: s.latest.toISOString() }
       : null,
   ]);
   return (
@@ -60,7 +60,7 @@ export default async function Home() {
             columns={[...SUBJECTS_COLUMNS]}
             rows={rows}
             sql={SUBJECTS_SQL}
-            name="przedmioty"
+            name="subjects"
           />
         </>
       )}

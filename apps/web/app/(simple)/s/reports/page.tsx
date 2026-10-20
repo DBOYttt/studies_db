@@ -17,7 +17,7 @@ export const dynamic = 'force-dynamic';
 type SP = Record<string, string | string[] | undefined>;
 
 /** Counts and ids (the DB driver sends COUNT() as a string, so go by name). */
-const NUMERIC_COLUMNS = new Set(['materialy', 'liczba_plikow', 'id']);
+const NUMERIC_COLUMNS = new Set(['materials', 'files', 'id']);
 
 const cellText = (col: string, v: unknown): string => {
   if (v === null || v === undefined) return '—';

@@ -30,7 +30,7 @@ export async function GET(
     listSubjectTags(db, subject.id),
     listSubjectClasses(db, subject.id),
   ]);
-  // Same selection rules as the Pliki grid (an empty group exports no rows).
+  // Same selection rules as the Files grid (an empty group exports no rows).
   const sel = resolveSubjectSelection(classList, tree, parseExplorerParams(sp));
   const files = await listExplorerFiles(db, subject.id, sel, {
     tagId: tags.some((t) => t.id === filters.tag)
@@ -42,14 +42,14 @@ export async function GET(
   });
   const body = toCsv(
     [
-      'temat',
-      'kategoria',
-      'grupa',
-      'plik',
-      'typ',
-      'rozmiar_bajty',
-      'autor',
-      'dodano',
+      'topic',
+      'class',
+      'group',
+      'file',
+      'type',
+      'size_bytes',
+      'author',
+      'added',
     ],
     files.map((f) => [
       f.topicTitle,
@@ -65,7 +65,7 @@ export async function GET(
   return new Response(body, {
     headers: {
       'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${subject.code.replace(/[^\w.-]/g, '_')}-pliki.csv"`,
+      'Content-Disposition': `attachment; filename="${subject.code.replace(/[^\w.-]/g, '_')}-files.csv"`,
       'Cache-Control': 'private, no-store',
     },
   });

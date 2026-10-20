@@ -47,7 +47,7 @@ describe('highlightParts', () => {
 describe('static maps', () => {
   it('has three reports and the column labels', () => {
     expect(REPORT_META.map((r) => r.icon)).toEqual(['Books', 'Medal', 'Exam']);
-    expect(REPORT_LABELS.liczba_plikow).toBe('Files');
+    expect(REPORT_LABELS.files).toBe('Files');
     expect(REPORT_LABELS.created_at).toBe('Added');
   });
   it('fileIcon and statusBadge', () => {
