@@ -273,10 +273,16 @@ describe('runPlanSyncOnce with an exam feed', () => {
     '',
   ].join('\r\n');
 
-  function fakeFetch(exam: 'ok' | 'fail', seen: string[]): typeof fetch {
+  function fakeFetch(
+    exam: 'ok' | 'fail',
+    seen: string[],
+    classes: 'ok' | 'fail' = 'ok',
+  ): typeof fetch {
     return (async (input: string | URL | Request) => {
       const url = String(input);
       seen.push(url);
+      if (url === CLASS_URL && classes === 'fail')
+        throw new Error(`connect failed for ${url}`);
       if (url === EXAM_URL) {
         if (exam === 'fail') throw new Error(`connect failed for ${url}`);
         return new Response(examIcs, {
@@ -338,5 +344,30 @@ describe('runPlanSyncOnce with an exam feed', () => {
     const rows = await db.select().from(classSessions);
     expect(rows.length).toBeGreaterThan(0);
     expect(rows.every((r) => r.source === 'classes')).toBe(true);
+  });
+
+  it('a class feed failure is recorded while the exam feed is still written', async () => {
+    await db.delete(classSessions);
+    const before = await getPlanSyncStatus(db);
+    expect(before.lastOkAt).not.toBeNull();
+    const startedAt = new Date('2026-10-14T10:00:00Z');
+    await runPlanSyncOnce({
+      db,
+      url: CLASS_URL,
+      examUrl: EXAM_URL,
+      fetchImpl: fakeFetch('ok', [], 'fail'),
+      now: () => startedAt,
+    });
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastRunAt).toEqual(startedAt);
+    expect(s.lastOkAt).toEqual(before.lastOkAt);
+    expect(s.lastError).toBe(
+      'Could not download the timetable from unitime.example.edu',
+    );
+    expect(s.lastError).not.toContain('secret');
+    const rows = await db.select().from(classSessions);
+    expect(rows.map((r) => [r.uid, r.kind, r.source])).toEqual([
+      ['700000001', 'exam', 'exams'],
+    ]);
   });
 });

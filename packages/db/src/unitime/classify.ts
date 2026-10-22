@@ -9,6 +9,8 @@ export interface ParsedLecturer {
 }
 
 export interface ClassifiedEvent {
+  /** UniTime summary the subject is matched by (an exam prefix in it removed). */
+  unitimeName: string;
   subjectName: string;
   yearOfStudy: number | null;
   /** 'exam' for exam entries; their class `kind` is always null. */
@@ -51,9 +53,11 @@ function startsWithPrefix(folded: string, prefix: string): string | null {
   return /^\p{L}/u.test(after) ? null : after;
 }
 
-function isExamText(text: string): boolean {
+/** Length of the exam prefix `text` (trimmed) starts with, or null. */
+function examPrefixLength(text: string): number | null {
   const folded = stripMarks(text.trim().toLowerCase());
-  return EXAM_PREFIXES.some((p) => startsWithPrefix(folded, p) !== null);
+  const p = EXAM_PREFIXES.find((x) => startsWithPrefix(folded, x) !== null);
+  return p === undefined ? null : p.length;
 }
 
 const TITLE_TOKENS = new Set(['prof.', 'dr', 'hab.', 'inż.', 'mgr', 'lic.']);
@@ -110,16 +114,28 @@ function classifyLine(line: string): {
 }
 
 export function classifyEvent(ev: IcsEvent): ClassifiedEvent {
-  const ym = /\s*\((\d+)\s*rok\)\s*$/i.exec(ev.summary);
-  const subjectName = (ym ? ev.summary.slice(0, ym.index) : ev.summary)
-    .replace(/\s+/g, ' ')
-    .trim();
   const lines = ev.description.split('\n');
   const first = (lines[0] ?? '').trim();
-  const exam = isExamText(first) || isExamText(ev.summary);
-  const c = exam
-    ? { kind: null, groupNumber: null, groupName: null }
-    : classifyLine(first);
+  const line = classifyLine(first);
+  const examFromLine = examPrefixLength(first) !== null;
+  // The summary counts only when the line names no class type, so a class of
+  // a subject called "Egzamin…" stays a class.
+  const summaryPrefix =
+    !examFromLine && line.kind === null ? examPrefixLength(ev.summary) : null;
+  const exam = examFromLine || summaryPrefix !== null;
+  // "Egzamin: Algebra liniowa (1rok)" files under "Algebra liniowa (1rok)".
+  const unitimeName =
+    summaryPrefix === null
+      ? ev.summary
+      : ev.summary
+          .trim()
+          .slice(summaryPrefix)
+          .replace(/^[\s:\-\u2013\u2014]+/, '') || ev.summary;
+  const ym = /\s*\((\d+)\s*rok\)\s*$/i.exec(unitimeName);
+  const subjectName = (ym ? unitimeName.slice(0, ym.index) : unitimeName)
+    .replace(/\s+/g, ' ')
+    .trim();
+  const c = exam ? { kind: null, groupNumber: null, groupName: null } : line;
   let lecturer: ParsedLecturer | null = null;
   if (ev.organizer?.cn) {
     lecturer = parseLecturerCn(ev.organizer.cn, ev.organizer.email);
@@ -128,6 +144,7 @@ export function classifyEvent(ev: IcsEvent): ClassifiedEvent {
     if (second) lecturer = parseLecturerCn(second, null);
   }
   return {
+    unitimeName,
     subjectName,
     yearOfStudy: ym ? Number(ym[1]) : null,
     sessionKind: exam ? 'exam' : 'class',

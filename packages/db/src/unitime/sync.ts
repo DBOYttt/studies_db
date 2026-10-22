@@ -15,7 +15,7 @@ import {
   semesterFor,
   subjectCode,
 } from './classify.js';
-import { expandOccurrences, type IcsEvent, parseIcs } from './ics.js';
+import { expandOccurrences, parseIcs } from './ics.js';
 
 export interface SyncStats {
   created: number;
@@ -97,8 +97,8 @@ class Resolver {
     private takenCodes: Set<string>,
   ) {}
 
-  async subject(ev: IcsEvent, c: ClassifiedEvent): Promise<number> {
-    const unitimeName = ev.summary.slice(0, 200);
+  async subject(c: ClassifiedEvent): Promise<number> {
+    const unitimeName = c.unitimeName.slice(0, 200);
     const cached = this.subjectIds.get(unitimeName);
     if (cached !== undefined) return cached;
     const [found] = await this.db
@@ -275,7 +275,7 @@ export async function syncTimetable(
 
     const desired = new Map<string, SessionRow>();
     for (const { ev, c, occurrences } of planned) {
-      const subjectId = await r.subject(ev, c);
+      const subjectId = await r.subject(c);
       const classId = await r.class(subjectId, c);
       const groupId = await r.group(classId, c);
       const lecturerId = c.lecturer ? await r.lecturer(c.lecturer) : null;

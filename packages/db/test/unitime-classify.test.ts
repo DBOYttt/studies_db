@@ -81,11 +81,44 @@ describe('classifyEvent', () => {
     },
   );
 
-  it('recognises an exam by the start of the summary', () => {
+  it.each([
+    'Egzamin: Algebra liniowa (1rok)',
+    'Egzamin - Algebra liniowa (1rok)',
+    'Exam \u2013 Algebra liniowa (1rok)',
+    'Zaliczenie \u2014 Algebra liniowa (1rok)',
+    'egz. Algebra liniowa (1rok)',
+  ])('exam from the summary %s files under the subject', (summary) => {
+    const r = classifyEvent(ev({ summary, description: 'Pisemny' }));
+    expect(r.sessionKind).toBe('exam');
+    expect(r.unitimeName).toBe('Algebra liniowa (1rok)');
+    expect(r.subjectName).toBe('Algebra liniowa');
+    expect(r.yearOfStudy).toBe(1);
+  });
+
+  it('a class of a subject named like an exam stays a class', () => {
     const r = classifyEvent(
-      ev({ summary: 'Egzamin: Algebra liniowa (1rok)', description: '' }),
+      ev({ summary: 'Egzaminy kliniczne (2rok)', description: 'Wykład 1' }),
+    );
+    expect(r.sessionKind).toBe('class');
+    const s = classifyEvent(
+      ev({ summary: 'Exam techniques (1rok)', description: 'Laboratorium 2' }),
+    );
+    expect(s).toMatchObject({
+      sessionKind: 'class',
+      kind: 'laboratorium',
+      groupNumber: 2,
+      unitimeName: 'Exam techniques (1rok)',
+      subjectName: 'Exam techniques',
+    });
+  });
+
+  it('an exam from the line keeps the subject name', () => {
+    const r = classifyEvent(
+      ev({ summary: 'Zaliczenie fizyki (1rok)', description: 'Egzamin 1' }),
     );
     expect(r.sessionKind).toBe('exam');
+    expect(r.unitimeName).toBe('Zaliczenie fizyki (1rok)');
+    expect(r.subjectName).toBe('Zaliczenie fizyki');
   });
 
   it('classes stay sessionKind class', () => {

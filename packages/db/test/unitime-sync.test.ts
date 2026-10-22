@@ -528,6 +528,47 @@ describe('syncTimetable exam sessions', () => {
     expect(after?.kind).toBe('exam');
   });
 
+  it('an exam detected from the summary files under the existing subject', async () => {
+    const subjectsBefore = await count(db, subjects);
+    const summaryExam = vevent({
+      uid: '800000003',
+      start: '20270208T090000',
+      end: '20270208T110000',
+      summary: 'Egzamin: Algebra liniowa (1rok)',
+      description: 'Pisemny',
+    });
+    const moved = MAIN_EXAM.replace(
+      'DTEND;TZID=Europe/Warsaw:20270201T110000',
+      'DTEND;TZID=Europe/Warsaw:20270201T120000',
+    ).replace('LOCATION:D-1 101', 'LOCATION:B-2 7');
+    await syncTimetable(db, calendar(LECTURE, moved, summaryExam));
+    expect(await count(db, subjects)).toBe(subjectsBefore);
+    const s = await sessionsByUid(db);
+    expect(s.get('800000003')).toMatchObject({ kind: 'exam', classId: null });
+    expect(s.get('800000003')?.subjectId).toBe(s.get('800000001')?.subjectId);
+  });
+
+  it('exam feed entries keep their subject name', async () => {
+    const before = await count(db, subjects);
+    const feedOnly = vevent({
+      uid: '800000103',
+      start: '20270210T090000',
+      end: '20270210T110000',
+      summary: 'Zaliczeniowa fizyka (1rok)',
+      description: 'Pisemny',
+    });
+    await syncTimetable(db, calendar(feedOnly), {
+      allExams: true,
+      source: 'exams',
+    });
+    expect(await count(db, subjects)).toBe(before + 1);
+    const [subj] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.unitimeName, 'Zaliczeniowa fizyka (1rok)'));
+    expect(subj?.name).toBe('Zaliczeniowa fizyka');
+  });
+
   it('an empty exam feed changes nothing', async () => {
     const before = await snapshot(db);
     const stats = await syncTimetable(db, calendar(), {
