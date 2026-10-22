@@ -12,6 +12,10 @@
 import type mysql from 'mysql2/promise';
 import { type ClassKind, type EventKind, KIND_ORDER } from './constants.js';
 import type { MyGroups } from './my-groups.js';
+import type { PlanBadge } from './plan-annotate.js';
+
+export * from './plan-annotate.js';
+export * from './plan-marks.js';
 
 export type IsoWeek = { year: number; week: number };
 
@@ -192,6 +196,12 @@ export interface PlanSession {
   eventKind?: EventKind;
   eventTitle?: string;
   allDay?: boolean;
+  /** Class sessions only: 'exam' for exam sessions (missing = 'class'). */
+  sessionKind?: 'class' | 'exam';
+  /** Set by `annotateWeek`: Test / Entry quiz markers of a class session. */
+  badges?: PlanBadge[];
+  /** Set by `annotateWeek`: the `egzamin` event merged into this exam session. */
+  linkedEventId?: number;
 }
 
 const isId = (n: unknown): n is number =>
@@ -392,6 +402,7 @@ export const toPlanSession = (r: mysql.RowDataPacket): PlanSession => ({
   room: strOrNull(r.room),
   label: String(r.label ?? ''),
   status: r.status === 'cancelled' ? 'cancelled' : 'confirmed',
+  sessionKind: r.kind === 'exam' ? 'exam' : 'class',
 });
 
 /** Week-sessions SELECT (v_class_sessions + v_subjects) and its bound values. */
@@ -410,7 +421,7 @@ export function weekSessionsQuery(
     'SELECT cs.id, cs.starts_at, cs.ends_at, cs.subject_id, cs.subject_name,',
     '       s.code AS subject_code, cs.class_id, cs.class_kind, cs.class_name,',
     '       cs.group_id, cs.group_name, cs.lecturer_id, cs.lecturer_name,',
-    '       cs.room, cs.label, cs.status',
+    '       cs.room, cs.label, cs.status, cs.kind',
     'FROM v_class_sessions cs',
     'JOIN v_subjects s ON s.id = cs.subject_id',
     `WHERE ${where.join(' AND ')}`,

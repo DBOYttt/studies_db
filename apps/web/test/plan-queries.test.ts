@@ -191,6 +191,7 @@ describe('listWeekSessions', () => {
       room: 'D-10 101',
       label: 'Wykład',
       status: 'confirmed',
+      sessionKind: 'class',
     });
     expect(rows.find((r) => r.id === id.ex2)).toMatchObject({
       classKind: 'cwiczenia',
