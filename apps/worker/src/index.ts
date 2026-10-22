@@ -45,6 +45,7 @@ try {
     startPlanSyncLoop({
       db,
       url: process.env.UNITIME_ICAL_URL || undefined,
+      examUrl: process.env.UNITIME_EXAM_ICAL_URL || undefined,
       signal: ac.signal,
     }),
   ]);

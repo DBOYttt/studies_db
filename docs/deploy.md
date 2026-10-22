@@ -32,7 +32,7 @@ can read and delete the files). Without it every upload answers 503. If you run 
 create `uploads/` yourself with an owner that matches the web process.
 
 The `worker` service does not load `.env` as a whole: compose passes it only `DATABASE_URL`,
-`UNITIME_ICAL_URL` and the optional `WORKER_CONCURRENCY` / `SOFFICE_BIN` / `PDFTOTEXT_BIN` (and forces
+`UNITIME_ICAL_URL` and the optional `UNITIME_EXAM_ICAL_URL` / `WORKER_CONCURRENCY` / `SOFFICE_BIN` / `PDFTOTEXT_BIN` (and forces
 `STORAGE_DIR`). It opens files named by DB rows, so it should not hold the Discord token or other secrets.
 If you add a worker setting, list it under `worker.environment` in `compose.yaml`.
 
@@ -146,6 +146,12 @@ worker syncs at start-up only if the last run is older than 6 hours, then every 
 minute after an admin runs the bot's `/plan sync` (the only way to request a sync; the web UI has none).
 The URL is a secret: it is never stored in the database or logged (only its host is), so keep it out of
 version control. Without it the sync is disabled and the worker logs that once at start.
+
+The optional `UNITIME_EXAM_ICAL_URL` is a second UniTime feed (the exam timetable), equally secret. The
+worker reads it right after the main feed in the same runs and stores every entry as an exam session. Each
+feed only removes its own rows, and an empty exam feed changes nothing. If this feed fails, the main feed
+is still synced and the status shows `Exam timetable: <error>`. It is used only when `UNITIME_ICAL_URL`
+is set too.
 
 **Migrating an existing database to 0006.** Migration 0006 adds `UNIQUE(email)` to `lecturers`; if
 duplicates exist it fails and leaves the migration half-applied. Before migrating, run

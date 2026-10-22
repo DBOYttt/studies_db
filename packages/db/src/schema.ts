@@ -26,6 +26,7 @@ import {
   CLASS_MARK_KINDS,
   EVENT_KIND_KEYS,
   SESSION_KINDS,
+  SESSION_SOURCES,
 } from './constants.js';
 import type { JobType, PreviewKind } from './files.js';
 
@@ -43,7 +44,9 @@ export {
   PUBLIC_VIEWS,
   type PublicView,
   SESSION_KINDS,
+  SESSION_SOURCES,
   type SessionKind,
+  type SessionSource,
 } from './constants.js';
 
 const JOB_TYPES = [
@@ -332,6 +335,7 @@ export const classSessions = mysqlTable(
       .notNull()
       .default('confirmed'),
     kind: mysqlEnum('kind', SESSION_KINDS).notNull().default('class'),
+    source: mysqlEnum('source', SESSION_SOURCES).notNull().default('classes'),
     sequence: int('sequence').notNull().default(0),
     updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   },

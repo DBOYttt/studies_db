@@ -105,6 +105,10 @@ export type ClassMarkKind = (typeof CLASS_MARK_KINDS)[number];
 export const SESSION_KINDS = ['class', 'exam'] as const;
 export type SessionKind = (typeof SESSION_KINDS)[number];
 
+/** Which UniTime feed a class_sessions row came from (each sync only removes its own). */
+export const SESSION_SOURCES = ['classes', 'exams'] as const;
+export type SessionSource = (typeof SESSION_SOURCES)[number];
+
 export const PUBLIC_VIEWS = [
   'v_subjects',
   'v_lecturers',

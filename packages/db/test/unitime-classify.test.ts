@@ -55,6 +55,48 @@ describe('classifyEvent', () => {
     expect(r.label).toBe(desc);
   });
 
+  it.each([
+    'Egzamin',
+    'Egzamin 1',
+    'egz. pisemny',
+    'Egz.',
+    'Exam',
+    'Zaliczenie',
+    'Zaliczenie 2',
+    'Kolokwium zaliczeniowe',
+  ])('%s is an exam', (desc) => {
+    const r = classifyEvent(ev({ description: desc }));
+    expect(r.sessionKind).toBe('exam');
+    expect(r.kind).toBeNull();
+    expect(r.groupNumber).toBeNull();
+    expect(r.label).toBe(desc);
+  });
+
+  it.each(['Egzaminatorium', 'Examination', 'Zaliczeniowy', 'Kolokwium 1'])(
+    '%s is not an exam',
+    (desc) => {
+      expect(classifyEvent(ev({ description: desc })).sessionKind).toBe(
+        'class',
+      );
+    },
+  );
+
+  it('recognises an exam by the start of the summary', () => {
+    const r = classifyEvent(
+      ev({ summary: 'Egzamin: Algebra liniowa (1rok)', description: '' }),
+    );
+    expect(r.sessionKind).toBe('exam');
+  });
+
+  it('classes stay sessionKind class', () => {
+    expect(classifyEvent(ev({ description: 'Wykład 1' })).sessionKind).toBe(
+      'class',
+    );
+    expect(
+      classifyEvent(ev({ description: 'Konsultacje 1' })).sessionKind,
+    ).toBe('class');
+  });
+
   it('extracts subject, year, lecturer, room', () => {
     const r = classifyEvent(
       ev({

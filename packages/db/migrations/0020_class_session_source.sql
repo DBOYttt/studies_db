@@ -1,0 +1,1 @@
+ALTER TABLE `class_sessions` ADD `source` enum('classes','exams') DEFAULT 'classes' NOT NULL;

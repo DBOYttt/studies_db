@@ -374,3 +374,167 @@ describe('plan sync status', () => {
     expect((await getPlanSyncStatus(db)).lastError).toBeNull();
   });
 });
+
+function vevent(o: {
+  uid: string;
+  start: string;
+  end: string;
+  summary: string;
+  description: string;
+  location?: string;
+}): string {
+  return [
+    'BEGIN:VEVENT',
+    `DTSTART;TZID=Europe/Warsaw:${o.start}`,
+    `DTEND;TZID=Europe/Warsaw:${o.end}`,
+    `LOCATION:${o.location ?? 'D-1 101'}`,
+    'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    `UID:${o.uid}`,
+    `SUMMARY:${o.summary}`,
+    `DESCRIPTION:${o.description}`,
+    'ORGANIZER;CN="dr Nowak, A":mailto:nowak@example.edu',
+    'END:VEVENT',
+  ].join('\r\n');
+}
+
+function calendar(...events: string[]): string {
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'X-WR-CALNAME:O-TPR-1 S1 harmonogram dla Semestr zimowy 2026',
+    ...events,
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+}
+
+const LECTURE = vevent({
+  uid: '800000001',
+  start: '20261006T080000',
+  end: '20261006T093000',
+  summary: 'Algebra liniowa (1rok)',
+  description: 'Wykład 1',
+});
+const MAIN_EXAM = vevent({
+  uid: '800000002',
+  start: '20270201T090000',
+  end: '20270201T110000',
+  summary: 'Algebra liniowa (1rok)',
+  description: 'Egzamin 1',
+});
+const FEED_EXAM = vevent({
+  uid: '800000101',
+  start: '20270203T090000',
+  end: '20270203T110000',
+  summary: 'Algebra liniowa (1rok)',
+  description: 'Wykład 1',
+  location: 'A-0 1',
+});
+
+async function sessionsByUid(db: Db) {
+  const rows = await db.select().from(classSessions);
+  return new Map(rows.map((r) => [r.uid, r]));
+}
+
+describe('syncTimetable exam sessions', () => {
+  let db: Db;
+  beforeAll(async () => {
+    db = await resetTestDb();
+  });
+  afterAll(async () => {
+    await closeTestDb(db);
+  });
+
+  it('stores the kinds of a class feed with one class and one exam', async () => {
+    const stats = await syncTimetable(db, calendar(LECTURE, MAIN_EXAM));
+    expect(stats.created).toBe(2);
+    expect(stats.warnings).toEqual([]);
+    const s = await sessionsByUid(db);
+    expect(s.get('800000001')).toMatchObject({
+      kind: 'class',
+      source: 'classes',
+    });
+    expect(s.get('800000001')?.classId).not.toBeNull();
+    expect(s.get('800000002')).toMatchObject({
+      kind: 'exam',
+      source: 'classes',
+      classId: null,
+      groupId: null,
+      label: 'Egzamin 1',
+      room: 'D-1 101',
+    });
+    expect(s.get('800000002')?.lecturerId).not.toBeNull();
+    expect(s.get('800000002')?.subjectId).toBe(s.get('800000001')?.subjectId);
+  });
+
+  it('an exam feed with allExams stores every entry as an exam', async () => {
+    const stats = await syncTimetable(db, calendar(FEED_EXAM), {
+      allExams: true,
+      source: 'exams',
+    });
+    expect(stats).toMatchObject({ created: 1, deleted: 0, warnings: [] });
+    const s = await sessionsByUid(db);
+    expect(s.get('800000101')).toMatchObject({
+      kind: 'exam',
+      source: 'exams',
+      classId: null,
+      room: 'A-0 1',
+    });
+    // The class feed rows are untouched.
+    expect(s.get('800000001')?.source).toBe('classes');
+    expect(s.get('800000002')?.source).toBe('classes');
+    expect(s.size).toBe(3);
+  });
+
+  it('a class feed sync does not cancel exam feed rows', async () => {
+    const stats = await syncTimetable(db, calendar(LECTURE, MAIN_EXAM));
+    expect(stats).toMatchObject({ created: 0, updated: 0, deleted: 0 });
+    expect((await sessionsByUid(db)).has('800000101')).toBe(true);
+  });
+
+  it('an exam feed sync does not cancel class feed rows', async () => {
+    const other = vevent({
+      uid: '800000102',
+      start: '20270205T090000',
+      end: '20270205T110000',
+      summary: 'Algebra liniowa (1rok)',
+      description: 'Egzamin poprawkowy',
+    });
+    const stats = await syncTimetable(db, calendar(other), {
+      allExams: true,
+      source: 'exams',
+    });
+    expect(stats).toMatchObject({ created: 1, deleted: 1 });
+    const s = await sessionsByUid(db);
+    expect(s.has('800000101')).toBe(false);
+    expect(s.has('800000102')).toBe(true);
+    expect(s.has('800000001')).toBe(true);
+    expect(s.has('800000002')).toBe(true);
+  });
+
+  it('a rescheduled exam is updated in place', async () => {
+    const before = (await sessionsByUid(db)).get('800000002');
+    const moved = MAIN_EXAM.replace(
+      'DTEND;TZID=Europe/Warsaw:20270201T110000',
+      'DTEND;TZID=Europe/Warsaw:20270201T120000',
+    ).replace('LOCATION:D-1 101', 'LOCATION:B-2 7');
+    const stats = await syncTimetable(db, calendar(LECTURE, moved));
+    expect(stats).toMatchObject({ created: 0, updated: 1, deleted: 0 });
+    const after = (await sessionsByUid(db)).get('800000002');
+    expect(after?.id).toBe(before?.id);
+    expect(after?.room).toBe('B-2 7');
+    expect(after?.endsAt.toISOString()).toBe('2027-02-01T12:00:00.000Z');
+    expect(after?.kind).toBe('exam');
+  });
+
+  it('an empty exam feed changes nothing', async () => {
+    const before = await snapshot(db);
+    const stats = await syncTimetable(db, calendar(), {
+      allExams: true,
+      source: 'exams',
+    });
+    expect(stats).toMatchObject({ created: 0, updated: 0, deleted: 0 });
+    expect(await snapshot(db)).toEqual(before);
+  });
+});

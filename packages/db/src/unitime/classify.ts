@@ -1,4 +1,4 @@
-import type { ClassKind } from '../constants.js';
+import type { ClassKind, SessionKind } from '../constants.js';
 import { stripMarks } from '../search.js';
 import type { IcsEvent } from './ics.js';
 
@@ -11,6 +11,8 @@ export interface ParsedLecturer {
 export interface ClassifiedEvent {
   subjectName: string;
   yearOfStudy: number | null;
+  /** 'exam' for exam entries; their class `kind` is always null. */
+  sessionKind: SessionKind;
   kind: ClassKind | null;
   groupNumber: number | null;
   groupName: string | null;
@@ -33,6 +35,26 @@ const PREFIXES: [string, ClassKind][] = [
   ['cwa', 'cwiczenia'],
   ['cwl', 'laboratorium'],
 ].sort((a, b) => b[0].length - a[0].length) as [string, ClassKind][];
+
+// Exam entries, matched like PREFIXES (longest first, not followed by a letter).
+const EXAM_PREFIXES = [
+  'kolokwium zaliczeniowe',
+  'zaliczenie',
+  'egzamin',
+  'exam',
+  'egz.',
+].sort((a, b) => b.length - a.length);
+
+function startsWithPrefix(folded: string, prefix: string): string | null {
+  if (!folded.startsWith(prefix)) return null;
+  const after = folded.slice(prefix.length);
+  return /^\p{L}/u.test(after) ? null : after;
+}
+
+function isExamText(text: string): boolean {
+  const folded = stripMarks(text.trim().toLowerCase());
+  return EXAM_PREFIXES.some((p) => startsWithPrefix(folded, p) !== null);
+}
 
 const TITLE_TOKENS = new Set(['prof.', 'dr', 'hab.', 'inż.', 'mgr', 'lic.']);
 
@@ -79,9 +101,8 @@ function classifyLine(line: string): {
     };
   }
   for (const [prefix, kind] of PREFIXES) {
-    if (!folded.startsWith(prefix)) continue;
-    const after = folded.slice(prefix.length);
-    if (/^\p{L}/u.test(after)) continue;
+    const after = startsWithPrefix(folded, prefix);
+    if (after === null) continue;
     const m = /^\s*(\d+)/.exec(after);
     return { kind, groupNumber: m ? Number(m[1]) : null, groupName: null };
   }
@@ -95,7 +116,10 @@ export function classifyEvent(ev: IcsEvent): ClassifiedEvent {
     .trim();
   const lines = ev.description.split('\n');
   const first = (lines[0] ?? '').trim();
-  const c = classifyLine(first);
+  const exam = isExamText(first) || isExamText(ev.summary);
+  const c = exam
+    ? { kind: null, groupNumber: null, groupName: null }
+    : classifyLine(first);
   let lecturer: ParsedLecturer | null = null;
   if (ev.organizer?.cn) {
     lecturer = parseLecturerCn(ev.organizer.cn, ev.organizer.email);
@@ -106,6 +130,7 @@ export function classifyEvent(ev: IcsEvent): ClassifiedEvent {
   return {
     subjectName,
     yearOfStudy: ym ? Number(ym[1]) : null,
+    sessionKind: exam ? 'exam' : 'class',
     ...c,
     label: first.slice(0, 100),
     lecturer,
