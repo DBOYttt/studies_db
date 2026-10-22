@@ -10,8 +10,9 @@
  * - A confirmed class session whose class (and group, or every group) has an
  *   entry-quiz mark gets an Entry quiz badge, except on the mark's skipped
  *   dates.
- * - An `egzamin` event of the same subject starting within 60 minutes of an
- *   exam session is shown once, as the exam session with `linkedEventId`.
+ * - An `egzamin` event of the same subject starting within 60 minutes of a
+ *   confirmed exam session is shown once, as the exam session with
+ *   `linkedEventId` (a cancelled exam leaves the event a normal block).
  */
 import type { PlanSession } from './plan.js';
 
@@ -112,7 +113,7 @@ export function annotateWeek(
   const merged = new Set<number>();
   const linked = new Map<number, number>();
   for (const x of classes) {
-    if (x.sessionKind !== 'exam') continue;
+    if (x.sessionKind !== 'exam' || x.status !== 'confirmed') continue;
     let best: PlanSession | null = null;
     let bestDiff = Number.POSITIVE_INFINITY;
     for (const e of events) {
@@ -149,7 +150,9 @@ export function annotateWeek(
     const quiz = entryQuizFor(s, marks);
     if (quiz)
       list.push({ kind: 'entry_quiz', markId: quiz.id, note: quiz.note });
-    const copy: PlanSession = { ...s };
+    // Annotations of a previous run are replaced, never kept.
+    const { badges: _stale, linkedEventId: _staleLink, ...rest } = s;
+    const copy: PlanSession = rest;
     if (list.length > 0) copy.badges = list;
     const link = linked.get(s.id);
     if (link !== undefined) copy.linkedEventId = link;

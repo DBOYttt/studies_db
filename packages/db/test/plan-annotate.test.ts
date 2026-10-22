@@ -153,6 +153,22 @@ describe('annotateWeek: Test badges', () => {
     expect(byId(out, e)).toBeDefined();
   });
 
+  it('a group kolokwium does not badge a group-less session of the class', () => {
+    const s = session(MON10, { groupId: null, groupName: null });
+    const e = event(MON10, { groupId: G1 });
+    const out = annotateWeek([s, e], []);
+    expect(byId(out, s)?.badges).toBeUndefined();
+    expect(byId(out, e)).toBeDefined();
+  });
+
+  it('an event after midnight of a session spanning midnight is kept', () => {
+    const s = session(W(2026, 10, 19, 23), { endsAt: W(2026, 10, 20, 1) });
+    const e = event(W(2026, 10, 20, 0, 30));
+    const out = annotateWeek([s, e], []);
+    expect(byId(out, s)?.badges).toBeUndefined();
+    expect(byId(out, e)).toBeDefined();
+  });
+
   it('a trip inside a session is kept', () => {
     const s = session(MON10);
     const e = event(MON10, { eventKind: 'wyjazd' });
@@ -241,6 +257,16 @@ describe('annotateWeek: Entry quiz badges', () => {
     expect(out[0].badges?.map((b) => b.kind)).toEqual(['test', 'entry_quiz']);
   });
 
+  it('drops stale badges and links of the input', () => {
+    const s = session(MON10, {
+      badges: [{ kind: 'entry_quiz', markId: 1, note: null }],
+    });
+    const x = exam(W(2026, 2, 2, 9), { linkedEventId: 77 });
+    const out = annotateWeek([s, x], []);
+    expect(byId(out, s)?.badges).toBeUndefined();
+    expect(byId(out, x)?.linkedEventId).toBeUndefined();
+  });
+
   it('does not change its input', () => {
     const s = session(MON10);
     annotateWeek([s, event(MON10)], [mark()]);
@@ -260,6 +286,15 @@ describe('annotateWeek: exam dedup', () => {
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({ id: x.id, linkedEventId: e.id });
     expect(out[0].badges).toBeUndefined();
+  });
+
+  it('a cancelled exam session neither hides nor links the event', () => {
+    const x = exam(W(2026, 2, 2, 9), { status: 'cancelled' });
+    const e = event(W(2026, 2, 2, 9), { eventKind: 'egzamin' });
+    const out = annotateWeek([x, e], []);
+    expect(out).toHaveLength(2);
+    expect(byId(out, x)?.linkedEventId).toBeUndefined();
+    expect(byId(out, e)).toBeDefined();
   });
 
   it('an egzamin event more than 60 minutes away is kept', () => {
