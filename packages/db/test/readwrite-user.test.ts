@@ -45,6 +45,15 @@ describe('studies_rw grants', () => {
     });
   });
 
+  it('may write class marks and skips and read their views', async () => {
+    await asRw(async (c) => {
+      await c.query("UPDATE class_marks SET note = 'x' WHERE id = -1");
+      await c.query('DELETE FROM class_mark_skips WHERE id = -1');
+      await c.query('SELECT * FROM v_class_marks');
+      await c.query('SELECT * FROM v_class_mark_skips');
+    });
+  });
+
   const denied = [
     'SELECT * FROM users',
     'SELECT * FROM sessions',

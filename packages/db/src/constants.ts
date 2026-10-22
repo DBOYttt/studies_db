@@ -97,6 +97,14 @@ export const EVENT_KINDS: Record<
 /** Symbol for a recurring series. */
 export const SERIES_SYMBOL = '🔁';
 
+/** Weekly marks on a class (or one group of it), see `class_marks`. */
+export const CLASS_MARK_KINDS = ['wejsciowka'] as const;
+export type ClassMarkKind = (typeof CLASS_MARK_KINDS)[number];
+
+/** `class_sessions.kind`: a regular class or an exam from the timetable feed. */
+export const SESSION_KINDS = ['class', 'exam'] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
 export const PUBLIC_VIEWS = [
   'v_subjects',
   'v_lecturers',
@@ -111,6 +119,8 @@ export const PUBLIC_VIEWS = [
   'v_users',
   'v_class_sessions',
   'v_events',
+  'v_class_marks',
+  'v_class_mark_skips',
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];
@@ -134,6 +144,8 @@ export const CONTENT_TABLES = [
   'events',
   'event_series',
   'event_topics',
+  'class_marks',
+  'class_mark_skips',
 ] as const;
 
 /**

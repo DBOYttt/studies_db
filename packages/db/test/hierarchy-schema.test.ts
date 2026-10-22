@@ -134,6 +134,8 @@ describe('hierarchy schema', () => {
       'v_users',
       'v_class_sessions',
       'v_events',
+      'v_class_marks',
+      'v_class_mark_skips',
     ]);
   });
 

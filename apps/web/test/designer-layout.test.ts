@@ -119,7 +119,24 @@ const columns: Record<PublicView, string[]> = {
     'room',
     'label',
     'status',
+    'kind',
   ],
+  v_class_marks: [
+    'id',
+    'class_id',
+    'subject_id',
+    'class_kind',
+    'class_name',
+    'group_id',
+    'group_name',
+    'kind',
+    'note',
+    'version',
+    'created_by',
+    'created_at',
+    'updated_at',
+  ],
+  v_class_mark_skips: ['id', 'mark_id', 'on_date', 'created_by', 'created_at'],
 };
 
 const rel = (

@@ -40,6 +40,8 @@ export const DESIGNER_DEFAULT_POS: Record<PublicView, [number, number]> = {
   v_files: [940, 250],
   v_class_sessions: [940, 640],
   v_events: [480, 640],
+  v_class_marks: [20, 640],
+  v_class_mark_skips: [250, 640],
 };
 
 export type DesignerHighlight = {

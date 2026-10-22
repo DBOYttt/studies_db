@@ -127,6 +127,20 @@
       "when": 1792357622575,
       "tag": "0017_event_version",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "5",
+      "when": 1792668093658,
+      "tag": "0018_class_marks",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "5",
+      "when": 1792668094315,
+      "tag": "0019_class_marks_views",
+      "breakpoints": true
     }
   ]
 }
