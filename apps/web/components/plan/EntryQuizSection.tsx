@@ -106,8 +106,9 @@ function ClassBlock({
 
   const run: Run = (action, after) => {
     if (pending) return;
+    // Outside the transition so the same refusal again is a new alert.
+    setError(null);
     start(async () => {
-      setError(null);
       const err = await markActionError(action);
       if (err) {
         setError(err);
@@ -133,8 +134,7 @@ function ClassBlock({
       )}
       {c.marks.map((m) => (
         <MarkRow
-          // A new version (after a save) resets the note field.
-          key={`${m.id}:${m.version}`}
+          key={m.id}
           m={m}
           noteMax={noteMax}
           pending={pending}
@@ -158,7 +158,9 @@ function ClassBlock({
                 <button
                   type="button"
                   aria-disabled={pending}
-                  onClick={() => run(() => restoreMarkAction(m.id))}
+                  onClick={() =>
+                    run(() => restoreMarkAction(m.id), focusHeading)
+                  }
                   className={btn}
                 >
                   Restore
@@ -234,10 +236,22 @@ function MarkRow({
   focusHeading: () => void;
 }) {
   const [note, setNote] = useState(m.note);
+  // A new version (a save here or elsewhere) shows the stored note; the
+  // row keeps its identity so focus stays on "Save note".
+  const [seenVersion, setSeenVersion] = useState(m.version);
+  if (seenVersion !== m.version) {
+    setSeenVersion(m.version);
+    setNote(m.note);
+  }
   const uid = useId();
   const changed = note.trim() !== m.note;
   return (
-    <div className="flex flex-col gap-2 rounded border border-line bg-surface px-2.5 py-2">
+    // biome-ignore lint/a11y/useSemanticElements: a fieldset would restyle the row; the group names its controls
+    <div
+      role="group"
+      aria-label={`Entry quiz: ${m.groupLabel}`}
+      className="flex flex-col gap-2 rounded border border-line bg-surface px-2.5 py-2"
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <span className="font-semibold">On · {m.groupLabel}</span>
         <button

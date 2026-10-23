@@ -19,6 +19,7 @@ import {
   syncFailed,
   toWeekSession,
   wallLongDate,
+  wallShortDate,
   wallSqlText,
   wallTime,
   weekHeading,
@@ -119,6 +120,8 @@ describe('weekNav', () => {
 describe('labels', () => {
   it('formats wall time from UTC fields', () => {
     expect(wallTime(W(2026, 10, 13, 7, 5))).toBe('07:05');
+    // Late evening wall time keeps its own day.
+    expect(wallShortDate(W(2026, 10, 21, 23, 30))).toBe('Wed 21 Oct');
     expect(wallSqlText('2026-10-13T08:00:00.000Z')).toBe('2026-10-13 08:00:00');
     expect(dayHeader(W(2026, 10, 13))).toEqual({
       name: 'Tue',

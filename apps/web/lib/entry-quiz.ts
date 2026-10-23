@@ -3,7 +3,7 @@
  * the shown classes as plain, serialisable rows for the client component.
  */
 import { type ClassMark, type Db, listMarks } from '@studies/db';
-import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
+import { wallShortDate } from './plan-view';
 
 export type EntryQuizMarkView = {
   id: number;
@@ -28,8 +28,7 @@ export type EntryQuizClassView = {
 
 /** `Wed 21 Oct` of a `YYYY-MM-DD` date. */
 export function skipDateLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00Z`);
-  return `${WEEKDAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+  return wallShortDate(new Date(`${date}T00:00:00Z`));
 }
 
 /** Pure part of `loadEntryQuiz` (marks may include deleted ones). */

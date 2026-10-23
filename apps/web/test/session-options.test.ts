@@ -11,6 +11,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
 import {
   getSessionOption,
+  sessionFormFields,
   upcomingSessionOptions,
 } from '../lib/session-options';
 
@@ -194,5 +195,18 @@ describe('getSessionOption', () => {
     expect(await getSessionOption(ro, id.cancelled)).toBeNull();
     expect(await getSessionOption(ro, id.exam)).toBeNull();
     expect(await getSessionOption(ro, 999_999)).toBeNull();
+  });
+});
+
+describe('sessionFormFields', () => {
+  it('fills date, times and place; no room empties the place', () => {
+    const o = { date: '2026-10-21', from: '10:00', to: '11:30' };
+    expect(sessionFormFields({ ...o, room: 'B-2 202' })).toEqual({
+      date: '2026-10-21',
+      start: '10:00',
+      end: '11:30',
+      place: 'B-2 202',
+    });
+    expect(sessionFormFields({ ...o, room: null }).place).toBe('');
   });
 });

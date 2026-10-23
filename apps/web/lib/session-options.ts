@@ -5,9 +5,8 @@
  * lib/plan.ts).
  */
 import { toWall, wallSql } from '@studies/db/plan';
-import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 import type mysql from 'mysql2/promise';
-import { wallDateKey, wallTime } from './plan-view';
+import { wallDateKey, wallShortDate, wallTime } from './plan-view';
 
 export type SessionOption = {
   /** Session id. */
@@ -31,8 +30,9 @@ function toOption(r: mysql.RowDataPacket, withGroup: boolean): SessionOption {
   const start = toWall(r.starts_at);
   const end = toWall(r.ends_at);
   const room = r.room == null || r.room === '' ? null : String(r.room);
-  const day = `${WEEKDAYS_SHORT[start.getUTCDay()]} ${start.getUTCDate()} ${MONTHS_SHORT[start.getUTCMonth()]}`;
-  const parts = [`${day}, ${wallTime(start)}–${wallTime(end)}`];
+  const parts = [
+    `${wallShortDate(start)}, ${wallTime(start)}–${wallTime(end)}`,
+  ];
   if (room) parts.push(room);
   if (withGroup && r.group_name != null) parts.push(String(r.group_name));
   return {
@@ -102,3 +102,16 @@ export async function getSessionOption(
     groupId: r.group_id == null ? null : Number(r.group_id),
   };
 }
+
+/**
+ * The event form fields a picked session fills: date, times and place (a
+ * session without a room empties the place rather than keeping an old one).
+ */
+export const sessionFormFields = (
+  o: Pick<SessionOption, 'date' | 'from' | 'to' | 'room'>,
+): { date: string; start: string; end: string; place: string } => ({
+  date: o.date,
+  start: o.from,
+  end: o.to,
+  place: o.room ?? '',
+});

@@ -461,6 +461,17 @@ test.describe('assessments on the timetable', () => {
       'Entry quiz is already on for this class.',
     );
 
+    // Saving the note keeps focus on the row's "Save note".
+    const row = section.getByRole('group', { name: 'Entry quiz: All groups' });
+    await row.getByLabel('Note', { exact: true }).fill('Rozdział 4');
+    const save = row.getByRole('button', { name: 'Save note' });
+    await save.click();
+    await expect(save).toHaveAttribute('aria-disabled', 'true');
+    await expect(save).toBeFocused();
+    await expect(row.getByLabel('Note', { exact: true })).toHaveValue(
+      'Rozdział 4',
+    );
+
     await page.goto(week());
     await expect(
       lab(page).getByRole('button', { name: 'Entry quiz' }),

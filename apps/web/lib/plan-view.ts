@@ -181,6 +181,10 @@ const p2 = (n: number) => String(n).padStart(2, '0');
 export const wallTime = (d: Date): string =>
   `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
 
+/** `Wed 21 Oct` of a wall Date. */
+export const wallShortDate = (d: Date): string =>
+  `${WEEKDAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+
 /** `YYYY-MM-DD` of a wall Date. */
 export const wallDateKey = (d: Date): string => d.toISOString().slice(0, 10);
 

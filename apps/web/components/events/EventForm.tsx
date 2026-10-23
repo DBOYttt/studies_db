@@ -14,7 +14,7 @@ import {
 } from '@/lib/event-actions';
 import { type FormVersion, nextFormVersion } from '@/lib/event-form-version';
 import type { SubjectOption } from '@/lib/event-queries';
-import type { SessionOption } from '@/lib/session-options';
+import { type SessionOption, sessionFormFields } from '@/lib/session-options';
 
 export type EventFormValues = {
   kind: EventKind;
@@ -105,9 +105,12 @@ export function EventForm({
   const [picker, setPicker] = useState<{
     key: string | null;
     options: SessionOption[];
+    /** The options could not be loaded (offline, server error). */
+    failed: boolean;
   }>({
     key: sessions ? groupKey(initial.classId, initial.groupId) : null,
     options: sessions ?? [],
+    failed: false,
   });
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -121,12 +124,13 @@ export function EventForm({
     let live = true;
     startTransition(async () => {
       let options: SessionOption[] = [];
+      let failed = false;
       try {
         options = await sessionOptionsAction(classId, groupId);
       } catch {
-        // Offline or a server error: the picker says there are none.
+        failed = true;
       }
-      if (live) setPicker({ key: wantKey, options });
+      if (live) setPicker({ key: wantKey, options, failed });
     });
     return () => {
       live = false;
@@ -137,10 +141,11 @@ export function EventForm({
     setSessionId(value);
     const o = picker.options.find((x) => x.value === value);
     if (!o) return;
-    setDate(o.date);
-    setStartTime(o.from);
-    setEndTime(o.to);
-    if (o.room) setPlace(o.room);
+    const f = sessionFormFields(o);
+    setDate(f.date);
+    setStartTime(f.start);
+    setEndTime(f.end);
+    setPlace(f.place);
   };
   const showPicker = wantKey !== null;
   const pickerReady = picker.key === wantKey;
@@ -234,7 +239,10 @@ export function EventForm({
               name="date"
               required
               value={date}
-              onChange={(e) => setDate(e.target.value)}
+              onChange={(e) => {
+                setDate(e.target.value);
+                setSessionId(''); // no longer that session
+              }}
               className={input}
             />
           </label>
@@ -244,7 +252,10 @@ export function EventForm({
               type="time"
               name="start"
               value={startTime}
-              onChange={(e) => setStartTime(e.target.value)}
+              onChange={(e) => {
+                setStartTime(e.target.value);
+                setSessionId('');
+              }}
               className={input}
             />
           </label>
@@ -254,7 +265,10 @@ export function EventForm({
               type="time"
               name="end"
               value={endTime}
-              onChange={(e) => setEndTime(e.target.value)}
+              onChange={(e) => {
+                setEndTime(e.target.value);
+                setSessionId('');
+              }}
               className={input}
             />
           </label>
@@ -382,9 +396,11 @@ export function EventForm({
               <option value="">
                 {!pickerReady
                   ? 'Loading sessions…'
-                  : picker.options.length === 0
-                    ? 'No upcoming sessions'
-                    : 'Choose a session'}
+                  : picker.failed
+                    ? 'Could not load sessions.'
+                    : picker.options.length === 0
+                      ? 'No upcoming sessions'
+                      : 'Choose a session'}
               </option>
               {pickerReady &&
                 picker.options.map((o) => (
