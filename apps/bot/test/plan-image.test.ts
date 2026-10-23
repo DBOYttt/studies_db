@@ -1,5 +1,5 @@
 import { createCanvas, loadImage } from '@napi-rs/canvas';
-import { KIND_COLORS } from '@studies/db/constants';
+import { EXAM_COLORS, KIND_COLORS } from '@studies/db/constants';
 import type { PlanSession } from '@studies/db/plan';
 import { describe, expect, it } from 'vitest';
 import {
@@ -262,5 +262,96 @@ describe('class and group labels', () => {
     expect(texts(weekLines(s, '#fff'))).toContain('Laboratorium Gr. 2');
     expect(texts(dayLines(s, '#fff')).join('|')).toContain('Laboratorium');
     expect(texts(dayLines(s, '#fff')).join('|')).toContain('Gr. 2');
+  });
+});
+
+describe('timetable assessments', () => {
+  const texts = (l: { text: string }[]) => l.map((x) => x.text);
+  const lab = (over: Partial<PlanSession> = {}) =>
+    session('2026-10-14T10:00:00', '2026-10-14T11:30:00', over);
+  const test = {
+    kind: 'test' as const,
+    eventIds: [7],
+    titles: ['Kolokwium 1'],
+  };
+  const quiz = { kind: 'entry_quiz' as const, markId: 3, note: null };
+
+  it('week: the class line carries the badges, unchanged without them', () => {
+    expect(texts(weekLines(lab(), '#fff'))).toContain('Laboratorium Gr. 2');
+    expect(texts(weekLines(lab({ badges: [test] }), '#fff'))).toContain(
+      'Laboratorium Gr. 2 · Test',
+    );
+    expect(texts(weekLines(lab({ badges: [quiz] }), '#fff'))).toContain(
+      'Laboratorium Gr. 2 · Entry quiz',
+    );
+    expect(texts(weekLines(lab({ badges: [test, quiz] }), '#fff'))).toContain(
+      'Laboratorium Gr. 2 · Test · Entry quiz',
+    );
+    const two = { ...test, eventIds: [7, 8], titles: ['A', 'B'] };
+    expect(texts(weekLines(lab({ badges: [two] }), '#fff'))).toContain(
+      'Laboratorium Gr. 2 · 2 tests',
+    );
+  });
+
+  it('day: one extra line per badge, the class line unchanged', () => {
+    const t = texts(dayLines(lab({ badges: [test, quiz] }), '#fff'));
+    expect(t).toContain('Laboratorium · Gr. 2');
+    expect(t).toContain('Test: Kolokwium 1');
+    expect(t).toContain('Entry quiz');
+    expect(texts(dayLines(lab(), '#fff'))).not.toContain('Entry quiz');
+  });
+
+  const exam = (over: Partial<PlanSession> = {}) =>
+    lab({
+      sessionKind: 'exam',
+      classId: null,
+      classKind: null,
+      className: null,
+      groupId: null,
+      groupName: null,
+      label: 'Egzamin',
+      ...over,
+    });
+
+  it('exam sessions are labelled "Exam"', () => {
+    expect(texts(weekLines(exam(), '#fff'))).toContain('Exam');
+    expect(texts(weekLines(exam({ groupName: 'Gr. 1' }), '#fff'))).toContain(
+      'Exam Gr. 1',
+    );
+    expect(texts(dayLines(exam(), '#fff'))).toContain('Exam');
+  });
+
+  it('exam blocks are filled in the exam colour, with a legend', async () => {
+    const x = exam();
+    const png = (await renderWeekImage([x], W42, null)) as Buffer;
+    const g = weekGeometry([x], W42, null);
+    const [b] = g.blocks;
+    expect(await pixel(png, b.x + b.w - 6, b.y + b.h - 6)).toBe(
+      EXAM_COLORS.dark.bg,
+    );
+    expect(await pixel(png, b.x + 2, b.y + b.h / 2)).toBe(EXAM_COLORS.dark.fg);
+    expect(g.legendH).toBeGreaterThan(0);
+    expect(pngSize(png).height).toBe(g.height);
+    // No exam, no legend.
+    expect(weekGeometry([lab()], W42, null).legendH).toBe(0);
+  });
+
+  it('a timed egzamin event is filled in the exam colour too', async () => {
+    const e = lab({
+      type: 'event',
+      eventKind: 'egzamin',
+      eventTitle: 'Egzamin',
+      allDay: false,
+      classId: null,
+      groupId: null,
+    });
+    const png = (await renderDayImage(
+      [e],
+      wall('2026-10-14T00:00:00'),
+    )) as Buffer;
+    const [b] = dayGeometry([e], wall('2026-10-14T00:00:00')).blocks;
+    expect(await pixel(png, b.x + b.w - 6, b.y + b.h - 6)).toBe(
+      EXAM_COLORS.dark.bg,
+    );
   });
 });

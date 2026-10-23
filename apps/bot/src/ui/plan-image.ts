@@ -17,6 +17,7 @@ import {
   CLASS_NAMES,
   EVENT_KINDS,
   type EventKind,
+  EXAM_COLORS,
   KIND_COLORS,
 } from '@studies/db/constants';
 import {
@@ -30,6 +31,14 @@ import {
   weekDays,
 } from '@studies/db/plan';
 import { dayMonth, WEEKDAYS } from '../dates.js';
+import {
+  badgeDetail,
+  badgeLabel,
+  badgesOf,
+  EXAM_LABEL,
+  isExamBlock,
+  isExamSession,
+} from './badges.js';
 
 /** Device pixels per layout unit. */
 const SCALE = 2;
@@ -115,10 +124,13 @@ export interface Geometry {
   stripH: number;
   /** All-day events, stacked per day in the strip. */
   strip: Block[];
+  /** Height of the legend under the grid (exam colour); 0 without exams. */
+  legendH: number;
 }
 
 const isAllDay = (s: PlanSession) => s.type === 'event' && s.allDay === true;
 const STRIP_ROW = 22;
+const LEGEND_H = 22;
 
 /**
  * The sessions' grid window widened by 30 min each side, on half hours, at
@@ -225,7 +237,8 @@ function geometry(
       });
     }
   }
-  const height = Math.ceil(yOf(endMin) + spec.bottom);
+  const legendH = blocks.some((b) => isExamBlock(b.session)) ? LEGEND_H : 0;
+  const height = Math.ceil(yOf(endMin) + spec.bottom + legendH);
   const s = (n: number) => n * SCALE;
   const scaled = (b: Block): Block => ({
     ...b,
@@ -246,6 +259,7 @@ function geometry(
     blocks: blocks.map(scaled),
     stripH: s(stripH),
     strip: strip.map(scaled),
+    legendH: s(legendH),
   };
 }
 
@@ -348,7 +362,9 @@ function drawMark(
 }
 
 const kindOf = (s: PlanSession) =>
-  s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label);
+  isExamSession(s)
+    ? EXAM_LABEL
+    : (s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label));
 const join = (...parts: (string | null | undefined)[]) =>
   parts.filter((p): p is string => !!p).join(' · ');
 
@@ -371,7 +387,11 @@ export function weekLines(s: PlanSession, ink: string): Line[] {
       color: C.errFg,
     });
   }
-  const kind = [kindOf(s), s.groupName].filter(Boolean).join(' ');
+  // "Laboratorium Gr. 2 · Test · Entry quiz"
+  const kind = join(
+    [kindOf(s), s.groupName].filter(Boolean).join(' '),
+    ...badgesOf(s).map(badgeLabel),
+  );
   if (kind) lines.push({ text: kind, weight: 400, size: 10.5, color: C.fg });
   if (s.room) {
     lines.push({ text: s.room, weight: 400, size: 10.5, color: C.muted });
@@ -414,6 +434,9 @@ export function dayLines(s: PlanSession, ink: string): Line[] {
   }
   const kind = join(kindOf(s), s.groupName);
   if (kind) lines.push({ text: kind, weight: 400, size: 11.5, color: C.fg });
+  for (const b of badgesOf(s)) {
+    lines.push({ text: badgeDetail(b), weight: 600, size: 11.5, color: ink });
+  }
   const where = join(s.room, s.lecturerName);
   if (where) {
     lines.push({ text: where, weight: 400, size: 11.5, color: C.muted });
@@ -481,13 +504,17 @@ const OUTLINE = 1.5;
 
 function drawBlock(ctx: SKRSContext2D, b: Block, lines: LinesFn): void {
   const s = b.session;
-  const isEvent = s.type === 'event';
+  const exam = isExamBlock(s);
+  // Exams (sessions and timed egzamin events) are filled like classes.
+  const isEvent = s.type === 'event' && !exam;
   const outline = EVENT_COLORS[s.eventKind ?? 'inne'];
-  const colors = isEvent
-    ? { bg: C.page, fg: outline }
-    : s.classKind
-      ? KIND_COLORS.dark[s.classKind]
-      : { bg: C.surface, fg: C.faint };
+  const colors = exam
+    ? EXAM_COLORS.dark
+    : isEvent
+      ? { bg: C.page, fg: outline }
+      : s.classKind
+        ? KIND_COLORS.dark[s.classKind]
+        : { bg: C.surface, fg: C.faint };
   ctx.save();
   if (s.status === 'cancelled') ctx.globalAlpha = 0.7;
   ctx.beginPath();
@@ -537,6 +564,30 @@ function drawBlock(ctx: SKRSContext2D, b: Block, lines: LinesFn): void {
     y += h;
   }
   ctx.restore();
+}
+
+/** The legend row under the grid: the exam colour swatch and "Exam". */
+function drawLegend(
+  ctx: SKRSContext2D,
+  W: number,
+  top: number,
+  gutter: number,
+): void {
+  ctx.fillStyle = C.page;
+  ctx.fillRect(0, top, W, LEGEND_H);
+  ctx.fillStyle = C.lineStrong;
+  ctx.fillRect(0, top, W, 0.5);
+  const mid = top + LEGEND_H / 2;
+  const x = gutter;
+  ctx.fillStyle = EXAM_COLORS.dark.bg;
+  ctx.fillRect(x, mid - 5, 14, 10);
+  ctx.fillStyle = EXAM_COLORS.dark.fg;
+  ctx.fillRect(x, mid - 5, 2, 10);
+  ctx.font = font(400, 10.5);
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = C.muted;
+  ctx.fillText(EXAM_LABEL, x + 20, mid);
 }
 
 function draw(g: Geometry, lines: LinesFn): Canvas {
@@ -613,6 +664,7 @@ function draw(g: Geometry, lines: LinesFn): Canvas {
     ctx.fillStyle = C.lineStrong;
     ctx.fillRect(0, headerH + stripH - 0.5, W, 0.5);
   }
+  if (g.legendH > 0) drawLegend(ctx, W, H - g.legendH / SCALE, gutter);
   for (const b of [...g.blocks, ...g.strip]) {
     drawBlock(
       ctx,

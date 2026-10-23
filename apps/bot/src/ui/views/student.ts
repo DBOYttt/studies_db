@@ -21,12 +21,14 @@ import {
   type ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
+  escapeMarkdown,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import { dayMonth as ddmm, WEEKDAYS, weekTitle } from '../../dates.js';
+import { badgeDetail, badgeLabel, badgesOf, isExamSession } from '../badges.js';
 import { encodeId } from '../ids.js';
 import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../limits.js';
 import {
@@ -64,18 +66,21 @@ const midnight = (d: Date) =>
   new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate()));
 
 /**
- * `HH:MM–HH:MM · <code> <subject> · <class>[ · <group>][ · <room>][ · <lecturer>]`;
- * cancelled sessions are struck through and marked "(cancelled)".
+ * `HH:MM–HH:MM · <code> <subject> · <class>[ · <group>][ · <room>][ · <lecturer>]`
+ * then the badges (` · Test: <title> · Entry quiz`); an exam session says
+ * "Exam" for the class. Cancelled sessions are struck through and marked
+ * "(cancelled)".
  */
 export function sessionLine(s: PlanSession): string {
   if (s.type === 'event') return eventLine(s);
   const parts = [
     `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`,
     `${s.subjectCode} ${s.subjectName}`.trim(),
-    s.className ?? s.label,
+    isExamSession(s) ? 'Exam' : (s.className ?? s.label),
     s.groupName,
     s.room,
     s.lecturerName,
+    ...badgesOf(s).map(badgeDetail),
   ].filter((p): p is string => !!p);
   const line = parts.join(' · ');
   return s.status === 'cancelled' ? `~~${line}~~ (cancelled)` : line;
@@ -136,7 +141,9 @@ export function studentPanel(): View {
     new ContainerBuilder()
       .addTextDisplayComponents(
         text('## 📚 Studies DB'),
-        text('Timetable, events and My groups. Only you see the replies.'),
+        text(
+          'Timetable, events, entry quizzes and My groups. Only you see the replies.',
+        ),
       )
       .addSeparatorComponents(divider())
       .addActionRowComponents(
@@ -151,6 +158,7 @@ export function studentPanel(): View {
           button(encodeId('stu', 'login'), 'Sign in to the website'),
           button(encodeId('evt', 'new'), 'Add event'),
         ),
+        row(button(encodeId('stu', 'quiz', 'open'), 'Entry quizzes')),
       ),
   );
 }
@@ -184,14 +192,16 @@ function altSession(s: PlanSession): string {
       s.eventTitle ?? s.label,
     ].join(' ');
   }
-  const kind =
-    s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label);
+  const kind = isExamSession(s)
+    ? 'Exam'
+    : (s.className ?? (s.classKind ? CLASS_NAMES[s.classKind] : s.label));
   return [
     `${hhmm(s.startsAt)}–${hhmm(s.endsAt)}`,
     s.subjectCode || s.subjectName,
     kind,
     s.groupName,
     s.status === 'cancelled' ? '(cancelled)' : null,
+    ...badgesOf(s).map(badgeLabel),
   ]
     .filter((p): p is string => !!p)
     .join(' ');
@@ -316,7 +326,8 @@ const byStart = (a: PlanSession, b: PlanSession) =>
 
 /**
  * One day (`day` is a wall Date): the rendered `image` of it, or without one
- * each session as its own text block.
+ * each session as its own text block. `linked` are events shown as a badge
+ * or an exam: not drawn, but listed in the event select.
  */
 export function planDay(
   sessions: PlanSession[],
@@ -325,6 +336,7 @@ export function planDay(
   webBaseUrl: string,
   image: Buffer | null = null,
   hidden = 0,
+  linked: PlanSession[] = [],
 ): View {
   const d = midnight(day);
   const key = dayKey(d);
@@ -332,7 +344,10 @@ export function planDay(
     .filter((s) => dayKey(s.startsAt) === key)
     .sort(byStart);
   const lines = daySessions.map(sessionLine);
-  const dayEvents = eventsOf(daySessions);
+  const dayEvents = eventsOf([
+    ...daySessions,
+    ...linked.filter((e) => dayKey(e.startsAt) === key),
+  ]);
   const title = `Timetable — ${dayLabel(d)}`;
   const week = isoWeekOf(d);
   const nav = [
@@ -395,6 +410,7 @@ export function planWeek(
   today?: Date,
   image: Buffer | null = null,
   hidden = 0,
+  linked: PlanSession[] = [],
 ): View {
   const monday = weekStart(week);
   const sunday = new Date(monday.getTime() + 6 * DAY_MS);
@@ -403,7 +419,10 @@ export function planWeek(
   const weekSessions = sessions
     .filter((s) => formatIsoWeek(isoWeekOf(s.startsAt)) === wanted)
     .sort(byStart);
-  const weekEvents = eventsOf(weekSessions);
+  const weekEvents = eventsOf([
+    ...weekSessions,
+    ...linked.filter((e) => formatIsoWeek(isoWeekOf(e.startsAt)) === wanted),
+  ]);
   const lines = weekSessions.map((s, i, all) => ({
     day: dayLabel(s.startsAt),
     line: sessionLine(s),
@@ -623,5 +642,210 @@ export function groupsView(
           ),
         ),
       ),
+  );
+}
+
+/* ---------- Entry quizzes ---------- */
+
+export const QUIZ_HINT =
+  'An entry quiz is shown on every session of the class until it is turned off.';
+export const QUIZ_NO_CLASSES = 'No classes with sessions yet.';
+/** "Not this week" offers this many upcoming session dates. */
+export const QUIZ_SKIP_DATES = 5;
+/** Skipped dates listed by name; the rest are counted. */
+const QUIZ_SKIPS_SHOWN = 10;
+
+export type QuizSubject = { id: number; name: string };
+export type QuizClass = {
+  classId: number;
+  className: string;
+  groups: { id: number; name: string }[];
+};
+export type QuizClassData = {
+  subjectId: number;
+  subjectName: string;
+  classId: number;
+  className: string;
+  /** null: every group of the class. */
+  groupId: number | null;
+  groupName: string | null;
+  /** The active mark, its skipped dates (`YYYY-MM-DD`, today on). */
+  mark: { id: number; note: string | null; skips: string[] } | null;
+  /** Upcoming session dates (`YYYY-MM-DD`) not skipped yet. */
+  dates: string[];
+};
+
+/** `Wed 21 Oct` of a `YYYY-MM-DD` date. */
+const dateLabel = (key: string) => dayLabel(new Date(`${key}T00:00:00Z`));
+
+/** Subject select(s), 25 per select (at most 75 subjects). */
+export function quizSubjectsView(subjects: QuizSubject[]): View {
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text('## Entry quizzes'),
+      text(`-# Pick a subject, then a class or one group. ${QUIZ_HINT}`),
+    )
+    .addSeparatorComponents(divider());
+  if (subjects.length === 0) {
+    container.addTextDisplayComponents(text(QUIZ_NO_CLASSES));
+  }
+  const pages = chunk(subjects.slice(0, MAX_OPTIONS * 3), MAX_OPTIONS);
+  pages.forEach((page, p) => {
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(
+            p === 0
+              ? encodeId('stu', 'quiz', 'subj')
+              : encodeId('stu', 'quiz', 'subj', p),
+          )
+          .setPlaceholder(
+            pages.length > 1
+              ? `Choose a subject (${p + 1}/${pages.length})`
+              : 'Choose a subject',
+          )
+          .addOptions(
+            page.map((x) =>
+              new StringSelectMenuOptionBuilder()
+                .setLabel(clip(x.name))
+                .setValue(String(x.id)),
+            ),
+          ),
+      ),
+    );
+  });
+  if (subjects.length > MAX_OPTIONS * 3) {
+    container.addTextDisplayComponents(
+      text(`-# ${more(subjects.length - MAX_OPTIONS * 3)}`),
+    );
+  }
+  return view(container);
+}
+
+/**
+ * One select over the subject's classes: "All groups" and each group per
+ * class (values `<classId>_<groupId|0>`), marked when an entry quiz is on.
+ */
+export function quizClassesView(
+  subject: QuizSubject,
+  classes: QuizClass[],
+  active: { classId: number; groupId: number | null }[],
+): View {
+  const isOn = (classId: number, groupId: number | null) =>
+    active.some((m) => m.classId === classId && m.groupId === groupId);
+  const options = classes.flatMap((c) => [
+    { c, groupId: null as number | null, name: 'All groups' },
+    ...c.groups.map((g) => ({
+      c,
+      groupId: g.id as number | null,
+      name: g.name,
+    })),
+  ]);
+  const shown = options.slice(0, MAX_OPTIONS);
+  const container = new ContainerBuilder()
+    .addTextDisplayComponents(
+      text(clip(`## Entry quizzes — ${subject.name}`, 200)),
+      text('-# Pick a class, or one group of it.'),
+    )
+    .addSeparatorComponents(divider());
+  if (shown.length === 0) {
+    container.addTextDisplayComponents(text(QUIZ_NO_CLASSES));
+  } else {
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(encodeId('stu', 'quiz', 'pick', subject.id))
+          .setPlaceholder('Choose a class or group')
+          .addOptions(
+            shown.map((o) => {
+              const opt = new StringSelectMenuOptionBuilder()
+                .setLabel(clip(`${o.c.className} · ${o.name}`))
+                .setValue(`${o.c.classId}_${o.groupId ?? 0}`);
+              if (isOn(o.c.classId, o.groupId)) {
+                opt.setDescription('Entry quiz: on');
+              }
+              return opt;
+            }),
+          ),
+      ),
+    );
+  }
+  if (options.length > shown.length) {
+    container.addTextDisplayComponents(
+      text(`-# ${more(options.length - shown.length)}`),
+    );
+  }
+  return view(
+    container
+      .addSeparatorComponents(divider())
+      .addActionRowComponents(
+        row(button(encodeId('stu', 'quiz', 'open'), 'Other subject')),
+      ),
+  );
+}
+
+/**
+ * One class (or group): on/off, the note, the skipped dates, "Not this week"
+ * over the next session dates and the toggle. `message` (the last action's
+ * answer) goes on top.
+ */
+export function quizClassView(d: QuizClassData, message?: string): View {
+  const where = `${d.subjectName}, ${d.className} ${d.groupName ?? '(all groups)'}`;
+  const container = new ContainerBuilder();
+  if (message) container.addTextDisplayComponents(text(clip(message, 500)));
+  container.addTextDisplayComponents(
+    text('## Entry quiz'),
+    text(clip(escapeMarkdown(where), 500)),
+  );
+  const m = d.mark;
+  const state = [`**Entry quiz: ${m ? 'on' : 'off'}**`];
+  if (m?.note) state.push(`Note: ${escapeMarkdown(m.note)}`);
+  if (m && m.skips.length > 0) {
+    const named = m.skips.slice(0, QUIZ_SKIPS_SHOWN).map(dateLabel);
+    const rest = m.skips.length - named.length;
+    state.push(
+      `-# Not this week: ${named.join(', ')}${rest > 0 ? ` …and ${rest} more` : ''}`,
+    );
+  }
+  if (!m) state.push(`-# ${QUIZ_HINT}`);
+  container
+    .addTextDisplayComponents(text(state.join('\n')))
+    .addSeparatorComponents(divider());
+  if (m && d.dates.length > 0) {
+    container.addActionRowComponents(
+      new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
+        new StringSelectMenuBuilder()
+          .setCustomId(encodeId('stu', 'quiz', 'skip', m.id))
+          .setPlaceholder('Not this week')
+          .addOptions(
+            d.dates
+              .slice(0, QUIZ_SKIP_DATES)
+              .map((key) =>
+                new StringSelectMenuOptionBuilder()
+                  .setLabel(dateLabel(key))
+                  .setValue(key.replaceAll('-', '')),
+              ),
+          ),
+      ),
+    );
+  }
+  const group = d.groupId ?? 0;
+  return view(
+    container.addActionRowComponents(
+      row(
+        m
+          ? button(
+              encodeId('stu', 'quiz', 'tog', d.classId, group, 0),
+              'Turn off',
+              ButtonStyle.Danger,
+            )
+          : button(
+              encodeId('stu', 'quiz', 'tog', d.classId, group, 1),
+              'Turn on',
+              ButtonStyle.Success,
+            ),
+        button(encodeId('stu', 'quiz', 'cls', d.subjectId), 'Other class'),
+      ),
+    ),
   );
 }

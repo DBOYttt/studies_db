@@ -1,6 +1,7 @@
 import type { MyGroupOption, PlanSession } from '@studies/db';
 import { ButtonStyle, MessageFlags } from 'discord.js';
 import { describe, expect, it } from 'vitest';
+import { decodeId } from '../src/ui/ids.js';
 import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../src/ui/limits.js';
 import { ephemeral } from '../src/ui/respond.js';
 import {
@@ -8,6 +9,11 @@ import {
   notice,
   planDay,
   planWeek,
+  type QuizClassData,
+  quizClassesView,
+  quizClassView,
+  quizSubjectsView,
+  sessionLine,
   studentPanel,
   type View,
 } from '../src/ui/views/student.js';
@@ -90,7 +96,7 @@ function session(
 }
 
 describe('studentPanel', () => {
-  it('offers the five student actions', () => {
+  it('offers the six student actions', () => {
     const v = studentPanel();
     expectValid(v);
     const b = buttons(v);
@@ -100,6 +106,7 @@ describe('studentPanel', () => {
       ['v1:stu:groups:open', 'My groups'],
       ['v1:stu:login', 'Sign in to the website'],
       ['v1:evt:new', 'Add event'],
+      ['v1:stu:quiz:open', 'Entry quizzes'],
     ]);
     expect(allText(v)).toContain('Studies DB');
   });
@@ -572,5 +579,185 @@ describe('notice', () => {
     const v = notice('You do not have permission.');
     expectValid(v);
     expect(texts(v)).toEqual(['You do not have permission.']);
+  });
+});
+
+describe('timetable assessments in the text lines', () => {
+  const lab = (over: Partial<PlanSession> = {}) =>
+    session('2026-10-14T10:00:00', '2026-10-14T11:30:00', over);
+  it('appends the badges to a session line', () => {
+    const base =
+      '10:00–11:30 · AM1 Analiza matematyczna · Laboratorium · Gr. 2 · C-13 1.23 · dr Anna Nowak';
+    expect(sessionLine(lab())).toBe(base);
+    expect(
+      sessionLine(
+        lab({
+          badges: [
+            { kind: 'test', eventIds: [1], titles: ['Kolokwium 1'] },
+            { kind: 'entry_quiz', markId: 2, note: null },
+          ],
+        }),
+      ),
+    ).toBe(`${base} · Test: Kolokwium 1 · Entry quiz`);
+  });
+  it('labels an exam session "Exam"', () => {
+    expect(
+      sessionLine(
+        lab({
+          sessionKind: 'exam',
+          classId: null,
+          classKind: null,
+          className: null,
+          groupId: null,
+          groupName: null,
+          label: 'Egz',
+          lecturerName: null,
+        }),
+      ),
+    ).toBe('10:00–11:30 · AM1 Analiza matematyczna · Exam · C-13 1.23');
+  });
+  it('the day list and the alt text carry the badges', () => {
+    const s = lab({ badges: [{ kind: 'entry_quiz', markId: 2, note: null }] });
+    const day = wall('2026-10-14T00:00:00');
+    expect(allText(planDay([s], day, true, WEB))).toContain('· Entry quiz');
+    const img = planDay([s], day, true, WEB, Buffer.from('png'));
+    const media = nodes(img).find((n) => n.type === 12);
+    expect(media.items[0].description).toContain('Entry quiz');
+  });
+});
+
+describe('entry quiz views', () => {
+  const ids = (v: View) => {
+    for (const id of customIds(v)) {
+      expect(decodeId(id), id).not.toBeNull();
+      expect(id.length).toBeLessThanOrEqual(100);
+    }
+    return customIds(v);
+  };
+
+  it('subjects: one select per 25 subjects, values are subject ids', () => {
+    const subjects = Array.from({ length: 30 }, (_, i) => ({
+      id: 1000 + i,
+      name: `Przedmiot ${i} ${'x'.repeat(120)}`,
+    }));
+    const v = quizSubjectsView(subjects);
+    expectValid(v);
+    expect(ids(v)).toEqual(['v1:stu:quiz:subj', 'v1:stu:quiz:subj:1']);
+    expect(selects(v)[0].options[0].value).toBe('1000');
+    expect(allText(v)).toContain('Entry quizzes');
+  });
+
+  it('classes: "All groups" and every group per class, capped at 25 options', () => {
+    const classes = Array.from({ length: 6 }, (_, c) => ({
+      classId: 10 + c,
+      className: c === 0 ? 'Laboratorium' : `Ćwiczenia ${c}`,
+      groups: Array.from({ length: 5 }, (_, g) => ({
+        id: 100 * (c + 1) + g,
+        name: `Gr. ${g + 1}`,
+      })),
+    }));
+    const v = quizClassesView({ id: 7, name: 'Fizyka' }, classes, [
+      { classId: 10, groupId: 101 },
+    ]);
+    expectValid(v);
+    const [sel] = selects(v);
+    expect(sel.custom_id).toBe('v1:stu:quiz:pick:7');
+    expect(sel.options).toHaveLength(25);
+    expect(sel.options[0]).toMatchObject({
+      label: 'Laboratorium · All groups',
+      value: '10_0',
+    });
+    expect(sel.options[2]).toMatchObject({
+      label: 'Laboratorium · Gr. 2',
+      value: '10_101',
+      description: 'Entry quiz: on',
+    });
+    expect(allText(v)).toMatch(/…and \d+ more/);
+    ids(v);
+  });
+
+  const data = (over: Partial<QuizClassData> = {}): QuizClassData => ({
+    subjectId: 7,
+    subjectName: 'Fizyka',
+    classId: 10,
+    className: 'Laboratorium',
+    groupId: 101,
+    groupName: 'Gr. 2',
+    mark: null,
+    dates: [],
+    ...over,
+  });
+
+  it('class off: "Turn on" with the state', () => {
+    const v = quizClassView(data());
+    expectValid(v);
+    expect(allText(v)).toContain('Fizyka, Laboratorium Gr. 2');
+    expect(allText(v)).toContain('Entry quiz: off');
+    const b = buttons(v).map((x) => [x.custom_id, x.label]);
+    expect(b).toContainEqual(['v1:stu:quiz:tog:10:101:1', 'Turn on']);
+    expect(selects(v)).toHaveLength(0);
+    ids(v);
+  });
+
+  it('class on: "Turn off", the note, skipped dates and "Not this week"', () => {
+    const v = quizClassView(
+      data({
+        groupId: null,
+        groupName: null,
+        mark: { id: 42, note: 'Z teorii', skips: ['2026-10-21'] },
+        dates: [
+          '2026-10-14',
+          '2026-10-28',
+          '2026-11-04',
+          '2026-11-11',
+          '2026-11-18',
+        ],
+      }),
+      'Entry quiz turned on.',
+    );
+    expectValid(v);
+    const t = allText(v);
+    expect(t).toContain('Entry quiz turned on.');
+    expect(t).toContain('Fizyka, Laboratorium (all groups)');
+    expect(t).toContain('Entry quiz: on');
+    expect(t).toContain('Z teorii');
+    expect(t).toContain('Wed 21 Oct');
+    expect(buttons(v).map((x) => [x.custom_id, x.label])).toContainEqual([
+      'v1:stu:quiz:tog:10:0:0',
+      'Turn off',
+    ]);
+    const [sel] = selects(v);
+    expect(sel.custom_id).toBe('v1:stu:quiz:skip:42');
+    expect(sel.placeholder).toBe('Not this week');
+    expect(sel.options.map((o: Json) => [o.value, o.label])).toEqual([
+      ['20261014', 'Wed 14 Oct'],
+      ['20261028', 'Wed 28 Oct'],
+      ['20261104', 'Wed 4 Nov'],
+      ['20261111', 'Wed 11 Nov'],
+      ['20261118', 'Wed 18 Nov'],
+    ]);
+    ids(v);
+  });
+
+  it('class on without upcoming sessions: no select', () => {
+    const v = quizClassView(data({ mark: { id: 1, note: null, skips: [] } }));
+    expectValid(v);
+    expect(selects(v)).toHaveLength(0);
+  });
+
+  it('a long note and many skips stay within the limits', () => {
+    const v = quizClassView(
+      data({
+        className: 'L'.repeat(200),
+        mark: {
+          id: 1,
+          note: '*'.repeat(200),
+          skips: Array.from({ length: 300 }, (_, i) =>
+            new Date(Date.UTC(2026, 9, 1 + i)).toISOString().slice(0, 10),
+          ),
+        },
+      }),
+    );
+    expectValid(v);
   });
 });

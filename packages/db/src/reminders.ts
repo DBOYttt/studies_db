@@ -9,7 +9,15 @@ import type mysql from 'mysql2/promise';
 import { writeAudit } from './audit.js';
 import type { Db } from './client.js';
 import { listEventsInRange } from './events.js';
-import { filterMyGroups, type PlanSession, type ValidGroups } from './plan.js';
+import {
+  annotateWeek,
+  filterMyGroups,
+  isoWeekOf,
+  listWeekMarks,
+  listWeekSessionRows,
+  type PlanSession,
+  type ValidGroups,
+} from './plan.js';
 import {
   classGroups,
   reminderLog,
@@ -256,6 +264,21 @@ export async function dueDms(
 }
 
 /**
+ * Wall midnight of tomorrow while the digest is due (18:00–18:30), else null.
+ */
+export function digestDay(nowWall_: Date): Date | null {
+  const minutes = nowWall_.getUTCHours() * 60 + nowWall_.getUTCMinutes();
+  if (minutes < 18 * 60 || minutes >= 18 * 60 + 30) return null;
+  return new Date(
+    Date.UTC(
+      nowWall_.getUTCFullYear(),
+      nowWall_.getUTCMonth(),
+      nowWall_.getUTCDate() + 1,
+    ),
+  );
+}
+
+/**
  * Tomorrow's events for the channel digest: only from 18:00 to 18:30, and only
  * those without a digest row for their current start (so an event added later
  * the same evening still gets announced).
@@ -264,15 +287,8 @@ export async function dueDigest(
   pool: mysql.Pool,
   nowWall_: Date,
 ): Promise<PlanSession[]> {
-  const minutes = nowWall_.getUTCHours() * 60 + nowWall_.getUTCMinutes();
-  if (minutes < 18 * 60 || minutes >= 18 * 60 + 30) return [];
-  const tomorrow = new Date(
-    Date.UTC(
-      nowWall_.getUTCFullYear(),
-      nowWall_.getUTCMonth(),
-      nowWall_.getUTCDate() + 1,
-    ),
-  );
+  const tomorrow = digestDay(nowWall_);
+  if (!tomorrow) return [];
   const list = await listEventsInRange(
     pool,
     tomorrow,
@@ -299,4 +315,51 @@ export async function clearDisabledReason(
     .update(reminderPrefs)
     .set({ disabledReason: null })
     .where(eq(reminderPrefs.userId, userId));
+}
+
+export type DueEntryQuiz = {
+  subjectName: string;
+  className: string;
+  /** null: a session of the whole class. */
+  groupName: string | null;
+};
+
+/**
+ * Tomorrow's entry quizzes for the channel digest (18:00–18:30 only, else
+ * empty): the confirmed class sessions that carry the Entry quiz badge, one
+ * entry per class and group, in order of their first session. Whether they
+ * were already posted is the caller's (bot setting `digest_quiz_date`).
+ */
+export async function dueEntryQuizzes(
+  pool: mysql.Pool,
+  nowWall_: Date,
+): Promise<DueEntryQuiz[]> {
+  const tomorrow = digestDay(nowWall_);
+  if (!tomorrow) return [];
+  const key = tomorrow.toISOString().slice(0, 10);
+  const sessions = (
+    await listWeekSessionRows(pool, isoWeekOf(tomorrow))
+  ).filter(
+    (s) => s.startsAt.toISOString().slice(0, 10) === key && s.classId !== null,
+  );
+  if (sessions.length === 0) return [];
+  const marks = await listWeekMarks(
+    pool,
+    sessions.map((s) => s.classId as number),
+  );
+  if (marks.length === 0) return [];
+  const out: DueEntryQuiz[] = [];
+  const seen = new Set<string>();
+  for (const s of annotateWeek(sessions, marks)) {
+    if (!s.badges?.some((b) => b.kind === 'entry_quiz')) continue;
+    const k = `${s.classId}:${s.groupId ?? 0}`;
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push({
+      subjectName: s.subjectName,
+      className: s.className ?? s.label,
+      groupName: s.groupName,
+    });
+  }
+  return out;
 }

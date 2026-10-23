@@ -119,7 +119,7 @@ export async function runEventAdd(
     if (!first) return void (await say(r.message));
     eventId = first.id;
   }
-  const v = await cardView(deps, eventId);
+  const v = await cardView(deps, eventId, deps.pool);
   await i.editReply({
     components: v.components,
     flags: v.flags,

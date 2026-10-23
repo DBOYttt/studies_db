@@ -6,9 +6,12 @@ import {
   type Db,
   DIGEST_USER_ID,
   DM_DISABLED_REASON,
+  type DueEntryQuiz,
+  digestDay,
   disableReminders,
   dueDigest,
   dueDms,
+  dueEntryQuizzes,
   EVENT_KINDS,
   getSetting,
   markSent,
@@ -30,6 +33,11 @@ export const TICK_MS = 60_000;
 /** bot_settings key of the long-lived "Przypomnienia" thread in #wydarzenia. */
 export const DIGEST_THREAD_SETTING = 'events_digest_thread_id';
 export const DIGEST_THREAD_NAME = '📅 Przypomnienia';
+/**
+ * bot_settings key: the day (`YYYY-MM-DD`, the "tomorrow" of the digest)
+ * whose entry quizzes were posted, so they go out once per day.
+ */
+export const DIGEST_QUIZ_SETTING = 'digest_quiz_date';
 const MAX_MESSAGE = 2000;
 
 /** The Discord operations the tick needs; `discordReminderGuild` is the real one. */
@@ -51,10 +59,13 @@ export interface ReminderGuild {
 export type ReminderMemory = {
   sent: Set<string>;
   digestThread: string | null;
+  /** The digest day whose entry quizzes this process posted. */
+  quizDate: string | null;
 };
 export const createReminderMemory = (): ReminderMemory => ({
   sent: new Set(),
   digestThread: null,
+  quizDate: null,
 });
 const keyOf = (eventId: number, userId: number, kind: string, t: Date) =>
   `${eventId}:${userId}:${kind}:${t.getTime()}`;
@@ -93,9 +104,21 @@ export function dmText(
   return `Reminder: ${head}\n${webBaseUrl}/s/wydarzenia/${e.id}`;
 }
 
-/** `Tomorrow:` and a line per event, at most 2000 characters. */
-export function digestText(events: PlanSession[]): string {
-  const lines = events.map((e) => {
+/** `Entry quiz: <subject>, <class> <group>` */
+export const quizLine = (q: DueEntryQuiz) =>
+  `Entry quiz: ${escapeMarkdown(q.subjectName)}, ${escapeMarkdown(
+    [q.className, q.groupName].filter(Boolean).join(' '),
+  )}`;
+
+/**
+ * `Tomorrow:`, a line per event, then a line per entry quiz; at most 2000
+ * characters.
+ */
+export function digestText(
+  events: PlanSession[],
+  quizzes: DueEntryQuiz[] = [],
+): string {
+  const eventLines = events.map((e) => {
     const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
     return [
       `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
@@ -106,6 +129,7 @@ export function digestText(events: PlanSession[]): string {
       .filter(Boolean)
       .join(' · ');
   });
+  const lines = [...eventLines, ...quizzes.map(quizLine)];
   let out = 'Tomorrow:';
   for (let n = 0; n < lines.length; n++) {
     const rest = lines.length - n - 1;
@@ -199,7 +223,21 @@ async function postDigest(
   const events = (await dueDigest(pool, now)).filter(
     (e) => !memory.sent.has(keyOf(e.id, DIGEST_USER_ID, 'digest', e.startsAt)),
   );
-  if (events.length === 0) return;
+  // Entry quizzes go out once per digest day (the first message that day
+  // carries them; events added later get their own lines only).
+  const day = digestDay(now);
+  const quizDay = day ? day.toISOString().slice(0, 10) : null;
+  let quizzes: DueEntryQuiz[] = [];
+  if (quizDay && memory.quizDate !== quizDay) {
+    const found = await dueEntryQuizzes(pool, now);
+    if (
+      found.length > 0 &&
+      (await getSetting(db, DIGEST_QUIZ_SETTING)) !== quizDay
+    ) {
+      quizzes = found;
+    }
+  }
+  if (events.length === 0 && quizzes.length === 0) return;
   const forumId = await getSetting(db, EVENTS_FORUM_SETTING);
   if (!forumId) return;
   const stored = await getSetting(db, DIGEST_THREAD_SETTING);
@@ -207,9 +245,17 @@ async function postDigest(
   const posted = await guild.postDigest(
     forumId,
     threadId ?? null,
-    digestText(events),
+    digestText(events, quizzes),
   );
   memory.digestThread = posted;
+  if (quizzes.length > 0 && quizDay) {
+    memory.quizDate = quizDay;
+    try {
+      await setSetting(db, DIGEST_QUIZ_SETTING, quizDay);
+    } catch (err) {
+      console.error('reminders: saving the entry quiz digest day failed:', err);
+    }
+  }
   for (const e of events) {
     memory.sent.add(keyOf(e.id, DIGEST_USER_ID, 'digest', e.startsAt));
   }

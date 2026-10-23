@@ -95,6 +95,8 @@ export interface EventCardData {
   postUrl: string | null;
   /** "every week" / "every 2 weeks" for an occurrence of a series. */
   seriesLabel?: string | null;
+  /** After a save: "Shown on <class> <group>, <Ddd D Mon>" (a Test on a session). */
+  shownOn?: string | null;
 }
 
 const base = (u: string) => u.replace(/\/+$/, '');
@@ -136,6 +138,7 @@ export function eventCard(d: EventCardData): View {
     `**When** ${whenLabel(d.startsAt, d.endsAt, d.allDay)}`,
     d.place ? `**Place** ${esc(d.place)}` : null,
     d.placement ? `**Class** ${esc(d.placement)}` : null,
+    d.shownOn ? `-# ${esc(d.shownOn)}` : null,
     d.note ? esc(d.note) : null,
   ]
     .filter((l): l is string => !!l)

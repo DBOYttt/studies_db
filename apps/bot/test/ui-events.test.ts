@@ -4,6 +4,7 @@ import {
   botRequests,
   classes,
   classGroups,
+  classSessions,
   type Db,
   events,
   eventTopics,
@@ -745,5 +746,98 @@ describe('series scope', () => {
     const i = interaction('v1:evt:del:1:everything');
     await handler()(i);
     expect(textOf(i.reply.mock.calls[0][0])).toContain('out of date');
+  });
+});
+
+describe('"Shown on" a timetable session', () => {
+  let classId: number;
+  let groupId: number;
+  beforeEach(async () => {
+    const [c] = await db
+      .insert(classes)
+      .values({ subjectId, kind: 'laboratorium', name: 'Laboratorium' });
+    classId = c.insertId;
+    const [g] = await db
+      .insert(classGroups)
+      .values({ classId, number: 2, name: 'Gr. 2' });
+    groupId = g.insertId;
+    // Tue 20.10.2026 10:00-11:30, Laboratorium Gr. 2.
+    await db.insert(classSessions).values({
+      uid: 's1',
+      occurrenceStart: new Date('2026-10-20T10:00:00Z'),
+      startsAt: new Date('2026-10-20T10:00:00Z'),
+      endsAt: new Date('2026-10-20T11:30:00Z'),
+      label: 'L',
+      subjectId,
+      classId,
+      groupId,
+    });
+  });
+  const SHOWN = 'Shown on Laboratorium Gr. 2, Tue 20 Oct';
+
+  it('after setting the class and group of a Test inside the session', async () => {
+    await handler()(save('new', fields({ when: '20.10.2026 10:15' })));
+    const [e] = await db.select().from(events);
+    expect(e.classId).toBeNull();
+    const set = interaction(`v1:evt:grp:${e.id}`, {
+      kind: 'select',
+      values: [`g${groupId}`],
+    });
+    await handler()(set);
+    expect(textOf(lastEdit(set))).toContain(SHOWN);
+    // An edit that keeps the time inside says it again, one outside does not.
+    const inside = save(
+      String(e.id),
+      fields({ when: '20.10.2026 11:00' }),
+      selects(),
+      true,
+    );
+    await handler()(inside);
+    expect(textOf(lastEdit(inside))).toContain(SHOWN);
+    const outside = save(
+      String(e.id),
+      fields({ when: '20.10.2026 11:30' }),
+      selects(),
+      true,
+    );
+    await handler()(outside);
+    expect(textOf(lastEdit(outside))).not.toContain('Shown on');
+  });
+
+  it('not for an event without a class, nor for another kind', async () => {
+    const i = save('new', fields({ when: '20.10.2026 10:15' }));
+    await handler()(i);
+    expect(textOf(lastEdit(i))).not.toContain('Shown on');
+    const [e] = await db.select().from(events);
+    await db.update(events).set({ classId, groupId, kind: 'inne' });
+    const show = interaction(`v1:evt:grp:${e.id}`, {
+      kind: 'select',
+      values: [`g${groupId}`],
+    });
+    await handler()(show);
+    expect(textOf(lastEdit(show))).not.toContain('Shown on');
+  });
+
+  it('/event add with the class and group', async () => {
+    const i = slash({
+      kind: 'kolokwium',
+      title: 'Kolokwium 1',
+      when: '20.10.2026 10:00',
+      subject: 'asd',
+      class: 'laboratorium',
+      group: 2,
+    });
+    await handler()(i);
+    expect(textOf(i.editReply.mock.calls[0][0])).toContain(SHOWN);
+    const other = slash({
+      kind: 'kolokwium',
+      title: 'Kolokwium 2',
+      when: '21.10.2026 10:00',
+      subject: 'asd',
+      class: 'laboratorium',
+      group: 2,
+    });
+    await handler()(other);
+    expect(textOf(other.editReply.mock.calls[0][0])).not.toContain('Shown on');
   });
 });
