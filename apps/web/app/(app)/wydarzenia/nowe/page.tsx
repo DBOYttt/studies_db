@@ -3,7 +3,7 @@ import { EventForm } from '@/components/events/EventForm';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
-import { newEventDefaults } from '@/lib/event-form-page';
+import { loadNewEventForm } from '@/lib/event-form-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
 import { requireUser } from '@/lib/session';
 
@@ -18,7 +18,10 @@ export default async function NewEventPage({
 }) {
   await requireUser();
   const sp = await searchParams;
-  const options = await listEventSubjectOptions(getDb());
+  const [options, form] = await Promise.all([
+    listEventSubjectOptions(getDb()),
+    loadNewEventForm(sp),
+  ]);
   return (
     <>
       <ScreenHeader
@@ -32,7 +35,8 @@ export default async function NewEventPage({
       <EventForm
         options={options}
         base="advanced"
-        initial={newEventDefaults(sp)}
+        initial={form.initial}
+        sessions={form.sessions}
         cancelHref="/plan"
       />
     </>

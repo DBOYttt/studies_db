@@ -5,6 +5,7 @@ import {
   CalendarBlank,
   ChalkboardTeacher,
   PencilSimple,
+  Plus,
   TerminalWindow,
   X,
 } from '@phosphor-icons/react';
@@ -12,7 +13,7 @@ import { CLASS_NAMES, EVENT_KINDS } from '@studies/db/constants';
 import Link from 'next/link';
 import { type RefObject, useEffect, useRef } from 'react';
 import type { PlanBadge, PlanSession } from '@/lib/plan';
-import { eventPageHref } from '@/lib/plan-events';
+import { canAddTest, eventPageHref, newTestHref } from '@/lib/plan-events';
 import {
   entryQuizEditHref,
   type SessionLinks,
@@ -163,6 +164,17 @@ export function SessionPanel({
           </section>
         )}
         <div className="flex flex-wrap gap-1.5">
+          {canAddTest(s) && (
+            <Link
+              href={newTestHref(s, simple)}
+              aria-label="Add test"
+              title="Add a test on this session"
+              className={btn}
+            >
+              <Plus size={14} weight="bold" aria-hidden />
+              Test
+            </Link>
+          )}
           <Link href={s.links.subject} className={btn}>
             <ArrowSquareOut size={14} aria-hidden />
             Subject

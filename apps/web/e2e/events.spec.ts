@@ -389,3 +389,111 @@ test.describe('concurrent edits', () => {
     );
   });
 });
+
+test.describe('assessments on the timetable', () => {
+  const week = () => `/s/plan?week=${isoWeekParam(dateIn(7))}`;
+  const lab = (page: import('@playwright/test').Page) =>
+    page.getByTestId('plan-block').filter({ hasText: 'F-6 601' });
+
+  test('"Add test" on a lab block opens the form with the session picked; saving shows the Test badge', async ({
+    page,
+  }) => {
+    await page.goto(week());
+    const panel = page.getByRole('complementary', { name: 'Class details' });
+    await expect(async () => {
+      await lab(page).locator('[data-block-main]').click();
+      await expect(panel).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    const add = panel.getByRole('link', { name: 'Add test' });
+    await expect(add).toHaveAttribute(
+      'href',
+      /^\/s\/wydarzenia\/nowe\?kind=kolokwium&subject=\d+&class=\d+&group=\d+&session=\d+$/,
+    );
+    await add.click();
+
+    await expect(page).toHaveURL(/\/s\/wydarzenia\/nowe\?/);
+    await expect(page.getByLabel('Type')).toHaveValue('kolokwium');
+    const pick = page.getByLabel('Pick a session');
+    await expect(pick.locator('option:checked')).toHaveText(
+      /, 14:00–15:30 · F-6 601$/,
+    );
+    await expect(page.getByLabel('Date')).toHaveValue(dateIn(7));
+    await expect(page.getByLabel('From (time)')).toHaveValue('14:00');
+    await expect(page.getByLabel('To (time)')).toHaveValue('15:30');
+    await expect(page.getByLabel('Place')).toHaveValue('F-6 601');
+
+    // Picking the next session fills date, time and place.
+    await pick.selectOption({ index: 2 });
+    await expect(page.getByLabel('Date')).toHaveValue(dateIn(14));
+    await pick.selectOption({ index: 1 });
+    await expect(page.getByLabel('Date')).toHaveValue(dateIn(7));
+
+    await page.getByLabel('Title', { exact: true }).fill('Kolokwium z sesji');
+    await page.getByRole('button', { name: 'Add event' }).click();
+    await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+
+    await page.goto(week());
+    await expect(
+      lab(page).getByRole('link', { name: 'Test: Kolokwium z sesji' }),
+    ).toBeVisible();
+  });
+
+  test('turn on an entry quiz on the subject page; the badge shows on the timetable', async ({
+    page,
+  }) => {
+    await page.goto('/s/subjects/SESJ?class=laboratorium');
+    const section = page.getByRole('region', {
+      name: 'Entry quiz every session',
+    });
+    await expect(section).toHaveAttribute('id', 'entry-quiz');
+    await section.getByLabel('Note (optional)').fill('Rozdział 3');
+    await section.getByRole('button', { name: 'Turn on' }).click();
+    await expect(
+      section.getByRole('button', { name: 'Turn off' }),
+    ).toBeVisible();
+    await expect(section.getByLabel('Note', { exact: true })).toHaveValue(
+      'Rozdział 3',
+    );
+
+    // A second "Turn on" for all groups is refused.
+    await section.getByRole('button', { name: 'Turn on' }).click();
+    await expect(section.getByRole('alert')).toHaveText(
+      'Entry quiz is already on for this class.',
+    );
+
+    await page.goto(week());
+    await expect(
+      lab(page).getByRole('button', { name: 'Entry quiz' }),
+    ).toBeVisible();
+  });
+
+  test('skipped dates are listed with "Undo"; "Turn off" removes the badge', async ({
+    page,
+  }) => {
+    await page.goto(week());
+    await lab(page).getByRole('button', { name: 'Entry quiz' }).click();
+    const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
+    await dialog.getByRole('button', { name: 'Not this week' }).click();
+    await expect(
+      lab(page).getByRole('button', { name: 'Entry quiz' }),
+    ).toHaveCount(0);
+
+    await page.goto('/s/subjects/SESJ?class=laboratorium');
+    const section = page.getByRole('region', {
+      name: 'Entry quiz every session',
+    });
+    const skipped = section.getByRole('list', { name: 'Skipped dates' });
+    await expect(skipped.getByRole('listitem')).toHaveCount(1);
+    await skipped.getByRole('button', { name: /^Undo/ }).click();
+    await expect(skipped).toHaveCount(0);
+
+    await section.getByRole('button', { name: 'Turn off' }).click();
+    await expect(section.getByRole('button', { name: 'Turn off' })).toHaveCount(
+      0,
+    );
+    await page.goto(week());
+    await expect(
+      lab(page).getByRole('button', { name: 'Entry quiz' }),
+    ).toHaveCount(0);
+  });
+});

@@ -10,6 +10,7 @@ import {
   TreeStructure,
   UsersThree,
 } from '@phosphor-icons/react/dist/ssr';
+import { MARK_NOTE_MAX } from '@studies/db';
 import { ASSESSMENT_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
@@ -18,6 +19,7 @@ import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { DataMap } from '@/components/explorer/DataMap';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
 import { TagSelect } from '@/components/explorer/TagSelect';
+import { EntryQuizSection } from '@/components/plan/EntryQuizSection';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
 import { SqlConsole } from '@/components/SqlConsole';
@@ -29,6 +31,7 @@ import {
 import type { Cell } from '@/lib/cells';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
+import { loadEntryQuiz } from '@/lib/entry-quiz';
 import {
   type ExplorerFilters,
   type ExplorerParams,
@@ -41,6 +44,8 @@ import {
   withResolvedSelection,
 } from '@/lib/explorer';
 import { formatDate, safeExternalUrl } from '@/lib/format';
+import { nowWall } from '@/lib/plan';
+import { wallDateKey } from '@/lib/plan-view';
 import {
   getExplorerFile,
   getSubject,
@@ -86,7 +91,7 @@ export default async function SubjectPage({
   params: Promise<{ code: string }>;
   searchParams: Promise<SP>;
 }) {
-  await requireUser();
+  const user = await requireUser();
   const { code: rawCode } = await params;
   const sp = await searchParams;
   const db = getDb();
@@ -222,15 +227,24 @@ export default async function SubjectPage({
           showTag={tab === 'explorer'}
         />
         {tab === 'explorer' && (
-          <FilesTab
-            subjectId={subject.id}
-            code={code}
-            sel={sel}
-            filters={filters}
-            sp={sp}
-            sqlSel={sqlSel}
-            sqlPath={sqlPath}
-          />
+          <>
+            <FilesTab
+              subjectId={subject.id}
+              code={code}
+              sel={sel}
+              filters={filters}
+              sp={sp}
+              sqlSel={sqlSel}
+              sqlPath={sqlPath}
+            />
+            {sel.classKind !== 'none' && (
+              <ClassEntryQuiz
+                classes={cls ? [cls] : classList}
+                defaultGroupId={grp?.id ?? null}
+                isAdmin={user.isAdmin}
+              />
+            )}
+          </>
         )}
         {tab === 'lecturers' && (
           <LecturersTab subjectId={subject.id} classList={classList} />
@@ -417,6 +431,30 @@ async function FilesTab({
         </div>
       )}
     </div>
+  );
+}
+
+/** "Entry quiz every session" of the selected class (or every class). */
+async function ClassEntryQuiz({
+  classes,
+  defaultGroupId,
+  isAdmin,
+}: {
+  classes: SubjectClass[];
+  defaultGroupId: number | null;
+  isAdmin: boolean;
+}) {
+  if (classes.length === 0) return null;
+  const view = await loadEntryQuiz(getDb(), classes, {
+    isAdmin,
+    today: wallDateKey(nowWall()),
+  });
+  return (
+    <EntryQuizSection
+      classes={view}
+      defaultGroupId={defaultGroupId}
+      noteMax={MARK_NOTE_MAX}
+    />
   );
 }
 

@@ -2,7 +2,7 @@ import { EventForm } from '@/components/events/EventForm';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb } from '@/lib/db';
-import { newEventDefaults } from '@/lib/event-form-page';
+import { loadNewEventForm } from '@/lib/event-form-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
@@ -20,9 +20,10 @@ export default async function SimpleNewEvent({
   const user = await requireUser();
   const sp = await searchParams;
   const db = getDb();
-  const [cards, options] = await Promise.all([
+  const [cards, options, form] = await Promise.all([
     listSubjectCards(db),
     listEventSubjectOptions(db),
+    loadNewEventForm(sp),
   ]);
   return (
     <SimpleShell
@@ -42,7 +43,8 @@ export default async function SimpleNewEvent({
       <EventForm
         options={options}
         base="simple"
-        initial={newEventDefaults(sp)}
+        initial={form.initial}
+        sessions={form.sessions}
         cancelHref="/s/plan"
       />
     </SimpleShell>

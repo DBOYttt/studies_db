@@ -473,6 +473,53 @@ export default async function globalSetup() {
     );
     if (!quiz.ok) throw new Error(`e2e entry quiz: ${quiz.message}`);
 
+    // Editing assessments (events.spec.ts): subject SESJ with upcoming lab
+    // sessions 7 and 14 days ahead (dates as the spec's `dateIn`).
+    const [{ id: sesjId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Sesje testowe',
+        code: 'SESJ',
+        semester: 3,
+        ects: 2,
+        discordChannelId: 'e2e-ch-sesj',
+      })
+      .$returningId();
+    const sesjLab = await ensureClass(db, sesjId, 'laboratorium');
+    const sesjGr1 = await ensureGroup(db, sesjLab, 1);
+    const ahead = (days: number, h: number, m = 0) => {
+      const d = new Date(Date.now() + days * 86_400_000);
+      return new Date(
+        Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), h, m),
+      );
+    };
+    await db
+      .insert(classSessions)
+      .values([
+        session(
+          'e2e-sesj-1',
+          sesjId,
+          sesjLab,
+          sesjGr1,
+          null,
+          'Laboratorium gr 1',
+          'F-6 601',
+          ahead(7, 14),
+          ahead(7, 15, 30),
+        ),
+        session(
+          'e2e-sesj-2',
+          sesjId,
+          sesjLab,
+          sesjGr1,
+          null,
+          'Laboratorium gr 1',
+          'F-6 601',
+          ahead(14, 14),
+          ahead(14, 15, 30),
+        ),
+      ]);
+
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_ENTITIES = await createLoginToken(db, userId);

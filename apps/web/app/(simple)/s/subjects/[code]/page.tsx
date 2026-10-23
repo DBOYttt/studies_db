@@ -1,6 +1,8 @@
 import { ArrowSquareOut, Info } from '@phosphor-icons/react/dist/ssr';
+import { MARK_NOTE_MAX } from '@studies/db';
 import { CLASS_NAMES } from '@studies/db/constants';
 import { notFound } from 'next/navigation';
+import { EntryQuizSection } from '@/components/plan/EntryQuizSection';
 import { FileList } from '@/components/simple/FileList';
 import { type ChipRow, FilterChips } from '@/components/simple/FilterChips';
 import { LecturerCards } from '@/components/simple/LecturerCards';
@@ -10,9 +12,11 @@ import { SimplePreview } from '@/components/simple/SimplePreview';
 import type { Crumb } from '@/components/simple/SimpleShell';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { getDb, getRoPool } from '@/lib/db';
+import { loadEntryQuiz } from '@/lib/entry-quiz';
 import { safeExternalUrl } from '@/lib/format';
 import { nowWall } from '@/lib/plan';
 import { nextSessions } from '@/lib/plan-queries';
+import { wallDateKey } from '@/lib/plan-view';
 import {
   getSubject,
   listSubjectClasses,
@@ -67,7 +71,9 @@ export default async function SimpleSubject({
     ),
     tags.map((t) => t.id),
   );
-  const [list, preview] = await Promise.all([
+  const cls = classes.find((c) => c.kind === cur.kind);
+  const group = cls?.groups.find((g) => g.number === cur.group);
+  const [list, preview, entryQuiz] = await Promise.all([
     listSimpleFiles(db, {
       subjectId: subject.id,
       kind: cur.kind ?? undefined,
@@ -76,14 +82,17 @@ export default async function SimpleSubject({
       limit: MAX_FILES,
     }),
     loadSimplePreview(db, sp, cards),
+    // The selected class only (the timetable's "Edit" lands here), else all.
+    loadEntryQuiz(db, cls ? [cls] : classes, {
+      isAdmin: user.isAdmin,
+      today: wallDateKey(nowWall()),
+    }),
   ]);
 
   const href = (change: Parameters<typeof chipHref>[2]) =>
     chipHref(subject.code, cur, change);
   const baseHref = href({});
   const filtered = cur.kind !== null || cur.group !== null || cur.tag !== null;
-  const cls = classes.find((c) => c.kind === cur.kind);
-  const group = cls?.groups.find((g) => g.number === cur.group);
 
   const rows: ChipRow[] = [
     {
@@ -214,6 +223,13 @@ export default async function SimpleSubject({
         </p>
       )}
       {sessions.length > 0 && <NextSessions sessions={sessions} />}
+      {entryQuiz.length > 0 && (
+        <EntryQuizSection
+          classes={entryQuiz}
+          defaultGroupId={group?.id ?? null}
+          noteMax={MARK_NOTE_MAX}
+        />
+      )}
       {lecturers.length > 0 && (
         <>
           <h2 className="mt-3 mb-0 text-base font-semibold">Lecturers</h2>

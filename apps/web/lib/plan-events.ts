@@ -44,6 +44,33 @@ export function newEventHref(
   return `${simple ? '/s' : ''}/wydarzenia/nowe?${q}`;
 }
 
+/** "Add test" is offered on confirmed class sessions that have a class. */
+export const canAddTest = (
+  s: Pick<PlanSession, 'type' | 'status' | 'sessionKind' | 'classId'>,
+): boolean =>
+  s.type === 'class' &&
+  s.status === 'confirmed' &&
+  s.sessionKind !== 'exam' &&
+  s.classId !== null;
+
+/**
+ * "Add test" of a session: the event form as a Test of the session's
+ * subject, class and group, with the session picked (date, time and room).
+ */
+export function newTestHref(
+  s: Pick<PlanSession, 'id' | 'subjectId' | 'classId' | 'groupId'>,
+  simple: boolean,
+): string {
+  const q = new URLSearchParams({
+    kind: 'kolokwium',
+    subject: String(s.subjectId),
+  });
+  if (s.classId !== null) q.set('class', String(s.classId));
+  if (s.groupId !== null) q.set('group', String(s.groupId));
+  q.set('session', String(s.id));
+  return `${simple ? '/s' : ''}/wydarzenia/nowe?${q}`;
+}
+
 /** Events of a subject-filtered plan; lecturer-filtered plans have none. */
 export function eventsForFilter(
   events: PlanSession[],

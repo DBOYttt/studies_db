@@ -7,10 +7,12 @@ import {
 } from '../lib/plan';
 import {
   annotatePlanWeek,
+  canAddTest,
   dayColumns,
   eventsForFilter,
   eventWhenShort,
   newEventHref,
+  newTestHref,
 } from '../lib/plan-events';
 import { pickUpcoming } from '../lib/upcoming-events';
 
@@ -86,6 +88,23 @@ describe('helpers', () => {
     expect(newEventHref(next, now, cur, false, 5)).toBe(
       '/wydarzenia/nowe?date=2026-10-19&subject=5',
     );
+  });
+  it('"+ Test" opens the form prefilled with the session', () => {
+    const s = { ...base, type: 'class' as const, id: 42, classId: 3 };
+    expect(newTestHref({ ...s, groupId: 8 }, true)).toBe(
+      '/s/wydarzenia/nowe?kind=kolokwium&subject=5&class=3&group=8&session=42',
+    );
+    expect(newTestHref(s, false)).toBe(
+      '/wydarzenia/nowe?kind=kolokwium&subject=5&class=3&session=42',
+    );
+  });
+  it('"+ Test" only on confirmed class sessions', () => {
+    const s = { ...base, type: 'class' as const, id: 42, classId: 3 };
+    expect(canAddTest(s)).toBe(true);
+    expect(canAddTest({ ...s, status: 'cancelled' })).toBe(false);
+    expect(canAddTest({ ...s, sessionKind: 'exam' })).toBe(false);
+    expect(canAddTest({ ...s, classId: null })).toBe(false);
+    expect(canAddTest(base)).toBe(false);
   });
   it('short when label', () => {
     expect(eventWhenShort(base)).toBe('Wed 14 Oct, 10:00');
