@@ -51,17 +51,28 @@ export async function enqueueBotRequest(
       .limit(1);
     return row;
   };
-  const found = await existing();
+  // MariaDB has no FOR SHARE: the locking read is spelt out.
+  const lockedExisting = async () => {
+    const [rows] = (await db.execute(sql`
+      SELECT id FROM bot_requests
+       WHERE kind = ${kind} AND target = ${target} AND status = 'queued'
+       ORDER BY id LIMIT 1
+       LOCK IN SHARE MODE`)) as unknown as [{ id: number }[]];
+    return rows[0];
+  };
+  // A locking read (inside a transaction it holds until commit), so two
+  // concurrent enqueues rarely both insert. Then a plain INSERT ... VALUES:
+  // an INSERT ... SELECT would take the table-level AUTO-INC lock, and a
+  // deadlock on that lock is reported as 1467 (ER_AUTOINC_READ_FAILED)
+  // instead of 1213, which withTxRetry retries.
+  const found = await lockedExisting();
   if (found) return { id: found.id, created: false };
   const json = payload === undefined ? null : JSON.stringify(payload);
-  // Conditional insert, so two concurrent enqueues rarely both insert.
   const [res] = (await db.execute(sql`
     INSERT INTO bot_requests (kind, target, payload)
-    SELECT ${kind}, ${target}, ${json} FROM DUAL
-    WHERE NOT EXISTS (
-      SELECT 1 FROM bot_requests
-       WHERE kind = ${kind} AND target = ${target} AND status = 'queued'
-    )`)) as unknown as [{ insertId: number; affectedRows: number }];
+    VALUES (${kind}, ${target}, ${json})`)) as unknown as [
+    { insertId: number; affectedRows: number },
+  ];
   if (res.affectedRows === 1) return { id: res.insertId, created: true };
   const raced = await existing();
   if (!raced) throw new Error('enqueueBotRequest: queued row vanished');
