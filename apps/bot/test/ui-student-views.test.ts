@@ -594,7 +594,7 @@ describe('timetable assessments in the text lines', () => {
         lab({
           badges: [
             { kind: 'test', eventIds: [1], titles: ['Kolokwium 1'] },
-            { kind: 'entry_quiz', markId: 2, note: null },
+            { kind: 'entry_quiz', markId: 2, note: null, allGroups: false },
           ],
         }),
       ),
@@ -617,7 +617,9 @@ describe('timetable assessments in the text lines', () => {
     ).toBe('10:00–11:30 · AM1 Analiza matematyczna · Exam · C-13 1.23');
   });
   it('the day list and the alt text carry the badges', () => {
-    const s = lab({ badges: [{ kind: 'entry_quiz', markId: 2, note: null }] });
+    const s = lab({
+      badges: [{ kind: 'entry_quiz', markId: 2, note: null, allGroups: false }],
+    });
     const day = wall('2026-10-14T00:00:00');
     expect(allText(planDay([s], day, true, WEB))).toContain('· Entry quiz');
     const img = planDay([s], day, true, WEB, Buffer.from('png'));
@@ -647,7 +649,7 @@ describe('entry quiz views', () => {
     expect(allText(v)).toContain('Entry quizzes');
   });
 
-  it('classes: "All groups" and every group per class, capped at 25 options', () => {
+  it('classes: "All groups" and every group per class, 25 options per select', () => {
     const classes = Array.from({ length: 6 }, (_, c) => ({
       classId: 10 + c,
       className: c === 0 ? 'Laboratorium' : `Ćwiczenia ${c}`,
@@ -660,9 +662,21 @@ describe('entry quiz views', () => {
       { classId: 10, groupId: 101 },
     ]);
     expectValid(v);
-    const [sel] = selects(v);
-    expect(sel.custom_id).toBe('v1:stu:quiz:pick:7');
+    const [sel, sel2] = selects(v);
+    expect(ids(v)).toEqual([
+      'v1:stu:quiz:pick:7',
+      'v1:stu:quiz:pick:7:1',
+      'v1:stu:quiz:open',
+    ]);
     expect(sel.options).toHaveLength(25);
+    expect(sel.placeholder).toBe('Choose a class or group (1/2)');
+    // 6 classes × (All groups + 5 groups) = 36 options.
+    expect(sel2.options).toHaveLength(11);
+    expect(sel2.placeholder).toBe('Choose a class or group (2/2)');
+    expect(sel2.options.at(-1)).toMatchObject({
+      label: 'Ćwiczenia 5 · Gr. 5',
+      value: '15_604',
+    });
     expect(sel.options[0]).toMatchObject({
       label: 'Laboratorium · All groups',
       value: '10_0',
@@ -672,7 +686,24 @@ describe('entry quiz views', () => {
       value: '10_101',
       description: 'Entry quiz: on',
     });
-    expect(allText(v)).toMatch(/…and \d+ more/);
+    expect(allText(v)).not.toMatch(/…and \d+ more/);
+  });
+
+  it('classes: past three selects the rest are counted', () => {
+    const classes = Array.from({ length: 20 }, (_, c) => ({
+      classId: 10 + c,
+      className: `Klasa ${c}`,
+      groups: Array.from({ length: 4 }, (_, g) => ({
+        id: 100 * (c + 1) + g,
+        name: `Gr. ${g + 1}`,
+      })),
+    }));
+    const v = quizClassesView({ id: 999_999_999, name: 'Fizyka' }, classes, []);
+    expectValid(v);
+    expect(selects(v)).toHaveLength(3);
+    expect(customIds(v)).toContain('v1:stu:quiz:pick:999999999:2');
+    // 20 × 5 = 100 options, 75 shown.
+    expect(allText(v)).toContain('…and 25 more');
     ids(v);
   });
 
@@ -683,6 +714,7 @@ describe('entry quiz views', () => {
     className: 'Laboratorium',
     groupId: 101,
     groupName: 'Gr. 2',
+    allGroupsOn: false,
     mark: null,
     dates: [],
     ...over,
@@ -728,7 +760,7 @@ describe('entry quiz views', () => {
     ]);
     const [sel] = selects(v);
     expect(sel.custom_id).toBe('v1:stu:quiz:skip:42');
-    expect(sel.placeholder).toBe('Not this week');
+    expect(sel.placeholder).toBe('Not this week (all groups)');
     expect(sel.options.map((o: Json) => [o.value, o.label])).toEqual([
       ['20261014', 'Wed 14 Oct'],
       ['20261028', 'Wed 28 Oct'],
@@ -737,6 +769,45 @@ describe('entry quiz views', () => {
       ['20261118', 'Wed 18 Nov'],
     ]);
     ids(v);
+  });
+
+  it('a group mark: "Not this week" for that group only', () => {
+    const v = quizClassView(
+      data({
+        mark: { id: 43, note: null, skips: [] },
+        dates: ['2026-10-14'],
+      }),
+    );
+    expectValid(v);
+    expect(selects(v)[0].placeholder).toBe('Not this week');
+  });
+
+  it('a group under an all-groups mark links the all-groups view', () => {
+    const v = quizClassView(data({ allGroupsOn: true, dates: ['2026-10-14'] }));
+    expectValid(v);
+    const t = allText(v);
+    expect(t).toContain('Entry quiz: on for all groups');
+    expect(t).not.toContain('Entry quiz: off');
+    const b = buttons(v).map((x) => [x.custom_id, x.label]);
+    expect(b).toEqual([
+      ['v1:stu:quiz:all:10', 'All groups'],
+      ['v1:stu:quiz:cls:7', 'Other class'],
+    ]);
+    expect(selects(v)).toHaveLength(0);
+    ids(v);
+  });
+
+  it('a leftover group mark under an all-groups mark can still be turned off', () => {
+    const v = quizClassView(
+      data({ allGroupsOn: true, mark: { id: 44, note: null, skips: [] } }),
+    );
+    expectValid(v);
+    expect(allText(v)).toContain('Entry quiz: on for all groups');
+    expect(buttons(v).map((x) => [x.custom_id, x.label])).toEqual([
+      ['v1:stu:quiz:all:10', 'All groups'],
+      ['v1:stu:quiz:tog:10:101:0', 'Turn off'],
+      ['v1:stu:quiz:cls:7', 'Other class'],
+    ]);
   });
 
   it('class on without upcoming sessions: no select', () => {

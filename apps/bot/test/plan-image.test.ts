@@ -274,7 +274,12 @@ describe('timetable assessments', () => {
     eventIds: [7],
     titles: ['Kolokwium 1'],
   };
-  const quiz = { kind: 'entry_quiz' as const, markId: 3, note: null };
+  const quiz = {
+    kind: 'entry_quiz' as const,
+    markId: 3,
+    note: null,
+    allGroups: true,
+  };
 
   it('week: the class line carries the badges, unchanged without them', () => {
     expect(texts(weekLines(lab(), '#fff'))).toContain('Laboratorium Gr. 2');

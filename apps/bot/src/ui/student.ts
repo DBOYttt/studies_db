@@ -45,6 +45,7 @@ import {
 } from '../commands/student.js';
 import { toDiscordUser } from '../discord/map.js';
 import { renderDayImage, renderWeekImage } from './plan-image.js';
+import { STALE_TEXT } from './respond.js';
 import {
   groupSubjects,
   groupsView,
@@ -106,7 +107,10 @@ function parseCompactDay(s: string | undefined): string | null {
   return parseDay(key) ? key : null;
 }
 
-/** The `quiz` actions: open, subj[:page], cls:<subject>, pick, tog, skip. */
+/**
+ * The `quiz` actions: open, subj[:page], cls:<subject>, pick:<subject>[:page],
+ * all:<class>, tog, skip.
+ */
 function parseQuizAction(
   args: string[],
   values: readonly string[],
@@ -128,6 +132,9 @@ function parseQuizAction(
     case 'pick': {
       const m = CLASS_GROUP_RE.exec(value ?? '');
       if (!m || a === undefined || !ID_RE.test(a)) return null;
+      // Option values are ids, so the page arg is only checked.
+      if (b !== undefined && !INDEX_RE.test(b)) return null;
+      if (c !== undefined) return null;
       const groupId = Number(m[2]);
       return {
         kind: 'quizClass',
@@ -135,6 +142,13 @@ function parseQuizAction(
         groupId: groupId === 0 ? null : groupId,
       };
     }
+    case 'all':
+      return a !== undefined &&
+        ID_RE.test(a) &&
+        args.length === 2 &&
+        values.length === 0
+        ? { kind: 'quizClass', classId: Number(a), groupId: null }
+        : null;
     case 'tog': {
       if (a === undefined || !ID_RE.test(a)) return null;
       if (b === undefined || !GROUP_ARG_RE.test(b)) return null;
@@ -321,9 +335,12 @@ async function quizClassData(
     groupId === null ? null : c.groups.find((g) => g.id === groupId);
   if (group === undefined) return null;
   const today = dayKeyOf(nowWall());
-  const mark = (await listMarks(ctx.deps.ingest.db, [classId])).find(
-    (m) => m.kind === 'wejsciowka' && m.groupId === groupId,
+  const quizzes = (await listMarks(ctx.deps.ingest.db, [classId])).filter(
+    (m) => m.kind === 'wejsciowka',
   );
+  const mark = quizzes.find((m) => m.groupId === groupId);
+  const allGroupsOn =
+    groupId !== null && quizzes.some((m) => m.groupId === null);
   const skips = mark ? mark.skips.filter((d) => d >= today) : [];
   const dates = mark
     ? (
@@ -345,6 +362,7 @@ async function quizClassData(
     className: c.className,
     groupId,
     groupName: group?.name ?? null,
+    allGroupsOn,
     mark: mark ? { id: mark.id, note: mark.note, skips } : null,
     dates,
   };
@@ -385,7 +403,9 @@ async function runQuizAction(
         db,
         classes.map((c) => c.classId),
       );
-      const name = classes[0]?.subjectName ?? '';
+      // No classes: the subject is gone or has no sessions (an old panel).
+      if (classes.length === 0) return ctx.show(notice(STALE_TEXT));
+      const name = classes[0].subjectName;
       return ctx.show(
         quizClassesView(
           { id: a.subjectId, name },

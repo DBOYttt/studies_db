@@ -720,6 +720,40 @@ describe('entry quizzes in the panel', () => {
     expect(await db.select().from(classMarkSkips)).toHaveLength(0);
   });
 
+  it('a group under an all-groups mark: refused turn-on, link to the all-groups view', async () => {
+    await run(`v1:stu:quiz:tog:${id.cls}:0:1`);
+    const g = await run(`v1:stu:quiz:pick:${id.subj}`, [`${id.cls}_${id.g1}`]);
+    expect(textOf(last(g))).toContain('Entry quiz: on for all groups');
+    expect(cidOf(last(g), 'Turn on')).toBeUndefined();
+    const all = cidOf(last(g), 'All groups');
+    expect(all).toBe(`v1:stu:quiz:all:${id.cls}`);
+    const allView = await run(all);
+    expect(textOf(last(allView))).toContain('Laboratorium (all groups)');
+    expect(textOf(last(allView))).toContain('Entry quiz: on');
+    const skip = nodes(last(allView)).find((n) => n.type === 3);
+    expect(skip.placeholder).toBe('Not this week (all groups)');
+
+    // An old view's "Turn on" for the group gets the domain's refusal.
+    const refused = await run(`v1:stu:quiz:tog:${id.cls}:${id.g1}:1`);
+    expect(textOf(last(refused))).toContain(
+      'Entry quiz is already on for all groups of this class.',
+    );
+    expect(await db.select().from(classMarks)).toHaveLength(1);
+  });
+
+  it('the class select of a second page decodes', async () => {
+    const i = await run(`v1:stu:quiz:pick:${id.subj}:1`, [`${id.cls}_0`]);
+    expect(textOf(last(i))).toContain('Entry quiz: off');
+  });
+
+  it('a subject without classes (a stale id) gets the stale notice', async () => {
+    for (const cid of ['v1:stu:quiz:cls:999999', 'v1:stu:quiz:subj']) {
+      const i = await run(cid, cid.endsWith('subj') ? ['999999'] : undefined);
+      expect(textOf(last(i)), cid).toContain(STALE);
+      expect(textOf(last(i))).not.toContain('Entry quizzes —');
+    }
+  });
+
   it('turning off what is already off says so', async () => {
     const i = await run(`v1:stu:quiz:tog:${id.cls}:${id.g2}:0`);
     expect(textOf(last(i))).toContain('Entry quiz not found.');
@@ -734,6 +768,9 @@ describe('entry quizzes in the panel', () => {
       [`v1:stu:quiz:pick:${id.subj}`, ['10-1']],
       ['v1:stu:quiz:skip:1', ['2026-10-21']],
       ['v1:stu:quiz:skip:1', ['20261341']],
+      [`v1:stu:quiz:pick:${id.subj}:x`, [`${id.cls}_0`]],
+      ['v1:stu:quiz:all:x', undefined],
+      [`v1:stu:quiz:all:${id.cls}:1`, undefined],
       ['v1:stu:quiz:nope', undefined],
     ] as const) {
       const i = await run(cid, values as string[] | undefined);

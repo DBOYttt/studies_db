@@ -669,6 +669,11 @@ export type QuizClassData = {
   /** null: every group of the class. */
   groupId: number | null;
   groupName: string | null;
+  /**
+   * A group whose class has an active all-groups mark: that mark applies (it
+   * takes precedence), so the view links the all-groups view instead.
+   */
+  allGroupsOn: boolean;
   /** The active mark, its skipped dates (`YYYY-MM-DD`, today on). */
   mark: { id: number; note: string | null; skips: string[] } | null;
   /** Upcoming session dates (`YYYY-MM-DD`) not skipped yet. */
@@ -723,8 +728,9 @@ export function quizSubjectsView(subjects: QuizSubject[]): View {
 }
 
 /**
- * One select over the subject's classes: "All groups" and each group per
- * class (values `<classId>_<groupId|0>`), marked when an entry quiz is on.
+ * Selects over the subject's classes, 25 options each (at most 75): "All
+ * groups" and each group per class (values `<classId>_<groupId|0>`), marked
+ * when an entry quiz is on. Later selects carry their page on the custom_id.
  */
 export function quizClassesView(
   subject: QuizSubject,
@@ -741,7 +747,8 @@ export function quizClassesView(
       name: g.name,
     })),
   ]);
-  const shown = options.slice(0, MAX_OPTIONS);
+  const shown = options.slice(0, MAX_OPTIONS * 3);
+  const pages = chunk(shown, MAX_OPTIONS);
   const container = new ContainerBuilder()
     .addTextDisplayComponents(
       text(clip(`## Entry quizzes — ${subject.name}`, 200)),
@@ -750,14 +757,23 @@ export function quizClassesView(
     .addSeparatorComponents(divider());
   if (shown.length === 0) {
     container.addTextDisplayComponents(text(QUIZ_NO_CLASSES));
-  } else {
+  }
+  pages.forEach((page, p) => {
     container.addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
-          .setCustomId(encodeId('stu', 'quiz', 'pick', subject.id))
-          .setPlaceholder('Choose a class or group')
+          .setCustomId(
+            p === 0
+              ? encodeId('stu', 'quiz', 'pick', subject.id)
+              : encodeId('stu', 'quiz', 'pick', subject.id, p),
+          )
+          .setPlaceholder(
+            pages.length > 1
+              ? `Choose a class or group (${p + 1}/${pages.length})`
+              : 'Choose a class or group',
+          )
           .addOptions(
-            shown.map((o) => {
+            page.map((o) => {
               const opt = new StringSelectMenuOptionBuilder()
                 .setLabel(clip(`${o.c.className} · ${o.name}`))
                 .setValue(`${o.c.classId}_${o.groupId ?? 0}`);
@@ -769,7 +785,7 @@ export function quizClassesView(
           ),
       ),
     );
-  }
+  });
   if (options.length > shown.length) {
     container.addTextDisplayComponents(
       text(`-# ${more(options.length - shown.length)}`),
@@ -786,8 +802,10 @@ export function quizClassesView(
 
 /**
  * One class (or group): on/off, the note, the skipped dates, "Not this week"
- * over the next session dates and the toggle. `message` (the last action's
- * answer) goes on top.
+ * over the next session dates and the toggle. A group under an active
+ * all-groups mark says so and links the all-groups view instead (a leftover
+ * group mark of its own can still be turned off). `message` (the last
+ * action's answer) goes on top.
  */
 export function quizClassView(d: QuizClassData, message?: string): View {
   const where = `${d.subjectName}, ${d.className} ${d.groupName ?? '(all groups)'}`;
@@ -798,25 +816,34 @@ export function quizClassView(d: QuizClassData, message?: string): View {
     text(clip(escapeMarkdown(where), 500)),
   );
   const m = d.mark;
-  const state = [`**Entry quiz: ${m ? 'on' : 'off'}**`];
-  if (m?.note) state.push(`Note: ${escapeMarkdown(m.note)}`);
-  if (m && m.skips.length > 0) {
+  const underAll = d.groupId !== null && d.allGroupsOn;
+  const state = underAll
+    ? [
+        '**Entry quiz: on for all groups**',
+        '-# Skip a week or turn it off in the all-groups view.',
+      ]
+    : [`**Entry quiz: ${m ? 'on' : 'off'}**`];
+  if (!underAll && m?.note) state.push(`Note: ${escapeMarkdown(m.note)}`);
+  if (!underAll && m && m.skips.length > 0) {
     const named = m.skips.slice(0, QUIZ_SKIPS_SHOWN).map(dateLabel);
     const rest = m.skips.length - named.length;
     state.push(
       `-# Not this week: ${named.join(', ')}${rest > 0 ? ` …and ${rest} more` : ''}`,
     );
   }
-  if (!m) state.push(`-# ${QUIZ_HINT}`);
+  if (!m && !underAll) state.push(`-# ${QUIZ_HINT}`);
   container
     .addTextDisplayComponents(text(state.join('\n')))
     .addSeparatorComponents(divider());
-  if (m && d.dates.length > 0) {
+  if (m && !underAll && d.dates.length > 0) {
     container.addActionRowComponents(
       new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(
         new StringSelectMenuBuilder()
           .setCustomId(encodeId('stu', 'quiz', 'skip', m.id))
-          .setPlaceholder('Not this week')
+          // An all-groups mark's skip applies to every group that day.
+          .setPlaceholder(
+            d.groupId === null ? 'Not this week (all groups)' : 'Not this week',
+          )
           .addOptions(
             d.dates
               .slice(0, QUIZ_SKIP_DATES)
@@ -830,20 +857,29 @@ export function quizClassView(d: QuizClassData, message?: string): View {
     );
   }
   const group = d.groupId ?? 0;
-  return view(
-    container.addActionRowComponents(
-      row(
+  const off = button(
+    encodeId('stu', 'quiz', 'tog', d.classId, group, 0),
+    'Turn off',
+    ButtonStyle.Danger,
+  );
+  const toggles = underAll
+    ? [
+        button(encodeId('stu', 'quiz', 'all', d.classId), 'All groups'),
+        ...(m ? [off] : []),
+      ]
+    : [
         m
-          ? button(
-              encodeId('stu', 'quiz', 'tog', d.classId, group, 0),
-              'Turn off',
-              ButtonStyle.Danger,
-            )
+          ? off
           : button(
               encodeId('stu', 'quiz', 'tog', d.classId, group, 1),
               'Turn on',
               ButtonStyle.Success,
             ),
+      ];
+  return view(
+    container.addActionRowComponents(
+      row(
+        ...toggles,
         button(encodeId('stu', 'quiz', 'cls', d.subjectId), 'Other class'),
       ),
     ),
