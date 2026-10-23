@@ -114,8 +114,13 @@ describe('class mark actions', () => {
 
   it('a banned user changes nothing', async () => {
     cookieSid = banned.sid;
-    const r = await A.addMarkAction(labId, null, null).catch((e) => String(e));
-    expect(JSON.stringify(r)).not.toContain('"ok":true');
+    // A banned user's session no longer resolves: sent to the login page.
+    await expect(A.addMarkAction(labId, null, null)).rejects.toThrow(
+      'redirect:/login-info',
+    );
+    await expect(A.skipMarkAction(1, '2026-10-13')).rejects.toThrow(
+      'redirect:/login-info',
+    );
     expect(await marks()).toHaveLength(0);
   });
 

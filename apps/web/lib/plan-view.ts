@@ -138,6 +138,24 @@ export function blockKind(
 export const entryQuizEditHref = (links: SessionLinks): string =>
   `${links.subject}#entry-quiz`;
 
+export const SAVE_FAILED = 'Could not save. Try again.';
+
+/**
+ * Runs a mark action for the timetable controls: null on success, else the
+ * message to show (the refusal, or SAVE_FAILED when the call itself failed,
+ * e.g. offline or a server error).
+ */
+export async function markActionError(
+  run: () => Promise<{ ok: boolean; message: string }>,
+): Promise<string | null> {
+  try {
+    const r = await run();
+    return r.ok ? null : r.message;
+  } catch {
+    return SAVE_FAILED;
+  }
+}
+
 /** prev / current / next week links of a page; `extra` params come first. */
 export function weekNav(
   path: string,

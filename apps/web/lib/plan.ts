@@ -30,6 +30,7 @@ export {
   shiftWeek,
   slotRange,
   type ValidGroups,
+  type WeekMark,
   weekDays,
   weekStart,
 } from '@studies/db/plan';

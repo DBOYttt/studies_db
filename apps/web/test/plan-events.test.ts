@@ -6,6 +6,7 @@ import {
   type PlanSession,
 } from '../lib/plan';
 import {
+  annotatePlanWeek,
   dayColumns,
   eventsForFilter,
   eventWhenShort,
@@ -103,5 +104,52 @@ describe('pickUpcoming', () => {
     }));
     const got = pickUpcoming(ev, { '7': 8 }, 5);
     expect(got.map((e) => e.id)).toEqual([1, 3, 4, 5, 6]);
+  });
+});
+
+describe('annotatePlanWeek', () => {
+  const lab: PlanSession = {
+    ...base,
+    type: 'class',
+    id: 10,
+    startsAt: new Date('2026-10-14T10:00:00Z'),
+    endsAt: new Date('2026-10-14T11:30:00Z'),
+    classId: 3,
+    classKind: 'laboratorium',
+    lecturerId: 8,
+    eventKind: undefined,
+    eventTitle: undefined,
+    allDay: undefined,
+  };
+  const test = {
+    ...base,
+    id: 20,
+    classId: 3,
+    startsAt: new Date('2026-10-14T10:15:00Z'),
+  };
+  const trip = {
+    ...base,
+    id: 21,
+    eventKind: 'wyjazd' as const,
+    eventTitle: 'Wyjazd',
+    startsAt: new Date('2026-10-14T08:00:00Z'),
+    endsAt: new Date('2026-10-14T09:00:00Z'),
+  };
+
+  it('a lecturer plan gets Test badges but no event blocks', () => {
+    const out = annotatePlanWeek([lab], [test, trip], [], { lecturerId: 8 });
+    expect(out.map((s) => `${s.type}:${s.id}`)).toEqual(['class:10']);
+    expect(out[0].badges?.[0]).toMatchObject({ kind: 'test', eventIds: [20] });
+  });
+
+  it('a subject plan keeps the unmatched events of that subject, sorted by time', () => {
+    const other = { ...trip, id: 22, subjectId: 6 };
+    const out = annotatePlanWeek([lab], [test, trip, other], [], {
+      subjectId: 5,
+    });
+    expect(out.map((s) => `${s.type}:${s.id}`)).toEqual([
+      'event:21',
+      'class:10',
+    ]);
   });
 });

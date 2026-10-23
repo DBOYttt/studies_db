@@ -432,6 +432,23 @@ export default async function globalSetup() {
         source: 'exams' as const,
       },
     ]);
+    // Two tests in the 29 Sep session: one "2 tests" badge.
+    for (const [title, m] of [
+      ['Kolokwium A', 15],
+      ['Kolokwium B', 45],
+    ] as const) {
+      await db.insert(events).values({
+        kind: 'kolokwium',
+        title,
+        subjectId: ocenId,
+        classId: ocenLab,
+        groupId: null,
+        startsAt: wall(-1, 10, m),
+        endsAt: wall(-1, 11),
+        createdBy: userId,
+        updatedBy: userId,
+      });
+    }
     await db.insert(events).values({
       kind: 'kolokwium',
       title: 'Kolokwium z ocen',

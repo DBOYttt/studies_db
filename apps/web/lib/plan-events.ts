@@ -5,10 +5,12 @@
  */
 import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 import {
+  annotateWeek,
   formatIsoWeek,
   type IsoWeek,
   layoutDay,
   type PlanSession,
+  type WeekMark,
   weekStart,
 } from './plan';
 import { wallDateKey, wallTime } from './plan-view';
@@ -51,6 +53,29 @@ export function eventsForFilter(
   if (f.subjectId !== undefined)
     return events.filter((e) => e.subjectId === f.subjectId);
   return events;
+}
+
+/**
+ * The week the timetable draws: annotates the class sessions with ALL the
+ * week's events (so a lecturer's plan still gets its Test badges), then keeps
+ * only the remaining events the plan filter allows; sorted by start.
+ */
+export function annotatePlanWeek(
+  classRows: PlanSession[],
+  events: PlanSession[],
+  marks: WeekMark[],
+  f: { subjectId?: number; lecturerId?: number },
+): PlanSession[] {
+  const out = annotateWeek([...classRows, ...events], marks);
+  const kept = new Set(
+    eventsForFilter(
+      out.filter((s) => s.type === 'event'),
+      f,
+    ).map((e) => e.id),
+  );
+  return out
+    .filter((s) => s.type === 'class' || kept.has(s.id))
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
 
 export interface DayColumn<S extends PlanSession> {

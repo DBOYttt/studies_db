@@ -13,6 +13,8 @@ import {
   entryQuizEditHref,
   formatSyncTime,
   fromWeekSession,
+  markActionError,
+  SAVE_FAILED,
   sessionLinks,
   syncFailed,
   toWeekSession,
@@ -317,5 +319,22 @@ describe('annotate, then My groups', () => {
       [],
       ['Entry quiz'],
     ]);
+  });
+});
+
+describe('markActionError', () => {
+  it('null on success, the refusal, or "Could not save" when the call fails', async () => {
+    expect(
+      await markActionError(async () => ({ ok: true, message: 'ok' })),
+    ).toBeNull();
+    expect(
+      await markActionError(async () => ({ ok: false, message: 'Nope.' })),
+    ).toBe('Nope.');
+    expect(
+      await markActionError(async () => {
+        throw new Error('network');
+      }),
+    ).toBe(SAVE_FAILED);
+    expect(SAVE_FAILED).toBe('Could not save. Try again.');
   });
 });

@@ -2,32 +2,32 @@
 
 import { PencilSimple, X } from '@phosphor-icons/react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
 import {
+  type FocusEvent,
   useCallback,
   useEffect,
   useId,
   useLayoutEffect,
   useRef,
   useState,
-  useTransition,
 } from 'react';
 import { createPortal } from 'react-dom';
-import { skipMarkAction } from '@/lib/class-mark-actions';
+import { useSkipMark } from './useSkipMark';
 
 const POP_W = 240;
 const GAP = 4;
 const EDGE = 8;
 
 const actionBtn =
-  'inline-flex h-7 items-center gap-1 rounded border border-line-strong bg-panel px-2.5 text-accent-ink hover:border-accent disabled:opacity-60';
+  'inline-flex h-7 items-center gap-1 rounded border border-line-strong bg-panel px-2.5 text-accent-ink hover:border-accent aria-disabled:opacity-60';
 
 /**
  * Entry quiz badge on a session block: a button that opens a small popover
  * with the note, "Not this week" (skips the mark on the session's date) and
  * "Edit" (the class section of the subject page). The popover is portalled
  * and fixed below the badge, so the block's clipping does not cut it off.
- * Escape or a click outside closes it and focus returns to the badge.
+ * Escape or a click outside closes it and focus returns to the badge; Tab
+ * out of it (focus leaving both the popover and the badge) closes it too.
  */
 export function EntryQuizBadge({
   markId,
@@ -46,21 +46,43 @@ export function EntryQuizBadge({
   editHref: string;
   className: string;
 }) {
-  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [pending, start] = useTransition();
   const btnRef = useRef<HTMLButtonElement>(null);
   const popRef = useRef<HTMLDivElement>(null);
   const headingId = useId();
   const popId = useId();
 
-  const close = useCallback((refocus: boolean) => {
+  // The badge goes away with the refresh: park focus on its block first.
+  const parkFocus = useCallback(() => {
+    btnRef.current
+      ?.closest('[data-testid="plan-block"]')
+      ?.querySelector<HTMLElement>('[data-block-main]')
+      ?.focus();
     setOpen(false);
-    setError(null);
-    if (refocus) btnRef.current?.focus();
   }, []);
+  const { skip, pending, error, setError } = useSkipMark(
+    markId,
+    onDate,
+    parkFocus,
+  );
+
+  const close = useCallback(
+    (refocus: boolean) => {
+      setOpen(false);
+      setError(null);
+      if (refocus) btnRef.current?.focus();
+    },
+    [setError],
+  );
+
+  /** Focus moved somewhere outside both the popover and the badge. */
+  const onFocusOut = (e: FocusEvent) => {
+    const to = e.relatedTarget as Node | null;
+    if (to && (popRef.current?.contains(to) || btnRef.current?.contains(to)))
+      return;
+    close(false);
+  };
 
   const place = useCallback(() => {
     const b = btnRef.current?.getBoundingClientRect();
@@ -111,23 +133,6 @@ export function EntryQuizBadge({
     };
   }, [open, close]);
 
-  const skip = () =>
-    start(async () => {
-      setError(null);
-      const r = await skipMarkAction(markId, onDate);
-      if (!r.ok) {
-        setError(r.message);
-        return;
-      }
-      // The badge goes away with the refresh: park focus on its block.
-      btnRef.current
-        ?.closest('[data-testid="plan-block"]')
-        ?.querySelector<HTMLElement>('[data-block-main]')
-        ?.focus();
-      setOpen(false);
-      router.refresh();
-    });
-
   return (
     <>
       <button
@@ -138,6 +143,7 @@ export function EntryQuizBadge({
         aria-controls={open ? popId : undefined}
         title={note ? `Entry quiz: ${note}` : 'Entry quiz'}
         onClick={() => (open ? close(false) : setOpen(true))}
+        onBlur={open ? onFocusOut : undefined}
         className={className}
       >
         Entry quiz
@@ -149,6 +155,9 @@ export function EntryQuizBadge({
             id={popId}
             role="dialog"
             aria-labelledby={headingId}
+            // Clicks on text inside keep focus in the dialog (no focusout).
+            tabIndex={-1}
+            onBlur={onFocusOut}
             className="fixed z-50 flex flex-col gap-2 rounded-md border border-line-strong bg-panel p-3 text-[13px] text-fg shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
             style={{
               width: POP_W,
@@ -180,7 +189,8 @@ export function EntryQuizBadge({
               <button
                 type="button"
                 data-autofocus
-                disabled={pending}
+                // aria-disabled, not disabled: a disabled button drops focus.
+                aria-disabled={pending}
                 onClick={skip}
                 className={actionBtn}
               >

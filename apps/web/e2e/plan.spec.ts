@@ -181,3 +181,55 @@ test.describe('timetable assessments', () => {
     ).toBeVisible();
   });
 });
+
+test('the session panel lists every test and offers "Not this week"', async ({
+  page,
+}) => {
+  await page.goto('/plan?week=2026-W40');
+  const block = page.getByTestId('plan-block').filter({ hasText: 'E-5 500' });
+  await expect(
+    block.getByRole('link', { name: '2 tests: Kolokwium A, Kolokwium B' }),
+  ).toBeVisible();
+  await expect(page.getByTestId('plan-event')).toHaveCount(0);
+
+  const panel = page.getByRole('complementary', { name: 'Class details' });
+  await expect(async () => {
+    await block.locator('[data-block-main]').click();
+    await expect(panel).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  const tests = panel.getByRole('list', { name: 'Tests' });
+  await expect(tests.getByRole('link')).toHaveCount(2);
+  await expect(
+    tests.getByRole('link', { name: 'Test: Kolokwium A' }),
+  ).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
+  await expect(
+    tests.getByRole('link', { name: 'Test: Kolokwium B' }),
+  ).toBeVisible();
+
+  await panel.getByRole('button', { name: 'Not this week' }).click();
+  await expect(block.getByRole('button', { name: 'Entry quiz' })).toHaveCount(
+    0,
+  );
+  await expect(
+    panel.getByRole('button', { name: 'Not this week' }),
+  ).toHaveCount(0);
+  await expect(tests.getByRole('link')).toHaveCount(2);
+});
+
+test('Tab out of the entry quiz popover closes it', async ({ page }) => {
+  await page.goto('/plan?week=2026-W41');
+  const g2 = page.getByTestId('plan-block').filter({ hasText: 'E-5 502' });
+  const quiz = g2.getByRole('button', { name: 'Entry quiz' });
+  const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
+  await expect(async () => {
+    await quiz.click();
+    await expect(dialog).toBeVisible({ timeout: 1000 });
+  }).toPass();
+  await expect(
+    dialog.getByRole('button', { name: 'Not this week' }),
+  ).toBeFocused();
+  await page.keyboard.press('Tab'); // Edit
+  await page.keyboard.press('Tab'); // out of the dialog
+  await expect(dialog).toBeHidden();
+  await expect(quiz).toHaveAttribute('aria-expanded', 'false');
+});
