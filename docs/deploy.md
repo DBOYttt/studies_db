@@ -127,6 +127,14 @@ Details (admin command visibility, panel channels) are in `apps/bot/README.md`.
 After deploying, run `pnpm --filter @studies/bot register` once (command descriptions changed), then re-run `/setup`: it
 renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` topic.
 
+### Upgrading to timetable assessments (migrations 0018-0020)
+
+1. `pnpm db:migrate` (or let the `migrate` container run on `compose up`); it adds `class_marks`,
+   `class_mark_skips`, their `v_*` views, and `class_sessions.kind` / `source`.
+2. Optional: set `UNITIME_EXAM_ICAL_URL` (the exam timetable feed, see "Plan zajęć" below) and recreate `worker`.
+3. Re-run `/setup` so the pinned `#panel` message gets the "Entry quizzes" row. Slash command definitions did
+   not change, so there is nothing to register.
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these
