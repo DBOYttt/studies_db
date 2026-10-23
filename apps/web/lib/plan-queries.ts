@@ -54,7 +54,7 @@ export async function nextSessions(
     `SELECT cs.id, cs.starts_at, cs.ends_at, cs.subject_id, cs.subject_name,
             s.code AS subject_code, cs.class_id, cs.class_kind, cs.class_name,
             cs.group_id, cs.group_name, cs.lecturer_id, cs.lecturer_name,
-            cs.room, cs.label, cs.status
+            cs.room, cs.label, cs.status, cs.kind
        FROM v_class_sessions cs
        JOIN v_subjects s ON s.id = cs.subject_id
       WHERE cs.subject_id = ? AND cs.starts_at >= ?

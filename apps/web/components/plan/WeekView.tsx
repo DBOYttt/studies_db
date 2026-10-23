@@ -403,6 +403,7 @@ function Badges({ s, simple }: { s: Session; simple: boolean }) {
             key="quiz"
             markId={b.markId}
             note={b.note}
+            allGroups={b.allGroups}
             onDate={wallDateKey(day)}
             dateLabel={`${h.name} ${h.date}`}
             editHref={entryQuizEditHref(s.links)}
@@ -494,31 +495,21 @@ function Block({
         width: `calc(${100 / cols}% - 4px)`,
       }}
     >
-      {exam && s.linkedEventId !== undefined ? (
-        <Link
-          href={eventPageHref(s.linkedEventId, simple)}
-          data-block-main
-          title={title}
-          className={inner}
-        >
-          {body}
-        </Link>
-      ) : (
-        <button
-          type="button"
-          data-block-main
-          ref={(el) => {
-            if (el) refMap.set(sessionKey(s), el);
-            else refMap.delete(sessionKey(s));
-          }}
-          onClick={onOpen}
-          aria-pressed={selected}
-          title={title}
-          className={inner}
-        >
-          {body}
-        </button>
-      )}
+      {/* A merged exam opens the panel too; the panel links the event. */}
+      <button
+        type="button"
+        data-block-main
+        ref={(el) => {
+          if (el) refMap.set(sessionKey(s), el);
+          else refMap.delete(sessionKey(s));
+        }}
+        onClick={onOpen}
+        aria-pressed={selected}
+        title={title}
+        className={inner}
+      >
+        {body}
+      </button>
       <Badges s={s} simple={simple} />
     </div>
   );

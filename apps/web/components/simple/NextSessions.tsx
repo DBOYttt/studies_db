@@ -1,10 +1,11 @@
 import { CalendarBlank } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 import type { PlanSession } from '@/lib/plan';
-import { dayHeader, wallTime } from '@/lib/plan-view';
+import { dayHeader, nextSessionWhat, wallTime } from '@/lib/plan-view';
 
 /**
- * "Next classes": the subject's next sessions (wall times, UTC getters).
+ * "Next classes": the subject's next sessions (wall times, UTC getters); an
+ * exam says "Exam".
  * The page passes confirmed ones only; a cancelled one would still render
  * struck through and marked "Cancelled".
  */
@@ -27,9 +28,7 @@ export function NextSessions({ sessions }: { sessions: PlanSession[] }) {
         {sessions.map((s) => {
           const d = dayHeader(s.startsAt);
           const cancelled = s.status === 'cancelled';
-          const what = [s.className ?? s.label, s.groupName]
-            .filter(Boolean)
-            .join(', ');
+          const what = nextSessionWhat(s);
           return (
             <li
               key={s.id}

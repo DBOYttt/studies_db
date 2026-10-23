@@ -484,7 +484,9 @@ test.describe('assessments on the timetable', () => {
     await page.goto(week());
     await lab(page).getByRole('button', { name: 'Entry quiz' }).click();
     const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
-    await dialog.getByRole('button', { name: 'Not this week' }).click();
+    await dialog
+      .getByRole('button', { name: 'Not this week (all groups)' })
+      .click();
     await expect(
       lab(page).getByRole('button', { name: 'Entry quiz' }),
     ).toHaveCount(0);

@@ -136,6 +136,19 @@ test.describe('timetable assessments', () => {
     await expect(
       page.getByRole('list', { name: 'Class types' }).getByText('Exam'),
     ).toBeVisible();
+    // The egzamin event is merged into the exam block, which opens the
+    // session panel with a link to the event.
+    await expect(
+      page.getByTestId('plan-event').filter({ hasText: 'Egzamin z ocen' }),
+    ).toHaveCount(0);
+    const panel = page.getByRole('complementary', { name: 'Class details' });
+    await expect(async () => {
+      await exam.locator('[data-block-main]').click();
+      await expect(panel).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await expect(
+      panel.getByRole('link', { name: 'Open event' }),
+    ).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
   });
 
   test('"Not this week" removes the entry quiz of that date only', async ({
@@ -165,7 +178,9 @@ test.describe('timetable assessments', () => {
 
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
-    await dialog.getByRole('button', { name: 'Not this week' }).click();
+    await dialog
+      .getByRole('button', { name: 'Not this week (all groups)' })
+      .click();
     await expect(g1.getByRole('button', { name: 'Entry quiz' })).toHaveCount(0);
     await expect(g2.getByRole('button', { name: 'Entry quiz' })).toBeVisible();
     // The Test badge stays.
@@ -206,12 +221,14 @@ test('the session panel lists every test and offers "Not this week"', async ({
     tests.getByRole('link', { name: 'Test: Kolokwium B' }),
   ).toBeVisible();
 
-  await panel.getByRole('button', { name: 'Not this week' }).click();
+  await panel
+    .getByRole('button', { name: 'Not this week (all groups)' })
+    .click();
   await expect(block.getByRole('button', { name: 'Entry quiz' })).toHaveCount(
     0,
   );
   await expect(
-    panel.getByRole('button', { name: 'Not this week' }),
+    panel.getByRole('button', { name: 'Not this week (all groups)' }),
   ).toHaveCount(0);
   await expect(tests.getByRole('link')).toHaveCount(2);
 });
@@ -226,7 +243,7 @@ test('Tab out of the entry quiz popover closes it', async ({ page }) => {
     await expect(dialog).toBeVisible({ timeout: 1000 });
   }).toPass();
   await expect(
-    dialog.getByRole('button', { name: 'Not this week' }),
+    dialog.getByRole('button', { name: 'Not this week (all groups)' }),
   ).toBeFocused();
   await page.keyboard.press('Tab'); // Edit
   await page.keyboard.press('Tab'); // out of the dialog

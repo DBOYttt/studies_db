@@ -14,8 +14,10 @@ import {
   formatSyncTime,
   fromWeekSession,
   markActionError,
+  nextSessionWhat,
   SAVE_FAILED,
   sessionLinks,
+  skipLabel,
   syncFailed,
   toWeekSession,
   wallLongDate,
@@ -206,7 +208,35 @@ describe('timetable badges', () => {
     eventIds: [5, 6],
     titles: ['Kolokwium 1', 'Poprawa'],
   };
-  const quiz: PlanBadge = { kind: 'entry_quiz', markId: 9, note: 'Rozdział 3' };
+  const quiz: PlanBadge = {
+    kind: 'entry_quiz',
+    markId: 9,
+    note: 'Rozdział 3',
+    allGroups: false,
+  };
+
+  it('"Not this week" says when it skips every group', () => {
+    expect(skipLabel(quiz)).toBe('Not this week');
+    expect(skipLabel({ ...quiz, allGroups: true })).toBe(
+      'Not this week (all groups)',
+    );
+  });
+
+  it('a next session line: the class and group, or "Exam"', () => {
+    expect(nextSessionWhat(session)).toBe('Laboratorium, Grupa 2');
+    expect(
+      nextSessionWhat({ ...session, className: null, groupName: null }),
+    ).toBe('Bazy danych - Laboratorium');
+    expect(
+      nextSessionWhat({
+        ...session,
+        sessionKind: 'exam',
+        className: null,
+        groupName: null,
+        label: 'Egzamin 1',
+      }),
+    ).toBe('Exam');
+  });
 
   it('labels one test, several tests and an entry quiz', () => {
     expect(badgeLabel(test1)).toBe('Test');

@@ -460,6 +460,16 @@ export default async function globalSetup() {
       createdBy: userId,
       updatedBy: userId,
     });
+    // An egzamin event at the imported exam: merged into its block.
+    await db.insert(events).values({
+      kind: 'egzamin',
+      title: 'Egzamin z ocen',
+      subjectId: ocenId,
+      startsAt: wall(9, 9),
+      endsAt: wall(9, 11),
+      createdBy: userId,
+      updatedBy: userId,
+    });
     const quiz = await addMark(
       db,
       userId,

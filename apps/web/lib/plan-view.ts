@@ -122,6 +122,16 @@ export function badgeTitle(b: PlanBadge): string {
   return titles.length > 0 ? `${label}: ${titles.join(', ')}` : label;
 }
 
+/** The skip button: an all-groups mark skips every group of that day. */
+export const skipLabel = (b: Extract<PlanBadge, { kind: 'entry_quiz' }>) =>
+  b.allGroups ? 'Not this week (all groups)' : 'Not this week';
+
+/** "Next classes" line: "Exam", or the class (else the label) and group. */
+export function nextSessionWhat(s: PlanSession): string {
+  if (s.sessionKind === 'exam') return 'Exam';
+  return [s.className ?? s.label, s.groupName].filter(Boolean).join(', ');
+}
+
 /**
  * How a timed entry is drawn: exam sessions and timed `egzamin` events as
  * filled exam blocks, other events outlined, class sessions in their kind

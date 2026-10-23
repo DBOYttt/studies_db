@@ -23,7 +23,8 @@ const actionBtn =
 
 /**
  * Entry quiz badge on a session block: a button that opens a small popover
- * with the note, "Not this week" (skips the mark on the session's date) and
+ * with the note, "Not this week" (skips the mark on the session's date; for
+ * an all-groups mark "Not this week (all groups)", every group) and
  * "Edit" (the class section of the subject page). The popover is portalled
  * and fixed below the badge, so the block's clipping does not cut it off.
  * Escape or a click outside closes it and focus returns to the badge; Tab
@@ -32,6 +33,7 @@ const actionBtn =
 export function EntryQuizBadge({
   markId,
   note,
+  allGroups,
   onDate,
   dateLabel,
   editHref,
@@ -39,6 +41,8 @@ export function EntryQuizBadge({
 }: {
   markId: number;
   note: string | null;
+  /** The mark covers every group: "Not this week" skips them all. */
+  allGroups: boolean;
   /** Session date, `YYYY-MM-DD`. */
   onDate: string;
   /** e.g. "Tue 13 Oct". */
@@ -194,7 +198,7 @@ export function EntryQuizBadge({
                 onClick={skip}
                 className={actionBtn}
               >
-                Not this week
+                {allGroups ? 'Not this week (all groups)' : 'Not this week'}
               </button>
               <Link href={editHref} className={actionBtn}>
                 <PencilSimple size={13} aria-hidden />

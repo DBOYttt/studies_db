@@ -17,6 +17,7 @@ import { canAddTest, eventPageHref, newTestHref } from '@/lib/plan-events';
 import {
   entryQuizEditHref,
   type SessionLinks,
+  skipLabel,
   wallDateKey,
   wallLongDate,
   wallTime,
@@ -31,7 +32,8 @@ const closeCls =
 /**
  * Details of one session, in the PreviewPanel look: 360px column from lg
  * (the caller sizes it), full-screen sheet below. Closing (×, Escape outside
- * form fields) calls `onClose`; the heading takes focus on open.
+ * form fields) calls `onClose`; the heading takes focus on open. An exam
+ * merged with an egzamin event links that event ("Open event").
  */
 export function SessionPanel({
   session: s,
@@ -164,6 +166,12 @@ export function SessionPanel({
           </section>
         )}
         <div className="flex flex-wrap gap-1.5">
+          {s.linkedEventId !== undefined && (
+            <Link href={eventPageHref(s.linkedEventId, simple)} className={btn}>
+              <CalendarBlank size={14} aria-hidden />
+              Open event
+            </Link>
+          )}
           {canAddTest(s) && (
             <Link
               href={newTestHref(s, simple)}
@@ -222,7 +230,10 @@ function TestLinks({
   );
 }
 
-/** The entry quiz of the session: note, "Not this week", "Edit". */
+/**
+ * The entry quiz of the session: note, "Not this week" ("(all groups)" for
+ * an all-groups mark), "Edit".
+ */
 function EntryQuizRow({
   badge,
   onDate,
@@ -251,7 +262,7 @@ function EntryQuizRow({
           onClick={skip}
           className={`${btn} aria-disabled:opacity-60`}
         >
-          Not this week
+          {skipLabel(badge)}
         </button>
         <Link href={editHref} className={btn}>
           <PencilSimple size={14} aria-hidden />
