@@ -105,6 +105,8 @@ describe('class marks (entry quiz)', () => {
     });
     // Lab group 1 only on 2026-10-22.
     await session(id.lab, id.g1, new Date(Date.UTC(2026, 9, 22, 8)));
+    // Lab group 2 late on 2026-10-29 (the end of the day, not the next one).
+    await session(id.lab, id.g2, new Date(Date.UTC(2026, 9, 29, 23, 30)));
   });
   afterAll(async () => {
     await closeTestDb(db);
@@ -181,6 +183,39 @@ describe('class marks (entry quiz)', () => {
     ]);
   });
 
+  it('refuses a group mark while an all-groups mark is on', async () => {
+    expect(
+      await addMark(
+        db,
+        id.u,
+        { classId: id.lab, groupId: id.g1, kind: 'wejsciowka' },
+        'web',
+      ),
+    ).toEqual({
+      ok: false,
+      message: 'Entry quiz is already on for all groups of this class.',
+    });
+    expect((await listMarks(db, [id.lab])).map((m) => m.id)).toEqual([
+      id.m,
+      id.mAll,
+    ]);
+  });
+
+  it('refuses an unknown mark type', async () => {
+    expect(
+      await addMark(
+        db,
+        id.u,
+        {
+          classId: id.lec,
+          groupId: null,
+          kind: 'nope' as unknown as 'wejsciowka',
+        },
+        'web',
+      ),
+    ).toEqual({ ok: false, message: 'Unknown mark type.' });
+  });
+
   it('refuses a group of another class, an unknown class, a banned user', async () => {
     expect(
       await addMark(
@@ -222,6 +257,34 @@ describe('class marks (entry quiz)', () => {
     expect(rs.filter((r) => r.ok)).toHaveLength(1);
     expect(rs.find((r) => !r.ok)).toEqual({ ok: false, message: ALREADY_ON });
     expect(await listMarks(db, [id.ex])).toHaveLength(1);
+  });
+
+  it('refuses a note over 200 characters', async () => {
+    const long = 'x'.repeat(201);
+    expect(
+      await addMark(
+        db,
+        id.u,
+        { classId: id.lec, groupId: null, kind: 'wejsciowka', note: long },
+        'web',
+      ),
+    ).toEqual({
+      ok: false,
+      message: 'The note can be at most 200 characters.',
+    });
+    expect(
+      await editMark(
+        db,
+        id.u,
+        id.m,
+        { note: long },
+        { expectedVersion: 0 },
+        'web',
+      ),
+    ).toEqual({
+      ok: false,
+      message: 'The note can be at most 200 characters.',
+    });
   });
 
   it('edits the note with the version check', async () => {
@@ -297,9 +360,12 @@ describe('class marks (entry quiz)', () => {
       });
     }
     // The all-groups mark accepts any group's session.
-    expect((await skipDate(db, id.u, id.mAll, '2026-10-22', 'web')).ok).toBe(
-      true,
-    );
+    expect(await skipDate(db, id.u, id.mAll, '2026-10-22', 'web')).toEqual({
+      ok: true,
+      message: 'Skipped for that week.',
+      id: id.mAll,
+      version: 0,
+    });
     expect(await skipDate(db, id.banned, id.m, '2026-10-21', 'web')).toEqual({
       ok: false,
       message: BANNED_MESSAGE,
@@ -315,13 +381,28 @@ describe('class marks (entry quiz)', () => {
       id: id.m,
       version: 1,
     });
-    expect((await unskipDate(db, id.u, id.m, '2026-10-21', 'web')).ok).toBe(
-      false,
-    );
+    expect(await unskipDate(db, id.u, id.m, '2026-10-21', 'web')).toEqual({
+      ok: false,
+      message: 'This week is not skipped.',
+    });
+    expect(await unskipDate(db, id.u, id.m, '21.10.2026', 'web')).toEqual({
+      ok: false,
+      message: 'This week is not skipped.',
+    });
     expect((await listMarks(db, [id.lab]))[0].skips).toEqual([]);
     expect((await auditRows('class_mark.unskip', id.m))[0]).toMatchObject({
       details: { source: 'web', onDate: '2026-10-21' },
     });
+
+    // The day is [00:00, next day 00:00).
+    expect(await skipDate(db, id.u, id.m, '2026-10-30', 'web')).toEqual({
+      ok: false,
+      message: none,
+    });
+    expect((await skipDate(db, id.u, id.m, '2026-10-29', 'web')).ok).toBe(true);
+    expect(
+      (await unskipDate(db, id.u, id.m, '2026-10-29', 'web')).message,
+    ).toBe('Skip undone.');
   });
 
   it('removes (soft), restores as admin, and refuses a restore over an active mark', async () => {
@@ -349,8 +430,27 @@ describe('class marks (entry quiz)', () => {
       message: 'Entry quiz not found.',
     });
     expect(await auditRows('class_mark.remove', id.m)).toHaveLength(1);
+    // A removed mark cannot be edited or unskipped.
+    expect(
+      await editMark(
+        db,
+        id.u,
+        id.m,
+        { note: 'x' },
+        { expectedVersion: 2 },
+        'web',
+      ),
+    ).toEqual({ ok: false, message: 'Entry quiz not found.' });
+    expect(await unskipDate(db, id.u, id.m, '2026-10-21', 'web')).toEqual({
+      ok: false,
+      message: 'Entry quiz not found.',
+    });
+    expect(await auditRows('class_mark.edit', id.m)).toHaveLength(1);
 
-    expect((await restoreMark(db, id.u, id.m, 'web')).ok).toBe(false);
+    expect(await restoreMark(db, id.u, id.m, 'web')).toEqual({
+      ok: false,
+      message: 'Only an admin can restore an entry quiz.',
+    });
     const back = await restoreMark(db, id.admin, id.m, 'web');
     expect(back).toEqual({
       ok: true,
@@ -371,8 +471,15 @@ describe('class marks (entry quiz)', () => {
       message: 'Entry quiz not found.',
     });
 
-    // Turn off, turn a new one on, then try to restore the old one.
-    expect((await removeMark(db, id.u, id.m, {}, 'web')).ok).toBe(true);
+    // Turn off, turn a new one on, then try to restore the old one (with
+    // the all-groups mark off, which would refuse the group mark).
+    expect((await removeMark(db, id.u, id.mAll, {}, 'web')).ok).toBe(true);
+    expect(await removeMark(db, id.u, id.m, {}, 'web')).toEqual({
+      ok: true,
+      message: 'Entry quiz turned off.',
+      id: id.m,
+      version: 4,
+    });
     okId(
       await addMark(
         db,

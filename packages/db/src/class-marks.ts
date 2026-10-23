@@ -6,7 +6,7 @@
  * `class_mark:<id>`, details carry the `source`). Nothing is posted to Discord.
  */
 
-import { and, asc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { writeAudit } from './audit.js';
 import type { Db, DbExecutor } from './client.js';
 import { CLASS_MARK_KINDS, type ClassMarkKind } from './constants.js';
@@ -48,6 +48,8 @@ export type MarkInput = {
 };
 
 export const MARK_ALREADY_ON = 'Entry quiz is already on for this class.';
+export const MARK_ALREADY_ON_ALL =
+  'Entry quiz is already on for all groups of this class.';
 export const MARK_NOT_FOUND = 'Entry quiz not found.';
 export const MARK_NOTE_MAX = 200;
 const GROUP_NOT_IN_CLASS = 'This group is not part of the class.';
@@ -149,7 +151,7 @@ export async function addMark(
 ): Promise<MarkResult> {
   const user = await checkUser(db, userId);
   if (isRefusal(user)) return fail(user.message);
-  if (!CLASS_MARK_KINDS.includes(input.kind)) return fail('Unknown mark.');
+  if (!CLASS_MARK_KINDS.includes(input.kind)) return fail('Unknown mark type.');
   const note = cleanNote(input.note);
   if (note === false) return fail(NOTE_TOO_LONG);
   const { classId, groupId, kind } = input;
@@ -158,6 +160,14 @@ export async function addMark(
     if (bad) return fail(bad);
     if (await activeExists(tx, { classId, groupId, kind })) {
       return fail(MARK_ALREADY_ON);
+    }
+    // A group mark under an all-groups one would never show (the all-groups
+    // mark takes precedence on the timetable).
+    if (
+      groupId !== null &&
+      (await activeExists(tx, { classId, groupId: null, kind }))
+    ) {
+      return fail(MARK_ALREADY_ON_ALL);
     }
     const [{ id }] = await tx
       .insert(classMarks)
@@ -304,6 +314,11 @@ export async function skipDate(
     const m = await lockMark(tx, markId);
     if (!m || m.deletedAt !== null) return fail(MARK_NOT_FOUND);
     if (!DATE_RE.test(onDate)) return fail(NO_SESSION);
+    // The day as a range [00:00, next day 00:00), so the index on starts_at
+    // is usable (DATE(starts_at) is not sargable).
+    const dayStart = new Date(`${onDate}T00:00:00Z`);
+    if (Number.isNaN(dayStart.getTime())) return fail(NO_SESSION);
+    const nextDay = new Date(dayStart.getTime() + 86_400_000);
     const [s] = await tx
       .select({ id: classSessions.id })
       .from(classSessions)
@@ -313,7 +328,8 @@ export async function skipDate(
           m.groupId === null ? undefined : eq(classSessions.groupId, m.groupId),
           eq(classSessions.kind, 'class'),
           eq(classSessions.status, 'confirmed'),
-          sql`DATE(${classSessions.startsAt}) = ${onDate}`,
+          gte(classSessions.startsAt, dayStart),
+          lt(classSessions.startsAt, nextDay),
         ),
       )
       .limit(1);

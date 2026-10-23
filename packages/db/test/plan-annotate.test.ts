@@ -215,7 +215,7 @@ describe('annotateWeek: Entry quiz badges', () => {
     );
     expect(byId(out, s1)?.badges).toBeUndefined();
     expect(byId(out, s2)?.badges).toEqual([
-      { kind: 'entry_quiz', markId: 9, note: 'Kartka' },
+      { kind: 'entry_quiz', markId: 9, note: 'Kartka', allGroups: false },
     ]);
   });
 
@@ -223,8 +223,35 @@ describe('annotateWeek: Entry quiz badges', () => {
     const ss = [G1, G2].map((g) => session(MON10, { groupId: g }));
     const out = annotateWeek(ss, [mark({ id: 9 })]);
     for (const s of out) {
-      expect(s.badges).toEqual([{ kind: 'entry_quiz', markId: 9, note: null }]);
+      expect(s.badges).toEqual([
+        { kind: 'entry_quiz', markId: 9, note: null, allGroups: true },
+      ]);
     }
+  });
+
+  it('an all-groups mark takes precedence over a group mark', () => {
+    const s1 = session(MON10, { groupId: G1 });
+    const s2 = session(MON10, { groupId: G2 });
+    const out = annotateWeek(
+      [s1, s2],
+      [mark({ id: 8, groupId: G1, note: 'Grupa' }), mark({ id: 9 })],
+    );
+    for (const s of out) {
+      expect(s.badges).toEqual([
+        { kind: 'entry_quiz', markId: 9, note: null, allGroups: true },
+      ]);
+    }
+  });
+
+  it('a group mark applies when the all-groups mark skips the date', () => {
+    const s = session(MON10, { groupId: G1 });
+    const out = annotateWeek(
+      [s],
+      [mark({ id: 8, groupId: G1 }), mark({ id: 9, skips: ['2026-10-19'] })],
+    );
+    expect(out[0].badges).toEqual([
+      { kind: 'entry_quiz', markId: 8, note: null, allGroups: false },
+    ]);
   });
 
   it('a skipped date gets no badge', () => {
@@ -259,7 +286,7 @@ describe('annotateWeek: Entry quiz badges', () => {
 
   it('drops stale badges and links of the input', () => {
     const s = session(MON10, {
-      badges: [{ kind: 'entry_quiz', markId: 1, note: null }],
+      badges: [{ kind: 'entry_quiz', markId: 1, note: null, allGroups: true }],
     });
     const x = exam(W(2026, 2, 2, 9), { linkedEventId: 77 });
     const out = annotateWeek([s, x], []);

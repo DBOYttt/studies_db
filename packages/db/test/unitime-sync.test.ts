@@ -578,4 +578,26 @@ describe('syncTimetable exam sessions', () => {
     expect(stats).toMatchObject({ created: 0, updated: 0, deleted: 0 });
     expect(await snapshot(db)).toEqual(before);
   });
+
+  it('the same UID in both feeds: the exam feed row wins', async () => {
+    // The exam feed lists the class feed's exam (same UID and start).
+    const inExamFeed = MAIN_EXAM.replace('LOCATION:D-1 101', 'LOCATION:Aula X');
+    const taken = await syncTimetable(db, calendar(inExamFeed), {
+      allExams: true,
+      source: 'exams',
+    });
+    expect(taken.updated).toBe(1);
+    const before = (await sessionsByUid(db)).get('800000002');
+    expect(before).toMatchObject({ source: 'exams', room: 'Aula X' });
+
+    // A class sync with the entry changed neither takes it back nor edits it.
+    const moved = MAIN_EXAM.replace('LOCATION:D-1 101', 'LOCATION:B-2 7');
+    const stats = await syncTimetable(db, calendar(LECTURE, moved));
+    expect(stats).toMatchObject({ updated: 0, created: 0 });
+    expect((await sessionsByUid(db)).get('800000002')).toEqual(before);
+
+    // Nor does a class sync without it delete it.
+    await syncTimetable(db, calendar(LECTURE));
+    expect((await sessionsByUid(db)).get('800000002')).toEqual(before);
+  });
 });

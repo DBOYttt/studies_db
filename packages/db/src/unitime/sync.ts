@@ -50,8 +50,9 @@ export interface SyncOptions {
   allExams?: boolean;
   /**
    * The feed being synced. Rows missing from the feed are removed only when
-   * they came from the same source, so the class and exam feeds never cancel
-   * each other's sessions. Default 'classes'.
+   * they came from the same source, so the class and exam feeds never remove
+   * each other's sessions. An entry in both feeds belongs to the exam feed.
+   * Default 'classes'.
    */
   source?: SessionSource;
 }
@@ -338,9 +339,14 @@ export async function syncTimetable(
         if (row.source === source) toDelete.push(row.id);
         continue;
       }
-      // A uid + start in this feed takes the row over (uid + start is unique),
-      // even if the other feed imported it first.
       desired.delete(key);
+      // The same uid + start in both feeds (uid + start is unique): the exam
+      // feed's row wins. The class sync leaves it alone; the exam sync takes
+      // over a row the class feed imported first.
+      if (row.source === 'exams' && source !== 'exams') {
+        stats.unchanged++;
+        continue;
+      }
       if (sameSession(row, want)) {
         stats.unchanged++;
         continue;

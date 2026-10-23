@@ -9,7 +9,7 @@
  *   that session and is not drawn as a block.
  * - A confirmed class session whose class (and group, or every group) has an
  *   entry-quiz mark gets an Entry quiz badge, except on the mark's skipped
- *   dates.
+ *   dates. An all-groups mark takes precedence over a group mark.
  * - An `egzamin` event of the same subject starting within 60 minutes of a
  *   confirmed exam session is shown once, as the exam session with
  *   `linkedEventId` (a cancelled exam leaves the event a normal block).
@@ -18,7 +18,13 @@ import type { PlanSession } from './plan.js';
 
 export type PlanBadge =
   | { kind: 'test'; eventIds: number[]; titles: string[] }
-  | { kind: 'entry_quiz'; markId: number; note: string | null };
+  | {
+      kind: 'entry_quiz';
+      markId: number;
+      note: string | null;
+      /** The mark covers every group of the class (its skip does too). */
+      allGroups: boolean;
+    };
 
 /** An active entry-quiz mark; `skips` are `YYYY-MM-DD` dates. */
 export type WeekMark = {
@@ -77,17 +83,20 @@ export function matchEventsToSessions(
   return { badges, matched };
 }
 
-/** The mark that applies to a session: its group's first, then all groups. */
+/**
+ * The mark that applies to a session: the all-groups mark first (it takes
+ * precedence; a new group mark under it is refused), then the group's.
+ */
 function entryQuizFor(s: PlanSession, marks: WeekMark[]): WeekMark | null {
   if (!isBadgeable(s) || s.classId === null) return null;
   const day = wallDay(s.startsAt);
   const applies = (m: WeekMark) =>
     m.classId === s.classId && !m.skips.includes(day);
   return (
+    marks.find((m) => applies(m) && m.groupId === null) ??
     marks.find(
       (m) => applies(m) && m.groupId !== null && m.groupId === s.groupId,
     ) ??
-    marks.find((m) => applies(m) && m.groupId === null) ??
     null
   );
 }
@@ -149,7 +158,12 @@ export function annotateWeek(
     }
     const quiz = entryQuizFor(s, marks);
     if (quiz)
-      list.push({ kind: 'entry_quiz', markId: quiz.id, note: quiz.note });
+      list.push({
+        kind: 'entry_quiz',
+        markId: quiz.id,
+        note: quiz.note,
+        allGroups: quiz.groupId === null,
+      });
     // Annotations of a previous run are replaced, never kept.
     const { badges: _stale, linkedEventId: _staleLink, ...rest } = s;
     const copy: PlanSession = rest;
