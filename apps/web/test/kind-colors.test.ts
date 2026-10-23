@@ -1,5 +1,5 @@
 import { readFileSync } from 'node:fs';
-import { CLASS_KINDS, KIND_COLORS } from '@studies/db/constants';
+import { CLASS_KINDS, EXAM_COLORS, KIND_COLORS } from '@studies/db/constants';
 import { describe, expect, it } from 'vitest';
 
 /**
@@ -44,5 +44,18 @@ describe('KIND_COLORS', () => {
   });
   it('equals the dark values of globals.css', () => {
     expect(dark).toEqual(expected('dark'));
+  });
+});
+
+describe('EXAM_COLORS', () => {
+  const exam = (block: string) => ({
+    bg: /--exam-bg:\s*(#[0-9a-f]{6})/i.exec(block)?.[1]?.toLowerCase(),
+    fg: /--exam-fg:\s*(#[0-9a-f]{6})/i.exec(block)?.[1]?.toLowerCase(),
+  });
+  it('equals --exam-bg/fg of globals.css in both themes', () => {
+    expect(exam(css.slice(0, darkStart))).toEqual(EXAM_COLORS.light);
+    expect(exam(css.slice(darkStart, css.indexOf('@theme')))).toEqual(
+      EXAM_COLORS.dark,
+    );
   });
 });

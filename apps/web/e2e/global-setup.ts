@@ -2,12 +2,14 @@ import { copyFileSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  addMark,
   classes,
   classLecturers,
   classSessions,
   createLoginToken,
   ensureClass,
   ensureGroup,
+  events,
   insertMaterial,
   lecturers,
   subjects,
@@ -363,6 +365,96 @@ export default async function globalSetup() {
           wall(14, 15, 30),
         ),
       ]);
+
+    // Timetable assessments (plan.spec.ts): subject OCEN in 2026-W40/W41
+    // with a Test inside the lab Gr. 1 session, an entry quiz on the lab
+    // and an imported exam.
+    const [{ id: ocenId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Ocenianie',
+        code: 'OCEN',
+        semester: 3,
+        ects: 2,
+        discordChannelId: 'e2e-ch-ocen',
+      })
+      .$returningId();
+    const ocenLab = await ensureClass(db, ocenId, 'laboratorium');
+    const ocenGr1 = await ensureGroup(db, ocenLab, 1);
+    const ocenGr2 = await ensureGroup(db, ocenLab, 2);
+    await db.insert(classSessions).values([
+      session(
+        'e2e-ocen-w40',
+        ocenId,
+        ocenLab,
+        ocenGr1,
+        null,
+        'Laboratorium gr 1',
+        'E-5 500',
+        wall(-1, 10), // Tue 29 Sep
+        wall(-1, 11, 30),
+      ),
+      session(
+        'e2e-ocen-g1',
+        ocenId,
+        ocenLab,
+        ocenGr1,
+        null,
+        'Laboratorium gr 1',
+        'E-5 501',
+        wall(6, 10),
+        wall(6, 11, 30),
+      ),
+      session(
+        'e2e-ocen-g2',
+        ocenId,
+        ocenLab,
+        ocenGr2,
+        null,
+        'Laboratorium gr 2',
+        'E-5 502',
+        wall(7, 12),
+        wall(7, 13, 30),
+      ),
+      {
+        ...session(
+          'e2e-ocen-exam',
+          ocenId,
+          null,
+          null,
+          null,
+          'Egzamin',
+          'Aula E',
+          wall(9, 9),
+          wall(9, 11),
+        ),
+        kind: 'exam' as const,
+        source: 'exams' as const,
+      },
+    ]);
+    await db.insert(events).values({
+      kind: 'kolokwium',
+      title: 'Kolokwium z ocen',
+      subjectId: ocenId,
+      classId: ocenLab,
+      groupId: ocenGr1,
+      startsAt: wall(6, 10, 15),
+      endsAt: wall(6, 11),
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    const quiz = await addMark(
+      db,
+      userId,
+      {
+        classId: ocenLab,
+        groupId: null,
+        kind: 'wejsciowka',
+        note: 'Rozdział 2',
+      },
+      'web',
+    );
+    if (!quiz.ok) throw new Error(`e2e entry quiz: ${quiz.message}`);
 
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);

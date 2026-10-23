@@ -71,6 +71,9 @@
   --kind-praktyczne-fg: #8c2e32;
   --kind-wf-bg: #f6e8dc;
   --kind-wf-fg: #7f4119;
+  /* Exam blocks (sessions and egzamin events); ink >= 4.5:1 on bg. */
+  --exam-bg: #f6e6f0;
+  --exam-fg: #8a1f5c;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -128,6 +131,8 @@
     --kind-praktyczne-fg: #eea6aa;
     --kind-wf-bg: #2c1c10;
     --kind-wf-fg: #eab68a;
+    --exam-bg: #2e1325;
+    --exam-fg: #f0a6d3;
   }
 }
 

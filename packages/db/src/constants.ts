@@ -56,6 +56,17 @@ export const KIND_COLORS: Record<
   },
 };
 
+/**
+ * Exam block colours (exam sessions and egzamin events), like KIND_COLORS:
+ * copies of `--exam-bg/fg` in apps/web/app/globals.css (a web test keeps them
+ * equal), for the bot's plan image.
+ */
+export const EXAM_COLORS: Record<'light' | 'dark', { bg: string; fg: string }> =
+  {
+    light: { bg: '#f6e6f0', fg: '#8a1f5c' },
+    dark: { bg: '#2e1325', fg: '#f0a6d3' },
+  };
+
 export const ASSESSMENTS = [
   'egzamin',
   'kolokwium',

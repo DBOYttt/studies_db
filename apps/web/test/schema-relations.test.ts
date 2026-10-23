@@ -35,8 +35,22 @@ const base = {
 } as const;
 
 describe('SCHEMA_RELATIONS drift guard', () => {
-  it('has 20 relations', () => {
-    expect(SCHEMA_RELATIONS).toHaveLength(20);
+  it('has 23 relations', () => {
+    expect(SCHEMA_RELATIONS).toHaveLength(23);
+  });
+
+  it('entry quiz marks link to their class and group, skips to the mark', () => {
+    expect(
+      SCHEMA_RELATIONS.filter((r) =>
+        r.from.view.startsWith('v_class_mark'),
+      ).map(
+        (r) => `${r.from.view}.${r.from.column}>${r.to.view}.${r.to.column}`,
+      ),
+    ).toEqual([
+      'v_class_marks.class_id>v_classes.id',
+      'v_class_marks.group_id>v_class_groups.id',
+      'v_class_mark_skips.mark_id>v_class_marks.id',
+    ]);
   });
 
   it('v_class_sessions links to subject, class, group and lecturer', () => {

@@ -12,6 +12,7 @@ import { explorerHref } from './explorer';
 import {
   formatIsoWeek,
   type IsoWeek,
+  type PlanBadge,
   type PlanSession,
   shiftWeek,
 } from './plan';
@@ -103,6 +104,39 @@ export const fromWeekSession = (
   startsAt: new Date(s.startsAt),
   endsAt: new Date(s.endsAt),
 });
+
+/* ---------- timetable assessments: badges and exam blocks ---------- */
+
+/** Visible badge text: "Test", "2 tests", "Entry quiz". */
+export function badgeLabel(b: PlanBadge): string {
+  if (b.kind === 'entry_quiz') return 'Entry quiz';
+  const n = b.eventIds.length;
+  return n > 1 ? `${n} tests` : 'Test';
+}
+
+/** Tooltip / accessible name: the label plus the test titles or the note. */
+export function badgeTitle(b: PlanBadge): string {
+  const label = badgeLabel(b);
+  if (b.kind === 'entry_quiz') return b.note ? `${label}: ${b.note}` : label;
+  const titles = b.titles.filter(Boolean);
+  return titles.length > 0 ? `${label}: ${titles.join(', ')}` : label;
+}
+
+/**
+ * How a timed entry is drawn: exam sessions and timed `egzamin` events as
+ * filled exam blocks, other events outlined, class sessions in their kind
+ * colour.
+ */
+export function blockKind(
+  s: Pick<PlanSession, 'type' | 'sessionKind' | 'eventKind' | 'allDay'>,
+): 'class' | 'exam' | 'event' {
+  if (s.type === 'class') return s.sessionKind === 'exam' ? 'exam' : 'class';
+  return s.eventKind === 'egzamin' && !s.allDay ? 'exam' : 'event';
+}
+
+/** "Edit" of the Entry quiz popover: the class section on the subject page. */
+export const entryQuizEditHref = (links: SessionLinks): string =>
+  `${links.subject}#entry-quiz`;
 
 /** prev / current / next week links of a page; `extra` params come first. */
 export function weekNav(

@@ -38,6 +38,9 @@ export const SCHEMA_RELATIONS: SchemaRelation[] = [
   rel('v_class_sessions', 'class_id', 'v_classes', 'id'),
   rel('v_class_sessions', 'group_id', 'v_class_groups', 'id'),
   rel('v_class_sessions', 'lecturer_id', 'v_lecturers', 'id'),
+  rel('v_class_marks', 'class_id', 'v_classes', 'id'),
+  rel('v_class_marks', 'group_id', 'v_class_groups', 'id'),
+  rel('v_class_mark_skips', 'mark_id', 'v_class_marks', 'id'),
 ];
 
 export type SelectionNames = {

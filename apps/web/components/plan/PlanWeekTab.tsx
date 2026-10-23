@@ -1,9 +1,11 @@
 import { getMyGroups, listEventsInRange } from '@studies/db';
+import { listWeekMarks } from '@studies/db/plan';
 import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
 import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
+  annotateWeek,
   defaultWeek,
   isoWeekOf,
   nowWall,
@@ -69,7 +71,13 @@ export async function PlanWeekTab({
         myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
         user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
       ]);
-    const rows = [...classRows, ...events].sort(
+    const marks = await listWeekMarks(
+      pool,
+      classRows.flatMap((s) => (s.classId === null ? [] : [s.classId])),
+    );
+    // Badges first (Test, Entry quiz, exam dedup); My groups filtering runs
+    // on the annotated sessions in WeekView, so badges travel with them.
+    const rows = annotateWeek([...classRows, ...events], marks).sort(
       (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
     );
     const validGroups = options

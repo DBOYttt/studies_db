@@ -116,3 +116,68 @@ test('Lecturers tab: office hours, room and platform links', async ({
     page.getByRole('link', { name: 'UPeL / platform ↗' }),
   ).toHaveAttribute('href', 'https://upel.example.edu/course/plan');
 });
+
+test.describe('timetable assessments', () => {
+  const ASSESS = '/plan?week=2026-W41';
+
+  test('a Test badge on the lab block and an exam block', async ({ page }) => {
+    await page.goto(ASSESS);
+    const lab = page.getByTestId('plan-block').filter({ hasText: 'E-5 501' });
+    const test = lab.getByRole('link', { name: 'Test: Kolokwium z ocen' });
+    await expect(test).toBeVisible();
+    await expect(test).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
+    // The kolokwium is a badge, not a separate event block.
+    await expect(
+      page.getByTestId('plan-event').filter({ hasText: 'Kolokwium z ocen' }),
+    ).toHaveCount(0);
+
+    const exam = page.getByTestId('plan-block').filter({ hasText: 'Aula E' });
+    await expect(exam).toContainText('Exam');
+    await expect(
+      page.getByRole('list', { name: 'Class types' }).getByText('Exam'),
+    ).toBeVisible();
+  });
+
+  test('"Not this week" removes the entry quiz of that date only', async ({
+    page,
+  }) => {
+    await page.goto(ASSESS);
+    const blocks = page.getByTestId('plan-block');
+    const g1 = blocks.filter({ hasText: 'E-5 501' });
+    const g2 = blocks.filter({ hasText: 'E-5 502' });
+    const quiz = g1.getByRole('button', { name: 'Entry quiz' });
+    await expect(g2.getByRole('button', { name: 'Entry quiz' })).toBeVisible();
+
+    const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
+    await expect(async () => {
+      await quiz.click();
+      await expect(dialog).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await expect(quiz).toHaveAttribute('aria-expanded', 'true');
+    await expect(dialog.getByText('Rozdział 2')).toBeVisible();
+    await expect(dialog.getByRole('link', { name: 'Edit' })).toHaveAttribute(
+      'href',
+      /^\/subjects\/OCEN\?class=laboratorium&group=1#entry-quiz$/,
+    );
+    await page.keyboard.press('Escape');
+    await expect(dialog).toBeHidden();
+    await expect(quiz).toBeFocused();
+
+    await page.keyboard.press('Enter');
+    await expect(dialog).toBeVisible();
+    await dialog.getByRole('button', { name: 'Not this week' }).click();
+    await expect(g1.getByRole('button', { name: 'Entry quiz' })).toHaveCount(0);
+    await expect(g2.getByRole('button', { name: 'Entry quiz' })).toBeVisible();
+    // The Test badge stays.
+    await expect(
+      g1.getByRole('link', { name: 'Test: Kolokwium z ocen' }),
+    ).toBeVisible();
+
+    await page.goto('/plan?week=2026-W40');
+    await expect(
+      blocks
+        .filter({ hasText: 'E-5 500' })
+        .getByRole('button', { name: 'Entry quiz' }),
+    ).toBeVisible();
+  });
+});
