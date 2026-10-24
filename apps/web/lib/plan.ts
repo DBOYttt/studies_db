@@ -11,6 +11,7 @@ import { type IsoWeek, isoWeekOf, weekStart } from '@studies/db/plan';
 
 export type { MyGroups } from '@studies/db';
 export {
+  annotateWeek,
   DAY_END_MIN,
   DAY_START_MIN,
   filterMyGroups,
@@ -20,6 +21,7 @@ export {
   isoWeekOf,
   layoutDay,
   nowWall,
+  type PlanBadge,
   type PlanSession,
   parseIsoWeek,
   parseMyGroups,
@@ -28,6 +30,7 @@ export {
   shiftWeek,
   slotRange,
   type ValidGroups,
+  type WeekMark,
   weekDays,
   weekStart,
 } from '@studies/db/plan';

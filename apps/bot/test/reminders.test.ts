@@ -1,4 +1,9 @@
 import {
+  classes,
+  classGroups,
+  classMarkSkips,
+  classMarks,
+  classSessions,
   createDb,
   type Db,
   events,
@@ -7,6 +12,7 @@ import {
   reminderLog,
   setReminderPrefs,
   setSetting,
+  subjects,
   users,
 } from '@studies/db';
 import type { PlanSession } from '@studies/db/plan';
@@ -114,6 +120,20 @@ describe('reminder texts', () => {
       '\\*Kolos\\* · Bazy · tomorrow 10:00 · \\_C\\_',
     );
     expect(digestText([e])).toContain('\\*Kolos\\*');
+  });
+  it('digest: entry quiz lines after the events', () => {
+    const q = [
+      { subjectName: 'Bazy', className: 'Laboratorium', groupName: 'Gr. 1' },
+      { subjectName: 'Fizyka', className: 'Ćwiczenia', groupName: null },
+    ];
+    expect(digestText([base], q)).toBe(
+      'Tomorrow:\n📝 Kolos · BD · 10:00 · C-12\nEntry quiz: Bazy, Laboratorium Gr. 1\nEntry quiz: Fizyka, Ćwiczenia',
+    );
+    expect(digestText([], q.slice(0, 1))).toBe(
+      'Tomorrow:\nEntry quiz: Bazy, Laboratorium Gr. 1',
+    );
+    const many = Array.from({ length: 200 }, () => q[0]);
+    expect(digestText([], many).length).toBeLessThanOrEqual(2000);
   });
   it('digest: lines, truncated to 2000 characters', () => {
     expect(digestText([base])).toBe('Tomorrow:\n📝 Kolos · BD · 10:00 · C-12');
@@ -252,6 +272,118 @@ describe('runReminderTick', () => {
     expect(g.digests[1].thread).toBe('thread-1');
     expect(g.digests[1].content).toContain('Nowy');
     expect(g.digests[1].content).not.toContain('Kolos');
+  });
+
+  describe('entry quizzes in the digest', () => {
+    /** Bazy, Laboratorium Gr. 1 with a session tomorrow (20.10) and an entry quiz. */
+    async function quizTomorrow(skip = false) {
+      const [s] = await db
+        .insert(subjects)
+        .values({ code: 'BD', name: 'Bazy', semester: 1, ects: 5 })
+        .$returningId();
+      const [c] = await db
+        .insert(classes)
+        .values({ subjectId: s.id, kind: 'laboratorium', name: 'Laboratorium' })
+        .$returningId();
+      const [g] = await db
+        .insert(classGroups)
+        .values({ classId: c.id, number: 1, name: 'Gr. 1' })
+        .$returningId();
+      await db.insert(classSessions).values({
+        uid: 'q1',
+        occurrenceStart: W(2026, 10, 20, 8),
+        startsAt: W(2026, 10, 20, 8),
+        endsAt: W(2026, 10, 20, 9, 30),
+        label: 'L',
+        subjectId: s.id,
+        classId: c.id,
+        groupId: g.id,
+      });
+      const [m] = await db
+        .insert(classMarks)
+        .values({ classId: c.id, groupId: null, kind: 'wejsciowka' })
+        .$returningId();
+      if (skip) {
+        await db
+          .insert(classMarkSkips)
+          .values({ markId: m.id, onDate: '2026-10-20' });
+      }
+    }
+
+    it('posts the quiz lines with the events, once per day, also after a restart', async () => {
+      await setSetting(db, 'events_forum_id', 'forum-1');
+      await quizTomorrow();
+      await event(W(2026, 10, 20, 10));
+      const g = fakeGuild();
+      const memory = createReminderMemory();
+      await runReminderTick(
+        { ...deps(g.guild), memory },
+        W(2026, 10, 19, 18, 1),
+      );
+      expect(g.digests).toHaveLength(1);
+      expect(g.digests[0].content).toBe(
+        'Tomorrow:\n📝 Kolos · 10:00 · C-12\nEntry quiz: Bazy, Laboratorium Gr. 1',
+      );
+      expect(await getSetting(db, 'digest_quiz_date')).toBe('2026-10-20');
+      // A second tick, and a restarted bot (fresh memory), post nothing.
+      await runReminderTick(
+        { ...deps(g.guild), memory },
+        W(2026, 10, 19, 18, 2),
+      );
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 3));
+      expect(g.digests).toHaveLength(1);
+      // An event added later gets its own message, without the quiz lines.
+      await event(W(2026, 10, 20, 12), { title: 'Nowy' });
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 10));
+      expect(g.digests).toHaveLength(2);
+      expect(g.digests[1].content).not.toContain('Entry quiz');
+    });
+
+    it('posts the quiz lines when there are no events', async () => {
+      await setSetting(db, 'events_forum_id', 'forum-1');
+      await quizTomorrow();
+      const g = fakeGuild();
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 1));
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 2));
+      expect(g.digests.map((d) => d.content)).toEqual([
+        'Tomorrow:\nEntry quiz: Bazy, Laboratorium Gr. 1',
+      ]);
+    });
+
+    it('a skipped date or a time outside 18:00–18:30 posts nothing', async () => {
+      await setSetting(db, 'events_forum_id', 'forum-1');
+      await quizTomorrow(true);
+      const g = fakeGuild();
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 1));
+      expect(g.digests).toEqual([]);
+      await db.delete(classMarkSkips);
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 17, 59));
+      await runReminderTick(deps(g.guild), W(2026, 10, 19, 18, 30));
+      expect(g.digests).toEqual([]);
+    });
+
+    it('a failed setSetting does not post the quiz lines twice in this process', async () => {
+      vi.spyOn(console, 'error').mockImplementation(() => {});
+      await setSetting(db, 'events_forum_id', 'forum-1');
+      await setSetting(db, DIGEST_THREAD_SETTING, 'thread-1');
+      await quizTomorrow();
+      const g = fakeGuild();
+      const memory = createReminderMemory();
+      const spy = vi
+        .spyOn(await import('@studies/db'), 'setSetting')
+        .mockRejectedValueOnce(new Error('db blip'));
+      await runReminderTick(
+        { ...deps(g.guild), memory },
+        W(2026, 10, 19, 18, 1),
+      );
+      expect(spy).toHaveBeenCalled();
+      spy.mockRestore();
+      await runReminderTick(
+        { ...deps(g.guild), memory },
+        W(2026, 10, 19, 18, 2),
+      );
+      expect(g.digests).toHaveLength(1);
+    });
   });
 
   it('no digest without a forum setting', async () => {

@@ -6,10 +6,13 @@ import {
   type PlanSession,
 } from '../lib/plan';
 import {
+  annotatePlanWeek,
+  canAddTest,
   dayColumns,
   eventsForFilter,
   eventWhenShort,
   newEventHref,
+  newTestHref,
 } from '../lib/plan-events';
 import { pickUpcoming } from '../lib/upcoming-events';
 
@@ -86,6 +89,23 @@ describe('helpers', () => {
       '/wydarzenia/nowe?date=2026-10-19&subject=5',
     );
   });
+  it('"+ Test" opens the form prefilled with the session', () => {
+    const s = { ...base, type: 'class' as const, id: 42, classId: 3 };
+    expect(newTestHref({ ...s, groupId: 8 }, true)).toBe(
+      '/s/wydarzenia/nowe?kind=kolokwium&subject=5&class=3&group=8&session=42',
+    );
+    expect(newTestHref(s, false)).toBe(
+      '/wydarzenia/nowe?kind=kolokwium&subject=5&class=3&session=42',
+    );
+  });
+  it('"+ Test" only on confirmed class sessions', () => {
+    const s = { ...base, type: 'class' as const, id: 42, classId: 3 };
+    expect(canAddTest(s)).toBe(true);
+    expect(canAddTest({ ...s, status: 'cancelled' })).toBe(false);
+    expect(canAddTest({ ...s, sessionKind: 'exam' })).toBe(false);
+    expect(canAddTest({ ...s, classId: null })).toBe(false);
+    expect(canAddTest(base)).toBe(false);
+  });
   it('short when label', () => {
     expect(eventWhenShort(base)).toBe('Wed 14 Oct, 10:00');
     expect(eventWhenShort({ ...base, allDay: true })).toBe('Wed 14 Oct');
@@ -103,5 +123,52 @@ describe('pickUpcoming', () => {
     }));
     const got = pickUpcoming(ev, { '7': 8 }, 5);
     expect(got.map((e) => e.id)).toEqual([1, 3, 4, 5, 6]);
+  });
+});
+
+describe('annotatePlanWeek', () => {
+  const lab: PlanSession = {
+    ...base,
+    type: 'class',
+    id: 10,
+    startsAt: new Date('2026-10-14T10:00:00Z'),
+    endsAt: new Date('2026-10-14T11:30:00Z'),
+    classId: 3,
+    classKind: 'laboratorium',
+    lecturerId: 8,
+    eventKind: undefined,
+    eventTitle: undefined,
+    allDay: undefined,
+  };
+  const test = {
+    ...base,
+    id: 20,
+    classId: 3,
+    startsAt: new Date('2026-10-14T10:15:00Z'),
+  };
+  const trip = {
+    ...base,
+    id: 21,
+    eventKind: 'wyjazd' as const,
+    eventTitle: 'Wyjazd',
+    startsAt: new Date('2026-10-14T08:00:00Z'),
+    endsAt: new Date('2026-10-14T09:00:00Z'),
+  };
+
+  it('a lecturer plan gets Test badges but no event blocks', () => {
+    const out = annotatePlanWeek([lab], [test, trip], [], { lecturerId: 8 });
+    expect(out.map((s) => `${s.type}:${s.id}`)).toEqual(['class:10']);
+    expect(out[0].badges?.[0]).toMatchObject({ kind: 'test', eventIds: [20] });
+  });
+
+  it('a subject plan keeps the unmatched events of that subject, sorted by time', () => {
+    const other = { ...trip, id: 22, subjectId: 6 };
+    const out = annotatePlanWeek([lab], [test, trip, other], [], {
+      subjectId: 5,
+    });
+    expect(out.map((s) => `${s.type}:${s.id}`)).toEqual([
+      'event:21',
+      'class:10',
+    ]);
   });
 });

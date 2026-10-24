@@ -54,7 +54,9 @@ An event that matches no session stays a normal event block. Only `kolokwium` tu
 - `version` int NOT NULL DEFAULT 0 (optimistic concurrency, as on `events`)
 
 At most one non-deleted mark per (`class_id`, `group_id`, `kind`); enforced in code inside the transaction with
-`SELECT … FOR UPDATE` (MariaDB has no partial unique index). The group must belong to the class.
+`SELECT … FOR UPDATE` (MariaDB has no partial unique index). The group must belong to the class. A group mark is
+refused while an all-groups mark of the same class and kind is active ("Entry quiz is already on for all groups of
+this class."); overlaps made before that rule are tolerated.
 
 `class_mark_skips` ("not this week"):
 - `id` int PK, `mark_id` int FK → class_marks ON DELETE CASCADE, `on_date` date, `created_by` int FK → users,
@@ -64,12 +66,15 @@ Keyed by date, so a skip survives the sync re-creating sessions. A skip may only
 mark's class/group has a confirmed session.
 
 A session shows the Entry quiz badge when an active mark exists for its class and (its group or no group), the
-session is a confirmed class session, and no skip exists for that mark on the session's date.
+session is a confirmed class session, and no skip exists for that mark on the session's date. When both apply, the
+all-groups mark is shown (it takes precedence over the group mark). Skipping an all-groups mark skips every group
+that day, so its button says "Not this week (all groups)" (web popover, session panel and the Discord select).
 
 ### Exams in `class_sessions`
 
 - New column `kind` enum(`class`, `exam`) NOT NULL DEFAULT `class`.
-- Exam sessions keep subject, room, lecturer and group from the feed; `class_id` stays NULL.
+- Exam sessions keep subject, room and lecturer from the feed; `class_id` stays NULL and `group_id` is stored NULL
+  (a group needs a class).
 
 ### Views, grants, audit
 
@@ -100,7 +105,7 @@ session is a confirmed class session, and no skip exists for that mark on the se
   exam without a group shows for everyone following the subject.
 - No exam-period setting: weeks after the semester simply contain only exam blocks.
 - Duplicate exam: an `egzamin` event with the same subject starting within ±60 min of an imported exam session is
-  shown once, as the imported block, with a link to the event.
+  shown once, as the imported block. The block still opens the session panel, which links the event ("Open event").
 
 ### Bot
 
@@ -139,7 +144,9 @@ session is a confirmed class session, and no skip exists for that mark on the se
 - Optional `UNITIME_EXAM_ICAL_URL`: read by the worker in the same 6 h loop and on `/plan sync`; every entry in this
   feed is an exam. A failure of this feed is recorded like a class-feed failure (no URL leak) and does not stop the
   class feed.
-- Re-sync uses the existing upsert by `uid` + occurrence start; a removed exam is cancelled like a class.
+- Re-sync uses the existing upsert by `uid` + occurrence start; an exam missing from its feed is removed like a
+  class. Each feed removes only its own rows (`source`). The same `uid` + start in both feeds belongs to the exam
+  feed: the exam sync takes the row over, and the class sync leaves `source = 'exams'` rows alone.
 - When the main feed starts carrying exams, the prefix rule picks them up; another word is a one-line addition.
 
 ## Error handling

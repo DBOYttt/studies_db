@@ -12,6 +12,7 @@ import { explorerHref } from './explorer';
 import {
   formatIsoWeek,
   type IsoWeek,
+  type PlanBadge,
   type PlanSession,
   shiftWeek,
 } from './plan';
@@ -104,6 +105,67 @@ export const fromWeekSession = (
   endsAt: new Date(s.endsAt),
 });
 
+/* ---------- timetable assessments: badges and exam blocks ---------- */
+
+/** Visible badge text: "Test", "2 tests", "Entry quiz". */
+export function badgeLabel(b: PlanBadge): string {
+  if (b.kind === 'entry_quiz') return 'Entry quiz';
+  const n = b.eventIds.length;
+  return n > 1 ? `${n} tests` : 'Test';
+}
+
+/** Tooltip / accessible name: the label plus the test titles or the note. */
+export function badgeTitle(b: PlanBadge): string {
+  const label = badgeLabel(b);
+  if (b.kind === 'entry_quiz') return b.note ? `${label}: ${b.note}` : label;
+  const titles = b.titles.filter(Boolean);
+  return titles.length > 0 ? `${label}: ${titles.join(', ')}` : label;
+}
+
+/** The skip button: an all-groups mark skips every group of that day. */
+export const skipLabel = (b: Extract<PlanBadge, { kind: 'entry_quiz' }>) =>
+  b.allGroups ? 'Not this week (all groups)' : 'Not this week';
+
+/** "Next classes" line: "Exam", or the class (else the label) and group. */
+export function nextSessionWhat(s: PlanSession): string {
+  if (s.sessionKind === 'exam') return 'Exam';
+  return [s.className ?? s.label, s.groupName].filter(Boolean).join(', ');
+}
+
+/**
+ * How a timed entry is drawn: exam sessions and timed `egzamin` events as
+ * filled exam blocks, other events outlined, class sessions in their kind
+ * colour.
+ */
+export function blockKind(
+  s: Pick<PlanSession, 'type' | 'sessionKind' | 'eventKind' | 'allDay'>,
+): 'class' | 'exam' | 'event' {
+  if (s.type === 'class') return s.sessionKind === 'exam' ? 'exam' : 'class';
+  return s.eventKind === 'egzamin' && !s.allDay ? 'exam' : 'event';
+}
+
+/** "Edit" of the Entry quiz popover: the class section on the subject page. */
+export const entryQuizEditHref = (links: SessionLinks): string =>
+  `${links.subject}#entry-quiz`;
+
+export const SAVE_FAILED = 'Could not save. Try again.';
+
+/**
+ * Runs a mark action for the timetable controls: null on success, else the
+ * message to show (the refusal, or SAVE_FAILED when the call itself failed,
+ * e.g. offline or a server error).
+ */
+export async function markActionError(
+  run: () => Promise<{ ok: boolean; message: string }>,
+): Promise<string | null> {
+  try {
+    const r = await run();
+    return r.ok ? null : r.message;
+  } catch {
+    return SAVE_FAILED;
+  }
+}
+
 /** prev / current / next week links of a page; `extra` params come first. */
 export function weekNav(
   path: string,
@@ -128,6 +190,10 @@ const p2 = (n: number) => String(n).padStart(2, '0');
 /** `HH:MM` of a wall Date. */
 export const wallTime = (d: Date): string =>
   `${p2(d.getUTCHours())}:${p2(d.getUTCMinutes())}`;
+
+/** `Wed 21 Oct` of a wall Date. */
+export const wallShortDate = (d: Date): string =>
+  `${WEEKDAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
 
 /** `YYYY-MM-DD` of a wall Date. */
 export const wallDateKey = (d: Date): string => d.toISOString().slice(0, 10);

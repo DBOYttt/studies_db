@@ -3,15 +3,16 @@
  * into the all-day strip and the hour grid, event links and the short
  * "when" label. Dates are wall Dates (see lib/plan.ts).
  */
-import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 import {
+  annotateWeek,
   formatIsoWeek,
   type IsoWeek,
   layoutDay,
   type PlanSession,
+  type WeekMark,
   weekStart,
 } from './plan';
-import { wallDateKey, wallTime } from './plan-view';
+import { wallDateKey, wallShortDate, wallTime } from './plan-view';
 
 export const isEvent = (s: Pick<PlanSession, 'type'>) => s.type === 'event';
 
@@ -42,6 +43,33 @@ export function newEventHref(
   return `${simple ? '/s' : ''}/wydarzenia/nowe?${q}`;
 }
 
+/** "Add test" is offered on confirmed class sessions that have a class. */
+export const canAddTest = (
+  s: Pick<PlanSession, 'type' | 'status' | 'sessionKind' | 'classId'>,
+): boolean =>
+  s.type === 'class' &&
+  s.status === 'confirmed' &&
+  s.sessionKind !== 'exam' &&
+  s.classId !== null;
+
+/**
+ * "Add test" of a session: the event form as a Test of the session's
+ * subject, class and group, with the session picked (date, time and room).
+ */
+export function newTestHref(
+  s: Pick<PlanSession, 'id' | 'subjectId' | 'classId' | 'groupId'>,
+  simple: boolean,
+): string {
+  const q = new URLSearchParams({
+    kind: 'kolokwium',
+    subject: String(s.subjectId),
+  });
+  if (s.classId !== null) q.set('class', String(s.classId));
+  if (s.groupId !== null) q.set('group', String(s.groupId));
+  q.set('session', String(s.id));
+  return `${simple ? '/s' : ''}/wydarzenia/nowe?${q}`;
+}
+
 /** Events of a subject-filtered plan; lecturer-filtered plans have none. */
 export function eventsForFilter(
   events: PlanSession[],
@@ -51,6 +79,29 @@ export function eventsForFilter(
   if (f.subjectId !== undefined)
     return events.filter((e) => e.subjectId === f.subjectId);
   return events;
+}
+
+/**
+ * The week the timetable draws: annotates the class sessions with ALL the
+ * week's events (so a lecturer's plan still gets its Test badges), then keeps
+ * only the remaining events the plan filter allows; sorted by start.
+ */
+export function annotatePlanWeek(
+  classRows: PlanSession[],
+  events: PlanSession[],
+  marks: WeekMark[],
+  f: { subjectId?: number; lecturerId?: number },
+): PlanSession[] {
+  const out = annotateWeek([...classRows, ...events], marks);
+  const kept = new Set(
+    eventsForFilter(
+      out.filter((s) => s.type === 'event'),
+      f,
+    ).map((e) => e.id),
+  );
+  return out
+    .filter((s) => s.type === 'class' || kept.has(s.id))
+    .sort((a, b) => a.startsAt.getTime() - b.startsAt.getTime());
 }
 
 export interface DayColumn<S extends PlanSession> {
@@ -82,6 +133,6 @@ export function dayColumns<S extends PlanSession>(
 /** `Tue 20 Oct, 10:00` (no time for all-day events). */
 export function eventWhenShort(s: PlanSession): string {
   const d = s.startsAt;
-  const date = `${WEEKDAYS_SHORT[d.getUTCDay()]} ${d.getUTCDate()} ${MONTHS_SHORT[d.getUTCMonth()]}`;
+  const date = wallShortDate(d);
   return s.allDay ? date : `${date}, ${wallTime(d)}`;
 }

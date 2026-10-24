@@ -2,6 +2,7 @@ export * from './admin-actions.js';
 export * from './audit.js';
 export * from './auth.js';
 export * from './bot-requests.js';
+export * from './class-marks.js';
 export { createDb, type Db, type DbExecutor } from './client.js';
 export * from './event-posts.js';
 export * from './event-series.js';

@@ -56,6 +56,17 @@ export const KIND_COLORS: Record<
   },
 };
 
+/**
+ * Exam block colours (exam sessions and egzamin events), like KIND_COLORS:
+ * copies of `--exam-bg/fg` in apps/web/app/globals.css (a web test keeps them
+ * equal), for the bot's plan image.
+ */
+export const EXAM_COLORS: Record<'light' | 'dark', { bg: string; fg: string }> =
+  {
+    light: { bg: '#f6e6f0', fg: '#8a1f5c' },
+    dark: { bg: '#2e1325', fg: '#f0a6d3' },
+  };
+
 export const ASSESSMENTS = [
   'egzamin',
   'kolokwium',
@@ -97,6 +108,18 @@ export const EVENT_KINDS: Record<
 /** Symbol for a recurring series. */
 export const SERIES_SYMBOL = '🔁';
 
+/** Weekly marks on a class (or one group of it), see `class_marks`. */
+export const CLASS_MARK_KINDS = ['wejsciowka'] as const;
+export type ClassMarkKind = (typeof CLASS_MARK_KINDS)[number];
+
+/** `class_sessions.kind`: a regular class or an exam from the timetable feed. */
+export const SESSION_KINDS = ['class', 'exam'] as const;
+export type SessionKind = (typeof SESSION_KINDS)[number];
+
+/** Which UniTime feed a class_sessions row came from (each sync only removes its own). */
+export const SESSION_SOURCES = ['classes', 'exams'] as const;
+export type SessionSource = (typeof SESSION_SOURCES)[number];
+
 export const PUBLIC_VIEWS = [
   'v_subjects',
   'v_lecturers',
@@ -111,6 +134,8 @@ export const PUBLIC_VIEWS = [
   'v_users',
   'v_class_sessions',
   'v_events',
+  'v_class_marks',
+  'v_class_mark_skips',
 ] as const;
 
 export type PublicView = (typeof PUBLIC_VIEWS)[number];
@@ -134,6 +159,8 @@ export const CONTENT_TABLES = [
   'events',
   'event_series',
   'event_topics',
+  'class_marks',
+  'class_mark_skips',
 ] as const;
 
 /**

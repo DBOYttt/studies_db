@@ -21,10 +21,12 @@ import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { asc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
-import { getDb } from './db';
+import { getDb, getRoPool } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
+import { nowWall } from './plan';
 import { requireAdmin, requireUser } from './session';
+import { type SessionOption, upcomingSessionOptions } from './session-options';
 import { uploadFileExists } from './storage';
 
 /**
@@ -262,4 +264,17 @@ export async function retryPostAction(id: number): Promise<ActionResult> {
   const r = await retryEventPost(getDb(), user.id, id, 'web');
   if (r.ok) refresh(id);
   return r;
+}
+
+/**
+ * "Pick a session" of the form after the class or group changed: the next
+ * confirmed class sessions (read-only pool). Empty for malformed ids.
+ */
+export async function sessionOptionsAction(
+  classId: number,
+  groupId: number | null,
+): Promise<SessionOption[]> {
+  await requireUser();
+  if (!isId(classId) || (groupId !== null && !isId(groupId))) return [];
+  return upcomingSessionOptions(getRoPool(), classId, groupId, nowWall());
 }

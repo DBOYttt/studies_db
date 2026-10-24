@@ -128,6 +128,7 @@ describe('timetable views', () => {
       'room',
       'label',
       'status',
+      'kind',
     ]);
   });
 });

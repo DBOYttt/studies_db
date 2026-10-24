@@ -3,30 +3,84 @@ import type { EventKind } from '@studies/db/constants';
 import { EVENT_KINDS } from '@studies/db/constants';
 import { notFound } from 'next/navigation';
 import type { EventFormValues } from '@/components/events/EventForm';
-import { getDb } from './db';
+import { getDb, getRoPool } from './db';
 import { formWhen } from './event-view';
+import { nowWall } from './plan';
+import {
+  getSessionOption,
+  type SessionOption,
+  upcomingSessionOptions,
+} from './session-options';
 
 type SP = Record<string, string | string[] | undefined>;
 const one = (v: string | string[] | undefined) =>
   typeof v === 'string' ? v : '';
+const idOf = (v: string | string[] | undefined): number | null => {
+  const t = one(v);
+  return /^[1-9]\d{0,9}$/.test(t) ? Number(t) : null;
+};
 
-/** Defaults of the add form from `?subject=<id>&date=YYYY-MM-DD&kind=`. */
+/**
+ * Defaults of the add form from
+ * `?subject=<id>&class=<id>&group=<id>&date=YYYY-MM-DD&kind=`.
+ */
 export function newEventDefaults(sp: SP): EventFormValues {
-  const subject = one(sp.subject);
   const date = one(sp.date);
   const kind = one(sp.kind);
+  const subjectId = idOf(sp.subject);
+  const classId = subjectId === null ? null : idOf(sp.class);
   return {
     kind: Object.hasOwn(EVENT_KINDS, kind) ? (kind as EventKind) : 'kolokwium',
     title: '',
-    subjectId: /^[1-9]\d{0,9}$/.test(subject) ? Number(subject) : null,
-    classId: null,
-    groupId: null,
+    subjectId,
+    classId,
+    groupId: classId === null ? null : idOf(sp.group),
     date: /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : '',
     start: '',
     end: '',
     place: '',
     note: '',
   };
+}
+
+/**
+ * The add form: `newEventDefaults`, and with `?session=<id>` (the timetable's
+ * "Add test") that session's subject, class, group, date, time and room.
+ * `sessions` are the "Pick a session" options of the initial class/group
+ * (the picked session first if it already started).
+ */
+export async function loadNewEventForm(
+  sp: SP,
+): Promise<{ initial: EventFormValues; sessions: SessionOption[] }> {
+  const initial = newEventDefaults(sp);
+  const pool = getRoPool();
+  const sessionId = idOf(sp.session);
+  const picked =
+    sessionId === null ? null : await getSessionOption(pool, sessionId);
+  if (picked) {
+    Object.assign(initial, {
+      subjectId: picked.subjectId,
+      classId: picked.classId,
+      groupId: picked.groupId,
+      date: picked.date,
+      start: picked.from,
+      end: picked.to,
+      place: picked.room ?? '',
+      sessionId: picked.value,
+    });
+  }
+  if (initial.classId === null) return { initial, sessions: [] };
+  const sessions = await upcomingSessionOptions(
+    pool,
+    initial.classId,
+    initial.groupId,
+    nowWall(),
+  );
+  if (picked && !sessions.some((o) => o.value === picked.value)) {
+    const { subjectId, classId, groupId, ...option } = picked;
+    sessions.unshift(option);
+  }
+  return { initial, sessions };
 }
 
 /**

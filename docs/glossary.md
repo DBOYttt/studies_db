@@ -140,3 +140,15 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Nieznany rodzaj wydarzenia | Unknown event type. |
 | Nie znaleziono wydarzenia | Event not found. |
 | Download / CSV names (`przedmioty`, `…-pliki`, `plan-zajec`) | `subjects`, `…-files`, `timetable` |
+
+## Timetable assessments
+
+| Polish | English |
+| --- | --- |
+| Wejściówka | Entry quiz |
+| Kolokwium (badge on a session) | Test |
+| Egzamin (exam block on the timetable) | Exam |
+| Nie w tym tygodniu | Not this week |
+| Wybierz zajęcia | Pick a session |
+| Wejściówka na każdych zajęciach | Entry quiz every session |
+| Włącz / Wyłącz (entry quiz) | Turn on / Turn off |

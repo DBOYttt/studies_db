@@ -4,14 +4,25 @@ import {
   ArrowSquareOut,
   CalendarBlank,
   ChalkboardTeacher,
+  PencilSimple,
+  Plus,
   TerminalWindow,
   X,
 } from '@phosphor-icons/react';
-import { CLASS_NAMES } from '@studies/db/constants';
+import { CLASS_NAMES, EVENT_KINDS } from '@studies/db/constants';
 import Link from 'next/link';
-import { useEffect, useRef } from 'react';
-import type { PlanSession } from '@/lib/plan';
-import { type SessionLinks, wallLongDate, wallTime } from '@/lib/plan-view';
+import { type RefObject, useEffect, useRef } from 'react';
+import type { PlanBadge, PlanSession } from '@/lib/plan';
+import { canAddTest, eventPageHref, newTestHref } from '@/lib/plan-events';
+import {
+  entryQuizEditHref,
+  type SessionLinks,
+  skipLabel,
+  wallDateKey,
+  wallLongDate,
+  wallTime,
+} from '@/lib/plan-view';
+import { useSkipMark } from './useSkipMark';
 
 const btn =
   'inline-flex items-center gap-[5px] rounded border border-line-strong px-2.5 py-[5px] text-accent-ink hover:border-accent';
@@ -21,7 +32,8 @@ const closeCls =
 /**
  * Details of one session, in the PreviewPanel look: 360px column from lg
  * (the caller sizes it), full-screen sheet below. Closing (×, Escape outside
- * form fields) calls `onClose`; the heading takes focus on open.
+ * form fields) calls `onClose`; the heading takes focus on open. An exam
+ * merged with an egzamin event links that event ("Open event").
  */
 export function SessionPanel({
   session: s,
@@ -127,7 +139,50 @@ export function SessionPanel({
             ))}
           </tbody>
         </table>
+        {(s.badges?.length ?? 0) > 0 && (
+          <section
+            aria-labelledby="session-assessments"
+            className="flex flex-col gap-2"
+          >
+            <h3
+              id="session-assessments"
+              className="m-0 text-xs font-semibold text-muted"
+            >
+              On this session
+            </h3>
+            {s.badges?.map((b) =>
+              b.kind === 'test' ? (
+                <TestLinks key="test" badge={b} simple={simple} />
+              ) : (
+                <EntryQuizRow
+                  key="quiz"
+                  badge={b}
+                  onDate={wallDateKey(s.startsAt)}
+                  editHref={entryQuizEditHref(s.links)}
+                  headingRef={headingRef}
+                />
+              ),
+            )}
+          </section>
+        )}
         <div className="flex flex-wrap gap-1.5">
+          {s.linkedEventId !== undefined && (
+            <Link href={eventPageHref(s.linkedEventId, simple)} className={btn}>
+              <CalendarBlank size={14} aria-hidden />
+              Open event
+            </Link>
+          )}
+          {canAddTest(s) && (
+            <Link
+              href={newTestHref(s, simple)}
+              aria-label="Add test"
+              title="Add a test on this session"
+              className={btn}
+            >
+              <Plus size={14} weight="bold" aria-hidden />
+              Test
+            </Link>
+          )}
           <Link href={s.links.subject} className={btn}>
             <ArrowSquareOut size={14} aria-hidden />
             Subject
@@ -147,5 +202,78 @@ export function SessionPanel({
         </div>
       </div>
     </aside>
+  );
+}
+
+/** Every test of the session, one link each (the block shows "2 tests"). */
+function TestLinks({
+  badge,
+  simple,
+}: {
+  badge: Extract<PlanBadge, { kind: 'test' }>;
+  simple: boolean;
+}) {
+  return (
+    <ul aria-label="Tests" className="m-0 flex list-none flex-col gap-1 p-0">
+      {badge.eventIds.map((id, i) => (
+        <li key={id}>
+          <Link
+            href={eventPageHref(id, simple)}
+            className="link inline-flex items-baseline gap-1 break-words"
+          >
+            <span aria-hidden>{EVENT_KINDS.kolokwium.symbol}</span>
+            <span>Test: {badge.titles[i] || 'Untitled'}</span>
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * The entry quiz of the session: note, "Not this week" ("(all groups)" for
+ * an all-groups mark), "Edit".
+ */
+function EntryQuizRow({
+  badge,
+  onDate,
+  editHref,
+  headingRef,
+}: {
+  badge: Extract<PlanBadge, { kind: 'entry_quiz' }>;
+  onDate: string;
+  editHref: string;
+  headingRef: RefObject<HTMLHeadingElement | null>;
+}) {
+  // The row goes away with the refresh: focus the panel heading first.
+  const { skip, pending, error } = useSkipMark(badge.markId, onDate, () =>
+    headingRef.current?.focus(),
+  );
+  return (
+    <div className="flex flex-col gap-1.5">
+      <div className="text-xs">
+        <span className="font-semibold">Entry quiz</span>
+        {badge.note && <span className="text-muted"> · {badge.note}</span>}
+      </div>
+      <div className="flex flex-wrap gap-1.5">
+        <button
+          type="button"
+          aria-disabled={pending}
+          onClick={skip}
+          className={`${btn} aria-disabled:opacity-60`}
+        >
+          {skipLabel(badge)}
+        </button>
+        <Link href={editHref} className={btn}>
+          <PencilSimple size={14} aria-hidden />
+          Edit
+        </Link>
+      </div>
+      {error && (
+        <p role="alert" className="m-0 text-xs text-err-fg">
+          {error}
+        </p>
+      )}
+    </div>
   );
 }

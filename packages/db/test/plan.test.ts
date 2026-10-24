@@ -211,6 +211,7 @@ describe('weekSessionsQuery', () => {
     const q = weekSessionsQuery({ year: 2026, week: 42 });
     expect(q.params).toEqual(['2026-10-12 00:00:00', '2026-10-19 00:00:00']);
     expect(q.sql).toContain('FROM v_class_sessions cs');
+    expect(q.sql).toContain('cs.kind');
     const f = weekSessionsQuery({ year: 2026, week: 42 }, { subjectId: 3 });
     expect(f.params).toEqual(['2026-10-12 00:00:00', '2026-10-19 00:00:00', 3]);
     expect(f.sql).toContain('cs.subject_id = ?');
@@ -311,6 +312,7 @@ describe('DB queries', () => {
       classId: null,
       status: 'confirmed',
       type: 'class',
+      sessionKind: 'class',
     });
     expect(rows[1]).toMatchObject({
       groupName: 'Gr. 1',

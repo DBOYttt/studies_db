@@ -163,8 +163,14 @@ beforeAll(async () => {
     .update(materials)
     .set({ deletedAt: new Date() })
     .where(eq(materials.id, mid.del));
-  const sess = async (n: number, subjectId: number, start: Date) =>
+  const sess = async (
+    n: number,
+    subjectId: number,
+    start: Date,
+    kind: 'class' | 'exam' = 'class',
+  ) =>
     db.insert(classSessions).values({
+      kind,
       uid: `uid${n}`,
       occurrenceStart: start,
       startsAt: start,
@@ -179,6 +185,7 @@ beforeAll(async () => {
   await sess(4, id.fiz, new Date(Date.UTC(2026, 9, 7, 8)));
   await sess(5, id.fiz, new Date(Date.UTC(2026, 8, 1, 8))); // past
   await sess(6, id.alg, new Date(Date.UTC(2026, 9, 2, 8)));
+  await sess(7, id.alg, new Date(Date.UTC(2026, 9, 9, 8)), 'exam');
 });
 
 afterAll(async () => {
@@ -310,7 +317,11 @@ describe('nextSessions', () => {
   });
   it('includes a session starting exactly now and is empty without sessions', async () => {
     const r = await nextSessions(ro, id.alg, new Date(Date.UTC(2026, 9, 2, 8)));
-    expect(r.map((s) => s.label)).toEqual(['s6']);
+    expect(r.map((s) => s.label)).toEqual(['s6', 's7']);
     expect(await nextSessions(ro, id.pus, now)).toEqual([]);
+  });
+  it('carries the session kind (an exam is an exam)', async () => {
+    const r = await nextSessions(ro, id.alg, now);
+    expect(r.map((s) => s.sessionKind)).toEqual(['class', 'exam']);
   });
 });

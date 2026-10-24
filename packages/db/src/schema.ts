@@ -20,7 +20,14 @@ import {
   unique,
   varchar,
 } from 'drizzle-orm/mysql-core';
-import { ASSESSMENTS, CLASS_KINDS, EVENT_KIND_KEYS } from './constants.js';
+import {
+  ASSESSMENTS,
+  CLASS_KINDS,
+  CLASS_MARK_KINDS,
+  EVENT_KIND_KEYS,
+  SESSION_KINDS,
+  SESSION_SOURCES,
+} from './constants.js';
 import type { JobType, PreviewKind } from './files.js';
 
 export {
@@ -28,12 +35,18 @@ export {
   ASSESSMENTS,
   type Assessment,
   CLASS_KINDS,
+  CLASS_MARK_KINDS,
   CLASS_NAMES,
   type ClassKind,
+  type ClassMarkKind,
   EVENT_KINDS,
   type EventKind,
   PUBLIC_VIEWS,
   type PublicView,
+  SESSION_KINDS,
+  SESSION_SOURCES,
+  type SessionKind,
+  type SessionSource,
 } from './constants.js';
 
 const JOB_TYPES = [
@@ -321,6 +334,8 @@ export const classSessions = mysqlTable(
     status: mysqlEnum('status', ['confirmed', 'cancelled'])
       .notNull()
       .default('confirmed'),
+    kind: mysqlEnum('kind', SESSION_KINDS).notNull().default('class'),
+    source: mysqlEnum('source', SESSION_SOURCES).notNull().default('classes'),
     sequence: int('sequence').notNull().default(0),
     updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   },
@@ -328,6 +343,48 @@ export const classSessions = mysqlTable(
     unique('uq_class_sessions_occurrence').on(t.uid, t.occurrenceStart),
     index('idx_class_sessions_starts').on(t.startsAt),
   ],
+);
+
+// A weekly mark on a class (group_id NULL = every group), e.g. an entry quiz
+// at the start of each session. At most one non-deleted mark per
+// (class, group, kind), enforced in code (MariaDB has no partial unique index).
+export const classMarks = mysqlTable(
+  'class_marks',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    classId: int('class_id')
+      .notNull()
+      .references(() => classes.id, { onDelete: 'cascade' }),
+    groupId: int('group_id').references(() => classGroups.id, {
+      onDelete: 'cascade',
+    }),
+    kind: mysqlEnum('kind', CLASS_MARK_KINDS).notNull(),
+    note: varchar('note', { length: 200 }),
+    createdBy: int('created_by').references(() => users.id),
+    updatedBy: int('updated_by').references(() => users.id),
+    createdAt: now(),
+    updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    deletedAt: datetime('deleted_at'),
+    // Bumped on every change; lets an edit detect a stale form.
+    version: int('version').notNull().default(0),
+  },
+  (t) => [index('idx_class_marks_class').on(t.classId, t.groupId, t.kind)],
+);
+
+// "Not this week": a date on which a mark does not apply. Keyed by date so it
+// survives the timetable sync re-creating sessions.
+export const classMarkSkips = mysqlTable(
+  'class_mark_skips',
+  {
+    id: int('id').autoincrement().primaryKey(),
+    markId: int('mark_id')
+      .notNull()
+      .references(() => classMarks.id, { onDelete: 'cascade' }),
+    onDate: date('on_date', { mode: 'string' }).notNull(),
+    createdBy: int('created_by').references(() => users.id),
+    createdAt: now(),
+  },
+  (t) => [unique('uq_class_mark_skips_mark_date').on(t.markId, t.onDate)],
 );
 
 // Single-row (id = 1) state of the timetable import. Timestamps are UTC.

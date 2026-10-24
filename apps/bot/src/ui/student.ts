@@ -3,26 +3,38 @@
  * running it once the interaction is acknowledged.
  */
 import {
+  addMark,
+  classMarks,
   clearMyGroups,
   getMyGroups,
   getReminderPrefs,
   listEventsInRange,
+  listMarks,
+  MARK_NOT_FOUND,
+  removeMark,
   setMyGroup,
   setReminderPrefs,
+  skipDate,
 } from '@studies/db';
 import {
+  annotateWeek,
   filterMyGroups,
   hiddenByMyGroups,
   type IsoWeek,
   isoWeekOf,
+  listMarkableClasses,
   listMyGroupOptions,
+  listWeekMarks,
   listWeekSessionRows,
+  type MarkableClass,
   nowWall,
   parseIsoWeek,
   sanitizeMyGroups,
+  upcomingSessionDates,
   weekStart,
 } from '@studies/db/plan';
 import type { APIInteractionGuildMember, GuildMember, User } from 'discord.js';
+import { eq } from 'drizzle-orm';
 import type { RouterDeps } from '../commands/router.js';
 import {
   LINK_BANNED,
@@ -33,12 +45,18 @@ import {
 } from '../commands/student.js';
 import { toDiscordUser } from '../discord/map.js';
 import { renderDayImage, renderWeekImage } from './plan-image.js';
+import { STALE_TEXT } from './respond.js';
 import {
   groupSubjects,
   groupsView,
   notice,
   planDay,
   planWeek,
+  QUIZ_SKIP_DATES,
+  type QuizClassData,
+  quizClassesView,
+  quizClassView,
+  quizSubjectsView,
   type View,
 } from './views/student.js';
 
@@ -55,7 +73,17 @@ export type StudentAction =
       on: boolean;
       subject: number | null;
     }
-  | { kind: 'login' };
+  | { kind: 'login' }
+  | { kind: 'quizOpen' }
+  | { kind: 'quizSubject'; subjectId: number }
+  | { kind: 'quizClass'; classId: number; groupId: number | null }
+  | {
+      kind: 'quizToggle';
+      classId: number;
+      groupId: number | null;
+      on: boolean;
+    }
+  | { kind: 'quizSkip'; markId: number; date: string };
 
 /** `yyyy-mm-dd` → wall midnight, or null when malformed or not a real date. */
 function parseDay(s: string): Date | null {
@@ -67,6 +95,80 @@ function parseDay(s: string): Date | null {
 
 const ID_RE = /^[1-9]\d*$/;
 const INDEX_RE = /^\d+$/;
+/** A class/group select value: `<classId>_<groupId|0>`. */
+const CLASS_GROUP_RE = /^([1-9]\d*)_(0|[1-9]\d*)$/;
+const GROUP_ARG_RE = /^(0|[1-9]\d*)$/;
+
+/** `YYYYMMDD` → `YYYY-MM-DD`, or null when not a real date. */
+function parseCompactDay(s: string | undefined): string | null {
+  const m = /^(\d{4})(\d{2})(\d{2})$/.exec(s ?? '');
+  if (!m) return null;
+  const key = `${m[1]}-${m[2]}-${m[3]}`;
+  return parseDay(key) ? key : null;
+}
+
+/**
+ * The `quiz` actions: open, subj[:page], cls:<subject>, pick:<subject>[:page],
+ * all:<class>, tog, skip.
+ */
+function parseQuizAction(
+  args: string[],
+  values: readonly string[],
+): StudentAction | null {
+  const [sub, a, b, c] = args;
+  const value = values[0];
+  switch (sub) {
+    case 'open':
+      return args.length === 1 ? { kind: 'quizOpen' } : null;
+    case 'subj':
+      // Subject values are ids, so the page arg is not needed.
+      return value !== undefined && ID_RE.test(value)
+        ? { kind: 'quizSubject', subjectId: Number(value) }
+        : null;
+    case 'cls':
+      return a !== undefined && ID_RE.test(a) && values.length === 0
+        ? { kind: 'quizSubject', subjectId: Number(a) }
+        : null;
+    case 'pick': {
+      const m = CLASS_GROUP_RE.exec(value ?? '');
+      if (!m || a === undefined || !ID_RE.test(a)) return null;
+      // Option values are ids, so the page arg is only checked.
+      if (b !== undefined && !INDEX_RE.test(b)) return null;
+      if (c !== undefined) return null;
+      const groupId = Number(m[2]);
+      return {
+        kind: 'quizClass',
+        classId: Number(m[1]),
+        groupId: groupId === 0 ? null : groupId,
+      };
+    }
+    case 'all':
+      return a !== undefined &&
+        ID_RE.test(a) &&
+        args.length === 2 &&
+        values.length === 0
+        ? { kind: 'quizClass', classId: Number(a), groupId: null }
+        : null;
+    case 'tog': {
+      if (a === undefined || !ID_RE.test(a)) return null;
+      if (b === undefined || !GROUP_ARG_RE.test(b)) return null;
+      if (c !== '0' && c !== '1') return null;
+      return {
+        kind: 'quizToggle',
+        classId: Number(a),
+        groupId: b === '0' ? null : Number(b),
+        on: c === '1',
+      };
+    }
+    case 'skip': {
+      const date = parseCompactDay(value);
+      return a !== undefined && ID_RE.test(a) && date
+        ? { kind: 'quizSkip', markId: Number(a), date }
+        : null;
+    }
+  }
+  return null;
+}
 
 /**
  * The action a `stu` id stands for; null when the id is not one this bot
@@ -79,6 +181,7 @@ export function parseStudentAction(
 ): StudentAction | null {
   const [sub, arg] = args;
   if (action === 'login') return { kind: 'login' };
+  if (action === 'quiz') return parseQuizAction(args, values);
   if (action === 'plan') {
     if (sub === 'day') {
       if (arg === undefined) return { kind: 'planDay', day: null };
@@ -146,14 +249,30 @@ async function planData(ctx: StudentContext, week: IsoWeek, day?: Date) {
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
     listMyGroupOptions(ctx.deps.pool),
   ]);
+  const marks = await listWeekMarks(
+    ctx.deps.pool,
+    classSessions.flatMap((s) => (s.classId === null ? [] : [s.classId])),
+  );
   const valid = Object.fromEntries(
     options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
   );
-  const sessions = [...classSessions, ...events];
+  // Like the web: badges and exam merges from all the week's events first,
+  // then My groups (which also drops the badges of hidden sessions).
+  const sessions = annotateWeek([...classSessions, ...events], marks);
   const my = sanitizeMyGroups(stored, valid);
   const hasGroups = Object.keys(my).length > 0;
+  const shown = filterMyGroups(sessions, my);
+  // Events drawn as a badge or merged into an exam still open from the
+  // plan's event select.
+  const linkedIds = new Set(
+    shown.flatMap((s) => [
+      ...(s.badges ?? []).flatMap((b) => (b.kind === 'test' ? b.eventIds : [])),
+      ...(s.linkedEventId === undefined ? [] : [s.linkedEventId]),
+    ]),
+  );
   return {
-    sessions: filterMyGroups(sessions, my),
+    sessions: shown,
+    linked: events.filter((e) => linkedIds.has(e.id)),
     hasGroups,
     /** Sessions (of `day` when given, else of the week) that My groups hides. */
     hidden: hiddenByMyGroups(
@@ -196,6 +315,139 @@ async function showGroups(
   await ctx.show(groupsView(options, pick(options), my, rem));
 }
 
+/* ---------- entry quizzes ---------- */
+
+const STALE_QUIZ = 'This class has no sessions any more.';
+
+/** `YYYY-MM-DD` of a wall Date. */
+const dayKeyOf = (d: Date) => d.toISOString().slice(0, 10);
+
+/** The class view's data; null when the class (or the group in it) is gone. */
+async function quizClassData(
+  ctx: StudentContext,
+  classes: MarkableClass[],
+  classId: number,
+  groupId: number | null,
+): Promise<QuizClassData | null> {
+  const c = classes.find((x) => x.classId === classId);
+  if (!c) return null;
+  const group =
+    groupId === null ? null : c.groups.find((g) => g.id === groupId);
+  if (group === undefined) return null;
+  const today = dayKeyOf(nowWall());
+  const quizzes = (await listMarks(ctx.deps.ingest.db, [classId])).filter(
+    (m) => m.kind === 'wejsciowka',
+  );
+  const mark = quizzes.find((m) => m.groupId === groupId);
+  const allGroupsOn =
+    groupId !== null && quizzes.some((m) => m.groupId === null);
+  const skips = mark ? mark.skips.filter((d) => d >= today) : [];
+  const dates = mark
+    ? (
+        await upcomingSessionDates(
+          ctx.deps.pool,
+          classId,
+          groupId,
+          new Date(`${today}T00:00:00Z`),
+          QUIZ_SKIP_DATES + skips.length,
+        )
+      )
+        .filter((d) => !skips.includes(d))
+        .slice(0, QUIZ_SKIP_DATES)
+    : [];
+  return {
+    subjectId: c.subjectId,
+    subjectName: c.subjectName,
+    classId,
+    className: c.className,
+    groupId,
+    groupName: group?.name ?? null,
+    allGroupsOn,
+    mark: mark ? { id: mark.id, note: mark.note, skips } : null,
+    dates,
+  };
+}
+
+async function showQuizClass(
+  ctx: StudentContext,
+  classId: number,
+  groupId: number | null,
+  message?: string,
+): Promise<void> {
+  const classes = await listMarkableClasses(ctx.deps.pool);
+  const d = await quizClassData(ctx, classes, classId, groupId);
+  await ctx.show(d ? quizClassView(d, message) : notice(message ?? STALE_QUIZ));
+}
+
+async function runQuizAction(
+  ctx: StudentContext,
+  a: Extract<StudentAction, { kind: `quiz${string}` }>,
+): Promise<void> {
+  const { db } = ctx.deps.ingest;
+  switch (a.kind) {
+    case 'quizOpen': {
+      const classes = await listMarkableClasses(ctx.deps.pool);
+      const subjects: { id: number; name: string }[] = [];
+      for (const c of classes) {
+        if (!subjects.some((x) => x.id === c.subjectId)) {
+          subjects.push({ id: c.subjectId, name: c.subjectName });
+        }
+      }
+      return ctx.show(quizSubjectsView(subjects));
+    }
+    case 'quizSubject': {
+      const classes = (await listMarkableClasses(ctx.deps.pool)).filter(
+        (c) => c.subjectId === a.subjectId,
+      );
+      const marks = await listMarks(
+        db,
+        classes.map((c) => c.classId),
+      );
+      // No classes: the subject is gone or has no sessions (an old panel).
+      if (classes.length === 0) return ctx.show(notice(STALE_TEXT));
+      const name = classes[0].subjectName;
+      return ctx.show(
+        quizClassesView(
+          { id: a.subjectId, name },
+          classes,
+          marks.filter((m) => m.kind === 'wejsciowka'),
+        ),
+      );
+    }
+    case 'quizClass':
+      return showQuizClass(ctx, a.classId, a.groupId);
+    case 'quizToggle': {
+      let message: string;
+      if (a.on) {
+        const r = await addMark(
+          db,
+          ctx.userId,
+          { classId: a.classId, groupId: a.groupId, kind: 'wejsciowka' },
+          'discord',
+        );
+        message = r.message;
+      } else {
+        const mark = (await listMarks(db, [a.classId])).find(
+          (m) => m.kind === 'wejsciowka' && m.groupId === a.groupId,
+        );
+        message = mark
+          ? (await removeMark(db, ctx.userId, mark.id, {}, 'discord')).message
+          : MARK_NOT_FOUND;
+      }
+      return showQuizClass(ctx, a.classId, a.groupId, message);
+    }
+    case 'quizSkip': {
+      const [mark] = await db
+        .select({ classId: classMarks.classId, groupId: classMarks.groupId })
+        .from(classMarks)
+        .where(eq(classMarks.id, a.markId));
+      if (!mark) return ctx.show(notice(MARK_NOT_FOUND));
+      const r = await skipDate(db, ctx.userId, a.markId, a.date, 'discord');
+      return showQuizClass(ctx, mark.classId, mark.groupId, r.message);
+    }
+  }
+}
+
 /** Runs an action after the interaction was acknowledged. */
 export async function runStudentAction(
   ctx: StudentContext,
@@ -204,26 +456,34 @@ export async function runStudentAction(
   const { db } = ctx.deps.ingest;
   const base = ctx.deps.config.webBaseUrl;
   switch (a.kind) {
+    case 'quizOpen':
+    case 'quizSubject':
+    case 'quizClass':
+    case 'quizToggle':
+    case 'quizSkip':
+      return runQuizAction(ctx, a);
     case 'planDay': {
       const day = a.day ?? nowWall();
-      const { sessions, hasGroups, hidden } = await planData(
+      const { sessions, linked, hasGroups, hidden } = await planData(
         ctx,
         isoWeekOf(day),
         day,
       );
       const image = await tryRender('day', () => renderDayImage(sessions, day));
-      await ctx.show(planDay(sessions, day, hasGroups, base, image, hidden));
+      await ctx.show(
+        planDay(sessions, day, hasGroups, base, image, hidden, linked),
+      );
       return;
     }
     case 'planWeek': {
       const today = nowWall();
       const week = a.week ?? isoWeekOf(today);
-      const { sessions, hasGroups, hidden } = await planData(ctx, week);
+      const { sessions, linked, hasGroups, hidden } = await planData(ctx, week);
       const image = await tryRender('week', () =>
         renderWeekImage(sessions, week, today),
       );
       await ctx.show(
-        planWeek(sessions, week, hasGroups, base, today, image, hidden),
+        planWeek(sessions, week, hasGroups, base, today, image, hidden, linked),
       );
       return;
     }

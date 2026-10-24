@@ -243,3 +243,131 @@ describe('runPlanSyncOnce', () => {
     expect(planSyncDue(s, end, 6 * 3600_000)).toBe(true);
   });
 });
+
+describe('runPlanSyncOnce with an exam feed', () => {
+  let db: Db;
+  beforeAll(async () => {
+    db = await resetTestDb();
+  });
+  afterAll(async () => {
+    await closeTestDb(db);
+  });
+
+  const CLASS_URL = 'https://unitime.example.edu/ical?x=secret';
+  const EXAM_URL = 'https://exams.example.edu/ical/secretpath?x=examsecret';
+  const examIcs = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'X-WR-CALNAME:Egzaminy',
+    'BEGIN:VEVENT',
+    'DTSTART;TZID=Europe/Warsaw:20270201T090000',
+    'DTEND;TZID=Europe/Warsaw:20270201T110000',
+    'LOCATION:A-0 1',
+    'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    'UID:700000001',
+    'SUMMARY:Algebra liniowa (1rok)',
+    'DESCRIPTION:Pisemny',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+
+  function fakeFetch(
+    exam: 'ok' | 'fail',
+    seen: string[],
+    classes: 'ok' | 'fail' = 'ok',
+  ): typeof fetch {
+    return (async (input: string | URL | Request) => {
+      const url = String(input);
+      seen.push(url);
+      if (url === CLASS_URL && classes === 'fail')
+        throw new Error(`connect failed for ${url}`);
+      if (url === EXAM_URL) {
+        if (exam === 'fail') throw new Error(`connect failed for ${url}`);
+        return new Response(examIcs, {
+          headers: { 'content-type': 'text/calendar' },
+        });
+      }
+      return new Response(ics, {
+        headers: { 'content-type': 'text/calendar' },
+      });
+    }) as typeof fetch;
+  }
+
+  it('without an exam URL fetches only the class feed', async () => {
+    const seen: string[] = [];
+    await runPlanSyncOnce({
+      db,
+      url: CLASS_URL,
+      fetchImpl: fakeFetch('ok', seen),
+    });
+    expect(seen).toEqual([CLASS_URL]);
+    expect((await getPlanSyncStatus(db)).lastError).toBeNull();
+  });
+
+  it('syncs both feeds; exam feed rows are exams', async () => {
+    const seen: string[] = [];
+    await runPlanSyncOnce({
+      db,
+      url: CLASS_URL,
+      examUrl: EXAM_URL,
+      fetchImpl: fakeFetch('ok', seen),
+    });
+    expect(seen).toEqual([CLASS_URL, EXAM_URL]);
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastError).toBeNull();
+    const rows = await db.select().from(classSessions);
+    const exam = rows.find((r) => r.uid === '700000001');
+    expect(exam).toMatchObject({ kind: 'exam', source: 'exams' });
+    expect(rows.filter((r) => r.source === 'classes').length).toBeGreaterThan(
+      0,
+    );
+  });
+
+  it('an exam feed failure is recorded host-only and class sessions still sync', async () => {
+    await db.delete(classSessions);
+    const startedAt = new Date('2026-10-13T10:00:00Z');
+    await runPlanSyncOnce({
+      db,
+      url: CLASS_URL,
+      examUrl: EXAM_URL,
+      fetchImpl: fakeFetch('fail', []),
+      now: () => startedAt,
+    });
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastError).toBe(
+      'Exam timetable: Could not download the timetable from exams.example.edu',
+    );
+    expect(s.lastOkAt).toEqual(startedAt);
+    expect(s.stats?.created).toBeGreaterThan(0);
+    const rows = await db.select().from(classSessions);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.source === 'classes')).toBe(true);
+  });
+
+  it('a class feed failure is recorded while the exam feed is still written', async () => {
+    await db.delete(classSessions);
+    const before = await getPlanSyncStatus(db);
+    expect(before.lastOkAt).not.toBeNull();
+    const startedAt = new Date('2026-10-14T10:00:00Z');
+    await runPlanSyncOnce({
+      db,
+      url: CLASS_URL,
+      examUrl: EXAM_URL,
+      fetchImpl: fakeFetch('ok', [], 'fail'),
+      now: () => startedAt,
+    });
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastRunAt).toEqual(startedAt);
+    expect(s.lastOkAt).toEqual(before.lastOkAt);
+    expect(s.lastError).toBe(
+      'Could not download the timetable from unitime.example.edu',
+    );
+    expect(s.lastError).not.toContain('secret');
+    const rows = await db.select().from(classSessions);
+    expect(rows.map((r) => [r.uid, r.kind, r.source])).toEqual([
+      ['700000001', 'exam', 'exams'],
+    ]);
+  });
+});

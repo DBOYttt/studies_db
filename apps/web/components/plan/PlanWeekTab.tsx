@@ -1,4 +1,5 @@
 import { getMyGroups, listEventsInRange } from '@studies/db';
+import { listWeekMarks } from '@studies/db/plan';
 import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
 import { getDb, getRoPool } from '@/lib/db';
@@ -13,7 +14,7 @@ import {
   weekDays,
   weekStart,
 } from '@/lib/plan';
-import { eventsForFilter, newEventHref } from '@/lib/plan-events';
+import { annotatePlanWeek, newEventHref } from '@/lib/plan-events';
 import {
   listMyGroupOptions,
   listWeekSessions,
@@ -59,19 +60,20 @@ export async function PlanWeekTab({
     const [{ rows: classRows }, events, links, options, stored] =
       await Promise.all([
         listWeekSessions(pool, week, filter),
-        listEventsInRange(
-          pool,
-          weekStart(week),
-          weekStart(shiftWeek(week, 1)),
-        ).then((e) => eventsForFilter(e, filter)),
+        listEventsInRange(pool, weekStart(week), weekStart(shiftWeek(week, 1))),
         // Without the lookups blocks link to the subject only.
         loadLinkContext(getDb()).catch(() => undefined),
         myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
         user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
       ]);
-    const rows = [...classRows, ...events].sort(
-      (a, b) => a.startsAt.getTime() - b.startsAt.getTime(),
+    const marks = await listWeekMarks(
+      pool,
+      classRows.flatMap((s) => (s.classId === null ? [] : [s.classId])),
     );
+    // Badges first (Test, Entry quiz, exam dedup) against all the week's
+    // events, then the plan filter on the rest; My groups filtering runs on
+    // the annotated sessions in WeekView, so badges travel with them.
+    const rows = annotatePlanWeek(classRows, events, marks, filter);
     const validGroups = options
       ? Object.fromEntries(
           options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),

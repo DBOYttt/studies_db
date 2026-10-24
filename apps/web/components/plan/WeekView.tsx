@@ -28,13 +28,19 @@ import {
 } from '@/lib/plan';
 import { dayColumns, eventPageHref, sessionKey } from '@/lib/plan-events';
 import {
+  badgeLabel,
+  badgeTitle,
+  blockKind,
   dayHeader,
+  entryQuizEditHref,
   fromWeekSession,
   type SessionLinks,
   type WeekSession,
+  wallDateKey,
   wallTime,
   weekHeading,
 } from '@/lib/plan-view';
+import { EntryQuizBadge } from './EntryQuizBadge';
 import { SessionPanel } from './SessionPanel';
 
 const EMPTY_GROUPS: MyGroups = {};
@@ -75,6 +81,11 @@ export interface WeekViewProps {
   /** Link of the "+ Add event" button (the event form, prefilled). */
   newEventHref?: string;
 }
+
+const EXAM_STYLE = {
+  '--k-bg': 'var(--exam-bg)',
+  '--k-fg': 'var(--exam-fg)',
+} as CSSProperties;
 
 const kindStyle = (k: ClassKind | null): CSSProperties =>
   k
@@ -118,10 +129,11 @@ export function WeekView({
   const days = useMemo(() => dayIsos.map((d) => new Date(d)), [dayIsos]);
   const columns = useMemo(() => dayColumns(days, shown), [days, shown]);
   const hasAllDay = columns.some((c) => c.allDay.length > 0);
-  const hasEvents = shown.some((s) => s.type === 'event');
+  const hasEvents = shown.some((s) => blockKind(s) === 'event');
+  const hasExams = shown.some((s) => blockKind(s) === 'exam');
   const kinds = useMemo(() => {
     const used = new Set(
-      shown.filter((s) => s.type === 'class').map((s) => s.classKind),
+      shown.filter((s) => blockKind(s) === 'class').map((s) => s.classKind),
     );
     return CLASS_KINDS.filter((k) => used.has(k));
   }, [shown]);
@@ -276,7 +288,15 @@ export function WeekView({
                     }}
                   >
                     {blocks.map(({ session: s, col, cols }) =>
-                      s.type === 'event' ? (
+                      s.type === 'event' && blockKind(s) === 'exam' ? (
+                        <ExamEventBlock
+                          key={sessionKey(s)}
+                          s={s}
+                          simple={simple}
+                          col={col}
+                          cols={cols}
+                        />
+                      ) : s.type === 'event' ? (
                         <EventBlock
                           key={sessionKey(s)}
                           s={s}
@@ -293,6 +313,7 @@ export function WeekView({
                           selected={sessionKey(s) === selectedId}
                           onOpen={() => setSelectedId(sessionKey(s))}
                           refMap={blockRefs.current}
+                          simple={simple}
                         />
                       ),
                     )}
@@ -300,7 +321,7 @@ export function WeekView({
                 ))}
               </div>
             </div>
-            {(kinds.length > 0 || hasEvents) && (
+            {(kinds.length > 0 || hasEvents || hasExams) && (
               <ul
                 aria-label="Class types"
                 className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted"
@@ -315,6 +336,16 @@ export function WeekView({
                     {CLASS_NAMES[k]}
                   </li>
                 ))}
+                {hasExams && (
+                  <li className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="inline-block h-3 w-3 rounded-sm border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)]"
+                      style={EXAM_STYLE}
+                    />
+                    Exam
+                  </li>
+                )}
                 {hasEvents && (
                   <li className="flex items-center gap-1.5">
                     <span
@@ -342,6 +373,48 @@ export function WeekView({
   );
 }
 
+/** Badge pill: Test filled in the block's ink, Entry quiz outlined. */
+const badgeBase =
+  'inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full px-1.5 text-[10px] font-semibold leading-none whitespace-nowrap';
+const testBadge = `${badgeBase} bg-[var(--k-fg)] text-[var(--k-bg)] hover:opacity-90`;
+const quizBadge = `${badgeBase} border border-[var(--k-fg)] bg-page text-[var(--k-fg)] hover:bg-[var(--k-bg)]`;
+
+function Badges({ s, simple }: { s: Session; simple: boolean }) {
+  const list = s.badges ?? [];
+  if (list.length === 0) return null;
+  const day = s.startsAt;
+  const h = dayHeader(day);
+  return (
+    <div className="absolute inset-x-[3px] bottom-[3px] z-[1] flex gap-[3px] overflow-hidden">
+      {list.map((b) =>
+        b.kind === 'test' ? (
+          <Link
+            key="test"
+            href={eventPageHref(b.eventIds[0], simple)}
+            title={badgeTitle(b)}
+            aria-label={badgeTitle(b)}
+            className={testBadge}
+          >
+            <span aria-hidden>{EVENT_KINDS.kolokwium.symbol}</span>
+            {badgeLabel(b)}
+          </Link>
+        ) : (
+          <EntryQuizBadge
+            key="quiz"
+            markId={b.markId}
+            note={b.note}
+            allGroups={b.allGroups}
+            onDate={wallDateKey(day)}
+            dateLabel={`${h.name} ${h.date}`}
+            editHref={entryQuizEditHref(s.links)}
+            className={quizBadge}
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
 function Block({
   s,
   col,
@@ -349,6 +422,7 @@ function Block({
   selected,
   onOpen,
   refMap,
+  simple,
 }: {
   s: Session;
   col: number;
@@ -356,44 +430,26 @@ function Block({
   selected: boolean;
   onOpen: () => void;
   refMap: Map<string, HTMLButtonElement>;
+  simple: boolean;
 }) {
   const { from, to } = slotRange(s);
   const cancelled = s.status === 'cancelled';
+  const exam = blockKind(s) === 'exam';
   const time = `${wallTime(s.startsAt)}–${wallTime(s.endsAt)}`;
   const classLine = [s.className, s.groupName].filter(Boolean).join(' ');
+  const hasBadges = (s.badges?.length ?? 0) > 0;
   const title = [
     `${time} ${s.subjectName}`,
-    classLine,
+    exam ? 'Exam' : classLine,
     s.room,
     s.lecturerName,
     cancelled ? 'Cancelled' : null,
+    ...(s.badges ?? []).map(badgeTitle),
   ]
     .filter(Boolean)
     .join('\n');
-  return (
-    <button
-      type="button"
-      data-testid="plan-block"
-      ref={(el) => {
-        if (el) refMap.set(sessionKey(s), el);
-        else refMap.delete(sessionKey(s));
-      }}
-      onClick={onOpen}
-      aria-pressed={selected}
-      title={title}
-      className={`absolute flex flex-col overflow-hidden rounded border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)] px-[5px] py-[3px] text-left text-[11px] leading-[14px] text-fg hover:shadow-[inset_0_0_0_1px_var(--k-fg)] ${
-        selected
-          ? 'z-[1] shadow-[inset_0_0_0_1px_var(--k-fg)] outline-2 outline-accent'
-          : ''
-      } ${cancelled ? 'opacity-75' : ''}`}
-      style={{
-        ...kindStyle(s.classKind),
-        top: from * ROW + 1,
-        height: (to - from) * ROW - 2,
-        left: `calc(${(col / cols) * 100}% + 2px)`,
-        width: `calc(${100 / cols}% - 4px)`,
-      }}
-    >
+  const body = (
+    <>
       <span className="sr-only">{time} </span>
       <span
         className={`truncate font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
@@ -403,16 +459,101 @@ function Block({
       {cancelled && (
         <span className="truncate font-semibold text-err-fg">Cancelled</span>
       )}
-      {classLine && (
-        <span className={`truncate ${cancelled ? 'line-through' : ''}`}>
-          {classLine}
+      {exam ? (
+        <span
+          className={`truncate font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
+        >
+          Exam{s.groupName ? ` · ${s.groupName}` : ''}
         </span>
+      ) : (
+        classLine && (
+          <span className={`truncate ${cancelled ? 'line-through' : ''}`}>
+            {classLine}
+          </span>
+        )
       )}
       {s.room && <span className="truncate text-muted">{s.room}</span>}
       {s.lecturerName && (
         <span className="truncate text-muted">{s.lecturerName}</span>
       )}
-    </button>
+    </>
+  );
+  const inner = `flex size-full flex-col overflow-hidden rounded-r px-[5px] pt-[3px] text-left ${hasBadges ? 'pb-[22px]' : 'pb-[3px]'}`;
+  return (
+    <div
+      data-testid="plan-block"
+      className={`absolute rounded border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)] text-[11px] leading-[14px] text-fg hover:shadow-[inset_0_0_0_1px_var(--k-fg)] ${
+        selected
+          ? 'z-[1] shadow-[inset_0_0_0_1px_var(--k-fg)] outline-2 outline-accent'
+          : ''
+      } ${cancelled ? 'opacity-75' : ''}`}
+      style={{
+        ...(exam ? EXAM_STYLE : kindStyle(s.classKind)),
+        top: from * ROW + 1,
+        height: (to - from) * ROW - 2,
+        left: `calc(${(col / cols) * 100}% + 2px)`,
+        width: `calc(${100 / cols}% - 4px)`,
+      }}
+    >
+      {/* A merged exam opens the panel too; the panel links the event. */}
+      <button
+        type="button"
+        data-block-main
+        ref={(el) => {
+          if (el) refMap.set(sessionKey(s), el);
+          else refMap.delete(sessionKey(s));
+        }}
+        onClick={onOpen}
+        aria-pressed={selected}
+        title={title}
+        className={inner}
+      >
+        {body}
+      </button>
+      <Badges s={s} simple={simple} />
+    </div>
+  );
+}
+
+/** A timed egzamin event not merged into an imported exam: a filled exam block. */
+function ExamEventBlock({
+  s,
+  simple,
+  col,
+  cols,
+}: {
+  s: Session;
+  simple: boolean;
+  col: number;
+  cols: number;
+}) {
+  const { from, to } = slotRange(s);
+  const title = s.eventTitle ?? s.label;
+  const time = `${wallTime(s.startsAt)}–${wallTime(s.endsAt)}`;
+  return (
+    <Link
+      href={eventPageHref(s.id, simple)}
+      data-testid="plan-event"
+      title={[`${time} ${title}`, 'Exam', s.subjectName, s.room]
+        .filter(Boolean)
+        .join('\n')}
+      className="absolute flex flex-col overflow-hidden rounded border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)] px-[5px] py-[3px] text-[11px] leading-[14px] text-fg hover:shadow-[inset_0_0_0_1px_var(--k-fg)]"
+      style={{
+        ...EXAM_STYLE,
+        top: from * ROW + 1,
+        height: (to - from) * ROW - 2,
+        left: `calc(${(col / cols) * 100}% + 2px)`,
+        width: `calc(${100 / cols}% - 4px)`,
+      }}
+    >
+      <span className="sr-only">{time} </span>
+      <span className="truncate font-semibold text-[var(--k-fg)]">
+        {s.subjectCode || title}
+      </span>
+      <span className="truncate font-semibold text-[var(--k-fg)]">Exam</span>
+      <span className="truncate">{title}</span>
+      {s.room && <span className="truncate text-muted">{s.room}</span>}
+    </Link>
   );
 }
 

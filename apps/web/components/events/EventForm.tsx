@@ -5,14 +5,16 @@ import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
 import { EVENT_NOT_FOUND } from '@studies/db/text';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState, useTransition } from 'react';
+import { startTransition, useEffect, useState, useTransition } from 'react';
 import {
   createEventAction,
   restoreEventAction,
+  sessionOptionsAction,
   updateEventAction,
 } from '@/lib/event-actions';
 import { type FormVersion, nextFormVersion } from '@/lib/event-form-version';
 import type { SubjectOption } from '@/lib/event-queries';
+import { type SessionOption, sessionFormFields } from '@/lib/session-options';
 
 export type EventFormValues = {
   kind: EventKind;
@@ -29,7 +31,12 @@ export type EventFormValues = {
   inSeries?: boolean;
   /** Row version at load time; the save is refused if it changed since. */
   version?: number;
+  /** The picked class session (`?session=`, "Add test" on the timetable). */
+  sessionId?: string;
 };
+
+const groupKey = (classId: number | null, groupId: number | null) =>
+  classId === null ? null : `${classId}:${groupId ?? ''}`;
 
 /** The refusal for an event that no longer exists (same text as the db's). */
 const GONE = EVENT_NOT_FOUND;
@@ -43,8 +50,10 @@ const primaryBtn =
 /**
  * Add / edit form of an event. "When" is three inputs (date, start, end)
  * that the Server Action composes into `DD.MM.YYYY [HH:MM[-HH:MM]]`. Class and
- * group follow the chosen subject. A refusal is shown in place; success
- * redirects from the action.
+ * group follow the chosen subject. For a Test with a class, "Pick a session"
+ * lists the class/group's upcoming sessions and fills date, time and place
+ * (still editable). A refusal is shown in place; success redirects from the
+ * action.
  */
 export function EventForm({
   options,
@@ -55,6 +64,7 @@ export function EventForm({
   deleted = false,
   isAdmin = false,
   planHref,
+  sessions,
 }: {
   options: SubjectOption[];
   base: 'simple' | 'advanced';
@@ -66,6 +76,8 @@ export function EventForm({
   deleted?: boolean;
   isAdmin?: boolean;
   planHref?: string;
+  /** "Pick a session" options of the initial class/group, when loaded. */
+  sessions?: SessionOption[];
 }) {
   const router = useRouter();
   // Kept from the first render: a refresh after a refusal must not swap in a
@@ -83,11 +95,60 @@ export function EventForm({
   const [subjectId, setSubjectId] = useState(initial.subjectId);
   const [classId, setClassId] = useState(initial.classId);
   const [groupId, setGroupId] = useState(initial.groupId);
+  const [kind, setKind] = useState<EventKind>(initial.kind);
+  const [date, setDate] = useState(initial.date);
+  const [startTime, setStartTime] = useState(initial.start);
+  const [endTime, setEndTime] = useState(initial.end);
+  const [place, setPlace] = useState(initial.place);
+  const [sessionId, setSessionId] = useState(initial.sessionId ?? '');
+  // Options and the class/group they belong to; refetched when that changes.
+  const [picker, setPicker] = useState<{
+    key: string | null;
+    options: SessionOption[];
+    /** The options could not be loaded (offline, server error). */
+    failed: boolean;
+  }>({
+    key: sessions ? groupKey(initial.classId, initial.groupId) : null,
+    options: sessions ?? [],
+    failed: false,
+  });
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const subject = options.find((s) => s.id === subjectId);
   const cls = subject?.classes.find((c) => c.id === classId);
+  const wantKey = kind === 'kolokwium' ? groupKey(classId, groupId) : null;
+
+  useEffect(() => {
+    if (wantKey === null || wantKey === picker.key || classId === null) return;
+    let live = true;
+    startTransition(async () => {
+      let options: SessionOption[] = [];
+      let failed = false;
+      try {
+        options = await sessionOptionsAction(classId, groupId);
+      } catch {
+        failed = true;
+      }
+      if (live) setPicker({ key: wantKey, options, failed });
+    });
+    return () => {
+      live = false;
+    };
+  }, [wantKey, picker.key, classId, groupId]);
+
+  const pickSession = (value: string) => {
+    setSessionId(value);
+    const o = picker.options.find((x) => x.value === value);
+    if (!o) return;
+    const f = sessionFormFields(o);
+    setDate(f.date);
+    setStartTime(f.start);
+    setEndTime(f.end);
+    setPlace(f.place);
+  };
+  const showPicker = wantKey !== null;
+  const pickerReady = picker.key === wantKey;
 
   const submit = (fd: FormData) => {
     setError(null);
@@ -147,7 +208,12 @@ export function EventForm({
         )}
         <label className={label}>
           Type
-          <select name="kind" defaultValue={initial.kind} className={input}>
+          <select
+            name="kind"
+            value={kind}
+            onChange={(e) => setKind(e.target.value as EventKind)}
+            className={input}
+          >
             {Object.entries(EVENT_KINDS).map(([k, v]) => (
               <option key={k} value={k}>
                 {v.label}
@@ -172,7 +238,11 @@ export function EventForm({
               type="date"
               name="date"
               required
-              defaultValue={initial.date}
+              value={date}
+              onChange={(e) => {
+                setDate(e.target.value);
+                setSessionId(''); // no longer that session
+              }}
               className={input}
             />
           </label>
@@ -181,7 +251,11 @@ export function EventForm({
             <input
               type="time"
               name="start"
-              defaultValue={initial.start}
+              value={startTime}
+              onChange={(e) => {
+                setStartTime(e.target.value);
+                setSessionId('');
+              }}
               className={input}
             />
           </label>
@@ -190,7 +264,11 @@ export function EventForm({
             <input
               type="time"
               name="end"
-              defaultValue={initial.end}
+              value={endTime}
+              onChange={(e) => {
+                setEndTime(e.target.value);
+                setSessionId('');
+              }}
               className={input}
             />
           </label>
@@ -245,6 +323,7 @@ export function EventForm({
               setSubjectId(e.target.value ? Number(e.target.value) : null);
               setClassId(null);
               setGroupId(null);
+              setSessionId('');
             }}
             className={input}
           >
@@ -266,6 +345,7 @@ export function EventForm({
                 onChange={(e) => {
                   setClassId(e.target.value ? Number(e.target.value) : null);
                   setGroupId(null);
+                  setSessionId('');
                 }}
                 className={input}
               >
@@ -283,9 +363,10 @@ export function EventForm({
                 <select
                   name="groupId"
                   value={groupId ?? ''}
-                  onChange={(e) =>
-                    setGroupId(e.target.value ? Number(e.target.value) : null)
-                  }
+                  onChange={(e) => {
+                    setGroupId(e.target.value ? Number(e.target.value) : null);
+                    setSessionId('');
+                  }}
                   className={input}
                 >
                   <option value="">All</option>
@@ -299,12 +380,50 @@ export function EventForm({
             )}
           </div>
         )}
+        {showPicker && (
+          <div className="flex flex-col gap-1">
+            <label htmlFor="pick-session" className={label}>
+              Pick a session
+            </label>
+            <select
+              id="pick-session"
+              value={pickerReady ? sessionId : ''}
+              onChange={(e) => pickSession(e.target.value)}
+              disabled={!pickerReady || picker.options.length === 0}
+              aria-describedby="pick-session-help"
+              className={`${input} disabled:opacity-60`}
+            >
+              <option value="">
+                {!pickerReady
+                  ? 'Loading sessions…'
+                  : picker.failed
+                    ? 'Could not load sessions.'
+                    : picker.options.length === 0
+                      ? 'No upcoming sessions'
+                      : 'Choose a session'}
+              </option>
+              {pickerReady &&
+                picker.options.map((o) => (
+                  <option key={o.value} value={o.value}>
+                    {o.label}
+                  </option>
+                ))}
+            </select>
+            <span
+              id="pick-session-help"
+              className="text-xs font-normal text-muted"
+            >
+              Fills the date, time and place; you can still change them.
+            </span>
+          </div>
+        )}
         <label className={label}>
           Place
           <input
             name="place"
             maxLength={100}
-            defaultValue={initial.place}
+            value={place}
+            onChange={(e) => setPlace(e.target.value)}
             className={input}
           />
         </label>

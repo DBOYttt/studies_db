@@ -2,9 +2,12 @@ import {
   adminAudit,
   classes,
   classGroups,
+  classMarkSkips,
+  classMarks,
   classSessions,
   type Db,
   disableReminders,
+  events,
   getReminderPrefs,
   setSetting,
   subjects,
@@ -530,6 +533,7 @@ describe('handleUi', () => {
       'v1:stu:plan:day',
       'v1:stu:groups:open',
       'v1:stu:rem:day:1',
+      `v1:stu:quiz:tog:${id.cls}:0:1`,
     ]) {
       const i = component(cid);
       await handler()(i);
@@ -599,8 +603,221 @@ describe('handleUi', () => {
   });
 });
 
+describe('entry quizzes in the panel', () => {
+  const cidOf = (payload: Json, label: string) =>
+    nodes(payload).find((n) => n.type === 2 && n.label === label)?.custom_id;
+  const last = (i: Json) => i.editReply.mock.calls.at(-1)[0];
+  const run = async (cid: string, values?: string[]) => {
+    const i = component(cid, {
+      ephemeral: true,
+      select: values !== undefined,
+      values,
+    });
+    await handler()(i);
+    return i;
+  };
+  const auditActions = async () =>
+    (await db.select().from(adminAudit))
+      .filter((a) => a.action.startsWith('class_mark.'))
+      .map((a) => [a.action, (a.details as { source?: string }).source]);
+
+  it('subject → class/group → turn on, skip a week, turn off', async () => {
+    // Later sessions of Gr. 1 (the skip select offers them).
+    for (const [n, d] of [
+      [1, '2026-10-21'],
+      [2, '2026-10-28'],
+    ] as const) {
+      await db.insert(classSessions).values({
+        uid: `later${n}`,
+        occurrenceStart: new Date(`${d}T10:00:00Z`),
+        startsAt: new Date(`${d}T10:00:00Z`),
+        endsAt: new Date(`${d}T11:30:00Z`),
+        label: 'L',
+        subjectId: id.subj,
+        classId: id.cls,
+        groupId: id.g1,
+      });
+    }
+    const open = await run('v1:stu:quiz:open');
+    const subj = nodes(last(open)).find((n) => n.type === 3);
+    expect(subj.custom_id).toBe('v1:stu:quiz:subj');
+    expect(subj.options.map((o: Json) => [o.label, o.value])).toEqual([
+      ['Fizyka', String(id.subj)],
+    ]);
+
+    const pick = await run('v1:stu:quiz:subj', [String(id.subj)]);
+    const cls = nodes(last(pick)).find((n) => n.type === 3);
+    expect(cls.custom_id).toBe(`v1:stu:quiz:pick:${id.subj}`);
+    expect(cls.options.map((o: Json) => o.label)).toEqual([
+      'Laboratorium · All groups',
+      'Laboratorium · Gr. 1',
+      'Laboratorium · Gr. 2',
+    ]);
+
+    const view = await run(`v1:stu:quiz:pick:${id.subj}`, [
+      `${id.cls}_${id.g1}`,
+    ]);
+    expect(textOf(last(view))).toContain('Entry quiz: off');
+    const on = cidOf(last(view), 'Turn on');
+    expect(on).toBe(`v1:stu:quiz:tog:${id.cls}:${id.g1}:1`);
+
+    const turned = await run(on);
+    expect(turned.calls).toEqual(['deferUpdate', 'editReply']);
+    expect(textOf(last(turned))).toContain('Entry quiz turned on.');
+    expect(textOf(last(turned))).toContain('Entry quiz: on');
+    const [mark] = await db.select().from(classMarks);
+    expect(mark).toMatchObject({
+      classId: id.cls,
+      groupId: id.g1,
+      kind: 'wejsciowka',
+      deletedAt: null,
+    });
+    const skipSel = nodes(last(turned)).find((n) => n.type === 3);
+    expect(skipSel.custom_id).toBe(`v1:stu:quiz:skip:${mark.id}`);
+    expect(skipSel.options.map((o: Json) => o.value)).toEqual([
+      '20261014',
+      '20261021',
+      '20261028',
+    ]);
+
+    // A second "Turn on" (an old view) gets the domain's message.
+    const again = await run(on);
+    expect(textOf(last(again))).toContain(
+      'Entry quiz is already on for this class.',
+    );
+    expect(await db.select().from(classMarks)).toHaveLength(1);
+
+    const skipped = await run(`v1:stu:quiz:skip:${mark.id}`, ['20261021']);
+    expect(textOf(last(skipped))).toContain('Skipped for that week.');
+    expect(textOf(last(skipped))).toContain('Wed 21 Oct');
+    expect(
+      (await db.select().from(classMarkSkips)).map((k) => k.onDate),
+    ).toEqual(['2026-10-21']);
+
+    const off = cidOf(last(skipped), 'Turn off');
+    expect(off).toBe(`v1:stu:quiz:tog:${id.cls}:${id.g1}:0`);
+    const turnedOff = await run(off);
+    expect(textOf(last(turnedOff))).toContain('Entry quiz turned off.');
+    expect(textOf(last(turnedOff))).toContain('Entry quiz: off');
+    const [gone] = await db.select().from(classMarks);
+    expect(gone.deletedAt).not.toBeNull();
+
+    expect(await auditActions()).toEqual([
+      ['class_mark.add', 'discord'],
+      ['class_mark.skip', 'discord'],
+      ['class_mark.remove', 'discord'],
+    ]);
+  });
+
+  it('a skip for a date without a session answers with the domain message', async () => {
+    const turned = await run(`v1:stu:quiz:tog:${id.cls}:0:1`);
+    expect(textOf(last(turned))).toContain('Entry quiz turned on.');
+    const [mark] = await db.select().from(classMarks);
+    const bad = await run(`v1:stu:quiz:skip:${mark.id}`, ['20261015']);
+    expect(textOf(last(bad))).toContain(
+      'There is no session of this class on that date.',
+    );
+    expect(await db.select().from(classMarkSkips)).toHaveLength(0);
+  });
+
+  it('a group under an all-groups mark: refused turn-on, link to the all-groups view', async () => {
+    await run(`v1:stu:quiz:tog:${id.cls}:0:1`);
+    const g = await run(`v1:stu:quiz:pick:${id.subj}`, [`${id.cls}_${id.g1}`]);
+    expect(textOf(last(g))).toContain('Entry quiz: on for all groups');
+    expect(cidOf(last(g), 'Turn on')).toBeUndefined();
+    const all = cidOf(last(g), 'All groups');
+    expect(all).toBe(`v1:stu:quiz:all:${id.cls}`);
+    const allView = await run(all);
+    expect(textOf(last(allView))).toContain('Laboratorium (all groups)');
+    expect(textOf(last(allView))).toContain('Entry quiz: on');
+    const skip = nodes(last(allView)).find((n) => n.type === 3);
+    expect(skip.placeholder).toBe('Not this week (all groups)');
+
+    // An old view's "Turn on" for the group gets the domain's refusal.
+    const refused = await run(`v1:stu:quiz:tog:${id.cls}:${id.g1}:1`);
+    expect(textOf(last(refused))).toContain(
+      'Entry quiz is already on for all groups of this class.',
+    );
+    expect(await db.select().from(classMarks)).toHaveLength(1);
+  });
+
+  it('the class select of a second page decodes', async () => {
+    const i = await run(`v1:stu:quiz:pick:${id.subj}:1`, [`${id.cls}_0`]);
+    expect(textOf(last(i))).toContain('Entry quiz: off');
+  });
+
+  it('a subject without classes (a stale id) gets the stale notice', async () => {
+    for (const cid of ['v1:stu:quiz:cls:999999', 'v1:stu:quiz:subj']) {
+      const i = await run(cid, cid.endsWith('subj') ? ['999999'] : undefined);
+      expect(textOf(last(i)), cid).toContain(STALE);
+      expect(textOf(last(i))).not.toContain('Entry quizzes —');
+    }
+  });
+
+  it('turning off what is already off says so', async () => {
+    const i = await run(`v1:stu:quiz:tog:${id.cls}:${id.g2}:0`);
+    expect(textOf(last(i))).toContain('Entry quiz not found.');
+  });
+
+  it('treats malformed quiz ids and values as stale', async () => {
+    for (const [cid, values] of [
+      ['v1:stu:quiz:tog:x:0:1', undefined],
+      [`v1:stu:quiz:tog:${id.cls}:0:2`, undefined],
+      [`v1:stu:quiz:tog:${id.cls}:0`, undefined],
+      ['v1:stu:quiz:subj', ['abc']],
+      [`v1:stu:quiz:pick:${id.subj}`, ['10-1']],
+      ['v1:stu:quiz:skip:1', ['2026-10-21']],
+      ['v1:stu:quiz:skip:1', ['20261341']],
+      [`v1:stu:quiz:pick:${id.subj}:x`, [`${id.cls}_0`]],
+      ['v1:stu:quiz:all:x', undefined],
+      [`v1:stu:quiz:all:${id.cls}:1`, undefined],
+      ['v1:stu:quiz:nope', undefined],
+    ] as const) {
+      const i = await run(cid, values as string[] | undefined);
+      expect(i.calls, cid).toEqual(['reply']);
+      expect(textOf(i.reply.mock.calls[0][0])).toContain(STALE);
+    }
+  });
+
+  it('the plan shows the badges; My groups hides those of hidden groups', async () => {
+    renderFail.on = true;
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    await run(`v1:stu:quiz:tog:${id.cls}:${id.g2}:1`);
+    await db.insert(events).values({
+      kind: 'kolokwium',
+      title: 'Kolokwium 1',
+      startsAt: new Date('2026-10-14T12:15:00Z'),
+      subjectId: id.subj,
+      classId: id.cls,
+      groupId: id.g2,
+    });
+    const all = await run('v1:stu:plan:day:2026-10-14');
+    const text = textOf(last(all));
+    expect(text).toContain(
+      '12:00–13:30 · FIZ Fizyka · Laboratorium · Gr. 2 · Test: Kolokwium 1 · Entry quiz',
+    );
+    // The Test is a badge, not an event line of its own, but it still
+    // opens from the event select.
+    expect(text).not.toContain('📝 Kolokwium 1 ·');
+    const sel = nodes(last(all)).find(
+      (n) => n.type === 3 && n.custom_id === 'v1:evt:open',
+    );
+    expect(sel.options.map((o: Json) => o.label)).toEqual(['📝 Kolokwium 1']);
+    const [u] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'stud'));
+    await db
+      .insert(userGroups)
+      .values({ userId: u.id, classId: id.cls, groupId: id.g1 });
+    const mine = await run('v1:stu:plan:day:2026-10-14');
+    expect(textOf(last(mine))).not.toContain('Entry quiz');
+    expect(textOf(last(mine))).not.toContain('Kolokwium 1');
+  });
+});
+
 describe('/panel', () => {
-  it('replies ephemeral with the student panel and its 5 buttons', async () => {
+  it('replies ephemeral with the student panel and its 6 buttons', async () => {
     const i: Json = {
       commandName: 'panel',
       user: user(),
@@ -623,6 +840,7 @@ describe('/panel', () => {
       'My groups',
       'Sign in to the website',
       'Add event',
+      'Entry quizzes',
     ]);
   });
 
@@ -644,6 +862,6 @@ describe('/panel', () => {
     await handler()(i);
     expect(
       nodes(i.reply.mock.calls[0][0]).filter((n) => n.type === 2),
-    ).toHaveLength(5);
+    ).toHaveLength(6);
   });
 });

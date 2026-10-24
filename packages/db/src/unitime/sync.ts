@@ -1,5 +1,6 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
 import type { Db, DbExecutor } from '../client.js';
+import type { SessionKind, SessionSource } from '../constants.js';
 import { ensureClass, ensureGroup } from '../hierarchy.js';
 import {
   classLecturers,
@@ -14,7 +15,7 @@ import {
   semesterFor,
   subjectCode,
 } from './classify.js';
-import { expandOccurrences, type IcsEvent, parseIcs } from './ics.js';
+import { expandOccurrences, parseIcs } from './ics.js';
 
 export interface SyncStats {
   created: number;
@@ -39,7 +40,21 @@ interface SessionRow {
   startsAt: Date;
   endsAt: Date;
   status: 'confirmed' | 'cancelled';
+  kind: SessionKind;
+  source: SessionSource;
   sequence: number;
+}
+
+export interface SyncOptions {
+  /** Every entry of the feed is an exam (the separate UniTime exam feed). */
+  allExams?: boolean;
+  /**
+   * The feed being synced. Rows missing from the feed are removed only when
+   * they came from the same source, so the class and exam feeds never remove
+   * each other's sessions. An entry in both feeds belongs to the exam feed.
+   * Default 'classes'.
+   */
+  source?: SessionSource;
 }
 
 function sessionKey(uid: string, occurrenceStart: Date): string {
@@ -57,6 +72,8 @@ function sameSession(a: SessionRow, b: SessionRow): boolean {
     a.startsAt.getTime() === b.startsAt.getTime() &&
     a.endsAt.getTime() === b.endsAt.getTime() &&
     a.status === b.status &&
+    a.kind === b.kind &&
+    a.source === b.source &&
     a.sequence === b.sequence
   );
 }
@@ -81,8 +98,8 @@ class Resolver {
     private takenCodes: Set<string>,
   ) {}
 
-  async subject(ev: IcsEvent, c: ClassifiedEvent): Promise<number> {
-    const unitimeName = ev.summary.slice(0, 200);
+  async subject(c: ClassifiedEvent): Promise<number> {
+    const unitimeName = c.unitimeName.slice(0, 200);
     const cached = this.subjectIds.get(unitimeName);
     if (cached !== undefined) return cached;
     const [found] = await this.db
@@ -208,23 +225,43 @@ class Resolver {
  * Imports a UniTime iCalendar export in one transaction (spec §2 steps 1–6).
  * Parses before touching the DB, so malformed input writes nothing.
  */
-export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
+export async function syncTimetable(
+  db: Db,
+  ics: string,
+  opts: SyncOptions = {},
+): Promise<SyncStats> {
+  const source = opts.source ?? 'classes';
   if (!/^BEGIN:VCALENDAR\s*$/im.test(ics))
     throw new Error(
       'This is not an iCalendar file (BEGIN:VCALENDAR is missing).',
     );
   const calendar = parseIcs(ics);
   // An empty feed would delete every session; treat it as an upstream error.
-  if (calendar.events.length === 0)
+  // The exam feed is legitimately empty outside the exam period: keep its rows.
+  if (calendar.events.length === 0) {
+    if (source === 'exams')
+      return { created: 0, updated: 0, deleted: 0, unchanged: 0, warnings: [] };
     throw new Error('The timetable contains no classes; skipping the sync');
+  }
 
   const warnings = new Set<string>();
   const warn = (w: string) => {
     if (warnings.size < MAX_WARNINGS) warnings.add(w);
   };
   const planned = calendar.events.map((ev) => {
-    const c = classifyEvent(ev);
-    if (!c.kind) warn(`Unknown class type: ${c.label}`);
+    const classified = classifyEvent(ev);
+    const c: ClassifiedEvent =
+      opts.allExams && classified.sessionKind !== 'exam'
+        ? {
+            ...classified,
+            sessionKind: 'exam',
+            kind: null,
+            groupNumber: null,
+            groupName: null,
+          }
+        : classified;
+    if (c.sessionKind === 'class' && !c.kind)
+      warn(`Unknown class type: ${c.label}`);
     if (ev.rruleUnsupported) warn(`Unsupported repeat rule: ${ev.uid}`);
     return { ev, c, occurrences: expandOccurrences(ev) };
   });
@@ -239,7 +276,7 @@ export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
 
     const desired = new Map<string, SessionRow>();
     for (const { ev, c, occurrences } of planned) {
-      const subjectId = await r.subject(ev, c);
+      const subjectId = await r.subject(c);
       const classId = await r.class(subjectId, c);
       const groupId = await r.group(classId, c);
       const lecturerId = c.lecturer ? await r.lecturer(c.lecturer) : null;
@@ -259,6 +296,8 @@ export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
           startsAt: o.start,
           endsAt: o.end,
           status: ev.status,
+          kind: c.sessionKind,
+          source,
           sequence: ev.sequence,
         });
       }
@@ -278,6 +317,8 @@ export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
         startsAt: classSessions.startsAt,
         endsAt: classSessions.endsAt,
         status: classSessions.status,
+        kind: classSessions.kind,
+        source: classSessions.source,
         sequence: classSessions.sequence,
       })
       .from(classSessions);
@@ -294,10 +335,18 @@ export async function syncTimetable(db: Db, ics: string): Promise<SyncStats> {
       const key = sessionKey(row.uid, row.occurrenceStart);
       const want = desired.get(key);
       if (!want) {
-        toDelete.push(row.id);
+        // Another feed's row: that feed's own sync decides about it.
+        if (row.source === source) toDelete.push(row.id);
         continue;
       }
       desired.delete(key);
+      // The same uid + start in both feeds (uid + start is unique): the exam
+      // feed's row wins. The class sync leaves it alone; the exam sync takes
+      // over a row the class feed imported first.
+      if (row.source === 'exams' && source !== 'exams') {
+        stats.unchanged++;
+        continue;
+      }
       if (sameSession(row, want)) {
         stats.unchanged++;
         continue;

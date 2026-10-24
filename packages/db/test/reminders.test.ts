@@ -6,6 +6,7 @@ import {
   disableReminders,
   dueDigest,
   dueDms,
+  dueEntryQuizzes,
   getReminderPrefs,
   markSent,
   setReminderPrefs,
@@ -14,6 +15,9 @@ import {
   adminAudit,
   classes,
   classGroups,
+  classMarkSkips,
+  classMarks,
+  classSessions,
   events,
   reminderLog,
   reminderPrefs,
@@ -258,6 +262,77 @@ describe('reminders', () => {
       const again = await dueDigest(pool, W(2026, 10, 19, 18, 10));
       expect(again.map((e) => e.id)).toEqual([e2]);
       expect(e1).not.toBe(e2);
+    });
+  });
+
+  describe('dueEntryQuizzes', () => {
+    let n = 0;
+    const session = (
+      start: Date,
+      o: Partial<typeof classSessions.$inferInsert> = {},
+    ) =>
+      db.insert(classSessions).values({
+        uid: `q${++n}`,
+        occurrenceStart: start,
+        startsAt: start,
+        endsAt: new Date(start.getTime() + 90 * 60_000),
+        label: 'L',
+        subjectId: id.sub,
+        classId: id.cls,
+        groupId: id.g1,
+        ...o,
+      });
+    const mark = async (groupId: number | null, deleted = false) =>
+      (
+        await db
+          .insert(classMarks)
+          .values({
+            classId: id.cls,
+            groupId,
+            kind: 'wejsciowka',
+            deletedAt: deleted ? new Date() : null,
+          })
+          .$returningId()
+      )[0].id;
+    beforeEach(async () => {
+      await db.delete(classMarks);
+      await db.delete(classSessions);
+    });
+
+    it("lists tomorrow's marked sessions, 18:00-18:30 only", async () => {
+      await session(W(2026, 10, 20, 8));
+      await session(W(2026, 10, 20, 10), { groupId: id.g2 });
+      await session(W(2026, 10, 21, 8));
+      await mark(id.g1);
+      expect(await dueEntryQuizzes(pool, W(2026, 10, 19, 17, 59))).toEqual([]);
+      expect(await dueEntryQuizzes(pool, W(2026, 10, 19, 18, 30))).toEqual([]);
+      expect(await dueEntryQuizzes(pool, W(2026, 10, 19, 18, 5))).toEqual([
+        { subjectName: 'Bazy', className: 'Lab', groupName: 'Gr. 1' },
+      ]);
+    });
+
+    it('an all-groups mark lists each group once; cancelled, exam, skipped and deleted are left out', async () => {
+      await session(W(2026, 10, 20, 8));
+      await session(W(2026, 10, 20, 12));
+      await session(W(2026, 10, 20, 10), { groupId: id.g2 });
+      await session(W(2026, 10, 20, 14), {
+        groupId: id.g2,
+        status: 'cancelled',
+      });
+      const m = await mark(null);
+      await mark(id.g2, true);
+      expect(await dueEntryQuizzes(pool, W(2026, 10, 19, 18, 5))).toEqual([
+        { subjectName: 'Bazy', className: 'Lab', groupName: 'Gr. 1' },
+        { subjectName: 'Bazy', className: 'Lab', groupName: 'Gr. 2' },
+      ]);
+      await db
+        .insert(classMarkSkips)
+        .values({ markId: m, onDate: '2026-10-20' });
+      expect(await dueEntryQuizzes(pool, W(2026, 10, 19, 18, 5))).toEqual([]);
+      await db.delete(classMarkSkips);
+      await db.delete(classSessions);
+      await session(W(2026, 10, 20, 8), { kind: 'exam' });
+      expect(await dueEntryQuizzes(pool, W(2026, 10, 19, 18, 5))).toEqual([]);
     });
   });
 });

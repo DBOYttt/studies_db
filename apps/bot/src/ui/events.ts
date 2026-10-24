@@ -20,10 +20,17 @@ import {
   users,
 } from '@studies/db';
 import { EVENT_KIND_KEYS, type EventKind } from '@studies/db/constants';
+import {
+  isoWeekOf,
+  listWeekSessionRows,
+  matchEventsToSessions,
+  type PlanSession,
+} from '@studies/db/plan';
 import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { and, count, desc, eq, isNull, ne } from 'drizzle-orm';
 import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
 import type { RouterDeps } from '../commands/router.js';
+import { dayMonth, WEEKDAYS } from '../dates.js';
 import { toDiscordUser } from '../discord/map.js';
 import { RULE_LABELS } from '../events/posts.js';
 import { MAX_OPTIONS } from './limits.js';
@@ -208,15 +215,70 @@ export async function loadCardData(
   };
 }
 
-/** The card, or a notice when the event is deleted or missing. */
+/**
+ * `Shown on Laboratorium Gr. 2, Tue 20 Oct` when the event is a Test whose
+ * start lies in a confirmed session of its class (and group, or every
+ * group's when it has none), as the timetable badge rule
+ * (`matchEventsToSessions`) decides; null otherwise.
+ */
+export async function shownOnLine(
+  pool: RouterDeps['pool'],
+  e: Pick<
+    EventDetails,
+    | 'id'
+    | 'kind'
+    | 'subjectId'
+    | 'classId'
+    | 'groupId'
+    | 'startsAt'
+    | 'endsAt'
+    | 'allDay'
+  >,
+): Promise<string | null> {
+  if (e.kind !== 'kolokwium' || e.allDay) return null;
+  if (e.subjectId === null || e.classId === null) return null;
+  const day = e.startsAt.toISOString().slice(0, 10);
+  const sessions = (
+    await listWeekSessionRows(pool, isoWeekOf(e.startsAt))
+  ).filter((s) => s.startsAt.toISOString().slice(0, 10) === day);
+  const ev = {
+    type: 'event',
+    id: e.id,
+    startsAt: e.startsAt,
+    endsAt: e.endsAt ?? e.startsAt,
+    subjectId: e.subjectId,
+    classId: e.classId,
+    groupId: e.groupId,
+    eventKind: e.kind,
+    allDay: false,
+  } as PlanSession;
+  const { badges } = matchEventsToSessions(sessions, [ev]);
+  const hit = sessions.filter((s) => badges.has(s.id));
+  if (hit.length === 0) return null;
+  const groups = [
+    ...new Set(hit.map((s) => s.groupName).filter((g): g is string => !!g)),
+  ];
+  const place = [hit[0].className ?? hit[0].label, groups.join(', ')]
+    .filter(Boolean)
+    .join(' ');
+  const d = hit[0].startsAt;
+  return `Shown on ${place}, ${WEEKDAYS[d.getUTCDay()]} ${dayMonth(d)}`;
+}
+
+/**
+ * The card, or a notice when the event is deleted or missing. With `pool`
+ * (after a save) it also says on which timetable session a Test is shown.
+ */
 export async function cardView(
   deps: Pick<RouterDeps, 'ingest' | 'config'>,
   id: number,
+  pool?: RouterDeps['pool'],
 ): Promise<View> {
   const c = await loadCardData(deps, id);
   if (!c) return notice(NOT_FOUND_TEXT);
   if (c.e.deletedAt) return notice(DELETED_TEXT);
-  return eventCard(c.data);
+  const shownOn = pool ? await shownOnLine(pool, c.e) : null;
+  return eventCard({ ...c.data, shownOn });
 }
 
 const modalSubjects = (db: RouterDeps['ingest']['db']) =>
@@ -326,6 +388,9 @@ export async function handleEvent(
     else await show(i, notice(message));
   };
   const showCard = async (id: number) => show(i, await cardView(deps, id));
+  /** The card after a change: also "Shown on …" for a Test on a session. */
+  const showSaved = async (id: number) =>
+    show(i, await cardView(deps, id, deps.pool));
 
   switch (action.kind) {
     case 'open':
@@ -368,7 +433,7 @@ export async function handleEvent(
       if (action.id === null) {
         const r = await addEvent(db, userId, input, 'discord');
         if (!r.ok || r.id === undefined) return fail(r.message);
-        return showCard(r.id);
+        return showSaved(r.id);
       }
       // Only what differs from the prefilled values: an unchanged "When" is
       // not range-checked again, an unchanged submit is a no-op.
@@ -393,7 +458,7 @@ export async function handleEvent(
         action.version === null ? {} : { expectedVersion: action.version },
       );
       if (!r.ok) return fail(r.message);
-      return showCard(action.id);
+      return showSaved(action.id);
     }
 
     case 'grpOpen': {
@@ -447,8 +512,11 @@ export async function handleEvent(
       }
       if (!patch) return fail(STALE_TEXT);
       const r = await editEvent(db, userId, action.id, patch, 'discord');
-      if (!r.ok) await fail(r.message);
-      return showCard(action.id);
+      if (!r.ok) {
+        await fail(r.message);
+        return showCard(action.id);
+      }
+      return showSaved(action.id);
     }
 
     case 'linkOpen':
