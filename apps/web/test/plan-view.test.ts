@@ -6,6 +6,8 @@ import {
   type PlanSession,
 } from '../lib/plan';
 import {
+  badgeBarsFit,
+  badgeBarText,
   badgeLabel,
   badgeTitle,
   blockKind,
@@ -249,6 +251,34 @@ describe('timetable badges', () => {
     expect(badgeTitle(test2)).toBe('2 tests: Kolokwium 1, Poprawa');
     expect(badgeTitle(quiz)).toBe('Entry quiz: Rozdział 3');
     expect(badgeTitle({ ...quiz, note: null })).toBe('Entry quiz');
+  });
+
+  it('splits a footer bar into its label and detail', () => {
+    expect(badgeBarText(test1)).toEqual({
+      label: 'Test',
+      detail: 'Kolokwium 1',
+    });
+    expect(badgeBarText(test2)).toEqual({
+      label: '2 tests',
+      detail: 'Kolokwium 1, Poprawa',
+    });
+    expect(badgeBarText(quiz)).toEqual({
+      label: 'Entry quiz',
+      detail: 'Rozdział 3',
+    });
+    expect(badgeBarText({ ...quiz, note: null })).toEqual({
+      label: 'Entry quiz',
+      detail: null,
+    });
+  });
+
+  it('fits footer bars only when two text lines stay visible', () => {
+    // 60 min block (4 rows of 14 px, minus 2): 54 px.
+    expect(badgeBarsFit(54, 1)).toBe(false);
+    expect(badgeBarsFit(58, 1)).toBe(true);
+    // 90 min block: 82 px holds two bars, not three.
+    expect(badgeBarsFit(82, 2)).toBe(true);
+    expect(badgeBarsFit(82, 3)).toBe(false);
   });
 
   it('links Edit to the entry quiz section of the subject page', () => {

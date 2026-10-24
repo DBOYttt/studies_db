@@ -214,7 +214,27 @@ a.link:hover {
   text-decoration: underline;
 }
 
-/* Preview panel: the only motion in the app. Transform + opacity, 150 ms. */
+/* Timetable footer bars (Test / Entry quiz): rise in with the week. */
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.bar-in {
+  animation: bar-in 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-in {
+    animation: none;
+  }
+}
+
+/* Preview panel. Transform + opacity, 150 ms. */
 @keyframes panel-in {
   from {
     opacity: 0;

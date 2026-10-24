@@ -4,6 +4,7 @@ import { PencilSimple, X } from '@phosphor-icons/react';
 import Link from 'next/link';
 import {
   type FocusEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -38,6 +39,7 @@ export function EntryQuizBadge({
   dateLabel,
   editHref,
   className,
+  children = 'Entry quiz',
 }: {
   markId: number;
   note: string | null;
@@ -49,6 +51,8 @@ export function EntryQuizBadge({
   dateLabel: string;
   editHref: string;
   className: string;
+  /** Visible content; it must start with "Entry quiz" (label in name). */
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -150,7 +154,7 @@ export function EntryQuizBadge({
         onBlur={open ? onFocusOut : undefined}
         className={className}
       >
-        Entry quiz
+        {children}
       </button>
       {open &&
         createPortal(

@@ -122,6 +122,28 @@ export function badgeTitle(b: PlanBadge): string {
   return titles.length > 0 ? `${label}: ${titles.join(', ')}` : label;
 }
 
+/** Footer bar text: the small-caps label and the test titles or the note. */
+export function badgeBarText(b: PlanBadge): {
+  label: string;
+  detail: string | null;
+} {
+  const label = badgeLabel(b);
+  if (b.kind === 'entry_quiz') return { label, detail: b.note || null };
+  const titles = b.titles.filter(Boolean);
+  return { label, detail: titles.length > 0 ? titles.join(', ') : null };
+}
+
+/** Height of one footer bar on a session block (px), a 24 px target. */
+export const BADGE_BAR_H = 24;
+
+/**
+ * Whether `count` footer bars fit on a block `blockPx` tall and still leave
+ * the subject and class lines (3 px padding, two 14 px lines, 3 px gap)
+ * readable; otherwise the block shows a thin stripe instead.
+ */
+export const badgeBarsFit = (blockPx: number, count: number) =>
+  blockPx >= 34 + BADGE_BAR_H * count;
+
 /** The skip button: an all-groups mark skips every group of that day. */
 export const skipLabel = (b: Extract<PlanBadge, { kind: 'entry_quiz' }>) =>
   b.allGroups ? 'Not this week (all groups)' : 'Not this week';

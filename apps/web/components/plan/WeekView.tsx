@@ -1,6 +1,6 @@
 'use client';
 
-import { Funnel, Plus } from '@phosphor-icons/react';
+import { CaretRight, Funnel, Plus } from '@phosphor-icons/react';
 import {
   CLASS_KINDS,
   CLASS_NAMES,
@@ -22,13 +22,16 @@ import {
   hiddenByMyGroups,
   type IsoWeek,
   type MyGroups,
+  type PlanBadge,
   type PlanSession,
   SLOT_MIN,
   slotRange,
 } from '@/lib/plan';
 import { dayColumns, eventPageHref, sessionKey } from '@/lib/plan-events';
 import {
-  badgeLabel,
+  BADGE_BAR_H,
+  badgeBarsFit,
+  badgeBarText,
   badgeTitle,
   blockKind,
   dayHeader,
@@ -373,31 +376,105 @@ export function WeekView({
   );
 }
 
-/** Badge pill: Test filled in the block's ink, Entry quiz outlined. */
-const badgeBase =
-  'inline-flex h-4 shrink-0 items-center gap-0.5 rounded-full px-1.5 text-[10px] font-semibold leading-none whitespace-nowrap';
-const testBadge = `${badgeBase} bg-[var(--k-fg)] text-[var(--k-bg)] hover:opacity-90`;
-const quizBadge = `${badgeBase} border border-[var(--k-fg)] bg-page text-[var(--k-fg)] hover:bg-[var(--k-bg)]`;
+/**
+ * Footer bars on a session block: the Test bar filled in the block's ink at
+ * the very bottom, the Entry quiz bar above it, light with a dashed rule.
+ * Each is a 24 px target; the label is small caps, the detail truncates.
+ */
+const barBase =
+  'bar-in group flex h-6 w-full min-w-0 items-center gap-1.5 px-1.5 text-left text-[11px] leading-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent';
+const testBar = `${barBase} rounded-sm bg-[var(--k-fg)] text-[var(--k-bg)] hover:opacity-90`;
+const quizBar = `${barBase} border-t border-dashed border-[var(--k-fg)] text-[var(--k-fg)] hover:bg-[color-mix(in_srgb,var(--k-fg)_12%,transparent)]`;
 
-function Badges({ s, simple }: { s: Session; simple: boolean }) {
-  const list = s.badges ?? [];
+function BarText({ b }: { b: PlanBadge }) {
+  const { label, detail } = badgeBarText(b);
+  return (
+    <>
+      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]">
+        {label}
+      </span>
+      {detail && <span className="min-w-0 truncate font-medium">{detail}</span>}
+      <CaretRight
+        size={10}
+        weight="bold"
+        aria-hidden
+        className="ml-auto shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+      />
+    </>
+  );
+}
+
+/** Too short for bars: a 4 px stripe per badge (solid Test, dashed quiz). */
+function BadgeStripe({ list }: { list: PlanBadge[] }) {
+  return (
+    <div
+      aria-hidden
+      data-testid="badge-stripe"
+      className="pointer-events-none absolute inset-x-[3px] bottom-[2px] flex flex-col gap-px"
+    >
+      {list.map((b) =>
+        b.kind === 'test' ? (
+          <span key="test" className="h-1 rounded-sm bg-[var(--k-fg)]" />
+        ) : (
+          <span
+            key="quiz"
+            className="h-1 border-t-2 border-dashed border-[var(--k-fg)]"
+          />
+        ),
+      )}
+    </div>
+  );
+}
+
+/** Entry quiz above, Test at the bottom edge. */
+const barOrder = (list: PlanBadge[]) =>
+  [...list].sort((a, b) =>
+    a.kind === b.kind ? 0 : a.kind === 'test' ? 1 : -1,
+  );
+
+function Badges({
+  s,
+  simple,
+  fit,
+  onOpen,
+}: {
+  s: Session;
+  simple: boolean;
+  fit: boolean;
+  onOpen: () => void;
+}) {
+  const list = barOrder(s.badges ?? []);
   if (list.length === 0) return null;
+  if (!fit) return <BadgeStripe list={list} />;
   const day = s.startsAt;
   const h = dayHeader(day);
   return (
-    <div className="absolute inset-x-[3px] bottom-[3px] z-[1] flex gap-[3px] overflow-hidden">
+    <div className="absolute inset-x-[3px] bottom-[3px] z-[1] flex flex-col gap-0.5">
       {list.map((b) =>
         b.kind === 'test' ? (
-          <Link
-            key="test"
-            href={eventPageHref(b.eventIds[0], simple)}
-            title={badgeTitle(b)}
-            aria-label={badgeTitle(b)}
-            className={testBadge}
-          >
-            <span aria-hidden>{EVENT_KINDS.kolokwium.symbol}</span>
-            {badgeLabel(b)}
-          </Link>
+          b.eventIds.length === 1 ? (
+            <Link
+              key="test"
+              href={eventPageHref(b.eventIds[0], simple)}
+              title={badgeTitle(b)}
+              aria-label={badgeTitle(b)}
+              className={testBar}
+            >
+              <BarText b={b} />
+            </Link>
+          ) : (
+            // Several tests: the session panel lists a link to each.
+            <button
+              key="test"
+              type="button"
+              onClick={onOpen}
+              title={badgeTitle(b)}
+              aria-label={badgeTitle(b)}
+              className={testBar}
+            >
+              <BarText b={b} />
+            </button>
+          )
         ) : (
           <EntryQuizBadge
             key="quiz"
@@ -407,8 +484,10 @@ function Badges({ s, simple }: { s: Session; simple: boolean }) {
             onDate={wallDateKey(day)}
             dateLabel={`${h.name} ${h.date}`}
             editHref={entryQuizEditHref(s.links)}
-            className={quizBadge}
-          />
+            className={quizBar}
+          >
+            <BarText b={b} />
+          </EntryQuizBadge>
         ),
       )}
     </div>
@@ -437,7 +516,9 @@ function Block({
   const exam = blockKind(s) === 'exam';
   const time = `${wallTime(s.startsAt)}–${wallTime(s.endsAt)}`;
   const classLine = [s.className, s.groupName].filter(Boolean).join(' ');
-  const hasBadges = (s.badges?.length ?? 0) > 0;
+  const badgeCount = s.badges?.length ?? 0;
+  const heightPx = (to - from) * ROW - 2;
+  const fit = badgeBarsFit(heightPx, badgeCount);
   const title = [
     `${time} ${s.subjectName}`,
     exam ? 'Exam' : classLine,
@@ -476,9 +557,23 @@ function Block({
       {s.lecturerName && (
         <span className="truncate text-muted">{s.lecturerName}</span>
       )}
+      {/* The stripe is decorative: name its badges for screen readers. */}
+      {badgeCount > 0 && !fit && (
+        <span className="sr-only">
+          {` ${(s.badges ?? []).map(badgeTitle).join('. ')}`}
+        </span>
+      )}
     </>
   );
-  const inner = `flex size-full flex-col overflow-hidden rounded-r px-[5px] pt-[3px] text-left ${hasBadges ? 'pb-[22px]' : 'pb-[3px]'}`;
+  const inner =
+    'flex size-full flex-col overflow-hidden rounded-r px-[5px] pt-[3px] text-left';
+  // Room for the bars (24 px each, 2 px apart, 3 px inset) or the stripe.
+  const padBottom =
+    badgeCount === 0
+      ? 3
+      : fit
+        ? 3 + BADGE_BAR_H * badgeCount + 2 * (badgeCount - 1) + 2
+        : 3 + 5 * badgeCount;
   return (
     <div
       data-testid="plan-block"
@@ -507,10 +602,11 @@ function Block({
         aria-pressed={selected}
         title={title}
         className={inner}
+        style={{ paddingBottom: padBottom }}
       >
         {body}
       </button>
-      <Badges s={s} simple={simple} />
+      <Badges s={s} simple={simple} fit={fit} onOpen={onOpen} />
     </div>
   );
 }

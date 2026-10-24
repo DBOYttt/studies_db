@@ -203,13 +203,16 @@ test('the session panel lists every test and offers "Not this week"', async ({
   await page.goto('/plan?week=2026-W40');
   const block = page.getByTestId('plan-block').filter({ hasText: 'E-5 500' });
   await expect(
-    block.getByRole('link', { name: '2 tests: Kolokwium A, Kolokwium B' }),
+    block.getByRole('button', { name: '2 tests: Kolokwium A, Kolokwium B' }),
   ).toBeVisible();
   await expect(page.getByTestId('plan-event')).toHaveCount(0);
 
   const panel = page.getByRole('complementary', { name: 'Class details' });
+  // The "2 tests" bar opens the panel, which links each test.
   await expect(async () => {
-    await block.locator('[data-block-main]').click();
+    await block
+      .getByRole('button', { name: '2 tests: Kolokwium A, Kolokwium B' })
+      .click();
     await expect(panel).toBeVisible({ timeout: 1000 });
   }).toPass();
   const tests = panel.getByRole('list', { name: 'Tests' });
