@@ -64,6 +64,8 @@ describe('sessionCookieOptions', () => {
   });
 });
 
+const SAME = { 'sec-fetch-site': 'same-origin' };
+
 describe('/auth/callback', () => {
   let token: string;
   beforeEach(async () => {
@@ -81,10 +83,11 @@ describe('/auth/callback', () => {
         `http://localhost:3000/auth/callback${t ? `?token=${encodeURIComponent(t)}` : ''}`,
       ),
     );
-  const post = (t: string | null) =>
+  const post = (t: string | null, headers: Record<string, string> = SAME) =>
     CALLBACK(
       new NextRequest('http://localhost:3000/auth/callback', {
         method: 'POST',
+        headers,
         body:
           t === null
             ? new URLSearchParams()
@@ -156,11 +159,38 @@ describe('/auth/callback', () => {
     const notForm = await CALLBACK(
       new NextRequest('http://localhost:3000/auth/callback', {
         method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        headers: { ...SAME, 'content-type': 'application/json' },
         body: JSON.stringify({ token }),
       }),
     );
     expect(notForm.headers.get('location')).toBe('/login-info?error=expired');
+  });
+
+  it('POST from another origin is refused and keeps the token', async () => {
+    vi.stubEnv('WEB_BASE_URL', 'http://localhost:3000');
+    for (const headers of <Record<string, string>[]>[
+      { origin: 'http://evil.example' },
+      { origin: 'null', 'sec-fetch-site': 'cross-site' },
+      { 'sec-fetch-site': 'cross-site' },
+      {},
+    ]) {
+      const res = await post(token, headers);
+      expect(res.status, JSON.stringify(headers)).toBe(403);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    }
+    const ok = await post(token, { origin: 'http://localhost:3000' });
+    expect(ok.status).toBe(303);
+    expect(ok.headers.get('location')).toBe('/');
+    expect(ok.cookies.get('sid')?.value).toBeTruthy();
+  });
+
+  it('POST from the no-referrer confirmation page (Origin: null) works', async () => {
+    const res = await post(token, {
+      origin: 'null',
+      'sec-fetch-site': 'same-origin',
+    });
+    expect(res.status).toBe(303);
+    expect(res.cookies.get('sid')?.value).toBeTruthy();
   });
 });
 
@@ -175,6 +205,7 @@ describe('POST /auth/logout', () => {
     const cb = await CALLBACK(
       new NextRequest('http://localhost:3000/auth/callback', {
         method: 'POST',
+        headers: SAME,
         body: new URLSearchParams({ token: login }),
       }),
     );
@@ -184,7 +215,7 @@ describe('POST /auth/logout', () => {
     const res = await POST(
       new NextRequest('http://localhost:3000/auth/logout', {
         method: 'POST',
-        headers: { cookie: `sid=${sid}` },
+        headers: { ...SAME, cookie: `sid=${sid}` },
       }),
     );
     expect(res.status).toBe(303);
@@ -192,6 +223,43 @@ describe('POST /auth/logout', () => {
     const set = res.headers.get('set-cookie') as string;
     expect(set).toMatch(/sid=;/);
     expect(set).toMatch(/Max-Age=0/i);
+    expect(await getSessionUser(db, sid)).toBeNull();
+  });
+});
+
+describe('POST /auth/logout from another origin', () => {
+  it('is refused with 403 and keeps the session', async () => {
+    vi.stubEnv('WEB_BASE_URL', 'http://localhost:3000');
+    const userId = await upsertUser(db, {
+      discordUserId: 'u3',
+      displayName: 'Cid',
+      avatarUrl: null,
+    });
+    const sid = (
+      await consumeLoginToken(db, await createLoginToken(db, userId))
+    )?.sessionToken as string;
+    for (const headers of <Record<string, string>[]>[
+      { origin: 'http://evil.example' },
+      { 'sec-fetch-site': 'cross-site' },
+      {},
+    ]) {
+      const res = await POST(
+        new NextRequest('http://localhost:3000/auth/logout', {
+          method: 'POST',
+          headers: { ...headers, cookie: `sid=${sid}` },
+        }),
+      );
+      expect(res.status, JSON.stringify(headers)).toBe(403);
+      expect(res.headers.get('set-cookie')).toBeNull();
+    }
+    expect(await getSessionUser(db, sid)).not.toBeNull();
+    const ok = await POST(
+      new NextRequest('http://localhost:3000/auth/logout', {
+        method: 'POST',
+        headers: { origin: 'http://localhost:3000', cookie: `sid=${sid}` },
+      }),
+    );
+    expect(ok.status).toBe(303);
     expect(await getSessionUser(db, sid)).toBeNull();
   });
 });

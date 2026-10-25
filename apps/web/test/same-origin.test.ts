@@ -27,6 +27,21 @@ describe('isCrossOrigin', () => {
     expect(isCrossOrigin(req({ 'sec-fetch-site': 'cross-site' }))).toBe(true);
   });
 
+  // A form POST from a `Referrer-Policy: no-referrer` page (the login
+  // confirmation) carries `Origin: null`; the browser-set Sec-Fetch-Site decides.
+  it('Origin: null with Sec-Fetch-Site: same-origin is allowed', () => {
+    expect(
+      isCrossOrigin(req({ origin: 'null', 'sec-fetch-site': 'same-origin' })),
+    ).toBe(false);
+  });
+
+  it('Origin: null without a same-origin Sec-Fetch-Site is refused', () => {
+    expect(isCrossOrigin(req({ origin: 'null' }))).toBe(true);
+    expect(
+      isCrossOrigin(req({ origin: 'null', 'sec-fetch-site': 'cross-site' })),
+    ).toBe(true);
+  });
+
   it('neither header is refused', () => {
     expect(isCrossOrigin(req())).toBe(true);
   });

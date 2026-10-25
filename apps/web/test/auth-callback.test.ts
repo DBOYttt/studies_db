@@ -30,6 +30,7 @@ const post = (token: string, next?: string) => {
   return POST(
     new NextRequest('http://localhost:3000/auth/callback', {
       method: 'POST',
+      headers: { 'sec-fetch-site': 'same-origin' },
       body,
     }),
   );
