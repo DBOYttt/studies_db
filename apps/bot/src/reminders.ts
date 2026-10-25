@@ -22,10 +22,10 @@ import {
   ChannelType,
   type Client,
   DiscordAPIError,
-  escapeMarkdown,
   RESTJSONErrorCodes,
 } from 'discord.js';
 import { EVENTS_FORUM_SETTING } from './config.js';
+import { escapeUserText } from './markdown.js';
 
 type Pool = Parameters<typeof dueDms>[1];
 
@@ -94,10 +94,10 @@ export function dmText(
     : `${kind === 'day' ? 'tomorrow' : 'today'} ${hm(e.startsAt)}`;
   const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
   const head = [
-    `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
-    e.subjectName ? escapeMarkdown(e.subjectName) : null,
+    `${symbol} ${escapeUserText(e.eventTitle ?? e.label)}`,
+    e.subjectName ? escapeUserText(e.subjectName) : null,
     when,
-    e.room ? escapeMarkdown(e.room) : null,
+    e.room ? escapeUserText(e.room) : null,
   ]
     .filter(Boolean)
     .join(' · ');
@@ -106,7 +106,7 @@ export function dmText(
 
 /** `Entry quiz: <subject>, <class> <group>` */
 export const quizLine = (q: DueEntryQuiz) =>
-  `Entry quiz: ${escapeMarkdown(q.subjectName)}, ${escapeMarkdown(
+  `Entry quiz: ${escapeUserText(q.subjectName)}, ${escapeUserText(
     [q.className, q.groupName].filter(Boolean).join(' '),
   )}`;
 
@@ -121,10 +121,10 @@ export function digestText(
   const eventLines = events.map((e) => {
     const symbol = e.eventKind ? EVENT_KINDS[e.eventKind].symbol : '📌';
     return [
-      `${symbol} ${escapeMarkdown(e.eventTitle ?? e.label)}`,
-      e.subjectCode ? escapeMarkdown(e.subjectCode) : null,
+      `${symbol} ${escapeUserText(e.eventTitle ?? e.label)}`,
+      e.subjectCode ? escapeUserText(e.subjectCode) : null,
       e.allDay ? 'all day' : hm(e.startsAt),
-      e.room ? escapeMarkdown(e.room) : null,
+      e.room ? escapeUserText(e.room) : null,
     ]
       .filter(Boolean)
       .join(' · ');

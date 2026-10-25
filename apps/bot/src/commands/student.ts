@@ -5,8 +5,9 @@ import {
   upsertUser,
   users,
 } from '@studies/db';
-import { escapeMarkdown, MessageFlags, type User } from 'discord.js';
+import { MessageFlags, type User } from 'discord.js';
 import { eq } from 'drizzle-orm';
+import { escapeUserText } from '../markdown.js';
 import type { DiscordUser } from '../types.js';
 
 export async function linkFor(
@@ -57,12 +58,12 @@ export async function searchReply(
   q: string,
 ): Promise<string> {
   const hits = await searchAll(db, { q, limit: 5 });
-  if (hits.length === 0) return `No results for "${escapeMarkdown(q)}".`;
+  if (hits.length === 0) return `No results for "${escapeUserText(q)}".`;
   return hits
     .slice(0, 5)
     .map((h) => {
-      const file = h.filename ? ` — ${escapeMarkdown(h.filename)}` : '';
-      return `**${h.subjectCode}** · ${escapeMarkdown(h.topicTitle)}${file} ${webBaseUrl}/topics/${h.topicId}`;
+      const file = h.filename ? ` — ${escapeUserText(h.filename)}` : '';
+      return `**${h.subjectCode}** · ${escapeUserText(h.topicTitle)}${file} ${webBaseUrl}/topics/${h.topicId}`;
     })
     .join('\n');
 }

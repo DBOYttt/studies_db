@@ -13,12 +13,12 @@ import {
   ActionRowBuilder,
   ButtonStyle,
   ContainerBuilder,
-  escapeMarkdown,
   LabelBuilder,
   type ModalBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
+import { escapeUserText } from '../../markdown.js';
 import { encodeId } from '../ids.js';
 import { MAX_OPTIONS, MAX_TEXT } from '../limits.js';
 import { field, modal } from './modals.js';
@@ -105,7 +105,7 @@ export const eventPageUrl = (webBaseUrl: string, id: number) =>
 const fileUrl = (webBaseUrl: string, m: { id: number; previewKind: string }) =>
   `${base(webBaseUrl)}/files/${m.id}/${m.previewKind === 'none' ? 'original' : 'preview'}`;
 
-const esc = (s: string) => escapeMarkdown(s);
+const esc = (s: string) => escapeUserText(s);
 const MORE = (n: number) => `…and ${n} more. Open the website`;
 
 /** The Materials block, within `budget` characters. */

@@ -98,6 +98,11 @@ describe('searchReply', () => {
       'No results for "abc".',
     );
   });
+  it('breaks a masked link in the echoed query (L2)', async () => {
+    expect(await searchReply(db, 'https://x.pl', '[free](https://phish)')).toBe(
+      'No results for "\\[free](https://phish)".',
+    );
+  });
   it('max 5 lines', async () => {
     const [s] = await db.insert(subjects).values({
       name: 'A',

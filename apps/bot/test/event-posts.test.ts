@@ -469,6 +469,25 @@ describe('event post fixes', () => {
     ).toContain('Note: krótka\n');
   });
 
+  it('breaks masked links and headings in user text (L2)', async () => {
+    const id = await add({
+      place: '[Room](https://phish)',
+      note: 'ok\n# Big\n[Notes](https://phish)',
+    });
+    const e = await getEvent(db, id);
+    if (!e) throw new Error('no event');
+    const c = eventPostContent(
+      { ...e, createdByName: '[Admin](https://phish)' },
+      'https://x.pl',
+    );
+    expect(c).toContain('Place: \\[Room](https://phish)');
+    expect(c).toContain('\n\\# Big\n\\[Notes](https://phish)');
+    expect(c).toContain('Added by \\[Admin](https://phish)');
+    const sc = seriesPostContent(e, e, 'weekly', [e.startsAt], 'https://x.pl');
+    expect(sc).toContain('Place: \\[Room](https://phish)');
+    expect(sc).toContain('\\# Big');
+  });
+
   it('escapes markdown in place, note and names, not in the link', async () => {
     const id = await add({ place: '*sala*', note: '__ważne__ `x`' });
     const e = await getEvent(db, id);

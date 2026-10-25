@@ -14,13 +14,13 @@ import {
   ChannelType,
   type Client,
   DiscordAPIError,
-  escapeMarkdown,
   type ForumChannel,
   RESTJSONErrorCodes,
 } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { EVENTS_FORUM_SETTING } from '../config.js';
 import { dayMonth, wallDate } from '../dates.js';
+import { escapeUserText } from '../markdown.js';
 import type { UploadSink } from './uploads.js';
 
 export const DELETED_TEXT = 'Event deleted';
@@ -98,10 +98,10 @@ export function seriesPostContent(
     `**${EVENT_KINDS[base.kind].label}**${base.subjectCode ? ` · ${base.subjectCode}${base.subjectName ? ` — ${base.subjectName}` : ''}` : ''}`,
     `Repeats: ${RULE_LABELS[rule]}, ${time}, ${plural(dates.length, 'occurrence', 'occurrences')} (${dm(dates[0])} – ${dmy(dates[dates.length - 1])})`,
     `Next: ${upcoming.map(dm).join(', ')}${later > upcoming.length ? ', …' : ''}`,
-    ...(base.place ? [`Place: ${escapeMarkdown(base.place)}`] : []),
-    ...(base.note ? [`Note: ${escapeMarkdown(base.note)}`] : []),
+    ...(base.place ? [`Place: ${escapeUserText(base.place)}`] : []),
+    ...(base.note ? [`Note: ${escapeUserText(base.note)}`] : []),
     ...(base.createdByName
-      ? [`Added by ${escapeMarkdown(base.createdByName)}`]
+      ? [`Added by ${escapeUserText(base.createdByName)}`]
       : []),
     `Details and files: ${webBaseUrl}/s/wydarzenia/${next.id}`,
   ];
@@ -130,7 +130,7 @@ export function eventWhenText(e: EventDetails): string {
 export function eventPostContent(e: EventDetails, webBaseUrl: string): string {
   const link = `Details and files: ${webBaseUrl}/s/wydarzenia/${e.id}`;
   // User text is escaped so it can't format the post; the link stays raw.
-  const md = (t: string | null) => (t ? escapeMarkdown(t) : t);
+  const md = (t: string | null) => (t ? escapeUserText(t) : t);
   const tail = [
     ...(e.createdByName ? [`Added by ${md(e.createdByName)}`] : []),
     ...(e.updatedByName && e.updatedByName !== e.createdByName
