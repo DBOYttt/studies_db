@@ -86,8 +86,10 @@ describe('canRunSetup', () => {
 const config = {
   adminRoleName: 'Studies Admin',
   webBaseUrl: 'https://x.pl',
+  discordGuildId: 'G1',
 } as never;
 const mkInteraction = (over: Record<string, unknown>) => ({
+  guildId: 'G1',
   isAutocomplete: () => false,
   isChatInputCommand: () => true,
   isRepliable: () => true,
@@ -95,6 +97,7 @@ const mkInteraction = (over: Record<string, unknown>) => ({
   replied: false,
   guild,
   member: { roles: ['r'] },
+  user: { id: 'caller' },
   reply: vi.fn().mockResolvedValue(undefined),
   followUp: vi.fn().mockResolvedValue(undefined),
   editReply: vi.fn().mockResolvedValue(undefined),
@@ -1023,5 +1026,97 @@ describe('/setup', () => {
         '- #wydarzenia: info post',
       ].join('\n'),
     );
+  });
+});
+
+describe('guild check (I1)', () => {
+  const handler = () =>
+    createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      pool: {} as never,
+      config,
+    });
+
+  it.each([['G2'], [null]])(
+    'refuses a command from guild %s without running it',
+    async (guildId) => {
+      const getSubcommand = vi.fn(() => 'list');
+      const i = mkInteraction({
+        guildId,
+        commandName: 'subject',
+        user: {
+          id: 'adm',
+          username: 'adm',
+          globalName: null,
+          displayAvatarURL: () => 'a',
+        },
+        options: { getSubcommand },
+      });
+      await handler()(asI(i));
+      expect(getSubcommand).not.toHaveBeenCalled();
+      const arg = i.reply.mock.calls[0]?.[0];
+      expect(arg.content).toBe('This bot only works on its own server.');
+      expect(arg.flags & MessageFlags.Ephemeral).toBeTruthy();
+      expect(await db.select().from(users)).toHaveLength(0);
+    },
+  );
+
+  it('answers no autocomplete from another guild', async () => {
+    const respond = vi.fn();
+    const i = mkInteraction({
+      guildId: 'G2',
+      isAutocomplete: () => true,
+      isChatInputCommand: () => false,
+      isRepliable: () => false,
+      options: { getFocused: () => ({ name: 'subject', value: '' }) },
+      respond,
+    });
+    await handler()(asI(i));
+    expect(respond).not.toHaveBeenCalled();
+  });
+});
+
+describe('banned admins (R6)', () => {
+  const handler = () =>
+    createInteractionHandler({
+      ingest: { db, storageDir: '', fetchBody: vi.fn() },
+      client: {} as never,
+      pool: {} as never,
+      config,
+    });
+  const me = {
+    id: 'b1',
+    username: 'b1',
+    globalName: null,
+    displayAvatarURL: () => 'a',
+  };
+
+  it('refuses every admin command, /setup with Manage Server included', async () => {
+    await db
+      .insert(users)
+      .values({ discordUserId: 'b1', displayName: 'b1', isBanned: true });
+    const cases: Record<string, unknown>[] = [
+      { commandName: 'unban', options: { getUser: () => me } },
+      { commandName: 'subject', options: { getSubcommand: () => 'list' } },
+      {
+        commandName: 'setup',
+        memberPermissions: { has: () => true },
+        options: { getBoolean: () => true },
+      },
+    ];
+    for (const c of cases) {
+      const i = mkInteraction({ user: me, member: { roles: ['r'] }, ...c });
+      await handler()(asI(i));
+      expect(i.reply.mock.calls[0]?.[0].content).toBe(
+        'You do not have permission.',
+      );
+    }
+    const [row] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, 'b1'));
+    expect(row.isBanned).toBe(true);
+    expect(await db.select().from(adminAudit)).toHaveLength(0);
   });
 });

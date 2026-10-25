@@ -27,6 +27,18 @@ describe('syncAdminFlag', () => {
     });
     expect(await flag()).toBe(true);
   });
+  it('reports whether the user is banned', async () => {
+    await setSetting(db, 'admin_role_id', 'r');
+    expect((await syncAdminFlag(db, u, ['r'])).isBanned).toBe(false);
+    await db
+      .update(users)
+      .set({ isBanned: true })
+      .where(eq(users.discordUserId, 'u1'));
+    expect(await syncAdminFlag(db, u, ['r'])).toMatchObject({
+      isAdmin: true,
+      isBanned: true,
+    });
+  });
   it('clears a previously true flag when the role is missing', async () => {
     await setSetting(db, 'admin_role_id', 'r');
     await syncAdminFlag(db, u, ['r']);

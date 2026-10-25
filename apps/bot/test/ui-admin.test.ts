@@ -48,6 +48,7 @@ afterAll(async () => {
 const config = {
   adminRoleName: 'Studies Admin',
   webBaseUrl: 'https://x.pl',
+  discordGuildId: 'G1',
 } as never;
 
 const discordUser = (id: string, over: Record<string, unknown> = {}) => ({
@@ -100,6 +101,7 @@ function interaction(
     },
     deferred: false,
     replied: false,
+    guildId: 'G1',
     isAutocomplete: () => false,
     isChatInputCommand: () => false,
     isButton: () => kind === 'button',
@@ -206,6 +208,34 @@ describe('admin check', () => {
     expect(textOf(i.reply.mock.calls[0][0])).toBe(
       'You do not have permission.',
     );
+  });
+
+  it('refuses a banned admin, who cannot unban themselves (R6)', async () => {
+    await db
+      .insert(users)
+      .values({ discordUserId: '1000', displayName: 'me', isBanned: true });
+    const i = interaction('v1:adm:user:unbanok:1000');
+    await handler()(i);
+    expect(i.calls).toEqual(['reply']);
+    expect(textOf(i.reply.mock.calls[0][0])).toBe(
+      'You do not have permission.',
+    );
+    const [me] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, '1000'));
+    expect(me.isBanned).toBe(true);
+    expect(await auditRows()).toHaveLength(0);
+  });
+
+  it('ignores admin buttons from another guild', async () => {
+    const i = interaction('v1:adm:user:banok:999');
+    i.guildId = 'G2';
+    await handler()(i);
+    expect(
+      textOf(i.reply.mock.calls[0][0]) || i.reply.mock.calls[0][0].content,
+    ).toBe('This bot only works on its own server.');
+    expect(clientUsers.fetch).not.toHaveBeenCalled();
   });
 
   it('answers malformed admin ids as stale', async () => {
@@ -672,6 +702,7 @@ describe('/admin', () => {
       member: { roles },
       deferred: false,
       replied: false,
+      guildId: 'G1',
       isAutocomplete: () => false,
       isChatInputCommand: () => true,
       isRepliable: () => true,

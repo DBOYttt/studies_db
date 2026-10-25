@@ -109,6 +109,7 @@ afterAll(async () => {
 const config = {
   adminRoleName: 'Studies Admin',
   webBaseUrl: 'https://x.pl',
+  discordGuildId: 'G1',
 } as never;
 const handler = () =>
   createInteractionHandler({
@@ -145,6 +146,7 @@ function component(
     },
     deferred: false,
     replied: false,
+    guildId: 'G1',
     isAutocomplete: () => false,
     isChatInputCommand: () => false,
     isButton: () => !over.select,
@@ -486,6 +488,7 @@ describe('handleUi', () => {
       member: { roles: [] },
       deferred: false,
       replied: false,
+      guildId: 'G1',
       isAutocomplete: () => false,
       isChatInputCommand: () => true,
       isRepliable: () => true,
@@ -824,6 +827,7 @@ describe('/panel', () => {
       member: { roles: [] },
       deferred: false,
       replied: false,
+      guildId: 'G1',
       isAutocomplete: () => false,
       isChatInputCommand: () => true,
       isRepliable: () => true,
@@ -854,6 +858,7 @@ describe('/panel', () => {
       member: { roles: [] },
       deferred: false,
       replied: false,
+      guildId: 'G1',
       isAutocomplete: () => false,
       isChatInputCommand: () => true,
       isRepliable: () => true,
