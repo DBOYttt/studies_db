@@ -4,12 +4,17 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  consumeLoginToken,
+  createLoginToken,
   type Db,
+  getSessionUser,
   insertMaterial,
   jobs,
+  loginTokens,
   materials,
   originalRelPath,
   planProcessing,
+  sessions,
   subjects,
   topics,
   upsertUser,
@@ -324,6 +329,42 @@ describe('startWorker', () => {
     ac.abort();
     await p;
     expect(Date.now() - t0).toBeLessThan(5000);
+  });
+
+  it('purges expired sessions and login tokens when it starts', async () => {
+    const t0 = new Date(Date.now() - 40 * 24 * 3600_000);
+    const stale = await consumeLoginToken(
+      db,
+      await createLoginToken(db, uploaderId, t0),
+      t0,
+    );
+    await createLoginToken(db, uploaderId, t0);
+    const live = await consumeLoginToken(
+      db,
+      await createLoginToken(db, uploaderId),
+    );
+    const count = async () =>
+      (await db.select().from(sessions)).length +
+      (await db.select().from(loginTokens)).length;
+    expect(await count()).toBe(5);
+
+    const ac = new AbortController();
+    const p = startWorker(deps(), {
+      concurrency: 1,
+      pollMs: 50,
+      signal: ac.signal,
+    });
+    for (let i = 0; i < 50 && (await count()) > 2; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    ac.abort();
+    await p;
+    // left: the live session and the (used) token it came from
+    expect(await count()).toBe(2);
+    expect(stale).not.toBeNull();
+    expect(
+      await getSessionUser(db, (live as { sessionToken: string }).sessionToken),
+    ).not.toBeNull();
   });
 
   it('processes queued jobs while running', async () => {

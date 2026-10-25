@@ -3,6 +3,7 @@ import {
   type Db,
   materials,
   previewRelPath,
+  purgeExpiredAuth,
   resolveInStorage,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
@@ -34,6 +35,8 @@ export type WorkerDeps = {
 const CONVERT_TIMEOUT_MS = 120_000;
 const EXTRACT_TIMEOUT_MS = 30_000;
 const REQUEUE_EVERY_MS = 60_000;
+/** Expired sessions and login tokens are deleted once a day (and at start). */
+const PURGE_AUTH_EVERY_MS = 24 * 3600_000;
 
 const exists = (path: string) =>
   stat(path).then(
@@ -157,8 +160,28 @@ export async function startWorker(
     }
   };
 
+  let lastPurge: number | null = null;
+  const purgeAuth = async () => {
+    const t = now();
+    if (lastPurge !== null && t.getTime() - lastPurge < PURGE_AUTH_EVERY_MS) {
+      return;
+    }
+    lastPurge = t.getTime();
+    try {
+      const p = await purgeExpiredAuth(deps.db, t);
+      if (p.sessions + p.loginTokens > 0) {
+        console.log(
+          `Worker: usunięto ${p.sessions} wygasłych sesji i ${p.loginTokens} tokenów logowania`,
+        );
+      }
+    } catch (err) {
+      console.error('Worker: błąd purgeExpiredAuth:', err);
+    }
+  };
+
   const requeue = async () => {
     while (!signal.aborted) {
+      await purgeAuth();
       try {
         const n = await requeueStale(deps.db, now());
         if (n > 0) console.log(`Worker: wznowiono ${n} zawieszonych jobów`);
