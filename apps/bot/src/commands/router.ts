@@ -238,7 +238,10 @@ async function runCommand(
               await syncForumTags(
                 db,
                 subject.id,
-                await discordForumSource(deps.client).listTags(channel.id),
+                await discordForumSource(
+                  deps.client,
+                  deps.config.discordGuildId,
+                ).listTags(channel.id),
               );
             }
           } catch (err) {

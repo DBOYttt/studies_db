@@ -112,9 +112,13 @@ export async function runSetup(
   );
   if (first.actions.some((a) => a.type === 'importForum')) {
     // Pull posts from the imported forums before planning what to add.
-    const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-      ignoreWatermark: true,
-    });
+    const r = await catchUp(
+      deps.ingest,
+      discordForumSource(deps.client, deps.config.discordGuildId),
+      {
+        ignoreWatermark: true,
+      },
+    );
     report.updated.push(
       `Fetched posts: ${plural(r.topics, 'topic', 'topics')}, ${plural(r.created, 'file', 'files')}, ${plural(r.failed, 'error', 'errors')}`,
     );
@@ -164,9 +168,13 @@ export async function runResync(
   deps: RouterDeps,
   audit: Audit,
 ): Promise<string> {
-  const r = await catchUp(deps.ingest, discordForumSource(deps.client), {
-    ignoreWatermark: true,
-  });
+  const r = await catchUp(
+    deps.ingest,
+    discordForumSource(deps.client, deps.config.discordGuildId),
+    {
+      ignoreWatermark: true,
+    },
+  );
   await audit('bot.resync', null, {
     topics: r.topics,
     created: r.created,

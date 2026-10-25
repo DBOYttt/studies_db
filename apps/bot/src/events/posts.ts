@@ -220,19 +220,31 @@ export function eventForumCheck(db: Db): EventForumCheck {
 }
 
 /**
+ * Discord allows about 2 renames of a channel per 10 minutes and the REST
+ * client waits out the limit instead of failing, which would stall the
+ * poller: a post renamed less than this long ago keeps its old title until the
+ * next edit after the window.
+ */
+export const RENAME_WINDOW_MS = 10 * 60_000;
+
+/**
  * `isEventForum` guards every thread the bot acts on: the thread ids come from
  * the DB, which the admin SQL console can write, so only the bot's own posts
- * in an event forum count. Anything else is treated as gone (a fresh post is
- * made and re-linked).
+ * in an event forum of the configured guild count. Anything else is treated
+ * as gone (a fresh post is made and re-linked).
  */
 export function discordEventPostGuild(
   client: Client,
   isEventForum: EventForumCheck,
+  opts: { guildId: string; now?: () => number },
 ): EventPostGuild {
+  const now = opts.now ?? Date.now;
+  /** Thread id → when this process last renamed it (kept in memory). */
+  const renamedAt = new Map<string, number>();
   const forumOf = async (id: string): Promise<ForumChannel> => {
     const c = await client.channels.fetch(id);
-    if (c?.type !== ChannelType.GuildForum) {
-      throw new Error(`channel ${id} is not a forum`);
+    if (c?.type !== ChannelType.GuildForum || c.guildId !== opts.guildId) {
+      throw new Error(`channel ${id} is not a forum of the server`);
     }
     return c;
   };
@@ -251,6 +263,7 @@ export function discordEventPostGuild(
       if (!c?.isThread())
         throw new PostGoneError(`channel ${id} is not a thread`);
       if (
+        c.guildId !== opts.guildId ||
         c.ownerId !== client.user?.id ||
         !c.parentId ||
         !(await isEventForum(c.parentId))
@@ -289,8 +302,16 @@ export function discordEventPostGuild(
           : undefined;
       await orGone(async () => {
         // Renames are rate limited (about 2 per 10 minutes): only when the
-        // title changed, and a refusal doesn't stop the rest of the edit.
-        if (t.name !== post.title) {
+        // title changed and the last rename is old enough (RENAME_WINDOW_MS),
+        // and a refusal doesn't stop the rest of the edit.
+        const last = renamedAt.get(t.id);
+        const recent = last !== undefined && now() - last < RENAME_WINDOW_MS;
+        if (t.name !== post.title && recent) {
+          console.log(`rename of event post ${t.id} postponed (rate limit)`);
+        } else if (t.name !== post.title) {
+          for (const [id, at] of renamedAt)
+            if (now() - at >= RENAME_WINDOW_MS) renamedAt.delete(id);
+          renamedAt.set(t.id, now());
           await t.setName(post.title, AUDIT_REASON).catch((err) => {
             if (isGone(err)) throw err;
             console.error(`cannot rename event post ${t.id}:`, err);

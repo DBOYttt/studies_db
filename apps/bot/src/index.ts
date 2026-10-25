@@ -72,7 +72,9 @@ client.once(Events.ClientReady, async (c) => {
   }
   eventPoller = startEventPoller({
     db,
-    guild: discordEventPostGuild(client, eventForumCheck(db)),
+    guild: discordEventPostGuild(client, eventForumCheck(db), {
+      guildId: config.discordGuildId,
+    }),
     webBaseUrl: config.webBaseUrl,
     storageDir: ingest.storageDir,
   });
@@ -82,7 +84,9 @@ client.once(Events.ClientReady, async (c) => {
     guild: discordReminderGuild(client),
     webBaseUrl: config.webBaseUrl,
   });
-  catchUp(ingest, discordForumSource(client), { ignoreWatermark: false }).then(
+  catchUp(ingest, discordForumSource(client, config.discordGuildId), {
+    ignoreWatermark: false,
+  }).then(
     (r) =>
       console.log(
         `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,

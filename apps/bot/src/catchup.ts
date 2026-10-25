@@ -147,10 +147,18 @@ export async function fetchAllPages<T>(
   }
 }
 
-export function discordForumSource(client: Client): ForumSource {
+/**
+ * Reads forums through discord.js. The channel ids come from the DB, which the
+ * admin SQL console could once write: only forums and threads of `guildId`
+ * (the configured server) are read.
+ */
+export function discordForumSource(
+  client: Client,
+  guildId: string,
+): ForumSource {
   const forumOf = async (id: string) => {
     const ch = await client.channels.fetch(id);
-    if (!ch || ch.type !== ChannelType.GuildForum) {
+    if (!ch || ch.type !== ChannelType.GuildForum || ch.guildId !== guildId) {
       throw new Error(`channel ${id} is not an accessible forum`);
     }
     return ch;
@@ -189,7 +197,7 @@ export function discordForumSource(client: Client): ForumSource {
     },
     async *listMessages(threadId, after) {
       const ch = await client.channels.fetch(threadId);
-      if (!ch?.isThread()) return;
+      if (!ch?.isThread() || ch.guildId !== guildId) return;
       let before: string | undefined;
       for (;;) {
         const page = await ch.messages.fetch({ limit: 100, before });
