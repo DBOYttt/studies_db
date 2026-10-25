@@ -36,17 +36,64 @@ export type AttachmentInput = {
   topicId?: number;
 };
 
+/**
+ * Bytes per user in a sliding window, kept in memory (a restart forgets it).
+ * `tryCharge` records the bytes only when they fit.
+ */
+export class UserByteQuota {
+  private readonly used = new Map<string, { at: number; bytes: number }[]>();
+  constructor(
+    readonly maxBytes: number,
+    readonly windowMs: number,
+    private readonly now: () => number = Date.now,
+  ) {}
+
+  tryCharge(user: string, bytes: number): boolean {
+    const now = this.now();
+    const live = (this.used.get(user) ?? []).filter(
+      (e) => now - e.at < this.windowMs,
+    );
+    const total = live.reduce((sum, e) => sum + e.bytes, 0);
+    if (total + bytes > this.maxBytes) {
+      if (live.length) this.used.set(user, live);
+      else this.used.delete(user);
+      return false;
+    }
+    live.push({ at: now, bytes });
+    this.used.set(user, live);
+    return true;
+  }
+}
+
+export type IngestLimits = {
+  /** Larger attachments are skipped (by declared size) or aborted mid-download. */
+  maxFileBytes: number;
+  /** Per-uploader volume; files the bot posts for web uploads are not charged. */
+  quota: UserByteQuota;
+};
+
+const MiB = 1024 * 1024;
+/** R3: 50 MiB per file, 500 MiB per user per hour. */
+export const DEFAULT_INGEST_LIMITS: IngestLimits = {
+  maxFileBytes: 50 * MiB,
+  quota: new UserByteQuota(500 * MiB, 60 * 60_000),
+};
+
 export type IngestDeps = {
   db: Db;
   storageDir: string;
   fetchBody: (url: string) => Promise<ReadableStream<Uint8Array>>;
+  /** Defaults to `DEFAULT_INGEST_LIMITS` (shared by the whole process). */
+  limits?: IngestLimits;
 };
 
+/** `skipped`: over a size or volume limit, not stored. */
 export type IngestResult =
   | 'created'
   | 'duplicate'
   | 'exists'
   | 'ignored'
+  | 'skipped'
   | 'failed';
 
 const exists = (p: string) =>
@@ -75,6 +122,23 @@ export async function ingestAttachment(
       .limit(1);
     if (dup) return 'exists';
 
+    const limits = deps.limits ?? DEFAULT_INGEST_LIMITS;
+    if (a.size > limits.maxFileBytes) {
+      console.warn(
+        `skipped attachment ${a.attachmentId} (${a.filename}): ${a.size} bytes is over the ${limits.maxFileBytes}-byte limit`,
+      );
+      return 'skipped';
+    }
+    if (
+      a.topicId === undefined &&
+      !limits.quota.tryCharge(a.uploader.discordUserId, a.size)
+    ) {
+      console.warn(
+        `skipped attachment ${a.attachmentId} (${a.filename}): uploader ${a.uploader.discordUserId} is over the hourly volume limit`,
+      );
+      return 'skipped';
+    }
+
     const tmpDir = join(storageDir, 'tmp');
     await mkdir(tmpDir, { recursive: true });
     await mkdir(join(storageDir, 'originals'), { recursive: true });
@@ -87,8 +151,13 @@ export async function ingestAttachment(
     let bytes = 0;
     const hasher = new Transform({
       transform(chunk: Buffer, _enc, cb) {
-        hash.update(chunk);
         bytes += chunk.length;
+        // The declared size can't be trusted for the body: stop at the cap.
+        if (bytes > limits.maxFileBytes) {
+          cb(new Error(`body over the ${limits.maxFileBytes}-byte limit`));
+          return;
+        }
+        hash.update(chunk);
         cb(null, chunk);
       },
     });

@@ -22,7 +22,12 @@ import {
   it,
   vi,
 } from 'vitest';
-import { type AttachmentInput, ingestAttachment } from '../src/ingest.js';
+import {
+  type AttachmentInput,
+  DEFAULT_INGEST_LIMITS,
+  ingestAttachment,
+  UserByteQuota,
+} from '../src/ingest.js';
 
 const fixture = await readFile(
   fileURLToPath(new URL('./fixtures/sample.pdf', import.meta.url)),
@@ -216,6 +221,90 @@ describe('ingestAttachment', () => {
     a.thread = { ...a.thread, forumChannelId: 'other' };
     expect(await ingestAttachment(deps(fetchBody), a)).toBe('ignored');
     expect(fetchBody).not.toHaveBeenCalled();
+  });
+});
+
+describe('ingest limits (R3)', () => {
+  const MiB = 1024 * 1024;
+  it('defaults to 50 MiB per file and 500 MiB per user per hour', () => {
+    expect(DEFAULT_INGEST_LIMITS.maxFileBytes).toBe(50 * MiB);
+    expect(DEFAULT_INGEST_LIMITS.quota.maxBytes).toBe(500 * MiB);
+    expect(DEFAULT_INGEST_LIMITS.quota.windowMs).toBe(60 * 60_000);
+  });
+
+  it('skips a file over the per-file limit without downloading it', async () => {
+    const fetchBody = vi.fn(streamOf(fixture));
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const r = await ingestAttachment(
+      {
+        ...deps(fetchBody),
+        limits: { maxFileBytes: 100, quota: new UserByteQuota(1e9, 1000) },
+      },
+      input({ size: 101 }),
+    );
+    expect(r).toBe('skipped');
+    expect(fetchBody).not.toHaveBeenCalled();
+    expect(log).toHaveBeenCalled();
+    log.mockRestore();
+    expect(await db.select().from(materials)).toHaveLength(0);
+  });
+
+  it('aborts a download that grows past the per-file limit', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await ingestAttachment(
+      {
+        ...deps(),
+        limits: { maxFileBytes: 100, quota: new UserByteQuota(1e9, 1000) },
+      },
+      // Size claims 10 bytes, the body is the whole fixture.
+      input({ size: 10 }),
+    );
+    err.mockRestore();
+    expect(r).toBe('failed');
+    expect(await db.select().from(materials)).toHaveLength(0);
+    expect(await readdir(join(dir, 'tmp'))).toEqual([]);
+    expect(await readdir(join(dir, 'originals'))).toEqual([]);
+  });
+
+  it('skips files past the per-user hourly quota, and allows them again later', async () => {
+    let now = 0;
+    const quota = new UserByteQuota(fixture.length * 2, 60_000, () => now);
+    const d = { ...deps(), limits: { maxFileBytes: 1e9, quota } };
+    const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(await ingestAttachment(d, input({ attachmentId: 'q1' }))).toBe(
+      'created',
+    );
+    expect(await ingestAttachment(d, input({ attachmentId: 'q2' }))).toBe(
+      'duplicate',
+    );
+    expect(await ingestAttachment(d, input({ attachmentId: 'q3' }))).toBe(
+      'skipped',
+    );
+    // Another user has their own quota.
+    expect(
+      await ingestAttachment(
+        d,
+        input({
+          attachmentId: 'q4',
+          uploader: { ...user, discordUserId: 'u2' },
+        }),
+      ),
+    ).toBe('duplicate');
+    now = 60_001;
+    expect(await ingestAttachment(d, input({ attachmentId: 'q3' }))).toBe(
+      'duplicate',
+    );
+    log.mockRestore();
+  });
+
+  it('does not charge the quota for files the bot posts for web uploads', async () => {
+    const quota = new UserByteQuota(1, 60_000);
+    const d = { ...deps(), limits: { maxFileBytes: 1e9, quota } };
+    const [t] = await db
+      .insert(topics)
+      .values({ discordThreadId: 'tw', title: 'W' })
+      .$returningId();
+    expect(await ingestAttachment(d, input({ topicId: t.id }))).toBe('created');
   });
 });
 

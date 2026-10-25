@@ -207,7 +207,7 @@ async function ingestSent(
       topicId: post.topicId,
     },
   );
-  return res !== 'failed' && res !== 'ignored';
+  return res !== 'failed' && res !== 'ignored' && res !== 'skipped';
 }
 
 /**
