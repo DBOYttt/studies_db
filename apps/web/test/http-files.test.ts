@@ -38,6 +38,8 @@ const { parseRange, contentDisposition, handleFileRequest } = await import(
   '../lib/http-files'
 );
 const { GET } = await import('../app/files/[id]/[variant]/route');
+const { contentSecurityPolicy } = await import('../lib/security-headers');
+const APP_CSP = contentSecurityPolicy(process.env.NODE_ENV);
 
 describe('parseRange', () => {
   it('parses forms', () => {
@@ -240,10 +242,14 @@ describe('file route', () => {
     });
     const res = await call(id, 'preview');
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
-    expect(res.headers.get('content-security-policy')).toBeNull();
+    // next.config leaves /files/ to the route, which sends the app CSP itself.
+    expect(res.headers.get('content-security-policy')).toBe(APP_CSP);
+    expect(res.headers.get('referrer-policy')).toBe(
+      'strict-origin-when-cross-origin',
+    );
   });
 
-  it('svg preview gets CSP; png does not', async () => {
+  it('svg preview gets the sandbox CSP; png gets the app CSP', async () => {
     const svg = await seed({ previewKind: 'image', mimeType: 'image/svg+xml' });
     const r1 = await call(svg, 'preview');
     expect(r1.headers.get('content-security-policy')).toBe(
@@ -252,8 +258,59 @@ describe('file route', () => {
     expect(r1.headers.get('x-content-type-options')).toBe('nosniff');
     const png = await seed({ previewKind: 'image', mimeType: 'image/png' });
     const r2 = await call(png, 'preview');
-    expect(r2.headers.get('content-security-policy')).toBeNull();
+    expect(r2.headers.get('content-security-policy')).toBe(APP_CSP);
     expect(r2.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('original of a type a browser would render as active content is octet-stream', async () => {
+    for (const mimeType of [
+      'text/html',
+      'text/html; charset=utf-8',
+      'TEXT/HTML',
+      'application/xhtml+xml',
+      'image/svg+xml',
+      'text/javascript',
+      'application/javascript',
+      'application/x-javascript',
+      'application/ecmascript',
+      'text/xml',
+      'application/xml',
+      'application/rss+xml',
+      'text/xsl',
+      'multipart/x-mixed-replace; boundary=x',
+    ]) {
+      const id = await seed({ mimeType, previewKind: 'none' });
+      const res = await call(id, 'original');
+      expect(res.status, mimeType).toBe(200);
+      expect(res.headers.get('content-type'), mimeType).toBe(
+        'application/octet-stream',
+      );
+      expect(res.headers.get('content-disposition')).toMatch(/^attachment;/);
+    }
+    for (const mimeType of [
+      'application/pdf',
+      'image/png',
+      'text/plain',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]) {
+      const id = await seed({ mimeType, previewKind: 'none' });
+      const res = await call(id, 'original');
+      expect(res.headers.get('content-type'), mimeType).toBe(mimeType);
+    }
+  });
+
+  it('404 for files of a soft-deleted topic', async () => {
+    const [t] = await db
+      .insert(topics)
+      .values({ title: 'Gone', discordThreadId: `gone-${seq}` });
+    const id = await seed({ topicId: t.insertId });
+    expect((await call(id, 'original')).status).toBe(200);
+    await db
+      .update(topics)
+      .set({ deletedAt: new Date() })
+      .where(eq(topics.id, t.insertId));
+    expect((await call(id, 'original')).status).toBe(404);
+    expect((await call(id, 'preview')).status).toBe(404);
   });
 
   it('image preview with non-image mime is 404; unknown kind is 404', async () => {
@@ -264,13 +321,12 @@ describe('file route', () => {
       .select()
       .from(materials)
       .where(eq(materials.id, unk));
+    const where = () => ({
+      limit: async () => [{ ...real, previewKind: 'weird' }],
+    });
     fakeDb = {
       select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [{ ...real, previewKind: 'weird' }],
-          }),
-        }),
+        from: () => ({ where, innerJoin: () => ({ where }) }),
       }),
     };
     try {

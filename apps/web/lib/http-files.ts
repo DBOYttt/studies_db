@@ -1,9 +1,10 @@
 import { createReadStream } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { materials, resolveInStorage } from '@studies/db';
-import { and, eq, isNull } from 'drizzle-orm';
+import { materials, resolveInStorage, topics } from '@studies/db';
+import { and, eq, getTableColumns, isNull } from 'drizzle-orm';
 import { getDb } from './db';
+import { contentSecurityPolicy } from './security-headers';
 import type { SessionUser } from './session';
 import { storageDir } from './storage';
 
@@ -73,6 +74,21 @@ async function startsWithPdfMagic(path: string): Promise<boolean> {
   }
 }
 
+/**
+ * Uploader-supplied types a browser would run or render as a document (HTML,
+ * XML/XSLT, SVG, scripts, multipart streams). The original is sent as
+ * application/octet-stream instead; `attachment` and nosniff already keep it
+ * from rendering, this is one more layer.
+ */
+const ACTIVE_MIME =
+  /^(?:text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml|text\/xsl|[a-z0-9.+-]+\/[a-z0-9.+-]*\+xml|[a-z0-9.+-]+\/(?:x-)?(?:java|ecma|j)script|multipart\/[a-z0-9.+-]+)$/;
+
+export function originalContentType(mimeType: string): string {
+  const mime = mimeType.split(';')[0].trim().toLowerCase();
+  if (!mime || ACTIVE_MIME.test(mime)) return 'application/octet-stream';
+  return mimeType;
+}
+
 const NOSNIFF = { 'X-Content-Type-Options': 'nosniff' };
 const notFound = () =>
   new Response('Not found', { status: 404, headers: NOSNIFF });
@@ -90,23 +106,34 @@ export async function handleFileRequest(
   if (variant !== 'original' && variant !== 'preview') return notFound();
   if (!/^[1-9]\d{0,9}$/.test(id)) return notFound();
 
+  // A soft-deleted topic hides its files too (as in v_materials / v_files).
   const [m] = await getDb()
-    .select()
+    .select(getTableColumns(materials))
     .from(materials)
-    .where(and(eq(materials.id, Number(id)), isNull(materials.deletedAt)))
+    .innerJoin(topics, eq(topics.id, materials.topicId))
+    .where(
+      and(
+        eq(materials.id, Number(id)),
+        isNull(materials.deletedAt),
+        isNull(topics.deletedAt),
+      ),
+    )
     .limit(1);
   if (!m) return notFound();
 
+  // next.config's global CSP skips /files/ so the sandbox below can win.
   const headers = new Headers({
     'X-Content-Type-Options': 'nosniff',
     'Accept-Ranges': 'bytes',
     'Cache-Control': 'private, no-store',
+    'Content-Security-Policy': contentSecurityPolicy(process.env.NODE_ENV),
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
   });
   let rel: string;
   let sniffPdf = false;
   if (variant === 'original') {
     rel = m.storagePath;
-    headers.set('Content-Type', m.mimeType || 'application/octet-stream');
+    headers.set('Content-Type', originalContentType(m.mimeType));
     headers.set(
       'Content-Disposition',
       contentDisposition('attachment', m.originalFilename),
