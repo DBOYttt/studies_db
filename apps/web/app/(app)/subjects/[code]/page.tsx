@@ -15,14 +15,16 @@ import { ASSESSMENT_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import type { ReactNode } from 'react';
-import { DesignerDiagram } from '@/components/DesignerDiagram';
-import { DataMap } from '@/components/explorer/DataMap';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
 import { TagSelect } from '@/components/explorer/TagSelect';
+import {
+  LazyDataMap,
+  LazyDesignerDiagram,
+  LazySqlConsole,
+} from '@/components/lazy-tabs';
 import { EntryQuizSection } from '@/components/plan/EntryQuizSection';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
-import { SqlConsole } from '@/components/SqlConsole';
 import {
   type Crumb,
   ScreenHeader,
@@ -264,7 +266,7 @@ export default async function SubjectPage({
         )}
         {tab === 'sql' && <SqlTab code={code} q={sp.q} editPath={sqlPath} />}
         {tab === 'map' && (
-          <DataMap
+          <LazyDataMap
             subject={{ code, name: subject.name }}
             tree={tree}
             sel={sel}
@@ -617,7 +619,7 @@ async function SqlTab({
           Could not load the column list: {error}
         </div>
       )}
-      <SqlConsole
+      <LazySqlConsole
         key={initialQuery}
         initialQuery={initialQuery}
         schema={schema ?? {}}
@@ -643,7 +645,7 @@ async function SchemaTab({ path }: { path: ReturnType<typeof selectionPath> }) {
     );
   }
   return (
-    <DesignerDiagram
+    <LazyDesignerDiagram
       columns={columns}
       highlight={{ views: path.views, caption: path.caption }}
     />
