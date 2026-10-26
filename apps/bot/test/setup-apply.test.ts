@@ -1,6 +1,6 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import {
   classLecturers,
   classSessions,
@@ -21,7 +21,11 @@ import {
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import { afterAll, beforeEach, describe, expect, it } from 'vitest';
-import { applySetup, type SetupGuild } from '../src/setup/apply.js';
+import {
+  ADMIN_ROLE_POSITION_WARNING,
+  applySetup,
+  type SetupGuild,
+} from '../src/setup/apply.js';
 import { EVENTS_INFO_TITLE, INFO_TITLE } from '../src/setup/info.js';
 import { loadPanelSettings, loadSubjectSpecs } from '../src/setup/load.js';
 import { planSetup } from '../src/setup/plan.js';
@@ -465,6 +469,19 @@ describe('applySetup', () => {
       );
       expect(await getSetting(db, 'admin_role_id')).toBe('role-new');
       expect(await adminFlags()).toEqual([false, false]);
+    });
+
+    it('warns that a created role sits at the bottom of the role list (L5)', async () => {
+      const r = await applySetup(
+        db,
+        fakeGuild(),
+        [{ type: 'createRole', name: 'Studies Admin' }],
+        snapshot,
+      );
+      expect(r.warnings).toEqual([
+        ADMIN_ROLE_POSITION_WARNING('Studies Admin'),
+      ]);
+      expect(r.warnings[0]).toContain('Manage Roles');
     });
 
     it('keeps is_admin when the same role id is stored again', async () => {
@@ -920,6 +937,38 @@ describe('applySetup: posts', () => {
     expect(r.failures[0]).toContain('gone.pdf');
     expect(await threadOf(topicId)).toBe('seed-1');
     expect(await threadOf(other)).toBe('th-1');
+  });
+
+  it('never posts a file whose stored path leaves the storage dir (L3)', async () => {
+    // A real file just outside the storage dir.
+    const outside = `${storageDir}-secret.txt`;
+    writeFileSync(outside, 'secret');
+    const id = await mat('ok.pdf');
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [
+          {
+            content: 'hdr',
+            files: [
+              {
+                materialId: id,
+                name: 'x.txt',
+                storagePath: `../${basename(outside)}`,
+                sizeBytes: 1,
+              },
+            ],
+          },
+        ]),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('x.txt');
+    expect(g.calls.some((c) => c[0] === 'createThread')).toBe(false);
   });
 
   const info = (
