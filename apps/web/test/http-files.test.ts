@@ -195,6 +195,10 @@ describe('file route', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
     expect(res.headers.get('content-disposition')).toMatch(/^inline;/);
+    // no object-src/default-src: the browser's PDF viewer must still open it
+    expect(res.headers.get('content-security-policy')).toBe(
+      "frame-ancestors 'none'",
+    );
   });
 
   it('pdf preview of a not-yet-converted non-PDF original is 404', async () => {

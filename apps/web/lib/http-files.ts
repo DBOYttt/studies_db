@@ -151,6 +151,9 @@ export async function handleFileRequest(
       sniffPdf =
         !m.previewPath && !looksLikePdf(m.mimeType, m.originalFilename);
       headers.set('Content-Type', 'application/pdf');
+      // The browser's own PDF viewer is a plugin: object-src (or a
+      // default-src fallback) in the app CSP would blank "Full screen".
+      headers.set('Content-Security-Policy', "frame-ancestors 'none'");
     } else if (m.previewKind === 'text') {
       rel = m.previewPath ?? m.storagePath;
       headers.set('Content-Type', 'text/plain; charset=utf-8');
