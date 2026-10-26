@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   expandOccurrences,
   type IcsEvent,
+  MAX_OCCURRENCES,
   parseIcs,
   utcToWarsawWall,
 } from '../src/unitime/index.js';
@@ -137,6 +138,30 @@ describe('expandOccurrences', () => {
     expect(new Set(occ.map((o) => o.start.getUTCDay()))).toEqual(
       new Set([2, 3, 4]),
     );
+  });
+
+  const weekly = (byDay: string, until: string) =>
+    parseIcs(
+      `BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:w\r\nDTSTART;TZID=Europe/Warsaw:20261005T080000\r\nDTEND;TZID=Europe/Warsaw:20261005T093000\r\nRRULE:FREQ=WEEKLY;UNTIL=${until};BYDAY=${byDay}\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n`,
+    ).events[0];
+
+  it('caps UNTIL at one year after the start (L4)', () => {
+    const occ = expandOccurrences(weekly('MO', '99991231T235959Z'));
+    expect(occ.length).toBeGreaterThan(50);
+    expect(occ.length).toBeLessThanOrEqual(53);
+    const last = occ[occ.length - 1].start.getTime();
+    expect(last).toBeLessThanOrEqual(wall(2027, 10, 5, 8).getTime());
+  });
+
+  it('caps the number of occurrences (L4)', () => {
+    expect(MAX_OCCURRENCES).toBe(500);
+    const ev = weekly('MO,TU,WE,TH,FR,SA,SU', '20271005T080000Z');
+    // A year of daily occurrences stays under the default cap…
+    expect(expandOccurrences(ev).length).toBeLessThanOrEqual(366);
+    // …and a lower cap stops the expansion early, in date order.
+    const occ = expandOccurrences(ev, 10);
+    expect(occ).toHaveLength(10);
+    expect(occ[9].start).toEqual(wall(2026, 10, 14, 8));
   });
 
   it('returns a non-recurring event as itself', () => {
