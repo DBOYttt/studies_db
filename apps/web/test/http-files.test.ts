@@ -148,10 +148,15 @@ describe('file route', () => {
     );
     return materialId;
   }
-  const call = (id: number | string, variant: string, range?: string) =>
+  const call = (
+    id: number | string,
+    variant: string,
+    range?: string,
+    extra: Record<string, string> = {},
+  ) =>
     GET(
       new Request(`http://localhost/files/${id}/${variant}`, {
-        headers: range ? { range } : {},
+        headers: { ...(range ? { range } : {}), ...extra },
       }),
       { params: Promise.resolve({ id: String(id), variant }) },
     ) as Promise<Response>;
@@ -385,6 +390,112 @@ describe('file route', () => {
     cookieSid = undefined;
     await expect(call(id, 'original')).rejects.toMatchObject({
       digest: expect.stringMatching(/^NEXT_REDIRECT;.*\/login-info;/),
+    });
+  });
+
+  describe('caching', () => {
+    const SHA = 'b'.repeat(64);
+
+    it('an original is immutable with a sha256 ETag', async () => {
+      const id = await seed({ sha256: SHA });
+      const res = await call(id, 'original');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('etag')).toBe(`"${SHA}"`);
+      expect(res.headers.get('cache-control')).toBe(
+        'private, max-age=31536000, immutable',
+      );
+    });
+
+    it('If-None-Match with the ETag is 304 without a body', async () => {
+      const id = await seed({ sha256: SHA });
+      for (const inm of [`"${SHA}"`, `W/"${SHA}"`, `"x", "${SHA}"`, '*']) {
+        const res = await call(id, 'original', undefined, {
+          'if-none-match': inm,
+        });
+        expect(res.status).toBe(304);
+        expect(res.body).toBeNull();
+        expect(res.headers.get('etag')).toBe(`"${SHA}"`);
+        expect(res.headers.get('cache-control')).toBe(
+          'private, max-age=31536000, immutable',
+        );
+      }
+      const other = await call(id, 'original', undefined, {
+        'if-none-match': '"other"',
+      });
+      expect(other.status).toBe(200);
+    });
+
+    it('a preview revalidates; its ETag changes once the conversion lands', async () => {
+      const id = await seed({ sha256: SHA });
+      const before = await call(id, 'preview');
+      expect(before.headers.get('cache-control')).toBe('private, no-cache');
+      const etag = before.headers.get('etag');
+      expect(etag).toMatch(new RegExp(`^"${SHA}`));
+      expect(
+        (await call(id, 'preview', undefined, { 'if-none-match': `${etag}` }))
+          .status,
+      ).toBe(304);
+      await writeFile(join(storage, 'previews', 'c.pdf'), 'CONVERTED');
+      await db
+        .update(materials)
+        .set({ previewPath: 'previews/c.pdf' })
+        .where(eq(materials.id, id));
+      const after = await call(id, 'preview', undefined, {
+        'if-none-match': `${etag}`,
+      });
+      expect(after.status).toBe(200);
+      expect(await after.text()).toBe('CONVERTED');
+      expect(after.headers.get('etag')).not.toBe(etag);
+      // PDF previews keep the frame-ancestors-only CSP on a 304 too
+      const again = await call(id, 'preview', undefined, {
+        'if-none-match': `${after.headers.get('etag')}`,
+      });
+      expect(again.status).toBe(304);
+      expect(again.headers.get('content-security-policy')).toBe(
+        "frame-ancestors 'none'",
+      );
+    });
+
+    it('Range still works, and If-Range with another ETag sends the whole file', async () => {
+      const id = await seed({ sha256: SHA });
+      const ranged = await call(id, 'original', 'bytes=10-19', {
+        'if-range': `"${SHA}"`,
+      });
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get('etag')).toBe(`"${SHA}"`);
+      expect(Buffer.from(await ranged.arrayBuffer()).toString()).toBe(
+        '0123456789',
+      );
+      const stale = await call(id, 'original', 'bytes=10-19', {
+        'if-range': '"old"',
+      });
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get('content-length')).toBe('100');
+    });
+
+    it('reads only the columns it needs (never extracted_text)', async () => {
+      const id = await seed();
+      const select = vi.spyOn(db, 'select');
+      try {
+        expect((await call(id, 'original')).status).toBe(200);
+        const fileQuery = select.mock.calls.find(
+          ([cols]) => cols !== undefined && 'storagePath' in (cols as object),
+        );
+        expect(fileQuery).toBeDefined();
+        expect(Object.keys(fileQuery?.[0] as object).sort()).toEqual(
+          [
+            'id',
+            'mimeType',
+            'originalFilename',
+            'previewKind',
+            'previewPath',
+            'sha256',
+            'storagePath',
+          ].sort(),
+        );
+      } finally {
+        select.mockRestore();
+      }
     });
   });
 
