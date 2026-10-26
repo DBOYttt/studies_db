@@ -5,7 +5,7 @@ import {
   materials,
   StoragePathError,
 } from '@studies/db';
-import { and, eq, inArray, lt, lte, sql } from 'drizzle-orm';
+import { and, eq, inArray, lt, lte, notInArray, sql } from 'drizzle-orm';
 
 export type Job = {
   id: number;
@@ -221,4 +221,37 @@ export async function requeueStale(
     }
     return alive.length;
   });
+}
+
+/** Finished jobs are kept this long. */
+export const JOB_KEEP_MS = 30 * 24 * 3600_000;
+
+/**
+ * Deletes `done`/`failed` jobs last scheduled (`run_after`) more than
+ * `keepMs` before `now`. Queued and running jobs stay, and so do the jobs of
+ * a still pending material: finalizeStuckMaterials needs them to see that
+ * every job is done. Returns how many were deleted.
+ */
+export async function pruneJobs(
+  db: Db,
+  now: Date,
+  keepMs = JOB_KEEP_MS,
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - keepMs);
+  const res = await db
+    .delete(jobs)
+    .where(
+      and(
+        inArray(jobs.status, ['done', 'failed']),
+        lt(jobs.runAfter, cutoff),
+        notInArray(
+          jobs.materialId,
+          db
+            .select({ id: materials.id })
+            .from(materials)
+            .where(eq(materials.status, 'pending')),
+        ),
+      ),
+    );
+  return affected(res);
 }

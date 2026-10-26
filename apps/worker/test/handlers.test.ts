@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  botRequests,
   consumeLoginToken,
   createLoginToken,
   type Db,
@@ -373,6 +374,45 @@ describe('startWorker', () => {
     expect(
       await getSessionUser(db, (live as { sessionToken: string }).sessionToken),
     ).not.toBeNull();
+  });
+
+  it('prunes finished bot requests and jobs older than 30 days when it starts', async () => {
+    const old = new Date(Date.now() - 40 * 24 * 3600_000);
+    await db.delete(botRequests);
+    await db.insert(botRequests).values([
+      {
+        kind: 'k',
+        target: 'old',
+        status: 'done',
+        createdAt: old,
+        finishedAt: old,
+      },
+      { kind: 'k', target: 'queued', status: 'queued', createdAt: old },
+    ]);
+    const { materialId } = await ingest('cp1250.txt', 'a.txt', 'text/plain');
+    await db
+      .update(jobs)
+      .set({ status: 'done', runAfter: old })
+      .where(eq(jobs.materialId, materialId));
+    const counts = async () => [
+      (await db.select().from(botRequests)).length,
+      (await db.select().from(jobs)).length,
+    ];
+    const ac = new AbortController();
+    const p = startWorker(deps(), {
+      concurrency: 1,
+      pollMs: 50,
+      signal: ac.signal,
+    });
+    for (let i = 0; i < 50 && (await counts()).join() !== '1,0'; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    ac.abort();
+    await p;
+    expect(await counts()).toEqual([1, 0]);
+    const [left] = await db.select().from(botRequests);
+    expect(left.target).toBe('queued');
+    await db.delete(botRequests);
   });
 
   it('processes queued jobs while running', async () => {

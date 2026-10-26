@@ -19,6 +19,7 @@ import {
   finalizeMaterial,
   finalizeStuckMaterials,
   MAX_ATTEMPTS,
+  pruneJobs,
   requeueStale,
 } from '../src/queue.js';
 
@@ -313,3 +314,55 @@ async function claim() {
   if (!job) throw new Error('expected a job');
   return job;
 }
+
+describe('pruneJobs', () => {
+  it('deletes done and failed jobs whose run_after is older than 30 days', async () => {
+    const m = await seed(['convert', 'extract_text']);
+    const m2 = await seed(['convert', 'extract_text']);
+    const [a, b] = await jobRows(m);
+    const [c, d] = await jobRows(m2);
+    const old = new Date(T0.getTime() - 31 * 24 * 3600_000);
+    const set = (
+      id: number,
+      status: 'queued' | 'running' | 'done' | 'failed',
+      runAfter: Date,
+    ) => db.update(jobs).set({ status, runAfter }).where(eq(jobs.id, id));
+    await set(a.id, 'done', old);
+    await set(b.id, 'failed', old);
+    await set(c.id, 'queued', old);
+    await set(d.id, 'done', plus(-24 * 3600_000));
+    await db.update(materials).set({ status: 'ready' });
+    expect(await pruneJobs(db, T0)).toBe(2);
+    expect((await jobRows(m)).map((j) => j.id)).toEqual([]);
+    expect((await jobRows(m2)).map((j) => j.id)).toEqual([c.id, d.id]);
+  });
+
+  it('keeps the jobs of a pending material, so the finalize sweep still sees them', async () => {
+    const m = await seed(['convert']);
+    const [a] = await jobRows(m);
+    await db
+      .update(jobs)
+      .set({
+        status: 'done',
+        runAfter: new Date(T0.getTime() - 90 * 24 * 3600_000),
+      })
+      .where(eq(jobs.id, a.id));
+    expect(await pruneJobs(db, T0)).toBe(0);
+    expect(await finalizeStuckMaterials(db)).toBe(1);
+    expect(await pruneJobs(db, T0)).toBe(1);
+  });
+
+  it('never deletes running jobs', async () => {
+    const m = await seed(['convert']);
+    const [a] = await jobRows(m);
+    await db
+      .update(jobs)
+      .set({
+        status: 'running',
+        runAfter: new Date(T0.getTime() - 90 * 24 * 3600_000),
+      })
+      .where(eq(jobs.id, a.id));
+    expect(await pruneJobs(db, T0)).toBe(0);
+    expect(await jobRows(m)).toHaveLength(1);
+  });
+});

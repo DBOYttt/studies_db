@@ -3,6 +3,7 @@ import {
   type Db,
   materials,
   previewRelPath,
+  pruneBotRequests,
   purgeExpiredAuth,
   resolveInStorage,
 } from '@studies/db';
@@ -21,6 +22,7 @@ import {
   failJob,
   finalizeStuckMaterials,
   type Job,
+  pruneJobs,
   requeueStale,
 } from './queue.js';
 
@@ -37,6 +39,8 @@ const EXTRACT_TIMEOUT_MS = 30_000;
 const REQUEUE_EVERY_MS = 60_000;
 /** Expired sessions and login tokens are deleted once a day (and at start). */
 const PURGE_AUTH_EVERY_MS = 24 * 3600_000;
+/** Finished bot requests and jobs (older than 30 days) are pruned as often. */
+const PRUNE_QUEUES_EVERY_MS = 24 * 3600_000;
 
 const exists = (path: string) =>
   stat(path).then(
@@ -180,6 +184,27 @@ export async function startWorker(
     }
   };
 
+  let lastPrune: number | null = null;
+  const pruneQueues = async () => {
+    const t = now();
+    if (lastPrune !== null && t.getTime() - lastPrune < PRUNE_QUEUES_EVERY_MS) {
+      return;
+    }
+    try {
+      const r = await pruneBotRequests(deps.db, t);
+      const j = await pruneJobs(deps.db, t);
+      // Set only on success, so a failed prune is retried on the next tick.
+      lastPrune = t.getTime();
+      if (r + j > 0) {
+        console.log(
+          `Worker: usunięto ${r} starych żądań do bota i ${j} zakończonych jobów`,
+        );
+      }
+    } catch (err) {
+      console.error('Worker: błąd pruneBotRequests/pruneJobs:', err);
+    }
+  };
+
   const requeue = async () => {
     while (!signal.aborted) {
       await purgeAuth();
@@ -191,6 +216,9 @@ export async function startWorker(
       } catch (err) {
         console.error('Worker: błąd requeueStale/finalizeStuckMaterials:', err);
       }
+      // After the finalize sweep, so a material it just made ready can lose
+      // its old jobs in the same tick.
+      await pruneQueues();
       await sleep(REQUEUE_EVERY_MS, signal);
     }
   };
