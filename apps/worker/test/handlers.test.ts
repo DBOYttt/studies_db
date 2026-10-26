@@ -24,6 +24,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { processOne, startWorker, type WorkerDeps } from '../src/handlers.js';
 import { BACKOFF_MS } from '../src/queue.js';
+import { wrapBin } from './wrap-bin.js';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -33,6 +34,7 @@ let uploaderId: number;
 let storageDir: string;
 let countFile: string;
 let seq = 0;
+let countingSoffice: string;
 
 beforeAll(async () => {
   db = await resetTestDb();
@@ -61,13 +63,19 @@ beforeEach(async () => {
   await db.delete(materials);
   storageDir = await mkdtemp(join(tmpdir(), 'worker-test-'));
   countFile = join(storageDir, 'soffice-count');
-  process.env.SOFFICE_COUNT_FILE = countFile;
+  countingSoffice = await wrapBin(
+    storageDir,
+    join(fixtures, 'count-soffice.sh'),
+    {
+      SOFFICE_COUNT_FILE: countFile,
+    },
+  );
 });
 
 const deps = (over: Partial<WorkerDeps> = {}): WorkerDeps => ({
   db,
   storageDir,
-  sofficeBin: join(fixtures, 'count-soffice.sh'),
+  sofficeBin: countingSoffice,
   pdftotextBin: 'pdftotext',
   ...over,
 });

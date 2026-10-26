@@ -43,7 +43,9 @@ services:
       - storage:/data/storage
     # Runs as root. First make the upload dir the web container (user `node`,
     # uid 1000) can write: owned by uid 1000, mode 0750 (the bot runs as root
-    # and reads/deletes the files). Then migrate as before.
+    # and reads/deletes the files). Then the previews dir the worker (also
+    # user `node`) writes: owned by uid 1000, existing previews included.
+    # Then migrate as before.
     command:
       - sh
       - -c
@@ -51,6 +53,9 @@ services:
         mkdir -p /data/storage/uploads
         && chown 1000:1000 /data/storage/uploads
         && chmod 0750 /data/storage/uploads
+        && mkdir -p /data/storage/previews
+        && chown -R 1000:1000 /data/storage/previews
+        && chmod 0755 /data/storage/previews
         && exec node --import tsx src/cli/migrate.ts
     depends_on:
       mariadb:
@@ -89,6 +94,11 @@ services:
       PDFTOTEXT_BIN: ${PDFTOTEXT_BIN:-}
     volumes:
       - storage:/data/storage
+    # soffice/pdftotext read untrusted documents: cap memory and processes
+    # (a zip bomb or fork storm stops here). The image runs as user `node`.
+    # Conversions still have network access; see docs/deploy.md.
+    mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    pids_limit: 512
     depends_on:
       migrate:
         condition: service_completed_successfully
