@@ -155,6 +155,13 @@
       "when": 1792937748450,
       "tag": "0021_v_materials_topic_deleted",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "5",
+      "when": 1793021868167,
+      "tag": "0022_perf_indexes",
+      "breakpoints": true
     }
   ]
 }
