@@ -1,6 +1,14 @@
 import { and, count, eq } from 'drizzle-orm';
 import type mysql from 'mysql2/promise';
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  it,
+  vi,
+} from 'vitest';
 import { createDb, type Db } from '../src/client.js';
 import {
   addEvent,
@@ -395,6 +403,28 @@ describe('event actions', () => {
       expect(reqs).toMatchObject([
         { kind: 'event_post_upsert', target: `event:${eid}` },
       ]);
+    });
+
+    it('getEvent loads the event, subject and both names in one query plus the links', async () => {
+      const { id: eid } = await addEvent(db, id.u, input(), 'web');
+      await editEvent(db, id.u, eid as number, { title: 'Kolokwium 3' }, 'web');
+      const select = vi.spyOn(db, 'select');
+      try {
+        const ev = await getEvent(db, eid as number);
+        expect(ev).toMatchObject({
+          title: 'Kolokwium 3',
+          createdByName: 'Ala',
+          updatedByName: 'Ala',
+          subjectCode: 'BD',
+          subjectName: 'Bazy danych',
+          series: null,
+          linkedTopicIds: [],
+        });
+        expect(select).toHaveBeenCalledTimes(2);
+      } finally {
+        select.mockRestore();
+      }
+      expect(await getEvent(db, 999_999)).toBeNull();
     });
 
     it('editEvent validates the merged event; a subject change clears class/group', async () => {

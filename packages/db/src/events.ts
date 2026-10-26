@@ -8,6 +8,7 @@
  */
 
 import { and, desc, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { alias } from 'drizzle-orm/mysql-core';
 import type mysql from 'mysql2/promise';
 import type { ActionResult } from './admin-actions.js';
 import { writeAudit } from './audit.js';
@@ -622,35 +623,37 @@ export type EventDetails = typeof events.$inferSelect & {
   } | null;
 };
 
-/** The event (also a deleted one: `deletedAt` is set) or null. */
+const createdByUser = alias(users, 'created_by_user');
+const updatedByUser = alias(users, 'updated_by_user');
+
+/**
+ * The event (also a deleted one: `deletedAt` is set) or null. Two queries:
+ * the event with its subject, series and both user names, then the links.
+ */
 export async function getEvent(
   db: DbExecutor,
   id: number,
 ): Promise<EventDetails | null> {
-  const [row] = await db.select().from(events).where(eq(events.id, id));
-  if (!row) return null;
-  const nameOf = async (uid: number | null) => {
-    if (uid === null) return null;
-    const [u] = await db
-      .select({ n: users.displayName })
-      .from(users)
-      .where(eq(users.id, uid));
-    return u?.n ?? null;
-  };
-  const [subj] =
-    row.subjectId === null
-      ? []
-      : await db
-          .select({ code: subjects.code, name: subjects.name })
-          .from(subjects)
-          .where(eq(subjects.id, row.subjectId));
-  const [series] =
-    row.seriesId === null
-      ? []
-      : await db
-          .select()
-          .from(eventSeries)
-          .where(eq(eventSeries.id, row.seriesId));
+  const [hit] = await db
+    .select({
+      event: events,
+      subjectCode: subjects.code,
+      subjectName: subjects.name,
+      seriesId: eventSeries.id,
+      seriesRule: eventSeries.rule,
+      seriesUntil: eventSeries.until,
+      seriesTopicId: eventSeries.topicId,
+      createdByName: createdByUser.displayName,
+      updatedByName: updatedByUser.displayName,
+    })
+    .from(events)
+    .leftJoin(subjects, eq(subjects.id, events.subjectId))
+    .leftJoin(eventSeries, eq(eventSeries.id, events.seriesId))
+    .leftJoin(createdByUser, eq(createdByUser.id, events.createdBy))
+    .leftJoin(updatedByUser, eq(updatedByUser.id, events.updatedBy))
+    .where(eq(events.id, id));
+  if (!hit) return null;
+  const row = hit.event;
   const links = await db
     .select({ topicId: eventTopics.topicId })
     .from(eventTopics)
@@ -662,19 +665,22 @@ export async function getEvent(
     .orderBy(eventTopics.id);
   return {
     ...row,
-    subjectCode: subj?.code ?? null,
-    subjectName: subj?.name ?? null,
-    createdByName: await nameOf(row.createdBy),
-    updatedByName: await nameOf(row.updatedBy),
+    subjectCode: hit.subjectCode ?? null,
+    subjectName: hit.subjectName ?? null,
+    createdByName: hit.createdByName ?? null,
+    updatedByName: hit.updatedByName ?? null,
     linkedTopicIds: links.map((l) => l.topicId),
-    series: series
-      ? {
-          id: series.id,
-          rule: series.rule,
-          until: String(series.until),
-          topicId: series.topicId,
-        }
-      : null,
+    series:
+      hit.seriesId !== null &&
+      hit.seriesRule !== null &&
+      hit.seriesUntil !== null
+        ? {
+            id: hit.seriesId,
+            rule: hit.seriesRule,
+            until: String(hit.seriesUntil),
+            topicId: hit.seriesTopicId,
+          }
+        : null,
   };
 }
 
