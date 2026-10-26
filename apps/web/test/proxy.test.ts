@@ -35,7 +35,7 @@ describe('proxy', () => {
       '/auth/logout',
       '/_next/static/chunks/main.js',
       '/favicon.ico',
-      '/pdf.worker.min.mjs',
+      '/pdf.worker.6.3.289.min.mjs',
       '/api/wydarzenia/12/pliki',
     ]) {
       expect(matches(u), u).toBe(false);

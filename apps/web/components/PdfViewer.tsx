@@ -4,10 +4,12 @@ import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
 import 'react-pdf/dist/Page/TextLayer.css';
+import { pdfWorkerFile } from '@/lib/cache-headers';
 
 // Static copy made by scripts/copy-pdf-worker.mjs (see next.config.ts: webpack's
-// `new URL(..., import.meta.url)` handling is disabled globally).
-pdfjs.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+// `new URL(..., import.meta.url)` handling is disabled globally). Its name
+// carries the pdf.js version, so it can be cached as immutable.
+pdfjs.GlobalWorkerOptions.workerSrc = `/${pdfWorkerFile(pdfjs.version)}`;
 
 const MAX_WIDTH = 1600;
 const FALLBACK_WIDTH = 720;

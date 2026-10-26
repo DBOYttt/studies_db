@@ -1,5 +1,6 @@
 import { getPathMatch } from 'next/dist/shared/lib/router/utils/path-match';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { cacheHeaderRules } from '../lib/cache-headers';
 import {
   contentSecurityPolicy,
   OWN_POLICY_SOURCE,
@@ -115,6 +116,9 @@ describe('next.config', () => {
     const { default: config } = await import('../next.config');
     expect(config.poweredByHeader).toBe(false);
     expect(config.images?.unoptimized).toBe(true);
-    expect(await config.headers?.()).toEqual(securityHeaderRules('production'));
+    expect(await config.headers?.()).toEqual([
+      ...securityHeaderRules('production'),
+      ...cacheHeaderRules(),
+    ]);
   });
 });

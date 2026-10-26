@@ -16,6 +16,6 @@ export function proxy(req: NextRequest) {
 // requireUser() itself.
 export const config = {
   matcher: [
-    '/((?!login-info(?:/|$)|auth/|_next/|favicon\\.ico$|api/wydarzenia/[^/]+/pliki$|pdf\\.worker\\.min\\.mjs$).*)',
+    '/((?!login-info(?:/|$)|auth/|_next/|favicon\\.ico$|api/wydarzenia/[^/]+/pliki$|pdf\\.worker\\.[0-9A-Za-z.-]+\\.min\\.mjs$).*)',
   ],
 };

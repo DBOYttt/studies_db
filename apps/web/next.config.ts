@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
+import { cacheHeaderRules } from './lib/cache-headers';
 import { securityHeaderRules } from './lib/security-headers';
 
 // Load the repo-root .env (Next only reads apps/web/.env). Real env vars win.
@@ -18,7 +19,10 @@ const config: NextConfig = {
   // Nothing uses next/image; keep /_next/image from fetching or resizing.
   images: { unoptimized: true },
   async headers() {
-    return securityHeaderRules(process.env.NODE_ENV);
+    return [
+      ...securityHeaderRules(process.env.NODE_ENV),
+      ...cacheHeaderRules(),
+    ];
   },
   // packages/db imports its own TS files with `.js` extensions (NodeNext style).
   webpack(cfg) {
