@@ -166,9 +166,10 @@ export async function startWorker(
     if (lastPurge !== null && t.getTime() - lastPurge < PURGE_AUTH_EVERY_MS) {
       return;
     }
-    lastPurge = t.getTime();
     try {
       const p = await purgeExpiredAuth(deps.db, t);
+      // Set only on success, so a failed purge is retried on the next tick.
+      lastPurge = t.getTime();
       if (p.sessions + p.loginTokens > 0) {
         console.log(
           `Worker: usunięto ${p.sessions} wygasłych sesji i ${p.loginTokens} tokenów logowania`,
