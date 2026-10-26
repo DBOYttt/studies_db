@@ -2,14 +2,14 @@ import { DownloadSimple, TerminalWindow } from '@phosphor-icons/react/dist/ssr';
 import { ReportCards } from '@/components/simple/ReportCards';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
-import { getDb, getRoPool } from '@/lib/db';
+import { cachedSubjectCards } from '@/lib/count-cache';
+import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
 import { formatDate, plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { MAX_ROWS, parseReportIndex, REPORT_LABELS } from '@/lib/simple';
 import { navSubjects } from '@/lib/simple-page';
-import { listSubjectCards } from '@/lib/simple-queries';
 import { runReadonlyQuery } from '@/lib/sql-console';
 
 export const dynamic = 'force-dynamic';
@@ -35,7 +35,7 @@ export default async function SimpleReports({
   const r = parseReportIndex((await searchParams).r);
   const query = EXAMPLE_QUERIES[r];
   const [cards, result] = await Promise.all([
-    listSubjectCards(getDb()),
+    cachedSubjectCards(),
     runReadonlyQuery(getRoPool(), query.sql, { maxRows: MAX_ROWS }).catch(
       (err: unknown) => ({ ok: false as const, error: roErrorMessage(err) }),
     ),

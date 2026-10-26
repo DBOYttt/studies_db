@@ -9,12 +9,12 @@ import { GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
 import { formatSyncTime, syncFailed } from '@/lib/plan-view';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
-import { listSubjectCards } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,7 +38,7 @@ export default async function SimplePlan({
   const tab = parseEntityTab(sp, TABS);
   const db = getDb();
   const [cards, status] = await Promise.all([
-    listSubjectCards(db),
+    cachedSubjectCards(),
     // Without the status the screen still works, just without the footer.
     getPlanSyncStatus(db).catch(() => null),
   ]);

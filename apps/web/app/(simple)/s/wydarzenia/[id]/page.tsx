@@ -4,11 +4,11 @@ import { EventDetails } from '@/components/events/EventDetails';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { listSubjectCards } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +27,7 @@ export default async function SimpleEvent({
   const db = getDb();
   const [e, cards] = await Promise.all([
     loadEventPage(id, user),
-    listSubjectCards(db),
+    cachedSubjectCards(),
   ]);
   const preview = await loadSimplePreview(db, sp, cards);
   const baseHref = `/s/wydarzenia/${id}`;

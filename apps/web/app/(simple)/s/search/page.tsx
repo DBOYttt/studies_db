@@ -2,12 +2,13 @@ import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { parseSearchQuery } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { listSubjectCards, searchSimpleFiles } from '@/lib/simple-queries';
+import { searchSimpleFiles } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,7 @@ export default async function SimpleSearch({
   const sp = await searchParams;
   const db = getDb();
   const q = parseSearchQuery(sp);
-  const cardsP = listSubjectCards(db);
+  const cardsP = cachedSubjectCards();
   const [cards, hits, preview] = await Promise.all([
     cardsP,
     q ? searchSimpleFiles(db, q, SEARCH_LIMIT) : Promise.resolve([]),

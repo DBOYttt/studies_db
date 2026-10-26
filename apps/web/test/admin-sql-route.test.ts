@@ -26,6 +26,13 @@ vi.mock('next/headers', () => ({
   }),
 }));
 
+const counts = vi.hoisted(() => ({ invalidated: 0 }));
+vi.mock('../lib/count-cache', () => ({
+  invalidateCounts: () => {
+    counts.invalidated++;
+  },
+}));
+
 const audit = vi.hoisted(() => ({ fail: false }));
 vi.mock('@studies/db', async (importOriginal) => {
   const m = await importOriginal<typeof import('@studies/db')>();
@@ -290,12 +297,16 @@ describe('handleAdminSqlRequest', () => {
   it('a token executes once; reuse is 400 and changes nothing', async () => {
     const sql = "UPDATE subjects SET ects = ects + 1 WHERE code = 'ASD'";
     const preview = await json(await call({ mode: 'preview', sql }));
+    const invalidated = counts.invalidated;
     const first = await call({ mode: 'execute', sql, token: preview.token });
     expect(first.status).toBe(200);
+    // a committed write drops the cached nav / subject-card counts
+    expect(counts.invalidated).toBe(invalidated + 1);
     const after = await ectsOf('ASD');
     const before = await auditCount('sql.execute');
     const again = await call({ mode: 'execute', sql, token: preview.token });
     expect(again.status).toBe(400);
+    expect(counts.invalidated).toBe(invalidated + 1);
     expect((await json(again)).error).toBe(
       'Token already used. Run the preview again.',
     );

@@ -35,6 +35,12 @@ vi.mock('next/navigation', () => ({
   },
 }));
 vi.mock('next/cache', () => ({ revalidatePath: () => {} }));
+const counts = vi.hoisted(() => ({ invalidated: 0 }));
+vi.mock('../lib/count-cache', () => ({
+  invalidateCounts: () => {
+    counts.invalidated++;
+  },
+}));
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   cache: <T>(fn: T) => fn,
@@ -145,11 +151,14 @@ describe('event actions', () => {
 
   it('creates, edits, links, deletes; restore is admin only', async () => {
     cookieSid = alice.sid;
+    const invalidated = counts.invalidated;
     await expect(
       A.createEventAction(
         form({ subjectId: String(subjectId), base: 'advanced' }),
       ),
     ).rejects.toThrow(/redirect:\/wydarzenia\/\d+/);
+    // the v_events count in the nav is dropped from the cache
+    expect(counts.invalidated).toBeGreaterThan(invalidated);
     const [ev] = await eventRows();
     expect(ev.title).toBe('Kolokwium z fizyki');
     expect(ev.createdBy).toBe(alice.id);

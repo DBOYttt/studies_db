@@ -6,25 +6,16 @@ import { ConsoleFooter } from '@/components/shell/ConsoleFooter';
 import { ModeSwitch } from '@/components/shell/ModeSwitch';
 import { NavPanel } from '@/components/shell/NavPanel';
 import { ShellFrame } from '@/components/shell/ShellFrame';
-import { getDb, getRoPool } from '@/lib/db';
+import { cachedNavSubjects, cachedViewCounts } from '@/lib/count-cache';
 import type { NavView } from '@/lib/nav-tree';
-import { getNavSubjects } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
-import { countViewRows } from '@/lib/tables';
-
-async function viewCounts() {
-  try {
-    return await countViewRows(getRoPool());
-  } catch {
-    return null; // e.g. DATABASE_RO_URL missing: no counts, layout still renders
-  }
-}
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
+  // Cached for up to a minute (lib/count-cache.ts).
   const [subjects, counts] = await Promise.all([
-    getNavSubjects(getDb()),
-    viewCounts(),
+    cachedNavSubjects(),
+    cachedViewCounts(),
   ]);
   const views: NavView[] = PUBLIC_VIEWS.map((v) => ({
     name: v,

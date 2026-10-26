@@ -4,11 +4,11 @@ import { EventDetails } from '@/components/events/EventDetails';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { SimplePreview } from '@/components/simple/SimplePreview';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview } from '@/lib/simple-page';
-import { listSubjectCards } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -26,7 +26,7 @@ export default async function EventPage({
   const id = parseEventId(raw);
   const db = getDb();
   const e = await loadEventPage(id, user);
-  const preview = await loadSimplePreview(db, sp, listSubjectCards(db));
+  const preview = await loadSimplePreview(db, sp, cachedSubjectCards());
   const baseHref = `/wydarzenia/${id}`;
   return (
     <>

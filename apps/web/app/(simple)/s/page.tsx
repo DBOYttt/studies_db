@@ -4,11 +4,12 @@ import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getRoPool } from '@/lib/db';
 import { nowWall } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { listSimpleFiles, listSubjectCards } from '@/lib/simple-queries';
+import { listSimpleFiles } from '@/lib/simple-queries';
 import { upcomingForUser } from '@/lib/upcoming-events';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function SimpleStart({
   const user = await requireUser();
   const sp = await searchParams;
   const db = getDb();
-  const cardsP = listSubjectCards(db);
+  const cardsP = cachedSubjectCards();
   const [cards, recent, preview, upcoming] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5 }),

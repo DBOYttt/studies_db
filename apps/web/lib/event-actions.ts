@@ -21,6 +21,7 @@ import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { asc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { invalidateCounts } from './count-cache';
 import { getDb, getRoPool } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
@@ -48,6 +49,7 @@ const eventHref = (base: Base, id: number) =>
 const planHref = (base: Base) => (base === 'simple' ? '/s/plan' : '/plan');
 
 function refresh(id?: number) {
+  invalidateCounts();
   revalidatePath('/s/plan');
   revalidatePath('/plan');
   if (id !== undefined) {

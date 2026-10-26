@@ -24,6 +24,7 @@ import {
   TOKEN_TTL_MS,
   verifyPreview,
 } from './admin-sql';
+import { invalidateCounts } from './count-cache';
 import { createRateLimiter, type RateLimiter } from './rate-limit';
 import { isCrossOrigin } from './same-origin';
 import type { SessionUser } from './session';
@@ -369,6 +370,8 @@ async function execute(
   }
 
   const { affected, insertId } = r.value;
+  // Committed: the nav and subject-card counts may have changed.
+  invalidateCounts();
   let auditId: number;
   try {
     auditId = await writeAudit(deps.db, {
