@@ -11,6 +11,7 @@ import Link from 'next/link';
 import {
   type CSSProperties,
   useCallback,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -60,10 +61,8 @@ const HOURS = Array.from(
   (_, i) => DAY_START_MIN / 60 + i,
 );
 const GUTTER = 48;
-/*
- * Minimum day column width (`--day-min` on the grid): 128 px, 88 px beside
- * the open panel from lg, so the whole week stays in view.
- */
+/** Minimum day column width (px); narrower weeks scroll sideways. */
+const DAY_MIN = 128;
 /** id of the session panel (aria-controls of the bars that open it). */
 const PANEL_ID = 'session-panel';
 
@@ -159,6 +158,21 @@ export function WeekView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = shown.find((s) => sessionKey(s) === selectedId) ?? null;
   const blockRefs = useRef(new Map<string, HTMLButtonElement>());
+  const scrollerRef = useRef<HTMLDivElement>(null);
+  /*
+   * From lg the panel slides over the grid (the grid keeps its width), on
+   * the side away from the selected block so the block stays in view.
+   */
+  const [panelSide, setPanelSide] = useState<'left' | 'right'>('right');
+  useLayoutEffect(() => {
+    if (selectedId === null) return;
+    const b = blockRefs.current.get(selectedId)?.getBoundingClientRect();
+    const g = scrollerRef.current?.getBoundingClientRect();
+    if (!b || !g) return;
+    setPanelSide(
+      b.left + b.width / 2 > g.left + g.width / 2 ? 'left' : 'right',
+    );
+  }, [selectedId]);
   const [recentSkip, setRecentSkip] = useState<RecentSkip | null>(null);
   const close = useCallback(() => {
     setRecentSkip(null);
@@ -230,21 +244,19 @@ export function WeekView({
           No classes this week.
         </div>
       ) : (
-        <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
-          <div className="min-w-0 flex-1">
+        <div className="relative flex flex-col gap-4">
+          <div className="min-w-0">
             {/* relative: the sr-only "(today)" must not escape the scroller. */}
             <div
+              ref={scrollerRef}
               data-testid="plan-scroller"
               className="relative overflow-x-auto rounded-md border border-line-strong bg-page"
             >
               <div
-                // Beside the open panel the days shrink to fit the whole week.
-                className={`grid [--day-min:128px] ${
-                  selected ? 'lg:[--day-min:88px]' : ''
-                }`}
+                className="grid"
                 style={{
-                  gridTemplateColumns: `${GUTTER}px repeat(${columns.length}, minmax(var(--day-min), 1fr))`,
-                  minWidth: `calc(${GUTTER}px + ${columns.length} * var(--day-min))`,
+                  gridTemplateColumns: `${GUTTER}px repeat(${columns.length}, minmax(${DAY_MIN}px, 1fr))`,
+                  minWidth: GUTTER + columns.length * DAY_MIN,
                 }}
               >
                 <div className="sticky left-0 z-[2] border-b border-line-strong bg-surface" />
@@ -412,21 +424,29 @@ export function WeekView({
             )}
           </div>
           {selected && (
-            <div className="lg:sticky lg:top-12 lg:w-[340px] lg:shrink-0">
-              <SessionPanel
-                key={sessionKey(selected)}
-                id={PANEL_ID}
-                session={selected}
-                onClose={close}
-                simple={simple}
-                skipped={
-                  recentSkip?.key === sessionKey(selected)
-                    ? recentSkip.badge
-                    : null
-                }
-                onSkipped={(badge) => onSkipped(sessionKey(selected), badge)}
-                onUndone={onUndone}
-              />
+            // From lg: a 340 px slide-over above the grid and legend. The
+            // full-height track lets clicks through; only the panel takes them.
+            <div
+              className={`lg:pointer-events-none lg:absolute lg:inset-y-0 lg:z-30 lg:w-[340px] ${
+                panelSide === 'left' ? 'lg:left-0' : 'lg:right-0'
+              }`}
+            >
+              <div className="lg:pointer-events-auto lg:sticky lg:top-12">
+                <SessionPanel
+                  key={sessionKey(selected)}
+                  id={PANEL_ID}
+                  session={selected}
+                  onClose={close}
+                  simple={simple}
+                  skipped={
+                    recentSkip?.key === sessionKey(selected)
+                      ? recentSkip.badge
+                      : null
+                  }
+                  onSkipped={(badge) => onSkipped(sessionKey(selected), badge)}
+                  onUndone={onUndone}
+                />
+              </div>
             </div>
           )}
         </div>
@@ -464,10 +484,14 @@ function BarText({
   return (
     <>
       {/* The label stays whole; the detail truncates first. */}
-      <span className={`${caps} shrink-0 tracking-[0.08em] @max-[92px]:hidden`}>
+      <span
+        data-bar-label
+        className={`${caps} shrink-0 tracking-[0.08em] @max-[92px]:hidden`}
+      >
         {label}
       </span>
       <span
+        data-bar-label
         className={`${caps} hidden min-w-0 truncate tracking-normal @max-[92px]:inline`}
       >
         {short}

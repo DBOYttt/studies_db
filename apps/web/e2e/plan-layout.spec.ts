@@ -41,7 +41,19 @@ async function expectBarsInsideBlocks(page: Page) {
         text: b.textContent ?? '',
         block: box(b),
         bars: [...b.querySelectorAll('[data-testid="badge-bars"] > *')].map(
-          box,
+          (bar) => ({
+            box: box(bar),
+            // Content wider than the bar would stick out (or be cut).
+            overflow: bar.scrollWidth - bar.clientWidth,
+            // The visible label ("ENTRY QUIZ", "Quiz", "Q+T"), whole.
+            labels: [...bar.querySelectorAll('[data-bar-label]')]
+              .filter((l) => l.getClientRects().length > 0)
+              .map((l) => ({
+                text: l.textContent ?? '',
+                box: box(l),
+                cut: l.scrollWidth - l.clientWidth,
+              })),
+          }),
         ),
         lines: [...b.querySelectorAll('[data-block-line]')].map(box),
       }),
@@ -62,9 +74,23 @@ async function expectBarsInsideBlocks(page: Page) {
   for (const b of withBars) {
     expect(b.lines.length, b.text).toBe(2);
     for (const bar of b.bars) {
-      expect(inside(bar, b.block), `bar inside block: ${b.text}`).toBe(true);
+      expect(inside(bar.box, b.block), `bar inside block: ${b.text}`).toBe(
+        true,
+      );
       for (const line of b.lines)
-        expect(overlaps(line, bar), `line clear of bar: ${b.text}`).toBe(false);
+        expect(overlaps(line, bar.box), `line clear of bar: ${b.text}`).toBe(
+          false,
+        );
+      expect(bar.overflow, `bar content fits: ${b.text}`).toBeLessThanOrEqual(
+        0,
+      );
+      expect(bar.labels, `one visible label: ${b.text}`).toHaveLength(1);
+      for (const l of bar.labels) {
+        expect(l.cut, `label not cut: ${l.text}`).toBeLessThanOrEqual(0);
+        expect(inside(l.box, bar.box), `label inside bar: ${l.text}`).toBe(
+          true,
+        );
+      }
     }
   }
 }
@@ -119,36 +145,93 @@ test('the current week does not widen the page at 375 px', async ({ page }) => {
   ).toBe('plan-day');
 });
 
-test('with the panel open at 1440 every day column stays in view', async ({
+/** Day column boxes, in order. */
+const dayBoxes = (page: Page) =>
+  page.getByTestId('plan-day').evaluateAll((els) =>
+    els.map((e) => {
+      const r = e.getBoundingClientRect();
+      return { x: r.x, width: r.width };
+    }),
+  );
+
+test('at 1440 the panel slides over the grid instead of squeezing it', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto(WEEK);
   const days = page.getByTestId('plan-day');
   await expect(days).toHaveCount(7);
-  const panel = await openPanel(page, 'U-1 101');
-  await expect(
-    panel.getByRole('heading', {
-      level: 2,
-      name: 'UKL · Laboratorium Gr. 1 · Tue 22 Sep',
-    }),
-  ).toBeFocused();
-
   const scroller = page.getByTestId('plan-scroller');
+  const before = await dayBoxes(page);
+  const scrollerBefore = await scroller.boundingBox();
+
+  const intersects = (
+    a: { x: number; y: number; width: number; height: number },
+    b: { x: number; y: number; width: number; height: number },
+  ) =>
+    a.x < b.x + b.width &&
+    b.x < a.x + a.width &&
+    a.y < b.y + b.height &&
+    b.y < a.y + a.height;
+
+  // Tuesday: the panel on the right; Friday: on the left. Either way the
+  // grid keeps its size and the selected block stays clear of the panel.
+  for (const [room, heading, side] of [
+    ['U-1 101', 'UKL · Laboratorium Gr. 1 · Tue 22 Sep', 'right'],
+    ['U-1 106', 'UKL · Wykład · Fri 25 Sep', 'left'],
+  ] as const) {
+    const panel = await openPanel(page, room);
+    await expect(
+      panel.getByRole('heading', { level: 2, name: heading }),
+    ).toBeFocused();
+    expect(await dayBoxes(page)).toEqual(before);
+    expect(await scroller.boundingBox()).toEqual(scrollerBefore);
+    expect(
+      await scroller.evaluate((e) => e.scrollWidth - e.clientWidth),
+    ).toBeLessThanOrEqual(0);
+
+    const s = await scroller.boundingBox();
+    const p = await panel.boundingBox();
+    const b = await block(page, room).boundingBox();
+    if (!s || !p || !b) throw new Error('no scroller, panel or block box');
+    // Over the grid, on the side away from the selected block.
+    expect(intersects(p, s)).toBe(true);
+    expect(intersects(p, b), `selected block clear of panel: ${room}`).toBe(
+      false,
+    );
+    if (side === 'right') expect(p.x).toBeGreaterThan(b.x + b.width);
+    else expect(p.x + p.width).toBeLessThan(b.x);
+    await expectBarsInsideBlocks(page);
+
+    // Escape closes it and returns focus to the block.
+    await page.keyboard.press('Escape');
+    await expect(panel).toBeHidden();
+    await expect(block(page, room).locator('[data-block-main]')).toBeFocused();
+  }
+});
+
+test('at 1024 the grid still scrolls sideways beside the open panel', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1024, height: 900 });
+  await page.goto(WEEK);
+  const scroller = page.getByTestId('plan-scroller');
+  const panel = await openPanel(page, 'U-1 103');
+  expect(
+    await scroller.evaluate((e) => e.scrollWidth - e.clientWidth),
+  ).toBeGreaterThan(0);
   const s = await scroller.boundingBox();
   const p = await panel.boundingBox();
   if (!s || !p) throw new Error('no scroller or panel box');
-  expect(
-    await scroller.evaluate((e) => e.scrollWidth - e.clientWidth),
-  ).toBeLessThanOrEqual(0);
-  for (const day of await days.all()) {
-    const d = await day.boundingBox();
-    if (!d) throw new Error('no day box');
-    expect(d.x).toBeGreaterThanOrEqual(s.x - 0.5);
-    expect(d.x + d.width).toBeLessThanOrEqual(s.x + s.width + 0.5);
-    expect(d.x + d.width).toBeLessThanOrEqual(p.x);
-  }
-  await expectBarsInsideBlocks(page);
+  // The panel is on the left (Thursday is past the middle); the wheel over
+  // the uncovered grid still scrolls it.
+  expect(p.x + p.width).toBeLessThan(s.x + s.width - 100);
+  await page.mouse.move(s.x + s.width - 50, s.y + 300);
+  await page.mouse.wheel(200, 0);
+  await expect
+    .poll(() => scroller.evaluate((e) => e.scrollLeft))
+    .toBeGreaterThan(0);
+  await expect(panel).toBeVisible();
 });
 
 test('the panel: heading, no repeated description, "Add test", tests, bar state', async ({

@@ -37,8 +37,8 @@ const closeCls =
   'grid size-[26px] shrink-0 place-items-center rounded text-muted hover:bg-line hover:text-fg pointer-coarse:size-11';
 
 /**
- * Details of one session, in the PreviewPanel look: 360px column from lg
- * (the caller sizes it), full-screen sheet below. Closing (×, Escape outside
+ * Details of one session, in the PreviewPanel look: a 340 px slide-over from lg
+ * (the caller places it), full-screen sheet below. Closing (×, Escape outside
  * form fields) calls `onClose`; the heading takes focus on open. An exam
  * merged with an egzamin event links that event ("Open event"). After
  * "Not this week" (here or on the bar) `skipped` holds the quiz and the panel
@@ -113,7 +113,7 @@ export function SessionPanel({
     <aside
       id={id}
       aria-label="Class details"
-      className="panel-in fixed inset-0 z-40 flex flex-col overflow-y-auto bg-page lg:static lg:z-auto lg:max-h-[calc(100dvh-4rem)] lg:rounded-md lg:border lg:border-line-strong"
+      className="panel-in fixed inset-0 z-40 flex flex-col overflow-y-auto bg-page lg:static lg:z-auto lg:max-h-[calc(100dvh-4rem)] lg:rounded-md lg:border lg:border-line-strong lg:shadow-lg"
     >
       <div className="sticky top-0 z-[1] flex min-h-[34px] shrink-0 items-center justify-between gap-2 border-b border-line-strong bg-surface py-1 pr-2 pl-3">
         <h2

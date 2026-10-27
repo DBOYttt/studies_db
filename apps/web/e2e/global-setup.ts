@@ -533,7 +533,8 @@ export default async function globalSetup() {
     // Timetable layout (plan-layout.spec.ts): subject UKL in 2026-W39 with
     // an entry quiz + Test on a 90-min block beside an event (2 columns), a
     // quiz + Test on a 105-min block, a quiz-only block beside a lecture,
-    // weekend events (7 day columns) and a lecture today (current week).
+    // a Friday lecture, weekend events (7 day columns) and a lecture today
+    // (current week).
     const [{ id: uklId }] = await db
       .insert(subjects)
       .values({
@@ -564,65 +565,75 @@ export default async function globalSetup() {
       .map(Number);
     const today = (h: number, m = 0) =>
       new Date(Date.UTC(ty, tm - 1, td, h, m));
-    await db
-      .insert(classSessions)
-      .values([
-        session(
-          'e2e-ukl-a',
-          uklId,
-          uklLab,
-          uklGr1,
-          uklLecturer,
-          'Laboratorium gr 1',
-          'U-1 101',
-          sep(22, 10),
-          sep(22, 11, 30),
-        ),
-        session(
-          'e2e-ukl-b',
-          uklId,
-          uklLab,
-          uklGr1,
-          uklLecturer,
-          'Laboratorium gr 1',
-          'U-1 102',
-          sep(23, 12),
-          sep(23, 13, 45),
-        ),
-        session(
-          'e2e-ukl-c',
-          uklId,
-          uklLab,
-          uklGr2,
-          uklLecturer,
-          'Laboratorium gr 2',
-          'U-1 103',
-          sep(24, 8),
-          sep(24, 9, 30),
-        ),
-        session(
-          'e2e-ukl-d',
-          uklId,
-          uklWyklad,
-          null,
-          uklLecturer,
-          'Wykład',
-          'U-1 104',
-          sep(24, 8),
-          sep(24, 9, 30),
-        ),
-        session(
-          'e2e-ukl-today',
-          uklId,
-          uklWyklad,
-          null,
-          uklLecturer,
-          'Wykład',
-          'U-1 105',
-          today(12),
-          today(13, 30),
-        ),
-      ]);
+    await db.insert(classSessions).values([
+      session(
+        'e2e-ukl-a',
+        uklId,
+        uklLab,
+        uklGr1,
+        uklLecturer,
+        'Laboratorium gr 1',
+        'U-1 101',
+        sep(22, 10),
+        sep(22, 11, 30),
+      ),
+      session(
+        'e2e-ukl-b',
+        uklId,
+        uklLab,
+        uklGr1,
+        uklLecturer,
+        'Laboratorium gr 1',
+        'U-1 102',
+        sep(23, 12),
+        sep(23, 13, 45),
+      ),
+      session(
+        'e2e-ukl-c',
+        uklId,
+        uklLab,
+        uklGr2,
+        uklLecturer,
+        'Laboratorium gr 2',
+        'U-1 103',
+        sep(24, 8),
+        sep(24, 9, 30),
+      ),
+      session(
+        'e2e-ukl-d',
+        uklId,
+        uklWyklad,
+        null,
+        uklLecturer,
+        'Wykład',
+        'U-1 104',
+        sep(24, 8),
+        sep(24, 9, 30),
+      ),
+      // Friday: the panel slides over the left side for it.
+      session(
+        'e2e-ukl-fri',
+        uklId,
+        uklWyklad,
+        null,
+        uklLecturer,
+        'Wykład',
+        'U-1 106',
+        sep(25, 10),
+        sep(25, 11, 30),
+      ),
+      session(
+        'e2e-ukl-today',
+        uklId,
+        uklWyklad,
+        null,
+        uklLecturer,
+        'Wykład',
+        'U-1 105',
+        today(12),
+        today(13, 30),
+      ),
+    ]);
     const uklEvent = (
       kind: 'kolokwium' | 'inne',
       title: string,
