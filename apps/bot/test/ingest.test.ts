@@ -266,40 +266,98 @@ describe('ingest limits (R3)', () => {
     expect(await readdir(join(dir, 'originals'))).toEqual([]);
   });
 
-  it('skips files past the per-user hourly quota, and allows them again later', async () => {
-    let now = 0;
-    const quota = new UserByteQuota(fixture.length * 2, 60_000, () => now);
-    const d = { ...deps(), limits: { maxFileBytes: 1e9, quota } };
+  // Distinct bodies of `L` bytes, so no file is a sha duplicate of another.
+  const L = fixture.length;
+  let bodyN = 0;
+  const uniqueBodies = () => () =>
+    streamOf(new TextEncoder().encode(`body-${++bodyN}-`.padEnd(L, 'x')))();
+  const base = Date.UTC(2026, 9, 1, 10);
+  const files = (n: number, everyMin: number) =>
+    Array.from({ length: n }, (_, k) =>
+      input({
+        attachmentId: `p${everyMin}-${k}`,
+        messageId: `m${everyMin}-${k}`,
+        filename: `f${k}.pdf`,
+        postedAt: new Date(base + k * everyMin * 60_000),
+      }),
+    ).reverse(); // catch-up reads newest first
+
+  it('charges files at their posted time: 12 files over 3 hours are all stored (catch-up)', async () => {
+    // 5 files per hour allowed; one file every 15 min is 4 in any hour.
+    const quota = new UserByteQuota(5 * L, 60 * 60_000);
+    const d = {
+      ...deps(uniqueBodies()),
+      limits: { maxFileBytes: 1e9, quota },
+    };
+    const out = [];
+    for (const a of files(12, 15)) out.push(await ingestAttachment(d, a));
+    expect(out).toEqual(Array(12).fill('created'));
+  });
+
+  it('skips files past the quota when they were posted within one hour', async () => {
+    const quota = new UserByteQuota(5 * L, 60 * 60_000);
+    const d = {
+      ...deps(uniqueBodies()),
+      limits: { maxFileBytes: 1e9, quota },
+    };
     const log = vi.spyOn(console, 'warn').mockImplementation(() => {});
-    expect(await ingestAttachment(d, input({ attachmentId: 'q1' }))).toBe(
-      'created',
-    );
-    expect(await ingestAttachment(d, input({ attachmentId: 'q2' }))).toBe(
-      'duplicate',
-    );
-    expect(await ingestAttachment(d, input({ attachmentId: 'q3' }))).toBe(
-      'skipped',
-    );
+    const out = [];
+    for (const a of files(12, 4)) out.push(await ingestAttachment(d, a));
+    expect(out.filter((r) => r === 'created')).toHaveLength(5);
+    expect(out.filter((r) => r === 'skipped')).toHaveLength(7);
     // Another user has their own quota.
     expect(
       await ingestAttachment(
         d,
         input({
-          attachmentId: 'q4',
+          attachmentId: 'other-user',
+          postedAt: new Date(base),
           uploader: { ...user, discordUserId: 'u2' },
         }),
       ),
-    ).toBe('duplicate');
-    now = 60_001;
-    expect(await ingestAttachment(d, input({ attachmentId: 'q3' }))).toBe(
-      'duplicate',
-    );
+    ).toBe('created');
     log.mockRestore();
+  });
+
+  it('charges only stored files, not failed downloads or sha duplicates', async () => {
+    const quota = new UserByteQuota(2 * L, 60 * 60_000);
+    const limits = { maxFileBytes: 1e9, quota };
+    const at = new Date(base);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const failing = () => Promise.reject(new Error('network'));
+    expect(
+      await ingestAttachment(
+        { ...deps(failing), limits },
+        input({ attachmentId: 'f1', postedAt: at }),
+      ),
+    ).toBe('failed');
+    err.mockRestore();
+    const same = new TextEncoder().encode('same-'.padEnd(L, 'y'));
+    expect(
+      await ingestAttachment(
+        { ...deps(streamOf(same)), limits },
+        input({ attachmentId: 'b1', postedAt: at }),
+      ),
+    ).toBe('created');
+    expect(
+      await ingestAttachment(
+        { ...deps(streamOf(same)), limits },
+        input({ attachmentId: 'b2', postedAt: at }),
+      ),
+    ).toBe('duplicate');
+    // Only b1 counts so far: one more file still fits.
+    expect(
+      await ingestAttachment(
+        { ...deps(uniqueBodies()), limits },
+        input({ attachmentId: 'c1', postedAt: at }),
+      ),
+    ).toBe('created');
   });
 
   it('does not charge the quota for files the bot posts for web uploads', async () => {
     const quota = new UserByteQuota(1, 60_000);
     const d = { ...deps(), limits: { maxFileBytes: 1e9, quota } };
+    // (the default quota would refuse this file: it is over 1 byte)
     const [t] = await db
       .insert(topics)
       .values({ discordThreadId: 'tw', title: 'W' })

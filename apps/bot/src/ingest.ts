@@ -37,31 +37,46 @@ export type AttachmentInput = {
 };
 
 /**
- * Bytes per user in a sliding window, kept in memory (a restart forgets it).
- * `tryCharge` records the bytes only when they fit.
+ * Bytes per user per `windowMs`, counted by when each file was posted (not
+ * when it is ingested), so a catch-up after downtime keeps the files of past
+ * hours. Kept in memory (a restart forgets it); one small entry per stored
+ * file of a limited user.
  */
 export class UserByteQuota {
   private readonly used = new Map<string, { at: number; bytes: number }[]>();
   constructor(
     readonly maxBytes: number,
     readonly windowMs: number,
-    private readonly now: () => number = Date.now,
   ) {}
 
-  tryCharge(user: string, bytes: number): boolean {
-    const now = this.now();
-    const live = (this.used.get(user) ?? []).filter(
-      (e) => now - e.at < this.windowMs,
+  /**
+   * True when `bytes` posted at `at` keep every window of `windowMs` that
+   * contains `at` within `maxBytes`, whatever order the files arrive in.
+   */
+  fits(user: string, at: number, bytes: number): boolean {
+    const near = (this.used.get(user) ?? []).filter(
+      (e) => Math.abs(e.at - at) < this.windowMs,
     );
-    const total = live.reduce((sum, e) => sum + e.bytes, 0);
-    if (total + bytes > this.maxBytes) {
-      if (live.length) this.used.set(user, live);
-      else this.used.delete(user);
-      return false;
-    }
-    live.push({ at: now, bytes });
-    this.used.set(user, live);
-    return true;
+    // Windows [s, s + windowMs) containing `at` start in (at - windowMs, at].
+    // What a window holds only changes where an entry leaves it (s just past
+    // an earlier entry: s = e.at) or enters it (s = e.at - windowMs + 1 for a
+    // later entry), so those starts and the first one are enough.
+    const starts = [
+      at - this.windowMs + 1,
+      ...near.map((e) => (e.at <= at ? e.at : e.at - this.windowMs + 1)),
+    ];
+    return starts.every(
+      (s) =>
+        near
+          .filter((e) => e.at >= s && e.at < s + this.windowMs)
+          .reduce((sum, e) => sum + e.bytes, bytes) <= this.maxBytes,
+    );
+  }
+
+  charge(user: string, at: number, bytes: number): void {
+    const list = this.used.get(user) ?? [];
+    list.push({ at, bytes });
+    this.used.set(user, list);
   }
 }
 
@@ -129,9 +144,12 @@ export async function ingestAttachment(
       );
       return 'skipped';
     }
+    // Web uploads (known topic) are limited by the web; not charged here.
+    const charged = a.topicId === undefined;
+    const postedAt = a.postedAt.getTime();
     if (
-      a.topicId === undefined &&
-      !limits.quota.tryCharge(a.uploader.discordUserId, a.size)
+      charged &&
+      !limits.quota.fits(a.uploader.discordUserId, postedAt, a.size)
     ) {
       console.warn(
         `skipped attachment ${a.attachmentId} (${a.filename}): uploader ${a.uploader.discordUserId} is over the hourly volume limit`,
@@ -202,7 +220,10 @@ export async function ingestAttachment(
       plan.jobs,
     );
     if (res.status === 'exists') return 'exists';
-    return alreadyOnDisk ? 'duplicate' : 'created';
+    if (alreadyOnDisk) return 'duplicate';
+    // Only files that took new space count (not failures or duplicates).
+    if (charged) limits.quota.charge(a.uploader.discordUserId, postedAt, bytes);
+    return 'created';
   } catch (err) {
     console.error(
       `ingest failed for attachment ${a.attachmentId} (${a.filename}):`,
