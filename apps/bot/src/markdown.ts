@@ -7,10 +7,14 @@ import { escapeMarkdown } from 'discord.js';
  * clickable, but they show where they go.
  */
 export function escapeUserText(text: string): string {
+  // discord.js's `maskedLink` option is greedy (it escapes only the first of
+  // several links), so every `[` is escaped here instead. `escapeMarkdown`
+  // already escapes typed backslashes, so nothing is escaped twice.
   return escapeMarkdown(text, {
-    maskedLink: true,
     heading: true,
     bulletedList: true,
     numberedList: true,
-  }).replace(/^(\s*)(>|-#)/gm, '$1\\$2');
+  })
+    .replace(/\[/g, '\\[')
+    .replace(/^(\s*)(>|-#)/gm, '$1\\$2');
 }

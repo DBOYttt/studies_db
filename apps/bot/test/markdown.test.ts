@@ -9,6 +9,13 @@ describe('escapeUserText', () => {
     expect(escapeUserText('see [x](https://a) now')).toBe(
       'see \\[x](https://a) now',
     );
+    // discord.js's own masked-link escape is greedy and missed the second one.
+    expect(escapeUserText('[a](x) [Notes](https://phish)')).toBe(
+      '\\[a](x) \\[Notes](https://phish)',
+    );
+    expect(escapeUserText('[[x](y)')).toBe('\\[\\[x](y)');
+    // A typed backslash stays a backslash; no double escaping.
+    expect(escapeUserText('\\[x](y)')).toBe('\\\\\\[x](y)');
   });
 
   it('breaks headings, subtext, lists and quotes at line starts', () => {
