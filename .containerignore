@@ -11,4 +11,4 @@ storage
 .superpowers
 **/test-results
 **/playwright-report
-apps/web/public/pdf.worker.min.mjs
+apps/web/public/pdf.worker.*min.mjs

@@ -157,8 +157,14 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
    chowns `$STORAGE_DIR/previews` to uid 1000 before the worker (now user `node`) starts; without it new
    previews fail with `EACCES`.
 2. Check the admin role's position (see "Admin role position" above).
-3. Discord attachments over 50 MiB, or past 500 MiB per user per hour, are skipped with a log line and not
-   mirrored. Event post renames wait 10 minutes after the previous rename of the same post.
+3. Discord attachments over 50 MiB, or past 500 MiB per user per hour (counted by the time the message was
+   posted), are skipped with a log line and a ⚠️ reaction, and not mirrored. A second rename of an event post
+   within 10 minutes waits until the 10 minutes are up; the bot then renames it on its own.
+4. Migrations 0021 (`v_materials` hides files of deleted topics) and 0022 (indexes on `bot_requests`,
+   `admin_audit` and `materials`) run with the `migrate` service. 0022 builds indexes, so on a large
+   `admin_audit` table the migrate step takes a little longer.
+5. File originals are now cached by the browser for a year (they never change for an id); logging out clears
+   the site's browser cache.
 
 ## Tagi forum
 
