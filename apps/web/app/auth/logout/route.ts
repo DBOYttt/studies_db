@@ -11,5 +11,8 @@ export async function POST(req: NextRequest) {
   if (sid) await deleteSession(getDb(), sid);
   const res = seeOther('/login-info');
   res.cookies.set(SESSION_COOKIE, '', { ...sessionCookieOptions(), maxAge: 0 });
+  // File originals are cached for a year; on a shared browser they must not
+  // stay readable after logout.
+  res.headers.set('Clear-Site-Data', '"cache"');
   return res;
 }

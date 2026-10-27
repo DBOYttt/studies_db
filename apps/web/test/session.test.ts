@@ -223,6 +223,8 @@ describe('POST /auth/logout', () => {
     const set = res.headers.get('set-cookie') as string;
     expect(set).toMatch(/sid=;/);
     expect(set).toMatch(/Max-Age=0/i);
+    // originals are cached for a year: a shared browser must drop them
+    expect(res.headers.get('clear-site-data')).toBe('"cache"');
     expect(await getSessionUser(db, sid)).toBeNull();
   });
 });
