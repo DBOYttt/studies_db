@@ -115,6 +115,12 @@ describe('eventCard', () => {
     expect(t).toContain('https://x.pl/files/1/original');
   });
 
+  it('drops brackets from file names before escaping, so the link holds', () => {
+    const materials = [{ id: 1, filename: 'a[b] c[', previewKind: 'none' }];
+    const t = allText(eventCard(card({ materials })));
+    expect(t).toContain('• [ab c](https://x.pl/files/1/original)');
+  });
+
   it('says how many materials do not fit in the text budget', () => {
     const materials = Array.from({ length: 15 }, (_, i) => ({
       id: i + 1,

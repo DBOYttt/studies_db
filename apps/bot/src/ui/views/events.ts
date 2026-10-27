@@ -116,7 +116,7 @@ function materialsText(d: EventCardData, budget: number): string {
   let used = head.length + 1;
   const listed = d.materials.slice(0, MAX_MATERIAL_LINES);
   for (const m of listed) {
-    const name = esc(clip(m.filename, 60)).replace(/[[\]]/g, '');
+    const name = esc(clip(m.filename, 60).replace(/[[\]]/g, ''));
     const line = `• [${name}](${fileUrl(d.webBaseUrl, m)})`;
     const rest = d.materials.length - lines.length - 1;
     const reserve = rest > 0 ? MORE(rest).length + 4 : 0;
