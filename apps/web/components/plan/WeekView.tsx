@@ -29,14 +29,16 @@ import {
 } from '@/lib/plan';
 import { dayColumns, eventPageHref, sessionKey } from '@/lib/plan-events';
 import {
-  BADGE_BAR_H,
-  badgeBarsFit,
+  type BadgeLayout,
   badgeBarText,
+  badgeLayout,
+  badgePadBottom,
   badgeTitle,
   blockKind,
   dayHeader,
   entryQuizEditHref,
   fromWeekSession,
+  mergedBarText,
   type SessionLinks,
   type WeekSession,
   wallDateKey,
@@ -44,7 +46,7 @@ import {
   weekHeading,
 } from '@/lib/plan-view';
 import { EntryQuizBadge } from './EntryQuizBadge';
-import { SessionPanel } from './SessionPanel';
+import { type QuizBadge, SessionPanel } from './SessionPanel';
 
 const EMPTY_GROUPS: MyGroups = {};
 
@@ -58,12 +60,21 @@ const HOURS = Array.from(
   (_, i) => DAY_START_MIN / 60 + i,
 );
 const GUTTER = 48;
-const DAY_MIN_W = 128;
+/*
+ * Minimum day column width (`--day-min` on the grid): 128 px, 88 px beside
+ * the open panel from lg, so the whole week stays in view.
+ */
+/** id of the session panel (aria-controls of the bars that open it). */
+const PANEL_ID = 'session-panel';
 
 const navBtn =
   'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover';
 
 type Session = PlanSession & { links: SessionLinks };
+
+/** An entry quiz just skipped on a session: the panel offers its Undo. */
+type RecentSkip = { key: string; badge: QuizBadge };
+type OnSkipped = (key: string, badge: QuizBadge) => void;
 
 export interface WeekViewProps {
   week: IsoWeek;
@@ -134,6 +145,10 @@ export function WeekView({
   const hasAllDay = columns.some((c) => c.allDay.length > 0);
   const hasEvents = shown.some((s) => blockKind(s) === 'event');
   const hasExams = shown.some((s) => blockKind(s) === 'exam');
+  const hasTests = shown.some((s) => s.badges?.some((b) => b.kind === 'test'));
+  const hasQuizzes = shown.some((s) =>
+    s.badges?.some((b) => b.kind === 'entry_quiz'),
+  );
   const kinds = useMemo(() => {
     const used = new Set(
       shown.filter((s) => blockKind(s) === 'class').map((s) => s.classKind),
@@ -144,12 +159,20 @@ export function WeekView({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const selected = shown.find((s) => sessionKey(s) === selectedId) ?? null;
   const blockRefs = useRef(new Map<string, HTMLButtonElement>());
+  const [recentSkip, setRecentSkip] = useState<RecentSkip | null>(null);
   const close = useCallback(() => {
+    setRecentSkip(null);
     setSelectedId((id) => {
       if (id !== null) blockRefs.current.get(id)?.focus();
       return null;
     });
   }, []);
+  // A skip from a bar or the panel opens the panel with its Undo.
+  const onSkipped = useCallback<OnSkipped>((key, badge) => {
+    setRecentSkip({ key, badge });
+    setSelectedId(key);
+  }, []);
+  const onUndone = useCallback(() => setRecentSkip(null), []);
 
   const heading = weekHeading(week, days);
 
@@ -209,12 +232,19 @@ export function WeekView({
       ) : (
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
           <div className="min-w-0 flex-1">
-            <div className="overflow-x-auto rounded-md border border-line-strong bg-page">
+            {/* relative: the sr-only "(today)" must not escape the scroller. */}
+            <div
+              data-testid="plan-scroller"
+              className="relative overflow-x-auto rounded-md border border-line-strong bg-page"
+            >
               <div
-                className="grid"
+                // Beside the open panel the days shrink to fit the whole week.
+                className={`grid [--day-min:128px] ${
+                  selected ? 'lg:[--day-min:88px]' : ''
+                }`}
                 style={{
-                  gridTemplateColumns: `${GUTTER}px repeat(${columns.length}, minmax(${DAY_MIN_W}px, 1fr))`,
-                  minWidth: GUTTER + columns.length * DAY_MIN_W,
+                  gridTemplateColumns: `${GUTTER}px repeat(${columns.length}, minmax(var(--day-min), 1fr))`,
+                  minWidth: `calc(${GUTTER}px + ${columns.length} * var(--day-min))`,
                 }}
               >
                 <div className="sticky left-0 z-[2] border-b border-line-strong bg-surface" />
@@ -224,7 +254,8 @@ export function WeekView({
                   return (
                     <div
                       key={key}
-                      className={`flex items-baseline gap-1.5 border-b border-l border-line-strong border-l-line px-2 py-[7px] ${
+                      data-testid="plan-day"
+                      className={`relative flex items-baseline gap-1.5 border-b border-l border-line-strong border-l-line px-2 py-[7px] ${
                         isToday ? 'bg-selected' : 'bg-surface'
                       }`}
                     >
@@ -315,6 +346,7 @@ export function WeekView({
                           cols={cols}
                           selected={sessionKey(s) === selectedId}
                           onOpen={() => setSelectedId(sessionKey(s))}
+                          onSkipped={onSkipped}
                           refMap={blockRefs.current}
                           simple={simple}
                         />
@@ -358,15 +390,42 @@ export function WeekView({
                     Events
                   </li>
                 )}
+                {hasTests && (
+                  <li className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="inline-block h-1.5 w-3 rounded-sm bg-muted"
+                    />
+                    Test
+                  </li>
+                )}
+                {hasQuizzes && (
+                  <li className="flex items-center gap-1.5">
+                    <span
+                      aria-hidden
+                      className="inline-block h-1.5 w-3 border-t-2 border-dashed border-muted"
+                    />
+                    Entry quiz
+                  </li>
+                )}
               </ul>
             )}
           </div>
           {selected && (
             <div className="lg:sticky lg:top-12 lg:w-[340px] lg:shrink-0">
               <SessionPanel
+                key={sessionKey(selected)}
+                id={PANEL_ID}
                 session={selected}
                 onClose={close}
                 simple={simple}
+                skipped={
+                  recentSkip?.key === sessionKey(selected)
+                    ? recentSkip.badge
+                    : null
+                }
+                onSkipped={(badge) => onSkipped(sessionKey(selected), badge)}
+                onUndone={onUndone}
               />
             </div>
           )}
@@ -379,26 +438,50 @@ export function WeekView({
 /**
  * Footer bars on a session block: the Test bar filled in the block's ink at
  * the very bottom, the Entry quiz bar above it, light with a dashed rule.
- * Each is a 24 px target; the label is small caps, the detail truncates.
+ * Each is a 24 px target and clips inside the block. The bar stack is a
+ * size container: under 120 px the detail and caret go, under 92 px the
+ * label shortens ("Quiz", "Test", "Q+T"); `aria-label`/`title` keep the
+ * full text. On touch screens the bars are indicators and a tap opens the
+ * session panel (larger targets) like the rest of the block.
  */
 const barBase =
-  'bar-in group flex h-6 w-full min-w-0 items-center gap-1.5 px-1.5 text-left text-[11px] leading-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent';
+  'bar-in group flex h-6 w-full min-w-0 items-center gap-1.5 overflow-hidden px-1.5 text-left text-[11px] leading-none whitespace-nowrap focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent @max-[92px]:gap-1 @max-[92px]:px-1';
 const testBar = `${barBase} rounded-sm bg-[var(--k-fg)] text-[var(--k-bg)] hover:opacity-90`;
 const quizBar = `${barBase} border-t border-dashed border-[var(--k-fg)] text-[var(--k-fg)] hover:bg-[color-mix(in_srgb,var(--k-fg)_12%,transparent)]`;
+/** Quiz + Test in one bar: filled like a Test, dashed rule of the quiz. */
+const mergedBar = `${testBar} border-t border-dashed border-[var(--k-bg)]`;
 
-function BarText({ b }: { b: PlanBadge }) {
-  const { label, detail } = badgeBarText(b);
+function BarText({
+  label,
+  short,
+  detail,
+}: {
+  label: string;
+  short: string;
+  detail: string | null;
+}) {
+  const caps = 'text-[10px] font-bold uppercase';
   return (
     <>
-      <span className="shrink-0 text-[10px] font-bold uppercase tracking-[0.08em]">
+      {/* The label stays whole; the detail truncates first. */}
+      <span className={`${caps} shrink-0 tracking-[0.08em] @max-[92px]:hidden`}>
         {label}
       </span>
-      {detail && <span className="min-w-0 truncate font-medium">{detail}</span>}
+      <span
+        className={`${caps} hidden min-w-0 truncate tracking-normal @max-[92px]:inline`}
+      >
+        {short}
+      </span>
+      {detail && (
+        <span className="min-w-0 truncate font-medium @max-[120px]:hidden">
+          {detail}
+        </span>
+      )}
       <CaretRight
         size={10}
         weight="bold"
         aria-hidden
-        className="ml-auto shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0"
+        className="ml-auto shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 motion-reduce:transition-none motion-reduce:group-hover:translate-x-0 @max-[120px]:hidden"
       />
     </>
   );
@@ -435,21 +518,49 @@ const barOrder = (list: PlanBadge[]) =>
 function Badges({
   s,
   simple,
-  fit,
+  layout,
+  selected,
   onOpen,
+  onSkipped,
 }: {
   s: Session;
   simple: boolean;
-  fit: boolean;
+  layout: BadgeLayout;
+  selected: boolean;
   onOpen: () => void;
+  onSkipped: OnSkipped;
 }) {
   const list = barOrder(s.badges ?? []);
-  if (list.length === 0) return null;
-  if (!fit) return <BadgeStripe list={list} />;
+  if (list.length === 0 || layout === 'none') return null;
+  if (layout === 'stripe') return <BadgeStripe list={list} />;
   const day = s.startsAt;
   const h = dayHeader(day);
+  // Bars that open the panel say whether it is open.
+  const opensPanel = {
+    onClick: onOpen,
+    'aria-expanded': selected,
+    'aria-controls': selected ? PANEL_ID : undefined,
+  };
+  const stack =
+    'absolute inset-x-[3px] bottom-[3px] z-[1] flex flex-col gap-0.5 @container pointer-coarse:pointer-events-none';
+  if (layout === 'merged') {
+    const m = mergedBarText(list);
+    return (
+      <div data-testid="badge-bars" className={stack}>
+        <button
+          type="button"
+          {...opensPanel}
+          title={m.title}
+          aria-label={m.title}
+          className={mergedBar}
+        >
+          <BarText label={m.label} short={m.short} detail={null} />
+        </button>
+      </div>
+    );
+  }
   return (
-    <div className="absolute inset-x-[3px] bottom-[3px] z-[1] flex flex-col gap-0.5">
+    <div data-testid="badge-bars" className={stack}>
       {list.map((b) =>
         b.kind === 'test' ? (
           b.eventIds.length === 1 ? (
@@ -460,19 +571,19 @@ function Badges({
               aria-label={badgeTitle(b)}
               className={testBar}
             >
-              <BarText b={b} />
+              <BarText {...badgeBarText(b)} />
             </Link>
           ) : (
             // Several tests: the session panel lists a link to each.
             <button
               key="test"
               type="button"
-              onClick={onOpen}
+              {...opensPanel}
               title={badgeTitle(b)}
               aria-label={badgeTitle(b)}
               className={testBar}
             >
-              <BarText b={b} />
+              <BarText {...badgeBarText(b)} />
             </button>
           )
         ) : (
@@ -484,9 +595,11 @@ function Badges({
             onDate={wallDateKey(day)}
             dateLabel={`${h.name} ${h.date}`}
             editHref={entryQuizEditHref(s.links)}
+            label={badgeTitle(b)}
+            onSkipped={() => onSkipped(sessionKey(s), b)}
             className={quizBar}
           >
-            <BarText b={b} />
+            <BarText {...badgeBarText(b)} />
           </EntryQuizBadge>
         ),
       )}
@@ -500,6 +613,7 @@ function Block({
   cols,
   selected,
   onOpen,
+  onSkipped,
   refMap,
   simple,
 }: {
@@ -508,6 +622,7 @@ function Block({
   cols: number;
   selected: boolean;
   onOpen: () => void;
+  onSkipped: OnSkipped;
   refMap: Map<string, HTMLButtonElement>;
   simple: boolean;
 }) {
@@ -518,7 +633,7 @@ function Block({
   const classLine = [s.className, s.groupName].filter(Boolean).join(' ');
   const badgeCount = s.badges?.length ?? 0;
   const heightPx = (to - from) * ROW - 2;
-  const fit = badgeBarsFit(heightPx, badgeCount);
+  const layout = badgeLayout(heightPx, badgeCount);
   const title = [
     `${time} ${s.subjectName}`,
     exam ? 'Exam' : classLine,
@@ -529,55 +644,63 @@ function Block({
   ]
     .filter(Boolean)
     .join('\n');
+  const inner =
+    'flex size-full flex-col overflow-hidden rounded-r px-[5px] pt-[3px] text-left';
+  // Room for the bars or the stripe, plus a gap above them.
+  const padBottom = badgePadBottom(layout, badgeCount);
+  // Whole lines only: a half-cut line above the bars reads as noise.
+  const textMax = Math.max(1, Math.floor((heightPx - 3 - padBottom) / 14)) * 14;
+  // Lines keep their 14 px (shrink-0); the wrapper clips them above the
+  // bars instead of letting them run on under the bars.
+  const line = 'shrink-0 truncate';
   const body = (
-    <>
+    <span
+      className="flex min-h-0 flex-1 flex-col overflow-hidden"
+      style={{ maxHeight: textMax }}
+    >
       <span className="sr-only">{time} </span>
       <span
-        className={`truncate font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
+        data-block-line="subject"
+        className={`${line} font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
       >
         {s.subjectCode || s.subjectName}
       </span>
       {cancelled && (
-        <span className="truncate font-semibold text-err-fg">Cancelled</span>
+        <span className={`${line} font-semibold text-err-fg`}>Cancelled</span>
       )}
       {exam ? (
         <span
-          className={`truncate font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
+          data-block-line="class"
+          className={`${line} font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
         >
           Exam{s.groupName ? ` · ${s.groupName}` : ''}
         </span>
       ) : (
         classLine && (
-          <span className={`truncate ${cancelled ? 'line-through' : ''}`}>
+          <span
+            data-block-line="class"
+            className={`${line} ${cancelled ? 'line-through' : ''}`}
+          >
             {classLine}
           </span>
         )
       )}
-      {s.room && <span className="truncate text-muted">{s.room}</span>}
+      {s.room && <span className={`${line} text-muted`}>{s.room}</span>}
       {s.lecturerName && (
-        <span className="truncate text-muted">{s.lecturerName}</span>
+        <span className={`${line} text-muted`}>{s.lecturerName}</span>
       )}
       {/* The stripe is decorative: name its badges for screen readers. */}
-      {badgeCount > 0 && !fit && (
+      {layout === 'stripe' && (
         <span className="sr-only">
           {` ${(s.badges ?? []).map(badgeTitle).join('. ')}`}
         </span>
       )}
-    </>
+    </span>
   );
-  const inner =
-    'flex size-full flex-col overflow-hidden rounded-r px-[5px] pt-[3px] text-left';
-  // Room for the bars (24 px each, 2 px apart, 3 px inset) or the stripe.
-  const padBottom =
-    badgeCount === 0
-      ? 3
-      : fit
-        ? 3 + BADGE_BAR_H * badgeCount + 2 * (badgeCount - 1) + 2
-        : 3 + 5 * badgeCount;
   return (
     <div
       data-testid="plan-block"
-      className={`absolute rounded border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)] text-[11px] leading-[14px] text-fg hover:shadow-[inset_0_0_0_1px_var(--k-fg)] ${
+      className={`absolute overflow-hidden rounded border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)] text-[11px] leading-[14px] text-fg hover:shadow-[inset_0_0_0_1px_var(--k-fg)] ${
         selected
           ? 'z-[1] shadow-[inset_0_0_0_1px_var(--k-fg)] outline-2 outline-accent'
           : ''
@@ -606,7 +729,14 @@ function Block({
       >
         {body}
       </button>
-      <Badges s={s} simple={simple} fit={fit} onOpen={onOpen} />
+      <Badges
+        s={s}
+        simple={simple}
+        layout={layout}
+        selected={selected}
+        onOpen={onOpen}
+        onSkipped={onSkipped}
+      />
     </div>
   );
 }

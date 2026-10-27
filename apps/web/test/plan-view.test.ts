@@ -6,9 +6,11 @@ import {
   type PlanSession,
 } from '../lib/plan';
 import {
-  badgeBarsFit,
+  BADGE_BAR_H,
   badgeBarText,
   badgeLabel,
+  badgeLayout,
+  badgePadBottom,
   badgeTitle,
   blockKind,
   dayHeader,
@@ -16,9 +18,12 @@ import {
   formatSyncTime,
   fromWeekSession,
   markActionError,
+  mergedBarText,
   nextSessionWhat,
+  panelDescription,
   SAVE_FAILED,
   sessionLinks,
+  sessionPanelHeading,
   skipLabel,
   syncFailed,
   toWeekSession,
@@ -253,32 +258,75 @@ describe('timetable badges', () => {
     expect(badgeTitle({ ...quiz, note: null })).toBe('Entry quiz');
   });
 
-  it('splits a footer bar into its label and detail', () => {
+  it('splits a footer bar into its label, a short label and the detail', () => {
     expect(badgeBarText(test1)).toEqual({
       label: 'Test',
+      short: 'Test',
       detail: 'Kolokwium 1',
     });
     expect(badgeBarText(test2)).toEqual({
       label: '2 tests',
+      short: 'Tests',
       detail: 'Kolokwium 1, Poprawa',
     });
     expect(badgeBarText(quiz)).toEqual({
       label: 'Entry quiz',
+      short: 'Quiz',
       detail: 'Rozdział 3',
     });
     expect(badgeBarText({ ...quiz, note: null })).toEqual({
       label: 'Entry quiz',
+      short: 'Quiz',
       detail: null,
     });
   });
 
-  it('fits footer bars only when two text lines stay visible', () => {
-    // 60 min block (4 rows of 14 px, minus 2): 54 px.
-    expect(badgeBarsFit(54, 1)).toBe(false);
-    expect(badgeBarsFit(58, 1)).toBe(true);
-    // 90 min block: 82 px holds two bars, not three.
-    expect(badgeBarsFit(82, 2)).toBe(true);
-    expect(badgeBarsFit(82, 3)).toBe(false);
+  it('merges an entry quiz and tests into one bar text', () => {
+    expect(mergedBarText([quiz, test1])).toEqual({
+      label: 'Quiz + Test',
+      short: 'Q+T',
+      title: 'Entry quiz: Rozdział 3. Test: Kolokwium 1',
+    });
+    expect(mergedBarText([test2, quiz])).toEqual({
+      label: 'Quiz + 2 tests',
+      short: 'Q+T',
+      title: 'Entry quiz: Rozdział 3. 2 tests: Kolokwium 1, Poprawa',
+    });
+  });
+
+  it('lays out footer bars so the subject and class lines stay clear', () => {
+    // Block heights: n quarter-hour rows of 14 px, minus 2.
+    // 60 min: 54 px, too short for any bar.
+    expect(badgeLayout(54, 1)).toBe('stripe');
+    expect(badgeLayout(54, 2)).toBe('stripe');
+    // 75 min: 68 px holds one bar.
+    expect(badgeLayout(68, 1)).toBe('bars');
+    expect(badgeLayout(68, 2)).toBe('merged');
+    // 90 min: 82 px holds one bar, so a quiz and a test merge.
+    expect(badgeLayout(82, 1)).toBe('bars');
+    expect(badgeLayout(82, 2)).toBe('merged');
+    // 105 min: 96 px holds both bars.
+    expect(badgeLayout(96, 2)).toBe('bars');
+    expect(badgeLayout(96, 0)).toBe('none');
+  });
+
+  it('reserves the bar stack plus a gap under the text, never less than two lines', () => {
+    expect(badgePadBottom('none', 0)).toBe(3);
+    expect(badgePadBottom('stripe', 2)).toBe(13);
+    expect(badgePadBottom('bars', 1)).toBe(3 + BADGE_BAR_H + 3);
+    expect(badgePadBottom('bars', 2)).toBe(3 + 2 * BADGE_BAR_H + 2 + 3);
+    expect(badgePadBottom('merged', 2)).toBe(3 + BADGE_BAR_H + 3);
+    for (const [h, n] of [
+      [68, 1],
+      [82, 1],
+      [82, 2],
+      [96, 2],
+      [124, 2],
+    ] as const) {
+      const layout = badgeLayout(h, n);
+      // 3 px top padding + two 14 px lines.
+      expect(h - 3 - badgePadBottom(layout, n)).toBeGreaterThanOrEqual(28);
+    }
   });
 
   it('links Edit to the entry quiz section of the subject page', () => {
@@ -305,6 +353,59 @@ describe('timetable badges', () => {
     expect(dto.linkedEventId).toBe(12);
     const back = fromWeekSession(JSON.parse(JSON.stringify(dto)));
     expect(back.badges).toEqual([test2, quiz]);
+  });
+});
+
+describe('session panel copy', () => {
+  it('names the subject, class and date in the heading', () => {
+    expect(sessionPanelHeading(session)).toBe(
+      'BD · Laboratorium Grupa 2 · Tue 13 Oct',
+    );
+    expect(
+      sessionPanelHeading({
+        ...session,
+        sessionKind: 'exam',
+        className: null,
+        groupName: null,
+      }),
+    ).toBe('BD · Exam · Tue 13 Oct');
+    expect(
+      sessionPanelHeading({ ...session, className: null, groupName: null }),
+    ).toBe('BD · Laboratorium · Tue 13 Oct');
+    expect(
+      sessionPanelHeading({
+        ...session,
+        subjectCode: '',
+        classKind: null,
+        className: null,
+        groupName: null,
+      }),
+    ).toBe('Bazy danych · Tue 13 Oct');
+  });
+
+  it('drops the description when it only repeats the subject and class', () => {
+    expect(panelDescription(session)).toBeNull();
+    expect(
+      panelDescription({
+        ...session,
+        className: 'Ćwiczenia',
+        groupName: 'Gr. 2',
+        label: 'Ćwiczenia gr 2',
+      }),
+    ).toBeNull();
+    expect(
+      panelDescription({
+        ...session,
+        label: 'Bazy danych — Laboratorium',
+      }),
+    ).toBeNull();
+    expect(panelDescription({ ...session, label: '' })).toBeNull();
+    expect(panelDescription({ ...session, label: 'Laboratorium 3' })).toBe(
+      'Laboratorium 3',
+    );
+    expect(
+      panelDescription({ ...session, label: 'Projekt zespołowy, sala 2' }),
+    ).toBe('Projekt zespołowy, sala 2');
   });
 });
 

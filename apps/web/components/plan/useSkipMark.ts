@@ -2,7 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useCallback, useState, useTransition } from 'react';
-import { skipMarkAction } from '@/lib/class-mark-actions';
+import { skipMarkAction, unskipMarkAction } from '@/lib/class-mark-actions';
 import { markActionError } from '@/lib/plan-view';
 
 /**
@@ -15,14 +15,44 @@ export function useSkipMark(
   onDate: string,
   onDone?: () => void,
 ) {
+  const { run, pending, error, setError } = useMarkDateAction(
+    skipMarkAction,
+    markId,
+    onDate,
+    onDone,
+  );
+  return { skip: run, pending, error, setError };
+}
+
+/** "Undo" of a skip in the session panel: the same flow, unskipping. */
+export function useUndoSkip(
+  markId: number,
+  onDate: string,
+  onDone?: () => void,
+) {
+  const { run, pending, error } = useMarkDateAction(
+    unskipMarkAction,
+    markId,
+    onDate,
+    onDone,
+  );
+  return { undo: run, pending, error };
+}
+
+function useMarkDateAction(
+  action: typeof skipMarkAction,
+  markId: number,
+  onDate: string,
+  onDone?: () => void,
+) {
   const router = useRouter();
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
-  const skip = useCallback(() => {
+  const run = useCallback(() => {
     if (pending) return;
     start(async () => {
       setError(null);
-      const err = await markActionError(() => skipMarkAction(markId, onDate));
+      const err = await markActionError(() => action(markId, onDate));
       if (err) {
         setError(err);
         return;
@@ -30,6 +60,6 @@ export function useSkipMark(
       onDone?.();
       router.refresh();
     });
-  }, [pending, markId, onDate, onDone, router]);
-  return { skip, pending, error, setError };
+  }, [pending, action, markId, onDate, onDone, router]);
+  return { run, pending, error, setError };
 }

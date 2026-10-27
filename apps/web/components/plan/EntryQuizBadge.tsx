@@ -30,6 +30,8 @@ const actionBtn =
  * and fixed below the badge, so the block's clipping does not cut it off.
  * Escape or a click outside closes it and focus returns to the badge; Tab
  * out of it (focus leaving both the popover and the badge) closes it too.
+ * After a skip `onSkipped` runs (the timetable opens the session panel with
+ * an Undo); without it focus parks on the block.
  */
 export function EntryQuizBadge({
   markId,
@@ -38,6 +40,8 @@ export function EntryQuizBadge({
   onDate,
   dateLabel,
   editHref,
+  label,
+  onSkipped,
   className,
   children = 'Entry quiz',
 }: {
@@ -50,8 +54,11 @@ export function EntryQuizBadge({
   /** e.g. "Tue 13 Oct". */
   dateLabel: string;
   editHref: string;
+  /** Accessible name, e.g. "Entry quiz: Rozdział 2" (the bar may shorten). */
+  label?: string;
+  onSkipped?: () => void;
   className: string;
-  /** Visible content; it must start with "Entry quiz" (label in name). */
+  /** Visible content; its text must be part of `label` (label in name). */
   children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -63,12 +70,14 @@ export function EntryQuizBadge({
 
   // The badge goes away with the refresh: park focus on its block first.
   const parkFocus = useCallback(() => {
-    btnRef.current
-      ?.closest('[data-testid="plan-block"]')
-      ?.querySelector<HTMLElement>('[data-block-main]')
-      ?.focus();
+    if (onSkipped) onSkipped();
+    else
+      btnRef.current
+        ?.closest('[data-testid="plan-block"]')
+        ?.querySelector<HTMLElement>('[data-block-main]')
+        ?.focus();
     setOpen(false);
-  }, []);
+  }, [onSkipped]);
   const { skip, pending, error, setError } = useSkipMark(
     markId,
     onDate,
@@ -149,6 +158,7 @@ export function EntryQuizBadge({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? popId : undefined}
+        aria-label={label}
         title={note ? `Entry quiz: ${note}` : 'Entry quiz'}
         onClick={() => (open ? close(false) : setOpen(true))}
         onBlur={open ? onFocusOut : undefined}
