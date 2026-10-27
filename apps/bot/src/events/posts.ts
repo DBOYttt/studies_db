@@ -223,7 +223,7 @@ export function eventForumCheck(db: Db): EventForumCheck {
  * Discord allows about 2 renames of a channel per 10 minutes and the REST
  * client waits out the limit instead of failing, which would stall the
  * poller: a post renamed less than this long ago keeps its old title until the
- * next edit after the window.
+ * window ends, when `retryRename` queues a new upsert of that post.
  */
 export const RENAME_WINDOW_MS = 10 * 60_000;
 
@@ -236,11 +236,35 @@ export const RENAME_WINDOW_MS = 10 * 60_000;
 export function discordEventPostGuild(
   client: Client,
   isEventForum: EventForumCheck,
-  opts: { guildId: string; now?: () => number },
-): EventPostGuild {
+  opts: {
+    guildId: string;
+    now?: () => number;
+    /** Queues an upsert of the post in `threadId` (a postponed rename is due). */
+    retryRename?: (threadId: string) => unknown;
+  },
+): EventPostGuild & { dispose(): void } {
   const now = opts.now ?? Date.now;
   /** Thread id → when this process last renamed it (kept in memory). */
   const renamedAt = new Map<string, number>();
+  /** Thread id → the pending retry of a postponed rename (one per thread). */
+  const retries = new Map<string, NodeJS.Timeout>();
+  const scheduleRetry = (threadId: string, last: number) => {
+    if (retries.has(threadId) || !opts.retryRename) return;
+    const retry = opts.retryRename;
+    const timer = setTimeout(
+      () => {
+        retries.delete(threadId);
+        Promise.resolve()
+          .then(() => retry(threadId))
+          .catch((err) =>
+            console.error(`cannot queue the rename of ${threadId}:`, err),
+          );
+      },
+      Math.max(0, last + RENAME_WINDOW_MS - now()),
+    );
+    timer.unref?.();
+    retries.set(threadId, timer);
+  };
   const forumOf = async (id: string): Promise<ForumChannel> => {
     const c = await client.channels.fetch(id);
     if (c?.type !== ChannelType.GuildForum || c.guildId !== opts.guildId) {
@@ -308,6 +332,7 @@ export function discordEventPostGuild(
         const recent = last !== undefined && now() - last < RENAME_WINDOW_MS;
         if (t.name !== post.title && recent) {
           console.log(`rename of event post ${t.id} postponed (rate limit)`);
+          scheduleRetry(t.id, last);
         } else if (t.name !== post.title) {
           for (const [id, at] of renamedAt)
             if (now() - at >= RENAME_WINDOW_MS) renamedAt.delete(id);
@@ -356,6 +381,10 @@ export function discordEventPostGuild(
         if (err instanceof PostGoneError) return false;
         throw err;
       }
+    },
+    dispose() {
+      for (const timer of retries.values()) clearTimeout(timer);
+      retries.clear();
     },
   };
 }

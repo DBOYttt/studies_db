@@ -47,6 +47,7 @@ import {
 } from '../src/events/posts.js';
 import {
   drainEventRequests,
+  enqueueRenameRetry,
   recoverInterruptedRequests,
   startEventPoller,
 } from '../src/events/worker.js';
@@ -762,6 +763,30 @@ describe('series posts', () => {
   });
 });
 
+describe('enqueueRenameRetry', () => {
+  it('queues an upsert for the event or series that owns the thread', async () => {
+    const id = await add();
+    await drain();
+    await db.delete(botRequests);
+    const e = await eventRow(id);
+    const [t] = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.id, e.topicId as number));
+    expect(await enqueueRenameRetry(db, t.discordThreadId)).toBe(`event:${id}`);
+    const [r] = await requests();
+    expect(r).toMatchObject({
+      kind: 'event_post_upsert',
+      target: `event:${id}`,
+      status: 'queued',
+    });
+    // Twice is still one queued request.
+    await enqueueRenameRetry(db, t.discordThreadId);
+    expect(await requests()).toHaveLength(1);
+    expect(await enqueueRenameRetry(db, 'unknown-thread')).toBeNull();
+  });
+});
+
 describe('discordEventPostGuild only touches its own event posts', () => {
   type FakeThread = {
     id: string;
@@ -874,6 +899,41 @@ describe('discordEventPostGuild only touches its own event posts', () => {
     // The window is per post.
     await g.editFirstMessage('own-bd', { ...post, title: 'C' });
     expect(threads.get('own-bd')?.setName).toHaveBeenCalledWith('C', 'event');
+  });
+
+  it('retries a postponed rename once, when the window has passed (R4)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const retryRename = vi.fn();
+      const g = discordEventPostGuild(client, eventForumCheck(db), {
+        ...opts,
+        retryRename,
+      });
+      const t = threads.get('own-ev') as FakeThread;
+      await g.editFirstMessage('own-ev', { ...post, title: 'A' });
+      t.name = 'A';
+      now = 9 * 60_000;
+      await g.editFirstMessage('own-ev', { ...post, title: 'B' });
+      now = 9.5 * 60_000;
+      await g.editFirstMessage('own-ev', { ...post, title: 'C' });
+      // One timer per thread, due when the window ends (10 min after A).
+      await vi.advanceTimersByTimeAsync(60_000 - 1);
+      expect(retryRename).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(retryRename).toHaveBeenCalledTimes(1);
+      expect(retryRename).toHaveBeenCalledWith('own-ev');
+      // dispose() drops a pending retry.
+      now = 10 * 60_000 + 1;
+      await g.editFirstMessage('own-ev', { ...post, title: 'D' });
+      t.name = 'D';
+      now = 11 * 60_000;
+      await g.editFirstMessage('own-ev', { ...post, title: 'E' });
+      g.dispose();
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+      expect(retryRename).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('refuses threads and forums of another guild', async () => {
