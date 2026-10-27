@@ -471,10 +471,17 @@ test.describe('assessments on the timetable', () => {
     await expect(row.getByLabel('Note', { exact: true })).toHaveValue(
       'Rozdział 4',
     );
+    // The save is done ("Turn on" is disabled only while it is pending).
+    await expect(
+      section.getByRole('button', { name: 'Turn on' }),
+    ).toHaveAttribute('aria-disabled', 'false');
 
     await page.goto(week());
+    // 90 min with the Test: one merged "Quiz + Test" bar.
     await expect(
-      lab(page).getByRole('button', { name: 'Entry quiz' }),
+      lab(page).getByRole('button', {
+        name: 'Entry quiz: Rozdział 4. Test: Kolokwium z sesji',
+      }),
     ).toBeVisible();
   });
 
@@ -482,13 +489,16 @@ test.describe('assessments on the timetable', () => {
     page,
   }) => {
     await page.goto(week());
-    await lab(page).getByRole('button', { name: 'Entry quiz' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
-    await dialog
+    const panel = page.getByRole('complementary', { name: 'Class details' });
+    await expect(async () => {
+      await lab(page).locator('[data-block-main]').click();
+      await expect(panel).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await panel
       .getByRole('button', { name: 'Not this week (all groups)' })
       .click();
     await expect(
-      lab(page).getByRole('button', { name: 'Entry quiz' }),
+      lab(page).getByRole('button', { name: /^Entry quiz/ }),
     ).toHaveCount(0);
 
     await page.goto('/s/subjects/SESJ?class=laboratorium');
@@ -506,7 +516,7 @@ test.describe('assessments on the timetable', () => {
     );
     await page.goto(week());
     await expect(
-      lab(page).getByRole('button', { name: 'Entry quiz' }),
+      lab(page).getByRole('button', { name: /^Entry quiz/ }),
     ).toHaveCount(0);
   });
 });

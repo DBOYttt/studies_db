@@ -530,6 +530,150 @@ export default async function globalSetup() {
         ),
       ]);
 
+    // Timetable layout (plan-layout.spec.ts): subject UKL in 2026-W39 with
+    // an entry quiz + Test on a 90-min block beside an event (2 columns), a
+    // quiz + Test on a 105-min block, a quiz-only block beside a lecture,
+    // weekend events (7 day columns) and a lecture today (current week).
+    const [{ id: uklId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Układ zajęć',
+        code: 'UKL',
+        semester: 3,
+        ects: 2,
+        discordChannelId: 'e2e-ch-ukl',
+      })
+      .$returningId();
+    const uklLab = await ensureClass(db, uklId, 'laboratorium');
+    const uklGr1 = await ensureGroup(db, uklLab, 1);
+    const uklGr2 = await ensureGroup(db, uklLab, 2);
+    const uklWyklad = await ensureClass(db, uklId, 'wyklad');
+    const uklLecturer = await mkLecturer(
+      'dr',
+      'Lena Układowa',
+      'lena.ukladowa@example.edu',
+    );
+    const sep = (d: number, h: number, m = 0) =>
+      new Date(Date.UTC(2026, 8, d, h, m));
+    // Today's wall date in Warsaw, as the timetable computes it.
+    const [ty, tm, td] = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Europe/Warsaw',
+    })
+      .format(new Date())
+      .split('-')
+      .map(Number);
+    const today = (h: number, m = 0) =>
+      new Date(Date.UTC(ty, tm - 1, td, h, m));
+    await db
+      .insert(classSessions)
+      .values([
+        session(
+          'e2e-ukl-a',
+          uklId,
+          uklLab,
+          uklGr1,
+          uklLecturer,
+          'Laboratorium gr 1',
+          'U-1 101',
+          sep(22, 10),
+          sep(22, 11, 30),
+        ),
+        session(
+          'e2e-ukl-b',
+          uklId,
+          uklLab,
+          uklGr1,
+          uklLecturer,
+          'Laboratorium gr 1',
+          'U-1 102',
+          sep(23, 12),
+          sep(23, 13, 45),
+        ),
+        session(
+          'e2e-ukl-c',
+          uklId,
+          uklLab,
+          uklGr2,
+          uklLecturer,
+          'Laboratorium gr 2',
+          'U-1 103',
+          sep(24, 8),
+          sep(24, 9, 30),
+        ),
+        session(
+          'e2e-ukl-d',
+          uklId,
+          uklWyklad,
+          null,
+          uklLecturer,
+          'Wykład',
+          'U-1 104',
+          sep(24, 8),
+          sep(24, 9, 30),
+        ),
+        session(
+          'e2e-ukl-today',
+          uklId,
+          uklWyklad,
+          null,
+          uklLecturer,
+          'Wykład',
+          'U-1 105',
+          today(12),
+          today(13, 30),
+        ),
+      ]);
+    const uklEvent = (
+      kind: 'kolokwium' | 'inne',
+      title: string,
+      start: Date,
+      end: Date,
+      groupId: number | null = null,
+    ) => ({
+      kind,
+      title,
+      subjectId: uklId,
+      classId: kind === 'kolokwium' ? uklLab : null,
+      groupId,
+      startsAt: start,
+      endsAt: end,
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    await db
+      .insert(events)
+      .values([
+        uklEvent(
+          'kolokwium',
+          'Kolokwium układu',
+          sep(22, 10, 15),
+          sep(22, 11),
+          uklGr1,
+        ),
+        uklEvent(
+          'kolokwium',
+          'Kolokwium drugie',
+          sep(23, 12, 15),
+          sep(23, 13),
+          uklGr1,
+        ),
+        uklEvent('inne', 'Konsultacje', sep(22, 10), sep(22, 11)),
+        uklEvent('inne', 'Sobotni wyjazd', sep(26, 9), sep(26, 12)),
+        uklEvent('inne', 'Niedzielne konsultacje', sep(27, 10), sep(27, 11)),
+      ]);
+    const uklQuiz = await addMark(
+      db,
+      userId,
+      {
+        classId: uklLab,
+        groupId: null,
+        kind: 'wejsciowka',
+        note: 'Rozdział 5',
+      },
+      'web',
+    );
+    if (!uklQuiz.ok) throw new Error(`e2e UKL entry quiz: ${uklQuiz.message}`);
+
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_ENTITIES = await createLoginToken(db, userId);
@@ -540,6 +684,7 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_NONADMIN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EVENTS = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_HEADERS = await createLoginToken(db, userId);
+    process.env.E2E_TOKEN_PLAN_LAYOUT = await createLoginToken(db, userId);
 
     // Moje grupy stored per user (my-groups.spec.ts): its own user, so the
     // saved choice cannot leak into the other specs.

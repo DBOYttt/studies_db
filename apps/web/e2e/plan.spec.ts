@@ -123,9 +123,24 @@ test.describe('timetable assessments', () => {
   test('a Test badge on the lab block and an exam block', async ({ page }) => {
     await page.goto(ASSESS);
     const lab = page.getByTestId('plan-block').filter({ hasText: 'E-5 501' });
-    const test = lab.getByRole('link', { name: 'Test: Kolokwium z ocen' });
-    await expect(test).toBeVisible();
-    await expect(test).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
+    // 90 min with a quiz and a Test: one merged bar that opens the panel.
+    const merged = lab.getByRole('button', {
+      name: 'Entry quiz: Rozdział 2. Test: Kolokwium z ocen',
+    });
+    await expect(merged).toBeVisible();
+    const labPanel = page.getByRole('complementary', {
+      name: 'Class details',
+    });
+    await expect(async () => {
+      await merged.click();
+      await expect(labPanel).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await expect(
+      labPanel
+        .getByRole('list', { name: 'Tests' })
+        .getByRole('link', { name: 'Kolokwium z ocen' }),
+    ).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
+    await labPanel.getByRole('button', { name: 'Close details' }).click();
     // The kolokwium is a badge, not a separate event block.
     await expect(
       page.getByTestId('plan-event').filter({ hasText: 'Kolokwium z ocen' }),
@@ -158,9 +173,10 @@ test.describe('timetable assessments', () => {
     const blocks = page.getByTestId('plan-block');
     const g1 = blocks.filter({ hasText: 'E-5 501' });
     const g2 = blocks.filter({ hasText: 'E-5 502' });
-    const quiz = g1.getByRole('button', { name: 'Entry quiz' });
-    await expect(g2.getByRole('button', { name: 'Entry quiz' })).toBeVisible();
+    const quiz = g2.getByRole('button', { name: 'Entry quiz: Rozdział 2' });
+    await expect(g1.getByRole('button', { name: /^Entry quiz/ })).toBeVisible();
 
+    // The popover of the quiz-only bar on the Gr. 2 block.
     const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
     await expect(async () => {
       await quiz.click();
@@ -170,20 +186,29 @@ test.describe('timetable assessments', () => {
     await expect(dialog.getByText('Rozdział 2')).toBeVisible();
     await expect(dialog.getByRole('link', { name: 'Edit' })).toHaveAttribute(
       'href',
-      /^\/subjects\/OCEN\?class=laboratorium&group=1#entry-quiz$/,
+      /^\/subjects\/OCEN\?class=laboratorium&group=2#entry-quiz$/,
     );
     await page.keyboard.press('Escape');
     await expect(dialog).toBeHidden();
     await expect(quiz).toBeFocused();
-
     await page.keyboard.press('Enter');
     await expect(dialog).toBeVisible();
-    await dialog
+    await page.keyboard.press('Escape');
+
+    // Skip the Gr. 1 date from its panel (its block shows a merged bar).
+    const panel = page.getByRole('complementary', { name: 'Class details' });
+    await expect(async () => {
+      await g1.locator('[data-block-main]').click();
+      await expect(panel).toBeVisible({ timeout: 1000 });
+    }).toPass();
+    await panel
       .getByRole('button', { name: 'Not this week (all groups)' })
       .click();
-    await expect(g1.getByRole('button', { name: 'Entry quiz' })).toHaveCount(0);
-    await expect(g2.getByRole('button', { name: 'Entry quiz' })).toBeVisible();
-    // The Test badge stays.
+    await expect(g1.getByRole('button', { name: /^Entry quiz/ })).toHaveCount(
+      0,
+    );
+    await expect(quiz).toBeVisible();
+    // The Test badge stays, now as its own bar.
     await expect(
       g1.getByRole('link', { name: 'Test: Kolokwium z ocen' }),
     ).toBeVisible();
@@ -192,7 +217,7 @@ test.describe('timetable assessments', () => {
     await expect(
       blocks
         .filter({ hasText: 'E-5 500' })
-        .getByRole('button', { name: 'Entry quiz' }),
+        .getByRole('button', { name: /^Entry quiz/ }),
     ).toBeVisible();
   });
 });
@@ -202,44 +227,48 @@ test('the session panel lists every test and offers "Not this week"', async ({
 }) => {
   await page.goto('/plan?week=2026-W40');
   const block = page.getByTestId('plan-block').filter({ hasText: 'E-5 500' });
-  await expect(
-    block.getByRole('button', { name: '2 tests: Kolokwium A, Kolokwium B' }),
-  ).toBeVisible();
+  const merged = block.getByRole('button', {
+    name: 'Entry quiz: Rozdział 2. 2 tests: Kolokwium A, Kolokwium B',
+  });
+  await expect(merged).toBeVisible();
   await expect(page.getByTestId('plan-event')).toHaveCount(0);
 
   const panel = page.getByRole('complementary', { name: 'Class details' });
-  // The "2 tests" bar opens the panel, which links each test.
+  // The merged bar opens the panel, which links each test.
   await expect(async () => {
-    await block
-      .getByRole('button', { name: '2 tests: Kolokwium A, Kolokwium B' })
-      .click();
+    await merged.click();
     await expect(panel).toBeVisible({ timeout: 1000 });
   }).toPass();
   const tests = panel.getByRole('list', { name: 'Tests' });
   await expect(tests.getByRole('link')).toHaveCount(2);
   await expect(
-    tests.getByRole('link', { name: 'Test: Kolokwium A' }),
+    tests.getByRole('link', { name: 'Kolokwium A' }),
   ).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
-  await expect(
-    tests.getByRole('link', { name: 'Test: Kolokwium B' }),
-  ).toBeVisible();
+  await expect(tests.getByRole('link', { name: 'Kolokwium B' })).toBeVisible();
 
   await panel
     .getByRole('button', { name: 'Not this week (all groups)' })
     .click();
-  await expect(block.getByRole('button', { name: 'Entry quiz' })).toHaveCount(
+  await expect(block.getByRole('button', { name: /^Entry quiz/ })).toHaveCount(
     0,
   );
+  // Without the quiz the tests get their own bar again.
+  await expect(
+    block.getByRole('button', { name: '2 tests: Kolokwium A, Kolokwium B' }),
+  ).toBeVisible();
   await expect(
     panel.getByRole('button', { name: 'Not this week (all groups)' }),
   ).toHaveCount(0);
+  await expect(
+    panel.getByRole('button', { name: 'Undo skip on Tue 29 Sep' }),
+  ).toBeVisible();
   await expect(tests.getByRole('link')).toHaveCount(2);
 });
 
 test('Tab out of the entry quiz popover closes it', async ({ page }) => {
   await page.goto('/plan?week=2026-W41');
   const g2 = page.getByTestId('plan-block').filter({ hasText: 'E-5 502' });
-  const quiz = g2.getByRole('button', { name: 'Entry quiz' });
+  const quiz = g2.getByRole('button', { name: /^Entry quiz/ });
   const dialog = page.getByRole('dialog', { name: 'Entry quiz' });
   await expect(async () => {
     await quiz.click();
