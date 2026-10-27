@@ -38,12 +38,15 @@ export function LinkedPosts({
   const [pending, start] = useTransition();
   const linkedIds = new Set(linked.map((t) => t.id));
 
-  const run = (fn: () => Promise<void>) =>
+  const run = (fn: () => Promise<void>) => {
+    // Outside the transition, so the cleared line commits first and the same
+    // message again is a new announcement.
+    setMessage(null);
+    setStatus('');
     start(async () => {
-      setMessage(null);
-      setStatus('');
       await fn();
     });
+  };
 
   const search = () =>
     run(async () => {

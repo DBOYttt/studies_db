@@ -5,7 +5,13 @@ import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
 import { EVENT_NOT_FOUND } from '@studies/db/text';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { startTransition, useEffect, useState, useTransition } from 'react';
+import {
+  startTransition,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from 'react';
 import {
   createEventAction,
   restoreEventAction,
@@ -35,6 +41,9 @@ export type EventFormValues = {
   /** The picked class session (`?session=`, "Add test" on the timetable). */
   sessionId?: string;
 };
+
+/** ms between clearing the status line and writing it again. */
+const STATUS_DELAY = 150;
 
 const groupKey = (classId: number | null, groupId: number | null) =>
   classId === null ? null : `${classId}:${groupId ?? ''}`;
@@ -117,7 +126,17 @@ export function EventForm({
   });
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
-  const [status, setStatus] = useState('');
+  const [status, setStatusNow] = useState('');
+  // The auto-fill message is written a moment after the line is cleared, so
+  // a second pick is a new change that screen readers announce again.
+  const statusTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const setStatus = (text: string) => {
+    clearTimeout(statusTimer.current);
+    setStatusNow('');
+    if (text)
+      statusTimer.current = setTimeout(() => setStatusNow(text), STATUS_DELAY);
+  };
+  useEffect(() => () => clearTimeout(statusTimer.current), []);
   const [pending, start] = useTransition();
   const subject = options.find((s) => s.id === subjectId);
   const cls = subject?.classes.find((c) => c.id === classId);
@@ -254,6 +273,7 @@ export function EventForm({
               onChange={(e) => {
                 setDate(e.target.value);
                 setSessionId(''); // no longer that session
+                setStatus('');
               }}
               className={input}
             />
@@ -268,6 +288,7 @@ export function EventForm({
               onChange={(e) => {
                 setStartTime(e.target.value);
                 setSessionId('');
+                setStatus('');
               }}
               className={input}
             />
@@ -282,6 +303,7 @@ export function EventForm({
               onChange={(e) => {
                 setEndTime(e.target.value);
                 setSessionId('');
+                setStatus('');
               }}
               className={input}
             />
@@ -441,7 +463,10 @@ export function EventForm({
             lang="pl"
             maxLength={100}
             value={place}
-            onChange={(e) => setPlace(e.target.value)}
+            onChange={(e) => {
+              setPlace(e.target.value);
+              setStatus('');
+            }}
             className={input}
           />
         </label>

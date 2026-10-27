@@ -9,6 +9,27 @@ let eventUrl = '';
 // The admin's login token is single use: its cookies are kept for later tests.
 let adminCookies: import('@playwright/test').Cookie[] = [];
 
+/**
+ * Records every text a status line shows from now on, so a test can see a
+ * repeated message cleared and written again (a live region only announces
+ * a change).
+ */
+async function watchText(loc: import('@playwright/test').Locator) {
+  await loc.evaluate((el) => {
+    const log: string[] = [];
+    (window as Window & { statusLog?: string[] }).statusLog = log;
+    new MutationObserver(() => {
+      const t = el.textContent ?? '';
+      if (log[log.length - 1] !== t) log.push(t);
+    }).observe(el, { childList: true, characterData: true, subtree: true });
+  });
+  const page = loc.page();
+  return () =>
+    page.evaluate(
+      () => (window as Window & { statusLog?: string[] }).statusLog ?? [],
+    );
+}
+
 function dateIn(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
@@ -159,6 +180,36 @@ test('link a seeded post; its files appear under Materials', async ({
   await expect(page.getByText('notatki.docx')).toBeVisible();
   await page.getByRole('button', { name: /Unlink post Kolokwium 1/ }).click();
   await expect(page.getByText('No materials')).toBeVisible();
+});
+
+test('linking a second post announces "Post linked." again', async ({
+  page,
+}) => {
+  // Without a subject the search lists posts of every subject.
+  await page.goto('/s/wydarzenia/nowe');
+  await page.getByLabel('Title', { exact: true }).fill('Dwa posty');
+  await page.getByLabel('Date').fill(dateIn(9));
+  await page.getByRole('button', { name: 'Add event' }).click();
+  await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+  await page.getByRole('button', { name: 'Search' }).click();
+  const results = page.getByRole('list', { name: 'Search results' });
+  await results
+    .getByRole('button', { name: /^Link post / })
+    .first()
+    .click();
+  const linked = page
+    .getByRole('status')
+    .filter({ hasText: /^Post linked\.$/ });
+  await expect(linked).toBeVisible();
+  const log = await watchText(linked);
+  await expect(results.getByText('Linked', { exact: true })).toHaveCount(1);
+  await results
+    .getByRole('button', { name: /^Link post / })
+    .first()
+    .click();
+  await expect(results.getByText('Linked', { exact: true })).toHaveCount(2);
+  // Cleared, then written again, so a screen reader hears it twice.
+  await expect.poll(log).toEqual(['', 'Post linked.']);
 });
 
 test('uploading a file shows it as sending… (no bot in e2e)', async ({
@@ -458,8 +509,16 @@ test.describe('assessments on the timetable', () => {
     await expect(page.getByRole('status')).toHaveText(
       'Date, time and place filled in.',
     );
+    // A second pick says it again: the line is cleared, then rewritten.
+    const filled = page.getByRole('status');
+    const log = await watchText(filled);
     await pick.selectOption({ index: 1 });
     await expect(page.getByLabel('Date')).toHaveValue(dateIn(7));
+    await expect.poll(log).toEqual(['', 'Date, time and place filled in.']);
+    // Editing a filled field by hand: the line no longer applies.
+    await page.getByLabel('Date').fill(dateIn(8));
+    await expect(filled).toHaveText('');
+    await page.getByLabel('Date').fill(dateIn(7));
 
     await page.getByLabel('Title', { exact: true }).fill('Kolokwium z sesji');
     await page.getByRole('button', { name: 'Add event' }).click();
