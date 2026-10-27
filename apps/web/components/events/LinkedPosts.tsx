@@ -9,6 +9,7 @@ import {
   unlinkTopicAction,
 } from '@/lib/event-actions';
 import type { LinkedTopic } from '@/lib/event-queries';
+import { STATUS } from '@/lib/status-text';
 
 const btn =
   'inline-flex h-7 items-center gap-1 rounded border border-line-strong bg-panel px-2 text-accent-ink hover:border-accent disabled:opacity-60';
@@ -16,7 +17,10 @@ const btn =
 const topicLabel = (t: LinkedTopic) =>
   t.subjectCode ? `${t.title} (${t.subjectCode})` : t.title;
 
-/** "Link posts": the linked posts and a title search to add more. */
+/**
+ * "Link posts": the linked posts and a title search to add more. A link or
+ * unlink that lands says so in a polite status line.
+ */
 export function LinkedPosts({
   eventId,
   subjectId,
@@ -30,12 +34,14 @@ export function LinkedPosts({
   const [q, setQ] = useState('');
   const [results, setResults] = useState<LinkedTopic[] | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [status, setStatus] = useState('');
   const [pending, start] = useTransition();
   const linkedIds = new Set(linked.map((t) => t.id));
 
   const run = (fn: () => Promise<void>) =>
     start(async () => {
       setMessage(null);
+      setStatus('');
       await fn();
     });
 
@@ -44,11 +50,14 @@ export function LinkedPosts({
       setResults(await searchTopicsAction(subjectId, q));
     });
 
-  const change = (p: Promise<{ ok: boolean; message: string }>) =>
+  const change = (p: Promise<{ ok: boolean; message: string }>, done: string) =>
     run(async () => {
       const r = await p;
       if (!r.ok) setMessage(r.message);
-      else router.refresh();
+      else {
+        setStatus(done);
+        router.refresh();
+      }
     });
 
   return (
@@ -62,13 +71,17 @@ export function LinkedPosts({
               key={t.id}
               className="flex items-center justify-between gap-3 bg-panel px-3.5 py-2"
             >
-              <span className="min-w-0 break-words">{topicLabel(t)}</span>
+              <span lang="pl" className="min-w-0 break-words">
+                {topicLabel(t)}
+              </span>
               <button
                 type="button"
                 disabled={pending}
                 className={btn}
                 aria-label={`Unlink post ${t.title}`}
-                onClick={() => change(unlinkTopicAction(eventId, t.id))}
+                onClick={() =>
+                  change(unlinkTopicAction(eventId, t.id), STATUS.postUnlinked)
+                }
               >
                 <X size={13} aria-hidden />
                 Unlink
@@ -99,6 +112,9 @@ export function LinkedPosts({
           Search
         </button>
       </form>
+      <p role="status" className={status ? 'm-0 text-ok-fg' : 'sr-only'}>
+        {status}
+      </p>
       {message && (
         <div role="alert" className="text-err-fg">
           {message}
@@ -112,7 +128,9 @@ export function LinkedPosts({
           {results.length === 0 && <li className="text-muted">No results.</li>}
           {results.map((t) => (
             <li key={t.id} className="flex items-center justify-between gap-3">
-              <span className="min-w-0 break-words">{topicLabel(t)}</span>
+              <span lang="pl" className="min-w-0 break-words">
+                {topicLabel(t)}
+              </span>
               {linkedIds.has(t.id) ? (
                 <span className="text-xs text-muted">Linked</span>
               ) : (
@@ -121,7 +139,9 @@ export function LinkedPosts({
                   disabled={pending}
                   className={btn}
                   aria-label={`Link post ${t.title}`}
-                  onClick={() => change(linkTopicAction(eventId, t.id))}
+                  onClick={() =>
+                    change(linkTopicAction(eventId, t.id), STATUS.postLinked)
+                  }
                 >
                   <LinkSimple size={14} aria-hidden />
                   Link

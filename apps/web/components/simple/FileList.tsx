@@ -72,6 +72,7 @@ export function FileRow({
             href={href}
             scroll={false}
             aria-current={selected ? 'true' : undefined}
+            lang="pl"
             className="font-semibold break-all text-accent-ink hover:text-accent-ink-hover hover:underline"
           >
             <Marked text={f.filename} q={q} />
@@ -84,7 +85,7 @@ export function FileRow({
             </span>
           )}
         </div>
-        <div className="break-words text-fg/80">
+        <div lang="pl" className="break-words text-fg/80">
           <Marked text={f.topicTitle} q={q} />
         </div>
         <div className="text-xs text-faint">{meta}</div>
@@ -94,6 +95,7 @@ export function FileRow({
           href={href}
           scroll={false}
           aria-label={`Preview file ${f.filename}`}
+          data-preview-trigger={f.id}
           className={btn}
         >
           <Eye size={15} aria-hidden />

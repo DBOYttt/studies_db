@@ -11,6 +11,7 @@ import Link from 'next/link';
 import {
   type CSSProperties,
   useCallback,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -46,6 +47,7 @@ import {
   wallTime,
   weekHeading,
 } from '@/lib/plan-view';
+import { blockDayPrefix } from '@/lib/status-text';
 import { EntryQuizBadge } from './EntryQuizBadge';
 import { type QuizBadge, SessionPanel } from './SessionPanel';
 
@@ -189,6 +191,8 @@ export function WeekView({
   const onUndone = useCallback(() => setRecentSkip(null), []);
 
   const heading = weekHeading(week, days);
+  // Day headers name the day columns (role="group") for screen readers.
+  const dayId = `${useId()}-day`;
 
   return (
     <section aria-label="Week timetable" className="flex flex-col gap-3">
@@ -266,12 +270,13 @@ export function WeekView({
                   return (
                     <div
                       key={key}
+                      id={`${dayId}-${key}`}
                       data-testid="plan-day"
                       className={`relative flex items-baseline gap-1.5 border-b border-l border-line-strong border-l-line px-2 py-[7px] ${
                         isToday ? 'bg-selected' : 'bg-surface'
                       }`}
                     >
-                      <span className="font-semibold">{h.name}</span>
+                      <span className="font-semibold">{h.name}</span>{' '}
                       <span
                         className={`font-mono text-xs ${isToday ? 'text-accent-ink' : 'text-muted'}`}
                       >
@@ -287,10 +292,10 @@ export function WeekView({
                     <div className="sticky left-0 z-[2] border-b border-line-strong bg-surface px-1.5 py-1 text-right text-[10px] leading-[14px] text-faint">
                       all day
                     </div>
-                    {columns.map(({ key, allDay }) => (
+                    {columns.map(({ key, day, allDay }) => (
                       <ul
                         key={key}
-                        aria-label="All-day events"
+                        aria-label={`All-day events, ${dayHeader(day).name} ${dayHeader(day).date}`}
                         className="m-0 flex list-none flex-col gap-0.5 border-b border-l border-line-strong border-l-line bg-surface p-[3px]"
                       >
                         {allDay.map((s) => (
@@ -323,8 +328,11 @@ export function WeekView({
                   ))}
                 </div>
                 {columns.map(({ key, blocks }) => (
+                  // biome-ignore lint/a11y/useSemanticElements: a fieldset would break the grid column; the group is named by its day header
                   <div
                     key={key}
+                    role="group"
+                    aria-labelledby={`${dayId}-${key}`}
                     className={`relative border-l border-line ${key === today ? 'bg-list-hover/40' : ''}`}
                     style={{
                       height: GRID_H,
@@ -682,7 +690,7 @@ function Block({
       className="flex min-h-0 flex-1 flex-col overflow-hidden"
       style={{ maxHeight: textMax }}
     >
-      <span className="sr-only">{time} </span>
+      <span className="sr-only">{blockDayPrefix(s.startsAt, time)}</span>
       <span
         data-block-line="subject"
         className={`${line} font-semibold text-[var(--k-fg)] ${cancelled ? 'line-through' : ''}`}
@@ -703,6 +711,7 @@ function Block({
         classLine && (
           <span
             data-block-line="class"
+            lang="pl"
             className={`${line} ${cancelled ? 'line-through' : ''}`}
           >
             {classLine}
@@ -711,7 +720,9 @@ function Block({
       )}
       {s.room && <span className={`${line} text-muted`}>{s.room}</span>}
       {s.lecturerName && (
-        <span className={`${line} text-muted`}>{s.lecturerName}</span>
+        <span lang="pl" className={`${line} text-muted`}>
+          {s.lecturerName}
+        </span>
       )}
       {/* The stripe is decorative: name its badges for screen readers. */}
       {layout === 'stripe' && (
@@ -796,12 +807,14 @@ function ExamEventBlock({
         width: `calc(${100 / cols}% - 4px)`,
       }}
     >
-      <span className="sr-only">{time} </span>
+      <span className="sr-only">{blockDayPrefix(s.startsAt, time)}</span>
       <span className="truncate font-semibold text-[var(--k-fg)]">
         {s.subjectCode || title}
       </span>
       <span className="truncate font-semibold text-[var(--k-fg)]">Exam</span>
-      <span className="truncate">{title}</span>
+      <span lang="pl" className="truncate">
+        {title}
+      </span>
       {s.room && <span className="truncate text-muted">{s.room}</span>}
     </Link>
   );
@@ -848,10 +861,10 @@ function EventBlock({
       }`}
       style={pos}
     >
-      <span className="sr-only">{time} </span>
+      <span className="sr-only">{blockDayPrefix(s.startsAt, time)}</span>
       <span className="truncate font-semibold">
         <span aria-hidden>{kind?.symbol} </span>
-        {title}
+        <span lang="pl">{title}</span>
       </span>
       {!strip && s.subjectCode && (
         <span className="truncate text-muted">{s.subjectCode}</span>

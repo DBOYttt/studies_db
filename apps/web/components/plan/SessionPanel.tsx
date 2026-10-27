@@ -44,6 +44,9 @@ const closeCls =
  * "Not this week" (here or on the bar) `skipped` holds the quiz and the panel
  * shows "Entry quiz skipped … Undo" in its place.
  */
+/** Meta rows holding Polish content (class names, lecturer, description). */
+const PL_ROWS = new Set(['Class', 'Lecturer', 'Description']);
+
 export function SessionPanel({
   id,
   session: s,
@@ -141,6 +144,7 @@ export function SessionPanel({
       <div className="flex flex-col gap-3 p-3">
         <div>
           <div
+            lang="pl"
             className={`text-sm font-semibold break-words ${cancelled ? 'line-through' : ''}`}
           >
             {s.subjectName}
@@ -166,7 +170,16 @@ export function SessionPanel({
                 >
                   {k}
                 </th>
-                <td className="py-[3px] break-words">{v}</td>
+                <td
+                  lang={
+                    PL_ROWS.has(k) && v !== 'No class assigned'
+                      ? 'pl'
+                      : undefined
+                  }
+                  className="py-[3px] break-words"
+                >
+                  {v}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -301,7 +314,12 @@ function EntryQuizRow({
     <div className="flex flex-col gap-1.5">
       <div className="text-xs">
         <span className="font-semibold">Entry quiz</span>
-        {badge.note && <span className="text-muted"> · {badge.note}</span>}
+        {badge.note && (
+          <span className="text-muted">
+            {' · '}
+            <span lang="pl">{badge.note}</span>
+          </span>
+        )}
       </div>
       <div className="flex flex-wrap gap-1.5">
         <button

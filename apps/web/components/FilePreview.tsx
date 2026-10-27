@@ -5,7 +5,11 @@ import { useEffect, useState } from 'react';
 
 const PdfViewer = dynamic(() => import('./PdfViewer'), {
   ssr: false,
-  loading: () => <p className="text-sm">Loading preview…</p>,
+  loading: () => (
+    <p role="status" className="text-sm">
+      Loading preview…
+    </p>
+  ),
 });
 
 const MAX_TEXT_CHARS = 200_000;
@@ -23,8 +27,18 @@ function TextPreview({ src }: { src: string }) {
       live = false;
     };
   }, [src]);
-  if (failed) return <p className="text-sm">Could not load the preview.</p>;
-  if (text === null) return <p className="text-sm">Loading preview…</p>;
+  if (failed)
+    return (
+      <p role="alert" className="text-sm">
+        Could not load the preview.
+      </p>
+    );
+  if (text === null)
+    return (
+      <p role="status" className="text-sm">
+        Loading preview…
+      </p>
+    );
   return (
     <pre className="max-h-[70vh] overflow-auto whitespace-pre-wrap rounded border border-[var(--border)] bg-[var(--surface)] p-3 font-mono text-xs">
       {text}

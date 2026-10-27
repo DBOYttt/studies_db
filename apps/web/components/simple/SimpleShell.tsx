@@ -10,6 +10,7 @@ import {
   useState,
 } from 'react';
 import { ModeSwitch } from '@/components/shell/ModeSwitch';
+import { SkipLink } from '@/components/shell/SkipLink';
 import type { SessionUser } from '@/lib/session';
 import { type Crumb, Crumbs } from './Crumbs';
 import {
@@ -125,6 +126,7 @@ export function SimpleShell({
 
   return (
     <div className="grid h-[100dvh] grid-cols-[minmax(0,1fr)] overflow-hidden text-[14px] md:grid-cols-[248px_minmax(0,1fr)]">
+      <SkipLink />
       <div
         aria-hidden="true"
         onClick={() => close(true)}
@@ -205,7 +207,8 @@ export function SimpleShell({
         <div className="flex min-h-0 flex-1">
           <main
             id="content"
-            className="min-w-0 flex-1 overflow-y-auto px-7 pt-6 pb-10 max-md:px-4 max-md:pt-5"
+            tabIndex={-1}
+            className="outline-none min-w-0 flex-1 overflow-y-auto px-7 pt-6 pb-10 max-md:px-4 max-md:pt-5"
           >
             <div className="grid max-w-[1080px] grid-cols-[minmax(0,1fr)] gap-4">
               {children}

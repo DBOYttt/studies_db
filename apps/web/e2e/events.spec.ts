@@ -75,14 +75,37 @@ test('the event shows in the plan week and on the start page', async ({
   await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
 });
 
+test('required fields are marked and the all-day hint describes the times', async ({
+  page,
+}) => {
+  await page.goto('/s/wydarzenia/nowe');
+  await expect(page.getByText('Fields marked * are required.')).toBeVisible();
+  await expect(page.getByLabel('Title', { exact: true })).toHaveAttribute(
+    'required',
+    '',
+  );
+  await expect(page.getByLabel('Date')).toHaveAttribute('required', '');
+  for (const name of ['From (time)', 'To (time)']) {
+    await expect(page.getByLabel(name)).toHaveAccessibleDescription(
+      'Without a time the event lasts all day.',
+    );
+  }
+});
+
 test('an invalid form shows the English message', async ({ page }) => {
   await page.goto('/s/wydarzenia/nowe');
   await page.getByLabel('Title', { exact: true }).fill('Coś');
   await page.getByLabel('Date').fill('2001-01-01');
-  await page.getByRole('button', { name: 'Add event' }).click();
+  const submit = page.getByRole('button', { name: 'Add event' });
+  await submit.click();
   await expect(
     page.getByText('The date cannot be more than a month in the past.'),
   ).toBeVisible();
+  // The refusal describes the submit button, which keeps focus.
+  await expect(submit).toHaveAccessibleDescription(
+    'The date cannot be more than a month in the past.',
+  );
+  await expect(submit).toBeFocused();
 });
 
 test('a refused save keeps the typed values', async ({ page }) => {
@@ -129,6 +152,9 @@ test('link a seeded post; its files appear under Materials', async ({
   await page.getByLabel('Search posts by title').fill('tarcie');
   await page.getByRole('button', { name: 'Search' }).click();
   await page.getByRole('button', { name: /Link post Kolokwium 1/ }).click();
+  await expect(
+    page.getByRole('status').filter({ hasText: /^Post linked\.$/ }),
+  ).toBeVisible();
   await expect(page.getByText('sample.pdf')).toBeVisible();
   await expect(page.getByText('notatki.docx')).toBeVisible();
   await page.getByRole('button', { name: /Unlink post Kolokwium 1/ }).click();
@@ -292,7 +318,11 @@ test.describe('concurrent edits', () => {
     await expect(page.getByLabel('Title', { exact: true })).toHaveValue(
       'Nowy tytuł po usunięciu',
     );
-    await expect(page.getByRole('button', { name: 'Save' })).toBeDisabled();
+    // aria-disabled, not disabled: focus stays on the button.
+    await expect(page.getByRole('button', { name: 'Save' })).toHaveAttribute(
+      'aria-disabled',
+      'true',
+    );
     await expect(
       page.getByRole('link', { name: 'Back to timetable' }),
     ).toBeVisible();
@@ -425,6 +455,9 @@ test.describe('assessments on the timetable', () => {
     // Picking the next session fills date, time and place.
     await pick.selectOption({ index: 2 });
     await expect(page.getByLabel('Date')).toHaveValue(dateIn(14));
+    await expect(page.getByRole('status')).toHaveText(
+      'Date, time and place filled in.',
+    );
     await pick.selectOption({ index: 1 });
     await expect(page.getByLabel('Date')).toHaveValue(dateIn(7));
 
@@ -451,6 +484,8 @@ test.describe('assessments on the timetable', () => {
     await expect(
       section.getByRole('button', { name: 'Turn off' }),
     ).toBeVisible();
+    const status = section.getByRole('status');
+    await expect(status).toHaveText('Entry quiz turned on for all groups.');
     await expect(section.getByLabel('Note', { exact: true })).toHaveValue(
       'Rozdział 3',
     );
@@ -468,6 +503,7 @@ test.describe('assessments on the timetable', () => {
     await save.click();
     await expect(save).toHaveAttribute('aria-disabled', 'true');
     await expect(save).toBeFocused();
+    await expect(status).toHaveText('Note saved.');
     await expect(row.getByLabel('Note', { exact: true })).toHaveValue(
       'Rozdział 4',
     );
@@ -507,13 +543,19 @@ test.describe('assessments on the timetable', () => {
     });
     const skipped = section.getByRole('list', { name: 'Skipped dates' });
     await expect(skipped.getByRole('listitem')).toHaveCount(1);
+    const date = (await skipped.getByRole('listitem').textContent())
+      ?.replace('Undo', '')
+      .trim();
     await skipped.getByRole('button', { name: /^Undo/ }).click();
     await expect(skipped).toHaveCount(0);
+    const status = section.getByRole('status');
+    await expect(status).toHaveText(`Entry quiz back on ${date}.`);
 
     await section.getByRole('button', { name: 'Turn off' }).click();
     await expect(section.getByRole('button', { name: 'Turn off' })).toHaveCount(
       0,
     );
+    await expect(status).toHaveText('Entry quiz turned off for all groups.');
     await page.goto(week());
     await expect(
       lab(page).getByRole('button', { name: /^Entry quiz/ }),

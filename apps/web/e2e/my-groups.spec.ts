@@ -15,6 +15,9 @@ test('a chosen group follows the user into a fresh browser context', async ({
   const saved = page.waitForResponse((r) => r.request().method() === 'POST');
   await select.selectOption({ label: 'Gr. 2' });
   await saved;
+  await expect(
+    page.getByRole('form', { name: 'My groups' }).getByRole('status'),
+  ).toHaveText('Group saved.');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/\/s\/plan$/);
 
@@ -41,6 +44,9 @@ test('a choice left in localStorage is imported once and removed', async ({
   await page.getByRole('button', { name: 'Clear' }).click();
   await cleared;
   await expect(select.locator('option:checked')).toHaveText('All');
+  await expect(
+    page.getByRole('form', { name: 'My groups' }).getByRole('status'),
+  ).toHaveText('Groups cleared.');
 
   // Ids of the class and of "Gr. 2", as rendered.
   const classId = (await select.getAttribute('id'))?.replace('my-group-', '');
@@ -107,6 +113,9 @@ test('Reminders checkboxes persist', async ({ page }) => {
   const saved = page.waitForResponse((r) => r.request().method() === 'POST');
   await day.check();
   await saved;
+  await expect(
+    page.getByRole('region', { name: 'Reminders' }).getByRole('status'),
+  ).toHaveText('Reminders saved.');
   await page.reload();
   await expect(page.getByLabel('24 h before')).toBeChecked();
   await expect(hour).not.toBeChecked();

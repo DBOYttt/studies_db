@@ -1,13 +1,14 @@
 'use client';
 
 import { BellRinging } from '@phosphor-icons/react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { saveRemindersAction } from '@/lib/my-groups-actions';
+import { STATUS } from '@/lib/status-text';
 
 /**
  * "Reminders": DM reminders 24 h and 1 h before events. Each checkbox is
  * saved at once (a rejected save reverts it); the choice is shared with the
- * Discord panel.
+ * Discord panel. A save that lands says "Reminders saved." (polite status).
  */
 export function RemindersForm({
   dayBefore,
@@ -21,19 +22,25 @@ export function RemindersForm({
   const [on, setOn] = useState({ day: dayBefore, hour: hourBefore });
   const [reason, setReason] = useState(disabledReason);
   const [failed, setFailed] = useState(false);
+  const [status, setStatus] = useState('');
+  // Latest save: an older reply never overwrites the newer outcome.
+  const seq = useRef(0);
 
   const toggle = (which: 'day' | 'hour') => {
     const before = on;
     const next = { ...on, [which]: !on[which] };
     setOn(next);
     setFailed(false);
+    setStatus('');
+    const mine = ++seq.current;
     const revert = () => {
       setOn(before);
       setFailed(true);
     };
     saveRemindersAction(next.day, next.hour).then((r) => {
-      if (r.ok) setReason(null);
-      else revert();
+      if (!r.ok) return revert();
+      setReason(null);
+      if (seq.current === mine) setStatus(STATUS.remindersSaved);
     }, revert);
   };
 
@@ -82,6 +89,12 @@ export function RemindersForm({
           Could not save. Try again.
         </p>
       )}
+      <p
+        role="status"
+        className={status ? 'm-0 px-3 py-2 text-ok-fg' : 'sr-only'}
+      >
+        {status}
+      </p>
     </section>
   );
 }

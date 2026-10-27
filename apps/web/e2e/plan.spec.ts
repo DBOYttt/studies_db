@@ -281,4 +281,35 @@ test('Tab out of the entry quiz popover closes it', async ({ page }) => {
   await page.keyboard.press('Tab'); // out of the dialog
   await expect(dialog).toBeHidden();
   await expect(quiz).toHaveAttribute('aria-expanded', 'false');
+  // Focus goes back to the badge, not to the end of the page.
+  await expect(quiz).toBeFocused();
+});
+
+test('advanced view: "Skip to content" passes the database tree', async ({
+  page,
+}) => {
+  await page.goto(WEEK);
+  await expect(page.getByTestId('plan-block').first()).toBeVisible();
+  await page.keyboard.press('Tab');
+  await expect(
+    page.getByRole('link', { name: 'Skip to content' }),
+  ).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main')).toBeFocused();
+});
+
+test('day columns are named groups and blocks name their day', async ({
+  page,
+}) => {
+  await page.goto(WEEK);
+  const tue = page.getByRole('group', { name: 'Tue 13 Oct' });
+  await expect(tue.getByTestId('plan-block')).toHaveCount(2);
+  await expect(
+    page
+      .getByRole('group', { name: 'Mon 12 Oct' })
+      .getByRole('button', { name: /^Mon 12 Oct, 08:00–09:30 / }),
+  ).toBeVisible();
+  await expect(
+    tue.getByRole('button', { name: /^Tue 13 Oct, 10:00–11:30 / }),
+  ).toBeVisible();
 });

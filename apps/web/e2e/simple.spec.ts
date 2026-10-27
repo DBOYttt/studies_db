@@ -87,11 +87,16 @@ test('subject filters, preview panel and download', async ({ page }) => {
   await expect(file.first()).toBeVisible();
 
   const panel = page.getByRole('complementary', { name: 'File preview' });
-  await main
-    .getByRole('link', { name: 'Preview file lab-sprawozdanie.pdf' })
-    .click();
+  const opener = main.getByRole('link', {
+    name: 'Preview file lab-sprawozdanie.pdf',
+  });
+  await opener.click();
   await expect(panel).toBeVisible();
   await expect(page).toHaveURL(/file=\d+/);
+  // Opening the preview moves focus into it.
+  await expect(
+    panel.getByRole('heading', { name: 'File preview' }),
+  ).toBeFocused();
   await expect(panel.getByRole('link', { name: 'Download' })).toHaveAttribute(
     'href',
     /^\/files\/\d+\/original$/,
@@ -103,6 +108,8 @@ test('subject filters, preview panel and download', async ({ page }) => {
   }).toPass();
   await expect(page).not.toHaveURL(/file=/);
   await expect(page).toHaveURL(/group=3/);
+  // Closing returns focus to the link that opened the preview.
+  await expect(opener).toBeFocused();
 });
 
 test('empty subject shows the empty state', async ({ page }) => {
@@ -166,4 +173,17 @@ test('mode switch round trip keeps the chosen mode', async ({ page }) => {
 test('/mode rejects a protocol-relative next', async ({ page }) => {
   await page.goto('/mode?to=simple&next=//evil.com');
   await expect(page).toHaveURL(/localhost:3100\/s$/);
+});
+
+test('the first Tab shows "Skip to content" and Enter focuses main', async ({
+  page,
+}) => {
+  await page.goto('/s/plan?week=2026-W42');
+  await expect(page.getByTestId('plan-block').first()).toBeVisible();
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main')).toBeFocused();
 });

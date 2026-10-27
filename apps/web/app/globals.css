@@ -254,6 +254,18 @@ a.link:hover {
   }
 }
 
+/*
+ * Required-field marker after a label's text. The alt text after "/" keeps
+ * the star out of the accessible name (the input says "required" itself);
+ * browsers without it read the star.
+ */
+.req::after {
+  content: " *";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the line above is the fallback without alt text */
+  content: " *" / "";
+  color: var(--err-fg);
+}
+
 /* Data map (React Flow): follow the app tokens in both color schemes. */
 .data-map .react-flow__controls {
   box-shadow: none;
