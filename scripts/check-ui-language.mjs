@@ -41,6 +41,12 @@ const ALLOW_LINES = [
     /Wykład|Ćwiczenia|Zajęcia praktyczne|tag: 'Zajęcia dodatkowe'/,
   ],
   [/^packages\/db\/src\/search\.ts$/, /replace\(\/[łŁ]\//],
+  [/^packages\/db\/src\/text\.ts$/, /replace\(\/[łŁ]\//],
+  // materials.search_text: extracted_text with ł folded (SQL REPLACE).
+  [
+    /^packages\/db\/src\/schema\.ts$/,
+    /REPLACE\(REPLACE\(.*'ł', 'l'\), 'Ł', 'L'\)/,
+  ],
   [/^apps\/web\/lib\/simple\.ts$/, /replace\(\/[łŁ]\//],
   // Titles older versions gave the pinned posts (matched, never shown).
   [/^apps\/bot\/src\/setup\/info\.ts$/, /^'ℹ️ Wydarzenia',$/],

@@ -162,6 +162,20 @@
       "when": 1793021868167,
       "tag": "0022_perf_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "5",
+      "when": 1793196184959,
+      "tag": "0023_materials_search_text",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "5",
+      "when": 1793196194668,
+      "tag": "0024_ft_materials_folded",
+      "breakpoints": true
     }
   ]
 }

@@ -232,6 +232,12 @@ export const materials = mysqlTable(
     previewPath: varchar('preview_path', { length: 500 }),
     previewKind: mysqlEnum('preview_kind', PREVIEW_KINDS).notNull(),
     extractedText: mediumtext('extracted_text'),
+    // extracted_text with ł folded (foldStroke), for FULLTEXT: the collation
+    // already ignores the other diacritics. Kept in sync by MariaDB.
+    searchText: mediumtext('search_text').generatedAlwaysAs(
+      sql`REPLACE(REPLACE(\`extracted_text\`, 'ł', 'l'), 'Ł', 'L')`,
+      { mode: 'stored' },
+    ),
     status: mysqlEnum('status', ['pending', 'ready', 'failed'])
       .notNull()
       .default('pending'),

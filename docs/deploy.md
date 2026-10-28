@@ -165,6 +165,11 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
    `admin_audit` table the migrate step takes a little longer.
 5. File originals are now cached by the browser for a year (they never change for an id); logging out clears
    the site's browser cache.
+6. Migrations 0023 and 0024 make search ignore `ł` like the other diacritics: 0023 adds the stored
+   generated column `materials.search_text` (a copy of `extracted_text` with `ł` folded), 0024 folds
+   `ł` in `search_name` and moves the `ft_materials` FULLTEXT index to `(search_name, search_text)`.
+   Both rebuild `materials`, and `search_text` roughly doubles the space the extracted text takes, so
+   take a backup first (`scripts/backup.sh`) and expect the migrate step to take longer on a large table.
 
 ## Tagi forum
 

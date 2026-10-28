@@ -1,0 +1,1 @@
+ALTER TABLE `materials` ADD `search_text` mediumtext GENERATED ALWAYS AS (REPLACE(REPLACE(`extracted_text`, 'ł', 'l'), 'Ł', 'L')) STORED;
