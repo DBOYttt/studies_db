@@ -53,8 +53,16 @@ const exists = (path: string) =>
 
 /** Runs one job; throws on failure (the caller records it via failJob). */
 export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
+  // Only what the job needs: never the large extracted_text / search_text.
   const [m] = await deps.db
-    .select()
+    .select({
+      id: materials.id,
+      deletedAt: materials.deletedAt,
+      storagePath: materials.storagePath,
+      sha256: materials.sha256,
+      previewKind: materials.previewKind,
+      previewPath: materials.previewPath,
+    })
     .from(materials)
     .where(eq(materials.id, job.materialId));
   if (!m || m.deletedAt) return;

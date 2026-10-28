@@ -151,6 +151,34 @@ describe('processOne', () => {
     expect(await sofficeCalls()).toBe(0);
   });
 
+  it('never loads the large text columns of a material', async () => {
+    const { materialId } = await ingest(
+      'sample.pdf',
+      'sample.pdf',
+      'application/pdf',
+    );
+    const picked: (string[] | null)[] = [];
+    const spyDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'select')
+          return (fields?: Parameters<Db['select']>[0]) => {
+            picked.push(fields ? Object.keys(fields) : null);
+            return fields ? target.select(fields) : target.select();
+          };
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    await drain(deps({ db: spyDb }));
+    expect((await material(materialId)).status).toBe('ready');
+    expect(picked.length).toBeGreaterThan(0);
+    for (const cols of picked) {
+      // A bare select() would load extracted_text and search_text too.
+      expect(cols).not.toBeNull();
+      expect(cols).not.toContain('extractedText');
+      expect(cols).not.toContain('searchText');
+    }
+  });
+
   it('pdf without extension gets text', async () => {
     const { materialId } = await ingest(
       'sample.pdf',
