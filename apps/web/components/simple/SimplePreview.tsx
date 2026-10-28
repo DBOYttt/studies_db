@@ -3,7 +3,7 @@
 import { ArrowsOut, DownloadSimple, X } from '@phosphor-icons/react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { FilePreview } from '@/components/FilePreview';
 import { formatDate, formatSize } from '@/lib/format';
 import type { PreviewFile } from '@/lib/queries';
@@ -22,7 +22,8 @@ const BADGE = {
  * primary action, Full screen, status badge, preview, then the meta table
  * Subject / Class / Size / Added by / Added. `meta.subjectName` is
  * the subject's full name (PreviewFile only carries the code). Escape
- * (outside form fields) and × navigate to `closeHref`.
+ * (outside form fields) and × navigate to `closeHref`. Opening a file moves
+ * focus to the panel heading (the panel sits after `<main>`).
  */
 export function SimplePreview({
   file,
@@ -34,6 +35,29 @@ export function SimplePreview({
   meta: { subjectName: string };
 }) {
   const router = useRouter();
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    const opener = document.activeElement;
+    headingRef.current?.focus();
+    return () => {
+      // Closed (focus fell to <body> once the panel is gone): back to the
+      // link that opened it, or to the file's Preview link when the list was
+      // re-rendered. A tick later, when the DOM has settled.
+      setTimeout(() => {
+        const now = document.activeElement;
+        if (now !== null && now !== document.body) return;
+        const back =
+          opener instanceof HTMLElement &&
+          opener !== document.body &&
+          opener.isConnected
+            ? opener
+            : document.querySelector<HTMLElement>(
+                `[data-preview-trigger="${file.id}"]`,
+              );
+        back?.focus({ preventScroll: true });
+      }, 0);
+    };
+  }, [file.id]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
@@ -68,7 +92,11 @@ export function SimplePreview({
       className="panel-in fixed inset-0 z-40 flex flex-col overflow-y-auto bg-page lg:static lg:z-auto lg:w-[360px] lg:shrink-0 lg:border-l lg:border-line-strong"
     >
       <div className="sticky top-0 z-[1] flex h-11 shrink-0 items-center justify-between border-b border-line-strong bg-surface pr-2 pl-3.5">
-        <h2 className="m-0 flex items-center gap-1.5 text-[14px] font-semibold">
+        <h2
+          ref={headingRef}
+          tabIndex={-1}
+          className="m-0 flex items-center gap-1.5 text-[14px] font-semibold outline-none"
+        >
           <FileTypeIcon file={file} size={16} toned />
           File preview
         </h2>
@@ -84,10 +112,12 @@ export function SimplePreview({
       </div>
       <div className="flex flex-col gap-3.5 p-3.5">
         <div>
-          <div className="text-[15px] font-semibold break-all">
+          <div lang="pl" className="text-[15px] font-semibold break-all">
             {file.filename}
           </div>
-          <div className="break-words text-muted">{file.topicTitle}</div>
+          <div lang="pl" className="break-words text-muted">
+            {file.topicTitle}
+          </div>
         </div>
         <div className="flex gap-1.5">
           <a
@@ -146,7 +176,12 @@ export function SimplePreview({
                 >
                   {k}
                 </th>
-                <td className="py-1 break-words">{v}</td>
+                <td
+                  lang={k === 'Subject' || k === 'Class' ? 'pl' : undefined}
+                  className="py-1 break-words"
+                >
+                  {v}
+                </td>
               </tr>
             ))}
           </tbody>

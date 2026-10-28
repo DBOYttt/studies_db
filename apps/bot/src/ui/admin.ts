@@ -681,8 +681,8 @@ async function run(ctx: Ctx, a: AdminAction): Promise<void> {
 
 /**
  * An `adm` interaction: stale ids get the stale notice, non-admins (by the
- * stored role, re-checked every time) "You do not have permission.", both before anything
- * else happens.
+ * stored role, re-checked every time) and banned admins "You do not have
+ * permission.", both before anything else happens.
  */
 export async function handleAdmin(
   deps: RouterDeps,
@@ -702,12 +702,14 @@ export async function handleAdmin(
   if (!action) return void (await reply(i, STALE_TEXT));
 
   const { db } = deps.ingest;
-  const { isAdmin, userId } = await syncAdminFlag(
+  const { isAdmin, isBanned, userId } = await syncAdminFlag(
     db,
     toDiscordUser(i.user, i.member),
     memberRoleIds(i),
   );
-  if (!isAdmin) return void (await reply(i, NO_PERMISSION));
+  // A banned admin keeps the role on Discord but loses every admin power
+  // (otherwise they could unban themselves).
+  if (!isAdmin || isBanned) return void (await reply(i, NO_PERMISSION));
   await run(
     {
       deps,

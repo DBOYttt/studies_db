@@ -2,7 +2,6 @@
 // action is recorded and later actions for the same subject are skipped; the
 // rest of the plan still runs.
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
 import {
   CLASS_NAMES,
   type Db,
@@ -10,6 +9,7 @@ import {
   getSetting,
   materials,
   plural,
+  resolveInStorage,
   setSetting,
   subjects,
   topics,
@@ -156,6 +156,14 @@ async function relinkFiles(
 const unlinkedFiles = (code: string, title: string, n: number) =>
   `${code}: "${title}": Discord did not confirm ${plural(n, 'file', 'files')}. They were sent but are not linked in the database`;
 
+/**
+ * A new role is created at the bottom of the role list, where anyone with
+ * Manage Roles can give it to themselves (and with it the bot, web and SQL
+ * console admin powers). See docs/deploy.md.
+ */
+export const ADMIN_ROLE_POSITION_WARNING = (name: string) =>
+  `role ${name} is at the bottom of the role list: anyone with Manage Roles can give it to themselves. Move it above the roles of people who must not be admins, and give Manage Roles only to admins`;
+
 export async function applySetup(
   db: Db,
   guild: SetupGuild,
@@ -166,7 +174,13 @@ export async function applySetup(
   const uploads = async (files: PostFile[]): Promise<UploadFile[]> => {
     const out: UploadFile[] = [];
     for (const f of files) {
-      const path = join(storageDir, f.storagePath);
+      // Paths in the DB are not trusted: never send a file outside storage.
+      let path: string;
+      try {
+        path = resolveInStorage(storageDir, f.storagePath);
+      } catch {
+        throw new Error(`file ${f.name} has an invalid storage path`);
+      }
       try {
         await access(path);
       } catch {
@@ -203,6 +217,7 @@ export async function applySetup(
         case 'createRole':
           createdRoleId = await guild.createRole(a.name);
           report.created.push(`role ${a.name}`);
+          report.warnings.push(ADMIN_ROLE_POSITION_WARNING(a.name));
           await storeAdminRole(db, createdRoleId);
           break;
         case 'adoptRole':

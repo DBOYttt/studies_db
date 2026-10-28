@@ -3,7 +3,7 @@ import {
   classGroups,
   type Db,
   eventMaterials,
-  listAudit,
+  listAuditRows,
   materials,
   subjects,
   topics,
@@ -169,15 +169,14 @@ export async function eventHistory(
   eventId: number,
   seriesId: number | null,
 ) {
-  return (
-    await listAudit(db, {
-      limit: 50,
-      offset: 0,
-      target:
-        seriesId === null
-          ? String(eventId)
-          : [String(eventId), `series:${seriesId}`],
-      actionPrefix: 'event.',
-    })
-  ).rows;
+  // Rows only: the page shows no total, so the count query is skipped.
+  return listAuditRows(db, {
+    limit: 50,
+    offset: 0,
+    target:
+      seriesId === null
+        ? String(eventId)
+        : [String(eventId), `series:${seriesId}`],
+    actionPrefix: 'event.',
+  });
 }

@@ -42,14 +42,14 @@ export async function loadEventPage(
     retryableUploadIds(db, id, uploadFileExists),
   ]);
   const pending = req?.status === 'queued' || req?.status === 'running';
+  // Students only hear about the Discord post when something needs doing:
+  // it failed, or none exists and nothing is on its way ("Try again").
   const postLine =
-    postTopicId !== null
-      ? 'Discord post: created'
-      : req?.status === 'failed'
-        ? `Discord post: failed${req.error ? ` (${req.error})` : ''}`
-        : pending
-          ? 'Discord post: being prepared'
-          : 'Discord post: none';
+    req?.status === 'failed' && postTopicId === null
+      ? `Discord post: failed${req.error ? ` (${req.error})` : ''}`
+      : postTopicId === null && !pending
+        ? 'Discord post: none'
+        : null;
   // Failed, or no request is on its way: the post can be asked for again.
   const canRetryPost =
     ev.deletedAt === null && postTopicId === null && !pending;
@@ -65,6 +65,8 @@ export async function loadEventPage(
     subjectId: ev.subjectId,
     subjectCode: ev.subjectCode,
     subjectName: ev.subjectName,
+    className: ev.className,
+    groupName: ev.groupName,
     createdByName: ev.createdByName,
     updatedByName: ev.updatedByName,
     series: ev.series ? { rule: ev.series.rule, until: ev.series.until } : null,

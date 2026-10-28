@@ -3,6 +3,8 @@ import {
   type Db,
   materials,
   previewRelPath,
+  pruneBotRequests,
+  purgeExpiredAuth,
   resolveInStorage,
 } from '@studies/db';
 import { eq } from 'drizzle-orm';
@@ -20,6 +22,7 @@ import {
   failJob,
   finalizeStuckMaterials,
   type Job,
+  pruneJobs,
   requeueStale,
 } from './queue.js';
 
@@ -34,6 +37,10 @@ export type WorkerDeps = {
 const CONVERT_TIMEOUT_MS = 120_000;
 const EXTRACT_TIMEOUT_MS = 30_000;
 const REQUEUE_EVERY_MS = 60_000;
+/** Expired sessions and login tokens are deleted once a day (and at start). */
+const PURGE_AUTH_EVERY_MS = 24 * 3600_000;
+/** Finished bot requests and jobs (older than 30 days) are pruned as often. */
+const PRUNE_QUEUES_EVERY_MS = 24 * 3600_000;
 
 const exists = (path: string) =>
   stat(path).then(
@@ -46,8 +53,16 @@ const exists = (path: string) =>
 
 /** Runs one job; throws on failure (the caller records it via failJob). */
 export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
+  // Only what the job needs: never the large extracted_text / search_text.
   const [m] = await deps.db
-    .select()
+    .select({
+      id: materials.id,
+      deletedAt: materials.deletedAt,
+      storagePath: materials.storagePath,
+      sha256: materials.sha256,
+      previewKind: materials.previewKind,
+      previewPath: materials.previewPath,
+    })
     .from(materials)
     .where(eq(materials.id, job.materialId));
   if (!m || m.deletedAt) return;
@@ -157,8 +172,50 @@ export async function startWorker(
     }
   };
 
+  let lastPurge: number | null = null;
+  const purgeAuth = async () => {
+    const t = now();
+    if (lastPurge !== null && t.getTime() - lastPurge < PURGE_AUTH_EVERY_MS) {
+      return;
+    }
+    try {
+      const p = await purgeExpiredAuth(deps.db, t);
+      // Set only on success, so a failed purge is retried on the next tick.
+      lastPurge = t.getTime();
+      if (p.sessions + p.loginTokens > 0) {
+        console.log(
+          `Worker: usunięto ${p.sessions} wygasłych sesji i ${p.loginTokens} tokenów logowania`,
+        );
+      }
+    } catch (err) {
+      console.error('Worker: błąd purgeExpiredAuth:', err);
+    }
+  };
+
+  let lastPrune: number | null = null;
+  const pruneQueues = async () => {
+    const t = now();
+    if (lastPrune !== null && t.getTime() - lastPrune < PRUNE_QUEUES_EVERY_MS) {
+      return;
+    }
+    try {
+      const r = await pruneBotRequests(deps.db, t);
+      const j = await pruneJobs(deps.db, t);
+      // Set only on success, so a failed prune is retried on the next tick.
+      lastPrune = t.getTime();
+      if (r + j > 0) {
+        console.log(
+          `Worker: usunięto ${r} starych żądań do bota i ${j} zakończonych jobów`,
+        );
+      }
+    } catch (err) {
+      console.error('Worker: błąd pruneBotRequests/pruneJobs:', err);
+    }
+  };
+
   const requeue = async () => {
     while (!signal.aborted) {
+      await purgeAuth();
       try {
         const n = await requeueStale(deps.db, now());
         if (n > 0) console.log(`Worker: wznowiono ${n} zawieszonych jobów`);
@@ -167,6 +224,9 @@ export async function startWorker(
       } catch (err) {
         console.error('Worker: błąd requeueStale/finalizeStuckMaterials:', err);
       }
+      // After the finalize sweep, so a material it just made ready can lose
+      // its old jobs in the same tick.
+      await pruneQueues();
       await sleep(REQUEUE_EVERY_MS, signal);
     }
   };

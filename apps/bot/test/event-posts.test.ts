@@ -47,6 +47,7 @@ import {
 } from '../src/events/posts.js';
 import {
   drainEventRequests,
+  enqueueRenameRetry,
   recoverInterruptedRequests,
   startEventPoller,
 } from '../src/events/worker.js';
@@ -469,6 +470,25 @@ describe('event post fixes', () => {
     ).toContain('Note: krótka\n');
   });
 
+  it('breaks masked links and headings in user text (L2)', async () => {
+    const id = await add({
+      place: '[Room](https://phish)',
+      note: 'ok\n# Big\n[Notes](https://phish)',
+    });
+    const e = await getEvent(db, id);
+    if (!e) throw new Error('no event');
+    const c = eventPostContent(
+      { ...e, createdByName: '[Admin](https://phish)' },
+      'https://x.pl',
+    );
+    expect(c).toContain('Place: \\[Room](https://phish)');
+    expect(c).toContain('\n\\# Big\n\\[Notes](https://phish)');
+    expect(c).toContain('Added by \\[Admin](https://phish)');
+    const sc = seriesPostContent(e, e, 'weekly', [e.startsAt], 'https://x.pl');
+    expect(sc).toContain('Place: \\[Room](https://phish)');
+    expect(sc).toContain('\\# Big');
+  });
+
   it('escapes markdown in place, note and names, not in the link', async () => {
     const id = await add({ place: '*sala*', note: '__ważne__ `x`' });
     const e = await getEvent(db, id);
@@ -743,9 +763,34 @@ describe('series posts', () => {
   });
 });
 
+describe('enqueueRenameRetry', () => {
+  it('queues an upsert for the event or series that owns the thread', async () => {
+    const id = await add();
+    await drain();
+    await db.delete(botRequests);
+    const e = await eventRow(id);
+    const [t] = await db
+      .select()
+      .from(topics)
+      .where(eq(topics.id, e.topicId as number));
+    expect(await enqueueRenameRetry(db, t.discordThreadId)).toBe(`event:${id}`);
+    const [r] = await requests();
+    expect(r).toMatchObject({
+      kind: 'event_post_upsert',
+      target: `event:${id}`,
+      status: 'queued',
+    });
+    // Twice is still one queued request.
+    await enqueueRenameRetry(db, t.discordThreadId);
+    expect(await requests()).toHaveLength(1);
+    expect(await enqueueRenameRetry(db, 'unknown-thread')).toBeNull();
+  });
+});
+
 describe('discordEventPostGuild only touches its own event posts', () => {
   type FakeThread = {
     id: string;
+    guildId: string;
     ownerId: string;
     parentId: string;
     archived: boolean;
@@ -764,6 +809,7 @@ describe('discordEventPostGuild only touches its own event posts', () => {
     const edit = vi.fn(async () => undefined);
     const t: FakeThread = {
       id,
+      guildId: 'G1',
       ownerId,
       parentId,
       archived: true,
@@ -781,14 +827,21 @@ describe('discordEventPostGuild only touches its own event posts', () => {
     return t;
   };
   const threads = new Map<string, FakeThread>();
+  const forums = new Map<string, unknown>();
   const client = {
     user: { id: 'bot' },
-    channels: { fetch: async (id: string) => threads.get(id) ?? null },
+    channels: {
+      fetch: async (id: string) => threads.get(id) ?? forums.get(id) ?? null,
+    },
   } as unknown as Client;
+  let now = 0;
+  const opts = { guildId: 'G1', now: () => now };
   const post = { title: 't', content: 'c', tagName: 'Inne' };
 
   beforeEach(async () => {
     threads.clear();
+    forums.clear();
+    now = 0;
     await setSetting(db, 'events_forum_id', 'f-events');
     threads.set('own-ev', thread('own-ev', 'bot', 'f-events'));
     threads.set('own-bd', thread('own-bd', 'bot', 'f-bd'));
@@ -797,7 +850,7 @@ describe('discordEventPostGuild only touches its own event posts', () => {
   });
 
   it('accepts bot threads in #wydarzenia or a subject forum', async () => {
-    const g = discordEventPostGuild(client, eventForumCheck(db));
+    const g = discordEventPostGuild(client, eventForumCheck(db), opts);
     expect(await g.postExists('own-ev')).toBe(true);
     expect(await g.postExists('own-bd')).toBe(true);
     await g.editFirstMessage('own-bd', post);
@@ -823,15 +876,95 @@ describe('discordEventPostGuild only touches its own event posts', () => {
     };
     t.appliedTags = ['n', 'k'];
     t.setAppliedTags = vi.fn(async () => undefined);
-    const g = discordEventPostGuild(client, eventForumCheck(db));
+    const g = discordEventPostGuild(client, eventForumCheck(db), opts);
     await g.editFirstMessage('own-ev', { ...post, tagName: 'Egzamin' });
     expect(t.setAppliedTags).toHaveBeenCalledWith(['n', 'e'], 'event');
+  });
+
+  it('renames a post at most once per 10 minutes; the next edit catches up (R4)', async () => {
+    const t = threads.get('own-ev') as FakeThread;
+    const g = discordEventPostGuild(client, eventForumCheck(db), opts);
+    await g.editFirstMessage('own-ev', { ...post, title: 'A' });
+    expect(t.setName).toHaveBeenCalledTimes(1);
+    t.name = 'A';
+    now = 9 * 60_000;
+    await g.editFirstMessage('own-ev', { ...post, title: 'B' });
+    // Skipped, but the rest of the edit still happens.
+    expect(t.setName).toHaveBeenCalledTimes(1);
+    expect(t.setLocked).toHaveBeenCalledTimes(2);
+    now = 10 * 60_000 + 1;
+    await g.editFirstMessage('own-ev', { ...post, title: 'B' });
+    expect(t.setName).toHaveBeenCalledTimes(2);
+    expect(t.setName).toHaveBeenLastCalledWith('B', 'event');
+    // The window is per post.
+    await g.editFirstMessage('own-bd', { ...post, title: 'C' });
+    expect(threads.get('own-bd')?.setName).toHaveBeenCalledWith('C', 'event');
+  });
+
+  it('retries a postponed rename once, when the window has passed (R4)', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    try {
+      const retryRename = vi.fn();
+      const g = discordEventPostGuild(client, eventForumCheck(db), {
+        ...opts,
+        retryRename,
+      });
+      const t = threads.get('own-ev') as FakeThread;
+      await g.editFirstMessage('own-ev', { ...post, title: 'A' });
+      t.name = 'A';
+      now = 9 * 60_000;
+      await g.editFirstMessage('own-ev', { ...post, title: 'B' });
+      now = 9.5 * 60_000;
+      await g.editFirstMessage('own-ev', { ...post, title: 'C' });
+      // One timer per thread, due when the window ends (10 min after A).
+      await vi.advanceTimersByTimeAsync(60_000 - 1);
+      expect(retryRename).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1);
+      expect(retryRename).toHaveBeenCalledTimes(1);
+      expect(retryRename).toHaveBeenCalledWith('own-ev');
+      // dispose() drops a pending retry.
+      now = 10 * 60_000 + 1;
+      await g.editFirstMessage('own-ev', { ...post, title: 'D' });
+      t.name = 'D';
+      now = 11 * 60_000;
+      await g.editFirstMessage('own-ev', { ...post, title: 'E' });
+      g.dispose();
+      await vi.advanceTimersByTimeAsync(20 * 60_000);
+      expect(retryRename).toHaveBeenCalledTimes(1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('refuses threads and forums of another guild', async () => {
+    const other = thread('other-guild', 'bot', 'f-events');
+    other.guildId = 'G2';
+    threads.set('other-guild', other);
+    const create = vi.fn(async () => ({ id: 'new' }));
+    const forum = (guildId: string) => ({
+      id: 'f',
+      guildId,
+      type: ChannelType.GuildForum,
+      availableTags: [],
+      threads: { create },
+    });
+    forums.set('f-here', forum('G1'));
+    forums.set('f-there', forum('G2'));
+    const g = discordEventPostGuild(client, eventForumCheck(db), opts);
+    expect(await g.postExists('other-guild')).toBe(false);
+    await expect(
+      g.editFirstMessage('other-guild', post),
+    ).rejects.toBeInstanceOf(PostGoneError);
+    expect(other.setArchived).not.toHaveBeenCalled();
+    await expect(g.createPost('f-there', post)).rejects.toThrow();
+    expect(create).not.toHaveBeenCalled();
+    expect(await g.createPost('f-here', post)).toBe('new');
   });
 
   it.each(['foreign-owner', 'foreign-forum'])(
     'refuses %s as gone, without touching it',
     async (id) => {
-      const g = discordEventPostGuild(client, eventForumCheck(db));
+      const g = discordEventPostGuild(client, eventForumCheck(db), opts);
       expect(await g.postExists(id)).toBe(false);
       await expect(g.editFirstMessage(id, post)).rejects.toBeInstanceOf(
         PostGoneError,

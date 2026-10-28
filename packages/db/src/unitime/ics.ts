@@ -241,9 +241,18 @@ function buildEvent(props: Prop[]): IcsEvent | null {
   };
 }
 
-/** Expands a (weekly) event into its occurrences, in wall time. Unsupported rules yield the first occurrence only. */
+/** Most occurrences one event expands to (a feed is not fully trusted). */
+export const MAX_OCCURRENCES = 500;
+
+/**
+ * Expands a (weekly) event into its occurrences, in wall time. Unsupported
+ * rules yield the first occurrence only. UNTIL is capped at one year after
+ * the start and the result at `max` occurrences, so a hostile rule can't run
+ * away.
+ */
 export function expandOccurrences(
   ev: IcsEvent,
+  max = MAX_OCCURRENCES,
 ): { start: WallTime; end: WallTime }[] {
   if (!ev.rrule) return [{ start: ev.start, end: ev.end }];
   const duration = ev.end.getTime() - ev.start.getTime();
@@ -258,7 +267,12 @@ export function expandOccurrences(
   );
   const timeOfDay = ev.start.getTime() - startDay;
   const monday = startDay - ((ev.start.getUTCDay() + 6) % 7) * DAY_MS;
-  const until = ev.rrule.until?.getTime() ?? Number.POSITIVE_INFINITY;
+  const yearLater = new Date(ev.start.getTime());
+  yearLater.setUTCFullYear(yearLater.getUTCFullYear() + 1);
+  const until = Math.min(
+    ev.rrule.until?.getTime() ?? Number.POSITIVE_INFINITY,
+    yearLater.getTime(),
+  );
   const skip = new Set(ev.exdates.map((d) => d.getTime()));
 
   const out: { start: WallTime; end: WallTime }[] = [];
@@ -267,6 +281,7 @@ export function expandOccurrences(
       const s = week + off * DAY_MS + timeOfDay;
       if (s < ev.start.getTime() || s > until || skip.has(s)) continue;
       out.push({ start: new Date(s), end: new Date(s + duration) });
+      if (out.length >= max) return out;
     }
   }
   return out;

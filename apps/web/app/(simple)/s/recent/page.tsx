@@ -3,12 +3,13 @@ import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { parsePageParam } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { listSimpleFiles, listSubjectCards } from '@/lib/simple-queries';
+import { listSimpleFiles } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export default async function SimpleRecent({
   const sp = await searchParams;
   const db = getDb();
   const page = parsePageParam(sp, MAX_PAGES);
-  const cardsP = listSubjectCards(db);
+  const cardsP = cachedSubjectCards();
   const [cards, list, preview] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: page * PER_PAGE }),

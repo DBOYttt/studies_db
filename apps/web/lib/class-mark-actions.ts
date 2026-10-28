@@ -11,6 +11,7 @@ import {
   unskipDate,
 } from '@studies/db';
 import { revalidatePath } from 'next/cache';
+import { invalidateCounts } from './count-cache';
 import { getDb } from './db';
 import { requireAdmin, requireUser } from './session';
 
@@ -35,6 +36,7 @@ const fail = (message: string): MarkResult => ({ ok: false, message });
 
 /** The timetables and subject pages that show marks. */
 function refresh() {
+  invalidateCounts(); // v_class_marks / v_class_mark_skips row counts
   revalidatePath('/plan');
   revalidatePath('/s/plan');
   revalidatePath('/subjects/[code]', 'page');

@@ -26,6 +26,14 @@ test('login lands on Start with subject cards and Recently added', async ({
     page.getByRole('heading', { name: 'Subjects' }).first(),
   ).toBeVisible();
   const main = page.getByRole('main');
+  // What's next first: Upcoming events sit above the subject grid.
+  const events = await main
+    .getByRole('heading', { name: 'Upcoming events' })
+    .boundingBox();
+  const subjects = await main
+    .getByRole('heading', { name: 'Subjects' })
+    .boundingBox();
+  expect(events?.y).toBeLessThan(subjects?.y ?? 0);
   for (const code of ['FIZ', 'MECH', 'PLAN']) {
     await expect(
       main.getByRole('link', { name: new RegExp(`^${code}\\b`) }),
@@ -87,11 +95,16 @@ test('subject filters, preview panel and download', async ({ page }) => {
   await expect(file.first()).toBeVisible();
 
   const panel = page.getByRole('complementary', { name: 'File preview' });
-  await main
-    .getByRole('link', { name: 'Preview file lab-sprawozdanie.pdf' })
-    .click();
+  const opener = main.getByRole('link', {
+    name: 'Preview file lab-sprawozdanie.pdf',
+  });
+  await opener.click();
   await expect(panel).toBeVisible();
   await expect(page).toHaveURL(/file=\d+/);
+  // Opening the preview moves focus into it.
+  await expect(
+    panel.getByRole('heading', { name: 'File preview' }),
+  ).toBeFocused();
   await expect(panel.getByRole('link', { name: 'Download' })).toHaveAttribute(
     'href',
     /^\/files\/\d+\/original$/,
@@ -103,6 +116,8 @@ test('subject filters, preview panel and download', async ({ page }) => {
   }).toPass();
   await expect(page).not.toHaveURL(/file=/);
   await expect(page).toHaveURL(/group=3/);
+  // Closing returns focus to the link that opened the preview.
+  await expect(opener).toBeFocused();
 });
 
 test('empty subject shows the empty state', async ({ page }) => {
@@ -116,6 +131,41 @@ test('search highlights hits with <mark>', async ({ page }) => {
   const marks = page.getByRole('main').locator('mark');
   await expect(marks.first()).toBeVisible();
   await expect(marks.first()).toHaveText(/lab/i);
+  // No inline padding, so a hit inside a word doesn't split it.
+  await expect(marks.first()).toHaveCSS('padding-left', '0px');
+  await expect(marks.first()).toHaveCSS('padding-right', '0px');
+});
+
+test('search shows the text snippet and counts files and topics', async ({
+  page,
+}) => {
+  await page.goto('/s/search?q=wspolczynnik');
+  const main = page.getByRole('main');
+  await expect(main.getByText('1 file, 0 topics')).toBeVisible();
+  // The text hit ("Współczynnik", diacritics folded) is shown and marked.
+  await expect(main.locator('li mark').first()).toHaveText('Współczynnik');
+  await expect(main.getByText(/tarcia: tarcie statyczne/)).toBeVisible();
+  // A topic hit is counted and points to Advanced, which lists it.
+  await page.goto('/s/search?q=tarcie');
+  await expect(main.getByText(/\d+ files?, 1 topic\b/)).toBeVisible();
+  await expect(
+    main.getByRole('link', { name: 'Show topics in Advanced' }),
+  ).toHaveAttribute(
+    'href',
+    /^\/mode\?to=advanced&next=%2Fsearch%3Fq%3Dtarcie$/,
+  );
+});
+
+test('event kinds are line icons, named for screen readers', async ({
+  page,
+}) => {
+  await page.goto('/s/plan?week=2026-W39');
+  const block = page
+    .getByTestId('plan-event')
+    .filter({ hasText: 'Niedzielne konsultacje' });
+  await expect(block).toHaveAccessibleName(/Other: Niedzielne konsultacje/);
+  await expect(block.locator('svg')).toHaveCount(1);
+  await expect(block).not.toContainText('📌');
 });
 
 test('reports: card shows table with Author header and CSV link', async ({
@@ -166,4 +216,17 @@ test('mode switch round trip keeps the chosen mode', async ({ page }) => {
 test('/mode rejects a protocol-relative next', async ({ page }) => {
   await page.goto('/mode?to=simple&next=//evil.com');
   await expect(page).toHaveURL(/localhost:3100\/s$/);
+});
+
+test('the first Tab shows "Skip to content" and Enter focuses main', async ({
+  page,
+}) => {
+  await page.goto('/s/plan?week=2026-W42');
+  await expect(page.getByTestId('plan-block').first()).toBeVisible();
+  await page.keyboard.press('Tab');
+  const skip = page.getByRole('link', { name: 'Skip to content' });
+  await expect(skip).toBeFocused();
+  await expect(skip).toBeInViewport();
+  await page.keyboard.press('Enter');
+  await expect(page.getByRole('main')).toBeFocused();
 });

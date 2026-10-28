@@ -3,3 +3,9 @@ packages:
   - apps/*
 allowBuilds:
   esbuild: true
+# Security floors for transitive dependencies (pnpm audit, 2026-10-25):
+# undici via discord.js (DoS, GHSA fixed in 6.29.1) and esbuild via
+# drizzle-kit's @esbuild-kit loader (dev server request leak, fixed in 0.25).
+overrides:
+  undici@>=6.5.0 <6.29.1: ^6.29.1
+  esbuild@<=0.24.2: ^0.25.0

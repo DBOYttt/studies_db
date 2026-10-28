@@ -1,9 +1,10 @@
 import { createReadStream } from 'node:fs';
 import { open, stat } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { materials, resolveInStorage } from '@studies/db';
+import { materials, resolveInStorage, topics } from '@studies/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getDb } from './db';
+import { contentSecurityPolicy } from './security-headers';
 import type { SessionUser } from './session';
 import { storageDir } from './storage';
 
@@ -73,6 +74,35 @@ async function startsWithPdfMagic(path: string): Promise<boolean> {
   }
 }
 
+/**
+ * Uploader-supplied types a browser would run or render as a document (HTML,
+ * XML/XSLT, SVG, scripts, multipart streams). The original is sent as
+ * application/octet-stream instead; `attachment` and nosniff already keep it
+ * from rendering, this is one more layer.
+ */
+const ACTIVE_MIME =
+  /^(?:text\/html|application\/xhtml\+xml|image\/svg\+xml|text\/xml|application\/xml|text\/xsl|[a-z0-9.+-]+\/[a-z0-9.+-]*\+xml|[a-z0-9.+-]+\/(?:x-)?(?:java|ecma|j)script|multipart\/[a-z0-9.+-]+)$/;
+
+export function originalContentType(mimeType: string): string {
+  const mime = mimeType.split(';')[0].trim().toLowerCase();
+  if (!mime || ACTIVE_MIME.test(mime)) return 'application/octet-stream';
+  return mimeType;
+}
+
+/** An original never changes for its id: it is stored by its sha256. */
+export const ORIGINAL_CACHE = 'private, max-age=31536000, immutable';
+/** A preview may change (a pending conversion lands): revalidate by ETag. */
+export const PREVIEW_CACHE = 'private, no-cache';
+
+/** Whether an If-None-Match header matches `etag` (weak comparison). */
+export function etagMatches(header: string | null, etag: string): boolean {
+  if (header === null) return false;
+  const bare = (t: string) => t.trim().replace(/^W\//, '');
+  return header
+    .split(',')
+    .some((t) => t.trim() === '*' || bare(t) === bare(etag));
+}
+
 const NOSNIFF = { 'X-Content-Type-Options': 'nosniff' };
 const notFound = () =>
   new Response('Not found', { status: 404, headers: NOSNIFF });
@@ -90,23 +120,46 @@ export async function handleFileRequest(
   if (variant !== 'original' && variant !== 'preview') return notFound();
   if (!/^[1-9]\d{0,9}$/.test(id)) return notFound();
 
+  // A soft-deleted topic hides its files too (as in v_materials / v_files).
+  // Only the columns used below: never the (up to 16 MB) extracted_text,
+  // which pdf.js range requests would otherwise load each time.
   const [m] = await getDb()
-    .select()
+    .select({
+      id: materials.id,
+      storagePath: materials.storagePath,
+      previewPath: materials.previewPath,
+      previewKind: materials.previewKind,
+      mimeType: materials.mimeType,
+      originalFilename: materials.originalFilename,
+      sha256: materials.sha256,
+    })
     .from(materials)
-    .where(and(eq(materials.id, Number(id)), isNull(materials.deletedAt)))
+    .innerJoin(topics, eq(topics.id, materials.topicId))
+    .where(
+      and(
+        eq(materials.id, Number(id)),
+        isNull(materials.deletedAt),
+        isNull(topics.deletedAt),
+      ),
+    )
     .limit(1);
   if (!m) return notFound();
 
+  // next.config's global CSP skips /files/ so the sandbox below can win.
   const headers = new Headers({
     'X-Content-Type-Options': 'nosniff',
     'Accept-Ranges': 'bytes',
-    'Cache-Control': 'private, no-store',
+    // `private`: never in a shared cache (Cloudflare). A cached file stays in
+    // this browser after logout, like any download.
+    'Cache-Control': variant === 'original' ? ORIGINAL_CACHE : PREVIEW_CACHE,
+    'Content-Security-Policy': contentSecurityPolicy(process.env.NODE_ENV),
+    'Referrer-Policy': 'strict-origin-when-cross-origin',
   });
   let rel: string;
   let sniffPdf = false;
   if (variant === 'original') {
     rel = m.storagePath;
-    headers.set('Content-Type', m.mimeType || 'application/octet-stream');
+    headers.set('Content-Type', originalContentType(m.mimeType));
     headers.set(
       'Content-Disposition',
       contentDisposition('attachment', m.originalFilename),
@@ -124,6 +177,9 @@ export async function handleFileRequest(
       sniffPdf =
         !m.previewPath && !looksLikePdf(m.mimeType, m.originalFilename);
       headers.set('Content-Type', 'application/pdf');
+      // The browser's own PDF viewer is a plugin: object-src (or a
+      // default-src fallback) in the app CSP would blank "Full screen".
+      headers.set('Content-Security-Policy', "frame-ancestors 'none'");
     } else if (m.previewKind === 'text') {
       rel = m.previewPath ?? m.storagePath;
       headers.set('Content-Type', 'text/plain; charset=utf-8');
@@ -159,7 +215,23 @@ export async function handleFileRequest(
   }
   if (sniffPdf && !(await startsWithPdfMagic(abs))) return notFound();
 
-  const range = parseRange(req.headers.get('range'), size);
+  // Content-addressed: the original's sha256, plus a suffix when a converted
+  // preview file is served (so the ETag changes when the conversion lands).
+  const etag =
+    rel === m.storagePath ? `"${m.sha256}"` : `"${m.sha256}-preview"`;
+  headers.set('ETag', etag);
+  if (etagMatches(req.headers.get('if-none-match'), etag)) {
+    return new Response(null, { status: 304, headers });
+  }
+
+  // If-Range with another validator: the client's partial copy is stale,
+  // send the whole file.
+  const ifRange = req.headers.get('if-range');
+  const rangeHeader =
+    ifRange === null || ifRange.trim() === etag
+      ? req.headers.get('range')
+      : null;
+  const range = parseRange(rangeHeader, size);
   if (range === 'invalid') {
     headers.set('Content-Range', `bytes */${size}`);
     return new Response(null, { status: 416, headers });

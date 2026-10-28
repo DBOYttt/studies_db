@@ -142,7 +142,8 @@ export type PublicView = (typeof PUBLIC_VIEWS)[number];
 
 /**
  * Tables the admin SQL console's read-write user may SELECT/INSERT/UPDATE/DELETE,
- * except some columns, see MATERIAL_FILE_COLUMNS and EVENT_LINK_COLUMNS.
+ * except some columns, see MATERIAL_FILE_COLUMNS, EVENT_LINK_COLUMNS and the
+ * Discord link columns (SUBJECT_/TOPIC_/TAG_LINK_COLUMNS).
  */
 export const CONTENT_TABLES = [
   'subjects',
@@ -191,6 +192,16 @@ export const EVENT_SERIES_LINK_COLUMNS = [
   'parent_id',
   'created_by',
 ] as const;
+
+/**
+ * Columns that point the bot at a Discord forum, thread or forum tag. The
+ * console's read-write user may neither INSERT nor UPDATE them: catch-up and
+ * `/resync` ingest whatever forum `subjects.discord_channel_id` names, and
+ * event posts go there too. Only the bot and `/setup` write them.
+ */
+export const SUBJECT_LINK_COLUMNS = ['discord_channel_id'] as const;
+export const TOPIC_LINK_COLUMNS = ['discord_thread_id'] as const;
+export const TAG_LINK_COLUMNS = ['discord_tag_id'] as const;
 
 /** Website uploads for events (Discord's attachment limit is the cap). */
 export const MAX_UPLOAD_FILES = 10;

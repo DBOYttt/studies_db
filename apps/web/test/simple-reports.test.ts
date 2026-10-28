@@ -2,9 +2,11 @@ import {
   consumeLoginToken,
   createLoginToken,
   type Db,
+  events,
   subjects,
   upsertUser,
 } from '@studies/db';
+import { nowWall } from '@studies/db/plan';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -53,6 +55,77 @@ beforeAll(async () => {
     displayName: 'Ann',
     avatarUrl: null,
   });
+  // Report 2 lists Test and Exam events of the next 30 days, nothing else.
+  const [{ id: mechId }] = await db
+    .select({ id: subjects.id })
+    .from(subjects)
+    .limit(1);
+  // events.starts_at is Warsaw wall time: build the edge cases from wall now.
+  const wall = nowWall();
+  const inDays = (d: number) => new Date(wall.getTime() + d * 86_400_000);
+  const late = inDays(2);
+  late.setUTCHours(23, 30, 0, 0);
+  await db.insert(events).values([
+    {
+      kind: 'kolokwium',
+      title: 'Kolokwium 1',
+      subjectId: mechId,
+      startsAt: inDays(3),
+      createdBy: userId,
+    },
+    {
+      kind: 'egzamin',
+      title: 'Egzamin',
+      subjectId: mechId,
+      startsAt: inDays(20),
+      createdBy: userId,
+    },
+    {
+      kind: 'inne',
+      title: 'Spotkanie',
+      subjectId: mechId,
+      startsAt: inDays(4),
+      createdBy: userId,
+    },
+    {
+      kind: 'kolokwium',
+      title: 'Stare',
+      subjectId: mechId,
+      startsAt: inDays(-5),
+      createdBy: userId,
+    },
+    {
+      // Late in the evening: still listed, on its own wall date.
+      kind: 'kolokwium',
+      title: 'Wieczorem',
+      subjectId: mechId,
+      startsAt: late,
+      createdBy: userId,
+    },
+    {
+      // Started 30 min ago (wall): no longer upcoming.
+      kind: 'kolokwium',
+      title: 'Trwa',
+      subjectId: mechId,
+      startsAt: new Date(wall.getTime() - 30 * 60_000),
+      createdBy: userId,
+    },
+    {
+      // 30 min before the end of the 30-day window: still inside it.
+      kind: 'egzamin',
+      title: 'Na granicy',
+      subjectId: mechId,
+      startsAt: new Date(wall.getTime() + 30 * 86_400_000 - 30 * 60_000),
+      createdBy: userId,
+    },
+    {
+      kind: 'kolokwium',
+      title: 'Daleko',
+      subjectId: mechId,
+      startsAt: inDays(40),
+      createdBy: userId,
+    },
+  ]);
   const r = await consumeLoginToken(db, await createLoginToken(db, userId));
   sid = (r as { sessionToken: string }).sessionToken;
   cookieSid = sid;
@@ -109,7 +182,21 @@ describe('GET /s/reports/csv', () => {
   it('invalid r falls back to report 0', async () => {
     const res = await call('9');
     expect((await res.text()).replace(/^﻿/, '').split('\r\n')[0]).toBe(
-      'Code,Subject,Materials',
+      'Code,Subject,Files',
     );
+  });
+  it('r=2 lists the Tests and Exams of the next 30 days', async () => {
+    const res = await call('2');
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="tests-exams-next-30-days.csv"',
+    );
+    const lines = (await res.text()).replace(/^\uFEFF/, '').split('\r\n');
+    expect(lines[0]).toBe('When,Type,Subject,Title');
+    const body = lines.slice(1).filter(Boolean);
+    expect(body).toHaveLength(4);
+    expect(body[0]).toMatch(/,Test,MECH,Wieczorem$/);
+    expect(body[1]).toMatch(/,Test,MECH,Kolokwium 1$/);
+    expect(body[2]).toMatch(/,Exam,MECH,Egzamin$/);
+    expect(body[3]).toMatch(/,Exam,MECH,Na granicy$/);
   });
 });

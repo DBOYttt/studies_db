@@ -7,6 +7,7 @@ import { SqlText } from '@/components/SqlText';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { formatAuditTime } from '@/lib/admin-audit';
+import { loadAuditTargets } from '@/lib/admin-audit-targets';
 import { getDb } from '@/lib/db';
 import { parseEntityId } from '@/lib/entity-page';
 import { requireAdmin } from '@/lib/session';
@@ -26,8 +27,10 @@ export default async function AdminAuditEntryPage({
   await requireAdmin();
   const id = parseEntityId((await params).id);
   if (id === null) notFound();
-  const row = await getAudit(getDb(), id);
+  const db = getDb();
+  const row = await getAudit(db, id);
   if (!row) notFound();
+  const target = (await loadAuditTargets(db, [row])).get(row.id);
   const href = `/admin/audit/${row.id}`;
   const details =
     row.details === null || row.details === undefined
@@ -60,10 +63,9 @@ export default async function AdminAuditEntryPage({
         <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-6 gap-y-1.5 rounded-md border border-line-strong px-3.5 py-3">
           <dt className={dt}>Time</dt>
           <dd className={`${dd} font-mono tabular-nums`}>
-            {formatAuditTime(row.createdAt)}{' '}
-            <span className="text-faint">(Europe/Warsaw)</span>
+            {formatAuditTime(row.createdAt)}
           </dd>
-          <dt className={dt}>Admin</dt>
+          <dt className={dt}>User</dt>
           <dd className={dd}>
             <Link
               href={userHref(row.userId)}
@@ -72,9 +74,28 @@ export default async function AdminAuditEntryPage({
               {row.userName}
             </Link>
           </dd>
-          <dt className={dt}>Table</dt>
-          <dd className={`${dd} font-mono`}>
-            {row.target ?? <span className="text-faint">—</span>}
+          <dt className={dt}>Target</dt>
+          <dd className={dd}>
+            {target?.href ? (
+              <Link
+                href={target.href}
+                className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+              >
+                {target.label}
+              </Link>
+            ) : (
+              target?.label
+            )}
+            {target && row.target && ' '}
+            {row.target ? (
+              <span
+                className={`font-mono ${target ? 'text-xs text-faint' : ''}`}
+              >
+                {target ? `(${row.target})` : row.target}
+              </span>
+            ) : (
+              <span className="text-faint">—</span>
+            )}
           </dd>
           <dt className={dt}>Rows changed</dt>
           <dd className={`${dd} font-mono tabular-nums`}>

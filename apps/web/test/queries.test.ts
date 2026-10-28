@@ -11,12 +11,13 @@ import {
   topicTags,
   upsertUser,
 } from '@studies/db';
+import { nowWall } from '@studies/db/plan';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
-import { EXAMPLE_QUERIES } from '../lib/example-queries';
+import { EXAMPLE_QUERIES, wallNowTable } from '../lib/example-queries';
 import { getSubject, listTopics, loadLinkContext } from '../lib/queries';
 import { runReadonlyQuery } from '../lib/sql-console';
 
@@ -170,9 +171,36 @@ describe('example queries', () => {
   }
   it('has exactly the three named examples', () => {
     expect(EXAMPLE_QUERIES.map((e) => e.name)).toEqual([
-      'Materials per subject',
+      'Files per subject',
       'Most active uploaders',
-      'Tests from the last 30 days',
+      'Tests and exams in the next 30 days',
     ]);
   });
+});
+
+describe('wallNowTable', () => {
+  // Around both 2026 switches (29 Mar, 25 Oct at 01:00 UTC), mid-season, New
+  // Year's Eve and the 2027 spring switch; JS nowWall() is the reference.
+  const instants = [
+    '2026-01-15T12:00:00Z',
+    '2026-03-29T00:59:59Z',
+    '2026-03-29T01:00:00Z',
+    '2026-07-01T12:00:00Z',
+    '2026-10-25T00:59:59Z',
+    '2026-10-25T01:00:00Z',
+    '2026-12-31T23:30:00Z',
+    '2027-03-28T00:59:59Z',
+    '2027-03-28T01:00:00Z',
+  ];
+  for (const iso of instants) {
+    it(`matches nowWall at ${iso}`, async () => {
+      const lit = `TIMESTAMP'${iso.slice(0, 19).replace('T', ' ')}'`;
+      const [rows] = await roPool.query<mysql.RowDataPacket[]>(
+        `SELECT n.wall_now FROM ${wallNowTable(lit)} n`,
+      );
+      expect((rows[0].wall_now as Date).toISOString()).toBe(
+        nowWall(new Date(iso)).toISOString(),
+      );
+    });
+  }
 });

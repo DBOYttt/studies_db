@@ -27,7 +27,7 @@ describe('proxy', () => {
     }
   });
 
-  it('skips login, auth, next assets, favicon and the pdf worker', () => {
+  it('skips login, auth, next assets, favicon, the app icon and the pdf worker', () => {
     for (const u of [
       '/login-info',
       '/login-info?error=expired',
@@ -35,7 +35,9 @@ describe('proxy', () => {
       '/auth/logout',
       '/_next/static/chunks/main.js',
       '/favicon.ico',
-      '/pdf.worker.min.mjs',
+      '/icon.svg',
+      '/icon.svg?3f9a1c2b',
+      '/pdf.worker.6.3.289.min.mjs',
       '/api/wydarzenia/12/pliki',
     ]) {
       expect(matches(u), u).toBe(false);

@@ -6,8 +6,8 @@ import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
 import { explorerHref } from '@/lib/explorer';
-import { plural } from '@/lib/format';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
+import { searchCountText } from '@/lib/search-count';
 import { requireUser } from '@/lib/session';
 
 export const dynamic = 'force-dynamic';
@@ -43,6 +43,7 @@ export default async function SearchPage({
   ]);
   // searchAll caps at SEARCH_LIMIT (its maximum): a full page means "maybe more".
   const capped = hits.length >= SEARCH_LIMIT;
+  const fileHits = hits.filter((h) => h.materialId !== null).length;
 
   return (
     <>
@@ -118,9 +119,11 @@ export default async function SearchPage({
               <CheckCircle size={16} weight="fill" aria-hidden />
               <span>
                 Search results for “<b>{q}</b>”:{' '}
-                {capped
-                  ? `${SEARCH_LIMIT}+ matches (showing the first ${SEARCH_LIMIT})`
-                  : plural(hits.length, 'match', 'matches')}
+                {searchCountText(
+                  fileHits,
+                  hits.length - fileHits,
+                  capped ? SEARCH_LIMIT : undefined,
+                )}
               </span>
             </div>
             <div className="shrink-0 overflow-auto rounded-md border border-line-strong">

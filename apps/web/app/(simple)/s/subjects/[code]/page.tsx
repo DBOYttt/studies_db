@@ -11,6 +11,7 @@ import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import type { Crumb } from '@/components/simple/SimpleShell';
 import { SimpleShell } from '@/components/simple/SimpleShell';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getRoPool } from '@/lib/db';
 import { loadEntryQuiz } from '@/lib/entry-quiz';
 import { safeExternalUrl } from '@/lib/format';
@@ -26,7 +27,7 @@ import {
 import { requireUser } from '@/lib/session';
 import { chipHref, groupLecturers, parseSimpleFilters } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { listSimpleFiles, listSubjectCards } from '@/lib/simple-queries';
+import { listSimpleFiles } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -54,7 +55,7 @@ export default async function SimpleSubject({
   const subject = await getSubject(db, code);
   if (!subject) notFound();
   const [cards, classes, tags, lecturerRows, upcoming] = await Promise.all([
-    listSubjectCards(db),
+    cachedSubjectCards(),
     listSubjectClasses(db, subject.id),
     listSubjectTags(db, subject.id),
     listSubjectLecturers(db, subject.id),

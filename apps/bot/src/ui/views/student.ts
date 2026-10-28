@@ -21,13 +21,13 @@ import {
   type ButtonBuilder,
   ButtonStyle,
   ContainerBuilder,
-  escapeMarkdown,
   MediaGalleryBuilder,
   MediaGalleryItemBuilder,
   StringSelectMenuBuilder,
   StringSelectMenuOptionBuilder,
 } from 'discord.js';
 import { dayMonth as ddmm, WEEKDAYS, weekTitle } from '../../dates.js';
+import { escapeUserText } from '../../markdown.js';
 import { badgeDetail, badgeLabel, badgesOf, isExamSession } from '../badges.js';
 import { encodeId } from '../ids.js';
 import { MAX_COMPONENTS, MAX_OPTIONS, MAX_TEXT } from '../limits.js';
@@ -813,7 +813,7 @@ export function quizClassView(d: QuizClassData, message?: string): View {
   if (message) container.addTextDisplayComponents(text(clip(message, 500)));
   container.addTextDisplayComponents(
     text('## Entry quiz'),
-    text(clip(escapeMarkdown(where), 500)),
+    text(clip(escapeUserText(where), 500)),
   );
   const m = d.mark;
   const underAll = d.groupId !== null && d.allGroupsOn;
@@ -823,7 +823,7 @@ export function quizClassView(d: QuizClassData, message?: string): View {
         '-# Skip a week or turn it off in the all-groups view.',
       ]
     : [`**Entry quiz: ${m ? 'on' : 'off'}**`];
-  if (!underAll && m?.note) state.push(`Note: ${escapeMarkdown(m.note)}`);
+  if (!underAll && m?.note) state.push(`Note: ${escapeUserText(m.note)}`);
   if (!underAll && m && m.skips.length > 0) {
     const named = m.skips.slice(0, QUIZ_SKIPS_SHOWN).map(dateLabel);
     const rest = m.skips.length - named.length;

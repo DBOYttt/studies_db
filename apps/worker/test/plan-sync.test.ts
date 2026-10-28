@@ -34,6 +34,17 @@ beforeAll(async () => {
     if (path.startsWith('/ok')) {
       res.writeHead(200, { 'content-type': 'text/calendar; charset=utf-8' });
       res.end('BEGIN:VCALENDAR\r\nEND:VCALENDAR\r\n');
+    } else if (path.startsWith('/redir-same')) {
+      res.writeHead(302, { location: '/ok?moved=1' });
+      res.end();
+    } else if (path.startsWith('/redir-other')) {
+      // Same server under another host name: must not be followed.
+      const port = (server.address() as AddressInfo).port;
+      res.writeHead(302, { location: `http://localhost:${port}/ok` });
+      res.end();
+    } else if (path.startsWith('/redir-loop')) {
+      res.writeHead(301, { location: '/redir-loop' });
+      res.end();
     } else if (path.startsWith('/err')) {
       res.writeHead(500, { 'content-type': 'text/plain' });
       res.end('boom');
@@ -108,6 +119,42 @@ describe('fetchTimetable', () => {
     }).catch((e: Error) => e);
     expect(err).toBeInstanceOf(SafeSyncError);
     expect((err as Error).message).toBe(`Timed out waiting for ${host()}`);
+  });
+  it('follows a redirect on the same host (L4)', async () => {
+    expect(await fetchTimetable(`${base}/redir-same?x=secret`)).toContain(
+      'BEGIN:VCALENDAR',
+    );
+  });
+  it('refuses a redirect to another host, naming the first host only (L4)', async () => {
+    const err = await fetchTimetable(`${base}/redir-other?x=secret`).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(`${host()} redirected to another host`);
+  });
+  it('refuses a downgrade from https to http (L4)', async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (u: string | URL | Request) => {
+      calls.push(String(u));
+      return new Response(null, {
+        status: 302,
+        headers: { location: 'http://feed.example/cal.ics' },
+      });
+    }) as typeof fetch;
+    const err = await fetchTimetable('https://feed.example/cal.ics?k=s', {
+      fetchImpl,
+    }).catch((e: Error) => e);
+    expect((err as Error).message).toBe(
+      'feed.example redirected to another host',
+    );
+    expect(calls).toHaveLength(1);
+  });
+  it('gives up after a few redirects (L4)', async () => {
+    const err = await fetchTimetable(`${base}/redir-loop?x=secret`).catch(
+      (e: Error) => e,
+    );
+    expect(err).toBeInstanceOf(SafeSyncError);
+    expect((err as Error).message).toBe(`Too many redirects from ${host()}`);
   });
   it('replaces an unexpected error with a generic message (no URL leak)', async () => {
     const url = `${base}/x/secretpath?x=secret`;

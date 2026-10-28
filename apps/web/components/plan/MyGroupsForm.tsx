@@ -9,6 +9,8 @@ import {
 } from '@/lib/my-groups-actions';
 import { type MyGroups, sanitizeMyGroups } from '@/lib/plan';
 import type { MyGroupOption } from '@/lib/plan-queries';
+import { MY_GROUPS_HELP } from '@/lib/plan-view';
+import { STATUS } from '@/lib/status-text';
 
 const primaryBtn =
   'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover';
@@ -21,7 +23,8 @@ const selectCls =
  * "My groups": one select per class with groups (All = no choice).
  * Each pick shows at once and is saved to the account in the background (a
  * rejected save reverts that one choice); Save waits for pending saves and
- * returns to the week view; Clear forgets all choices.
+ * returns to the week view; Clear forgets all choices. A save that lands
+ * says so in the polite status line ("Group saved.").
  */
 export function MyGroupsForm({
   options,
@@ -35,6 +38,7 @@ export function MyGroupsForm({
   const router = useRouter();
   const [chosen, setChosen] = useState<MyGroups>(initialGroups);
   const [failed, setFailed] = useState(false);
+  const [status, setStatus] = useState('');
   const pending = useRef(new Set<Promise<unknown>>());
   // Latest save per class: a superseded save never reverts the newer choice.
   const seq = useRef(new Map<string, number>());
@@ -69,6 +73,7 @@ export function MyGroupsForm({
         return next;
       });
     setFailed(false);
+    setStatus('');
     apply(groupId ?? undefined);
     const revert = () => {
       if (seq.current.get(key) !== mine) return;
@@ -78,6 +83,7 @@ export function MyGroupsForm({
     track(
       saveMyGroupAction(classId, groupId).then((r) => {
         if (!r.ok) revert();
+        else if (seq.current.get(key) === mine) setStatus(STATUS.groupSaved);
       }, revert),
     );
   };
@@ -91,12 +97,16 @@ export function MyGroupsForm({
   const onClear = () => {
     const before = chosen;
     setFailed(false);
+    setStatus('');
     setChosen({});
     track(
-      clearMyGroupsAction().catch(() => {
-        setChosen(before);
-        setFailed(true);
-      }),
+      clearMyGroupsAction().then(
+        () => setStatus(STATUS.groupsCleared),
+        () => {
+          setChosen(before);
+          setFailed(true);
+        },
+      ),
     );
   };
 
@@ -113,9 +123,7 @@ export function MyGroupsForm({
         </h2>
       </div>
       <p className="m-0 border-b border-line px-3 py-2 text-muted">
-        Pick your group in each class that is split into groups. The week view
-        then shows only those groups. Lectures and classes you haven&apos;t
-        picked a group for stay visible. Your choice is saved to your account.
+        {MY_GROUPS_HELP}
       </p>
       {options.length === 0 ? (
         <p className="m-0 px-3 py-6 text-center text-muted">
@@ -134,7 +142,7 @@ export function MyGroupsForm({
                   i % 2 ? 'bg-zebra' : ''
                 }`}
               >
-                <label htmlFor={id} className="min-w-0">
+                <label htmlFor={id} lang="pl" className="min-w-0">
                   <span className="font-semibold">{o.subjectName}</span>
                   <span className="text-muted"> · {o.className}</span>
                 </label>
@@ -144,7 +152,7 @@ export function MyGroupsForm({
                   onChange={(e) => set(o.classId, e.target.value)}
                   className={selectCls}
                 >
-                  <option value="">All</option>
+                  <option value="">All groups (not picked)</option>
                   {o.groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
@@ -164,7 +172,7 @@ export function MyGroupsForm({
           Could not save your choice. Try again.
         </p>
       )}
-      <div className="flex flex-wrap gap-1.5 bg-bar px-3 py-2">
+      <div className="flex flex-wrap items-center gap-1.5 bg-bar px-3 py-2">
         <button type="submit" className={primaryBtn}>
           <FloppyDisk size={14} aria-hidden />
           Save
@@ -173,6 +181,9 @@ export function MyGroupsForm({
           <X size={14} aria-hidden />
           Clear
         </button>
+        <p role="status" className="m-0 ml-1 text-ok-fg">
+          {status}
+        </p>
       </div>
     </form>
   );

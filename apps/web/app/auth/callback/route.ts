@@ -1,9 +1,10 @@
 import { consumeLoginToken } from '@studies/db';
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
-import { seeOther } from '@/lib/http';
+import { forbiddenOrigin, seeOther } from '@/lib/http';
 import { safeLoginNext } from '@/lib/login-next';
 import { MODE_COOKIE, modeCookieOptions } from '@/lib/mode';
+import { isCrossOrigin } from '@/lib/same-origin';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/session';
 
 const EXPIRED = '/login-info?error=expired';
@@ -57,7 +58,9 @@ export async function GET(req: NextRequest) {
   return new Response(confirmPage(token, next), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Referrer-Policy': 'no-referrer',
+      // same-origin (not no-referrer): the sign-in POST then carries a real
+      // Origin, which browsers without Fetch Metadata need to pass the check.
+      'Referrer-Policy': 'same-origin',
       'X-Robots-Tag': 'noindex',
       'Cache-Control': 'no-store',
       'Content-Security-Policy':
@@ -68,6 +71,8 @@ export async function GET(req: NextRequest) {
 
 /** Consumes the token (form-encoded `token`) and starts a session. */
 export async function POST(req: NextRequest) {
+  // Login CSRF: a cross-site form must not sign the victim in as someone else.
+  if (isCrossOrigin(req)) return forbiddenOrigin();
   let token: unknown = null;
   let rawNext: unknown = null;
   try {

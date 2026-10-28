@@ -17,9 +17,10 @@ import {
   users,
   webUploads,
 } from '@studies/db';
-import { DiscordAPIError, escapeMarkdown } from 'discord.js';
+import { DiscordAPIError } from 'discord.js';
 import { and, eq, inArray, isNotNull, isNull, lt, sql } from 'drizzle-orm';
 import { type IngestResult, ingestAttachment } from '../ingest.js';
+import { escapeUserText } from '../markdown.js';
 
 /** Discord allows at most 10 attachments per message. */
 export const MAX_FILES_PER_MESSAGE = 10;
@@ -162,7 +163,7 @@ async function uploaderOf(db: Db, userId: number) {
     displayName: u?.displayName ?? '',
     avatarUrl: u?.avatarUrl ?? null,
   };
-  const content = `File from ${escapeMarkdown(u?.displayName ?? 'a user')} (via the website)`;
+  const content = `File from ${escapeUserText(u?.displayName ?? 'a user')} (via the website)`;
   return { uploader, content };
 }
 
@@ -207,7 +208,7 @@ async function ingestSent(
       topicId: post.topicId,
     },
   );
-  return res !== 'failed' && res !== 'ignored';
+  return res !== 'failed' && res !== 'ignored' && res !== 'skipped';
 }
 
 /**

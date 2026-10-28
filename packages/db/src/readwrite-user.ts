@@ -7,8 +7,18 @@ import {
   EVENT_SERIES_LINK_COLUMNS,
   MATERIAL_FILE_COLUMNS,
   PUBLIC_VIEWS,
+  SUBJECT_LINK_COLUMNS,
+  TAG_LINK_COLUMNS,
+  TOPIC_LINK_COLUMNS,
 } from './constants.js';
-import { eventSeries, events, materials } from './schema.js';
+import {
+  eventSeries,
+  events,
+  materials,
+  subjects,
+  tags,
+  topics,
+} from './schema.js';
 
 function columnsExcept(table: MySqlTable, denied: readonly string[]): string[] {
   return Object.values(getTableColumns(table))
@@ -36,6 +46,9 @@ const RESTRICTED: Record<
     denied: EVENT_SERIES_LINK_COLUMNS,
     insert: true,
   },
+  subjects: { table: subjects, denied: SUBJECT_LINK_COLUMNS, insert: true },
+  topics: { table: topics, denied: TOPIC_LINK_COLUMNS, insert: true },
+  tags: { table: tags, denied: TAG_LINK_COLUMNS, insert: true },
 };
 
 /**
@@ -44,7 +57,9 @@ const RESTRICTED: Record<
  * `materials` it gets no INSERT and no UPDATE of the file-path columns, since
  * the worker reads and writes files from those values. On `events` and
  * `event_series` it may not write the thread/owner links (the bot acts on the
- * thread they point at).
+ * thread they point at), and on `subjects`, `topics` and `tags` it may not
+ * write the Discord channel, thread and tag ids (catch-up ingests the forum
+ * they point at).
  */
 export async function ensureReadWriteUser(
   adminUrl: string,

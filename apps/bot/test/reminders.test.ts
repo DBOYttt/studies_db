@@ -121,6 +121,16 @@ describe('reminder texts', () => {
     );
     expect(digestText([e])).toContain('\\*Kolos\\*');
   });
+  it('breaks masked links in the digest and DMs (L2)', () => {
+    const e = {
+      ...base,
+      eventTitle: '[Kolos](https://phish)',
+      room: '[C](https://x)',
+    } as PlanSession;
+    expect(digestText([e])).toContain('\\[Kolos](https://phish)');
+    expect(digestText([e])).toContain('\\[C](https://x)');
+    expect(dmText(e, 'day', 'u')).toContain('\\[Kolos](https://phish)');
+  });
   it('digest: entry quiz lines after the events', () => {
     const q = [
       { subjectName: 'Bazy', className: 'Laboratorium', groupName: 'Gr. 1' },

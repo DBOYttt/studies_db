@@ -8,6 +8,7 @@ import {
   type Db,
   EVENT_KINDS,
   type EventDetails,
+  enqueueBotRequest,
   eventSeries,
   events,
   eventTopics,
@@ -530,4 +531,42 @@ export function startEventPoller(
       await running;
     },
   };
+}
+
+/**
+ * Queues an `event_post_upsert` for whatever owns the post in `threadId` (a
+ * series first: its occurrences share its post). Used when a postponed rename
+ * is due. Returns the target, or null when no live event or series owns it.
+ */
+export async function enqueueRenameRetry(
+  db: Db,
+  threadId: string,
+): Promise<string | null> {
+  const [topic] = await db
+    .select({ id: topics.id })
+    .from(topics)
+    .where(eq(topics.discordThreadId, threadId))
+    .limit(1);
+  if (!topic) return null;
+  const [series] = await db
+    .select({ id: eventSeries.id })
+    .from(eventSeries)
+    .where(
+      and(eq(eventSeries.topicId, topic.id), isNull(eventSeries.deletedAt)),
+    )
+    .limit(1);
+  const [event] = series
+    ? []
+    : await db
+        .select({ id: events.id })
+        .from(events)
+        .where(and(eq(events.topicId, topic.id), isNull(events.deletedAt)))
+        .limit(1);
+  const target = series
+    ? `series:${series.id}`
+    : event
+      ? `event:${event.id}`
+      : null;
+  if (target) await enqueueBotRequest(db, 'event_post_upsert', target);
+  return target;
 }

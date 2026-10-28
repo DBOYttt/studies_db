@@ -4,12 +4,18 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  botRequests,
+  consumeLoginToken,
+  createLoginToken,
   type Db,
+  getSessionUser,
   insertMaterial,
   jobs,
+  loginTokens,
   materials,
   originalRelPath,
   planProcessing,
+  sessions,
   subjects,
   topics,
   upsertUser,
@@ -19,6 +25,7 @@ import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { processOne, startWorker, type WorkerDeps } from '../src/handlers.js';
 import { BACKOFF_MS } from '../src/queue.js';
+import { wrapBin } from './wrap-bin.js';
 
 const fixtures = join(dirname(fileURLToPath(import.meta.url)), 'fixtures');
 
@@ -28,6 +35,7 @@ let uploaderId: number;
 let storageDir: string;
 let countFile: string;
 let seq = 0;
+let countingSoffice: string;
 
 beforeAll(async () => {
   db = await resetTestDb();
@@ -56,13 +64,19 @@ beforeEach(async () => {
   await db.delete(materials);
   storageDir = await mkdtemp(join(tmpdir(), 'worker-test-'));
   countFile = join(storageDir, 'soffice-count');
-  process.env.SOFFICE_COUNT_FILE = countFile;
+  countingSoffice = await wrapBin(
+    storageDir,
+    join(fixtures, 'count-soffice.sh'),
+    {
+      SOFFICE_COUNT_FILE: countFile,
+    },
+  );
 });
 
 const deps = (over: Partial<WorkerDeps> = {}): WorkerDeps => ({
   db,
   storageDir,
-  sofficeBin: join(fixtures, 'count-soffice.sh'),
+  sofficeBin: countingSoffice,
   pdftotextBin: 'pdftotext',
   ...over,
 });
@@ -135,6 +149,34 @@ describe('processOne', () => {
     expect(m.status).toBe('ready');
     expect(m.extractedText?.trim().length).toBeGreaterThan(0);
     expect(await sofficeCalls()).toBe(0);
+  });
+
+  it('never loads the large text columns of a material', async () => {
+    const { materialId } = await ingest(
+      'sample.pdf',
+      'sample.pdf',
+      'application/pdf',
+    );
+    const picked: (string[] | null)[] = [];
+    const spyDb = new Proxy(db, {
+      get(target, prop, receiver) {
+        if (prop === 'select')
+          return (fields?: Parameters<Db['select']>[0]) => {
+            picked.push(fields ? Object.keys(fields) : null);
+            return fields ? target.select(fields) : target.select();
+          };
+        return Reflect.get(target, prop, receiver);
+      },
+    });
+    await drain(deps({ db: spyDb }));
+    expect((await material(materialId)).status).toBe('ready');
+    expect(picked.length).toBeGreaterThan(0);
+    for (const cols of picked) {
+      // A bare select() would load extracted_text and search_text too.
+      expect(cols).not.toBeNull();
+      expect(cols).not.toContain('extractedText');
+      expect(cols).not.toContain('searchText');
+    }
   });
 
   it('pdf without extension gets text', async () => {
@@ -324,6 +366,81 @@ describe('startWorker', () => {
     ac.abort();
     await p;
     expect(Date.now() - t0).toBeLessThan(5000);
+  });
+
+  it('purges expired sessions and login tokens when it starts', async () => {
+    const t0 = new Date(Date.now() - 40 * 24 * 3600_000);
+    const stale = await consumeLoginToken(
+      db,
+      await createLoginToken(db, uploaderId, t0),
+      t0,
+    );
+    await createLoginToken(db, uploaderId, t0);
+    const live = await consumeLoginToken(
+      db,
+      await createLoginToken(db, uploaderId),
+    );
+    const count = async () =>
+      (await db.select().from(sessions)).length +
+      (await db.select().from(loginTokens)).length;
+    expect(await count()).toBe(5);
+
+    const ac = new AbortController();
+    const p = startWorker(deps(), {
+      concurrency: 1,
+      pollMs: 50,
+      signal: ac.signal,
+    });
+    for (let i = 0; i < 50 && (await count()) > 2; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    ac.abort();
+    await p;
+    // left: the live session and the (used) token it came from
+    expect(await count()).toBe(2);
+    expect(stale).not.toBeNull();
+    expect(
+      await getSessionUser(db, (live as { sessionToken: string }).sessionToken),
+    ).not.toBeNull();
+  });
+
+  it('prunes finished bot requests and jobs older than 30 days when it starts', async () => {
+    const old = new Date(Date.now() - 40 * 24 * 3600_000);
+    await db.delete(botRequests);
+    await db.insert(botRequests).values([
+      {
+        kind: 'k',
+        target: 'old',
+        status: 'done',
+        createdAt: old,
+        finishedAt: old,
+      },
+      { kind: 'k', target: 'queued', status: 'queued', createdAt: old },
+    ]);
+    const { materialId } = await ingest('cp1250.txt', 'a.txt', 'text/plain');
+    await db
+      .update(jobs)
+      .set({ status: 'done', runAfter: old })
+      .where(eq(jobs.materialId, materialId));
+    const counts = async () => [
+      (await db.select().from(botRequests)).length,
+      (await db.select().from(jobs)).length,
+    ];
+    const ac = new AbortController();
+    const p = startWorker(deps(), {
+      concurrency: 1,
+      pollMs: 50,
+      signal: ac.signal,
+    });
+    for (let i = 0; i < 50 && (await counts()).join() !== '1,0'; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    ac.abort();
+    await p;
+    expect(await counts()).toEqual([1, 0]);
+    const [left] = await db.select().from(botRequests);
+    expect(left.target).toBe('queued');
+    await db.delete(botRequests);
   });
 
   it('processes queued jobs while running', async () => {

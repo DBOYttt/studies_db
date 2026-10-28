@@ -26,7 +26,11 @@ import {
   PermissionFlagsBits,
 } from 'discord.js';
 import { like, or } from 'drizzle-orm';
-import { memberRoleIds, syncAdminFlag } from '../admin-flag.js';
+import {
+  isBannedDiscordUser,
+  memberRoleIds,
+  syncAdminFlag,
+} from '../admin-flag.js';
 import { auditDiscord } from '../audit.js';
 import { discordForumSource } from '../catchup.js';
 import { ADMIN_ROLE_SETTING, type BotConfig } from '../config.js';
@@ -166,12 +170,13 @@ async function runCommand(
   // the sync failed and this command needs it.
   let synced: string | null | undefined;
   let callerId: number | undefined;
+  let banned: boolean | undefined;
   try {
-    ({ roleId: synced, userId: callerId } = await syncAdminFlag(
-      db,
-      callerOf(i),
-      memberRoleIds(i),
-    ));
+    ({
+      roleId: synced,
+      userId: callerId,
+      isBanned: banned,
+    } = await syncAdminFlag(db, callerOf(i), memberRoleIds(i)));
   } catch (err) {
     console.error('admin flag sync failed', err);
   }
@@ -202,10 +207,13 @@ async function runCommand(
     : synced !== undefined
       ? synced
       : await getSetting(db, ADMIN_ROLE_SETTING);
+  // A banned admin is refused every admin command, /setup included (R6).
+  if (needsAdmin && banned === undefined)
+    banned = await isBannedDiscordUser(db, i.user.id);
   const allowed =
     name === 'setup'
-      ? canRunSetup(i, roleId)
-      : !needsAdmin || isAdmin(i, roleId);
+      ? !banned && canRunSetup(i, roleId)
+      : !needsAdmin || (!banned && isAdmin(i, roleId));
   if (!allowed) {
     await reply('You do not have permission.');
     return;
@@ -238,7 +246,10 @@ async function runCommand(
               await syncForumTags(
                 db,
                 subject.id,
-                await discordForumSource(deps.client).listTags(channel.id),
+                await discordForumSource(
+                  deps.client,
+                  deps.config.discordGuildId,
+                ).listTags(channel.id),
               );
             }
           } catch (err) {
@@ -452,9 +463,21 @@ async function runCommand(
   }
 }
 
+export const OTHER_GUILD_TEXT = 'This bot only works on its own server.';
+
 export function createInteractionHandler(deps: RouterDeps) {
   return async (interaction: Interaction): Promise<void> => {
     try {
+      // Commands are registered only in the configured server and the bot
+      // sends no components in DMs: anything else is refused before it runs.
+      if (
+        !deps.config.discordGuildId ||
+        interaction.guildId !== deps.config.discordGuildId
+      ) {
+        if (interaction.isRepliable())
+          await interaction.reply(replyOptions(OTHER_GUILD_TEXT, true));
+        return;
+      }
       if (interaction.isAutocomplete()) {
         await autocomplete(deps, interaction);
       } else if (interaction.isChatInputCommand()) {

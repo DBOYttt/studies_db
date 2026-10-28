@@ -7,11 +7,19 @@
  * UTC fields or formats with `timeZone: 'UTC'`. Only `formatSyncTime` takes a
  * real instant (plan_sync) and formats it in Europe/Warsaw.
  */
-import { fixSept, MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
+import { CLASS_NAMES } from '@studies/db/constants';
+import {
+  fixSept,
+  MONTHS_SHORT,
+  plural,
+  WEEKDAYS_SHORT,
+} from '@studies/db/text';
 import { explorerHref } from './explorer';
 import {
+  filterMyGroups,
   formatIsoWeek,
   type IsoWeek,
+  type MyGroups,
   type PlanBadge,
   type PlanSession,
   shiftWeek,
@@ -120,6 +128,123 @@ export function badgeTitle(b: PlanBadge): string {
   if (b.kind === 'entry_quiz') return b.note ? `${label}: ${b.note}` : label;
   const titles = b.titles.filter(Boolean);
   return titles.length > 0 ? `${label}: ${titles.join(', ')}` : label;
+}
+
+/** Short footer-bar label for narrow blocks: "Test", "Tests", "Quiz". */
+function badgeShort(b: PlanBadge): string {
+  if (b.kind === 'entry_quiz') return 'Quiz';
+  return b.eventIds.length > 1 ? 'Tests' : 'Test';
+}
+
+/**
+ * Footer bar text: the small-caps label, the short label shown in narrow
+ * blocks, and the test titles or the note.
+ */
+export function badgeBarText(b: PlanBadge): {
+  label: string;
+  short: string;
+  detail: string | null;
+} {
+  const label = badgeLabel(b);
+  const short = badgeShort(b);
+  if (b.kind === 'entry_quiz') return { label, short, detail: b.note || null };
+  const titles = b.titles.filter(Boolean);
+  return {
+    label,
+    short,
+    detail: titles.length > 0 ? titles.join(', ') : null,
+  };
+}
+
+/**
+ * One bar for an entry quiz and its tests on a block too short for two:
+ * "Quiz + Test" / "Quiz + 2 tests", "Q+T" when narrow; `title` names both.
+ */
+export function mergedBarText(list: PlanBadge[]): {
+  label: string;
+  short: string;
+  title: string;
+} {
+  const quiz = list.filter((b) => b.kind === 'entry_quiz');
+  const tests = list.filter((b) => b.kind === 'test');
+  return {
+    label: ['Quiz', ...tests.map(badgeLabel)].join(' + '),
+    short: 'Q+T',
+    title: [...quiz, ...tests].map(badgeTitle).join('. '),
+  };
+}
+
+/** Height of one footer bar on a session block (px), a 24 px target. */
+export const BADGE_BAR_H = 24;
+
+/** Top padding plus the subject and class lines (two 14 px lines). */
+const TEXT_MIN_PX = 3 + 2 * 14;
+
+export type BadgeLayout = 'none' | 'bars' | 'merged' | 'stripe';
+
+/**
+ * Bottom padding of a block's text: the bars (3 px inset, 2 px apart) plus a
+ * 3 px gap, or the 4 px stripes, so the text is clipped above them.
+ */
+export function badgePadBottom(layout: BadgeLayout, count: number): number {
+  if (layout === 'none') return 3;
+  if (layout === 'stripe') return 3 + 5 * count;
+  const n = layout === 'merged' ? 1 : count;
+  return 3 + BADGE_BAR_H * n + 2 * (n - 1) + 3;
+}
+
+/**
+ * How `count` badges sit on a block `blockPx` tall: one bar each when they
+ * fit under the subject and class lines, else one merged bar, else 4 px
+ * stripes. The width is handled in CSS (container queries in WeekView).
+ */
+export function badgeLayout(blockPx: number, count: number): BadgeLayout {
+  if (count === 0) return 'none';
+  const fits = (l: BadgeLayout) =>
+    blockPx - badgePadBottom(l, count) >= TEXT_MIN_PX;
+  if (fits('bars')) return 'bars';
+  if (count > 1 && fits('merged')) return 'merged';
+  return 'stripe';
+}
+
+/**
+ * Session panel heading: "ASD · Laboratorium Gr. 1 · Tue 27 Oct" (subject
+ * code, class and group or "Exam", the date).
+ */
+export function sessionPanelHeading(s: PlanSession): string {
+  const what =
+    s.sessionKind === 'exam'
+      ? 'Exam'
+      : [s.className, s.groupName].filter(Boolean).join(' ') ||
+        (s.classKind ? CLASS_NAMES[s.classKind] : '');
+  return [s.subjectCode || s.subjectName, what, wallShortDate(s.startsAt)]
+    .filter(Boolean)
+    .join(' · ');
+}
+
+const words = (t: string | null | undefined): string[] =>
+  (t ?? '')
+    .toLocaleLowerCase('pl')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w && w !== 'gr' && w !== 'grupa');
+
+/**
+ * The session label for the panel's Description row, or null when it only
+ * repeats the subject, class and group (e.g. "Ćwiczenia gr 2") or is empty.
+ */
+export function panelDescription(s: PlanSession): string | null {
+  const label = s.label?.trim();
+  if (!label) return null;
+  const known = new Set(
+    [
+      s.subjectName,
+      s.subjectCode,
+      s.className,
+      s.groupName,
+      s.classKind ? CLASS_NAMES[s.classKind] : null,
+    ].flatMap(words),
+  );
+  return words(label).every((w) => known.has(w)) ? null : label;
 }
 
 /** The skip button: an all-groups mark skips every group of that day. */
@@ -263,4 +388,61 @@ export function syncFailed(s: {
   if (!s.lastError) return false;
   if (!s.lastOkAt) return true;
   return s.lastRunAt !== null && s.lastRunAt.getTime() > s.lastOkAt.getTime();
+}
+
+/** "Last synced: …", or a plain note that the stored classes are shown. */
+export function syncLine(lastOkAt: Date | null): string {
+  return lastOkAt
+    ? `Last synced: ${formatSyncTime(lastOkAt)}`
+    : 'Not synced from UniTime yet. The timetable shows the classes stored so far.';
+}
+
+/* ---------- My groups ---------- */
+
+/** The My groups tab of the current mode (simple links stay under /s). */
+export const myGroupsHref = (simple: boolean) =>
+  simple ? '/s/plan?tab=groups' : '/plan?tab=groups';
+
+/**
+ * Help of the My groups form. It must say what `filterMyGroups` does: with a
+ * group picked anywhere, lectures stay, only the picked group of each picked
+ * class stays, and group sessions of classes left unpicked are hidden.
+ */
+export const MY_GROUPS_HELP =
+  'Pick your group in each class that is split into groups. Until you pick one, the week view shows every group. Once you do, it shows lectures and only the groups you picked; group sessions of classes left on "All groups (not picked)" are hidden. Your choice is saved to your account.';
+
+/**
+ * Sessions `filterMyGroups` hides only because their class has no pick (not
+ * the other groups of a picked class), with the subject codes to pick for.
+ */
+export function unpickedHidden(
+  sessions: PlanSession[],
+  g: MyGroups,
+): { count: number; codes: string[] } {
+  if (Object.keys(g).length === 0) return { count: 0, codes: [] };
+  const kept = new Set(filterMyGroups(sessions, g));
+  const hidden = sessions.filter(
+    (s) => !kept.has(s) && g[String(s.classId)] === undefined,
+  );
+  return {
+    count: hidden.length,
+    codes: [...new Set(hidden.map((s) => s.subjectCode))],
+  };
+}
+
+/** "N classes hidden: pick a group for AM2, BD…" (at most three codes). */
+export function hiddenNote(h: { count: number; codes: string[] }): string {
+  const shown = h.codes.slice(0, 3).join(', ');
+  const more = h.codes.length > 3 ? '…' : '';
+  return `${plural(h.count, 'class', 'classes')} hidden: pick a group for ${shown}${more}`;
+}
+
+/** "Showing all groups. Pick yours": no group saved, and the week has groups. */
+export function showAllGroupsPrompt(
+  sessions: PlanSession[],
+  g: MyGroups,
+): boolean {
+  return (
+    Object.keys(g).length === 0 && sessions.some((s) => s.groupId !== null)
+  );
 }

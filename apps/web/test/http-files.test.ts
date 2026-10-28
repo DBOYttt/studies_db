@@ -38,6 +38,8 @@ const { parseRange, contentDisposition, handleFileRequest } = await import(
   '../lib/http-files'
 );
 const { GET } = await import('../app/files/[id]/[variant]/route');
+const { contentSecurityPolicy } = await import('../lib/security-headers');
+const APP_CSP = contentSecurityPolicy(process.env.NODE_ENV);
 
 describe('parseRange', () => {
   it('parses forms', () => {
@@ -146,10 +148,15 @@ describe('file route', () => {
     );
     return materialId;
   }
-  const call = (id: number | string, variant: string, range?: string) =>
+  const call = (
+    id: number | string,
+    variant: string,
+    range?: string,
+    extra: Record<string, string> = {},
+  ) =>
     GET(
       new Request(`http://localhost/files/${id}/${variant}`, {
-        headers: range ? { range } : {},
+        headers: { ...(range ? { range } : {}), ...extra },
       }),
       { params: Promise.resolve({ id: String(id), variant }) },
     ) as Promise<Response>;
@@ -193,6 +200,10 @@ describe('file route', () => {
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toBe('application/pdf');
     expect(res.headers.get('content-disposition')).toMatch(/^inline;/);
+    // no object-src/default-src: the browser's PDF viewer must still open it
+    expect(res.headers.get('content-security-policy')).toBe(
+      "frame-ancestors 'none'",
+    );
   });
 
   it('pdf preview of a not-yet-converted non-PDF original is 404', async () => {
@@ -240,10 +251,14 @@ describe('file route', () => {
     });
     const res = await call(id, 'preview');
     expect(res.headers.get('content-type')).toBe('text/plain; charset=utf-8');
-    expect(res.headers.get('content-security-policy')).toBeNull();
+    // next.config leaves /files/ to the route, which sends the app CSP itself.
+    expect(res.headers.get('content-security-policy')).toBe(APP_CSP);
+    expect(res.headers.get('referrer-policy')).toBe(
+      'strict-origin-when-cross-origin',
+    );
   });
 
-  it('svg preview gets CSP; png does not', async () => {
+  it('svg preview gets the sandbox CSP; png gets the app CSP', async () => {
     const svg = await seed({ previewKind: 'image', mimeType: 'image/svg+xml' });
     const r1 = await call(svg, 'preview');
     expect(r1.headers.get('content-security-policy')).toBe(
@@ -252,8 +267,59 @@ describe('file route', () => {
     expect(r1.headers.get('x-content-type-options')).toBe('nosniff');
     const png = await seed({ previewKind: 'image', mimeType: 'image/png' });
     const r2 = await call(png, 'preview');
-    expect(r2.headers.get('content-security-policy')).toBeNull();
+    expect(r2.headers.get('content-security-policy')).toBe(APP_CSP);
     expect(r2.headers.get('content-type')).toBe('image/png');
+  });
+
+  it('original of a type a browser would render as active content is octet-stream', async () => {
+    for (const mimeType of [
+      'text/html',
+      'text/html; charset=utf-8',
+      'TEXT/HTML',
+      'application/xhtml+xml',
+      'image/svg+xml',
+      'text/javascript',
+      'application/javascript',
+      'application/x-javascript',
+      'application/ecmascript',
+      'text/xml',
+      'application/xml',
+      'application/rss+xml',
+      'text/xsl',
+      'multipart/x-mixed-replace; boundary=x',
+    ]) {
+      const id = await seed({ mimeType, previewKind: 'none' });
+      const res = await call(id, 'original');
+      expect(res.status, mimeType).toBe(200);
+      expect(res.headers.get('content-type'), mimeType).toBe(
+        'application/octet-stream',
+      );
+      expect(res.headers.get('content-disposition')).toMatch(/^attachment;/);
+    }
+    for (const mimeType of [
+      'application/pdf',
+      'image/png',
+      'text/plain',
+      'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    ]) {
+      const id = await seed({ mimeType, previewKind: 'none' });
+      const res = await call(id, 'original');
+      expect(res.headers.get('content-type'), mimeType).toBe(mimeType);
+    }
+  });
+
+  it('404 for files of a soft-deleted topic', async () => {
+    const [t] = await db
+      .insert(topics)
+      .values({ title: 'Gone', discordThreadId: `gone-${seq}` });
+    const id = await seed({ topicId: t.insertId });
+    expect((await call(id, 'original')).status).toBe(200);
+    await db
+      .update(topics)
+      .set({ deletedAt: new Date() })
+      .where(eq(topics.id, t.insertId));
+    expect((await call(id, 'original')).status).toBe(404);
+    expect((await call(id, 'preview')).status).toBe(404);
   });
 
   it('image preview with non-image mime is 404; unknown kind is 404', async () => {
@@ -264,13 +330,12 @@ describe('file route', () => {
       .select()
       .from(materials)
       .where(eq(materials.id, unk));
+    const where = () => ({
+      limit: async () => [{ ...real, previewKind: 'weird' }],
+    });
     fakeDb = {
       select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [{ ...real, previewKind: 'weird' }],
-          }),
-        }),
+        from: () => ({ where, innerJoin: () => ({ where }) }),
       }),
     };
     try {
@@ -325,6 +390,112 @@ describe('file route', () => {
     cookieSid = undefined;
     await expect(call(id, 'original')).rejects.toMatchObject({
       digest: expect.stringMatching(/^NEXT_REDIRECT;.*\/login-info;/),
+    });
+  });
+
+  describe('caching', () => {
+    const SHA = 'b'.repeat(64);
+
+    it('an original is immutable with a sha256 ETag', async () => {
+      const id = await seed({ sha256: SHA });
+      const res = await call(id, 'original');
+      expect(res.status).toBe(200);
+      expect(res.headers.get('etag')).toBe(`"${SHA}"`);
+      expect(res.headers.get('cache-control')).toBe(
+        'private, max-age=31536000, immutable',
+      );
+    });
+
+    it('If-None-Match with the ETag is 304 without a body', async () => {
+      const id = await seed({ sha256: SHA });
+      for (const inm of [`"${SHA}"`, `W/"${SHA}"`, `"x", "${SHA}"`, '*']) {
+        const res = await call(id, 'original', undefined, {
+          'if-none-match': inm,
+        });
+        expect(res.status).toBe(304);
+        expect(res.body).toBeNull();
+        expect(res.headers.get('etag')).toBe(`"${SHA}"`);
+        expect(res.headers.get('cache-control')).toBe(
+          'private, max-age=31536000, immutable',
+        );
+      }
+      const other = await call(id, 'original', undefined, {
+        'if-none-match': '"other"',
+      });
+      expect(other.status).toBe(200);
+    });
+
+    it('a preview revalidates; its ETag changes once the conversion lands', async () => {
+      const id = await seed({ sha256: SHA });
+      const before = await call(id, 'preview');
+      expect(before.headers.get('cache-control')).toBe('private, no-cache');
+      const etag = before.headers.get('etag');
+      expect(etag).toMatch(new RegExp(`^"${SHA}`));
+      expect(
+        (await call(id, 'preview', undefined, { 'if-none-match': `${etag}` }))
+          .status,
+      ).toBe(304);
+      await writeFile(join(storage, 'previews', 'c.pdf'), 'CONVERTED');
+      await db
+        .update(materials)
+        .set({ previewPath: 'previews/c.pdf' })
+        .where(eq(materials.id, id));
+      const after = await call(id, 'preview', undefined, {
+        'if-none-match': `${etag}`,
+      });
+      expect(after.status).toBe(200);
+      expect(await after.text()).toBe('CONVERTED');
+      expect(after.headers.get('etag')).not.toBe(etag);
+      // PDF previews keep the frame-ancestors-only CSP on a 304 too
+      const again = await call(id, 'preview', undefined, {
+        'if-none-match': `${after.headers.get('etag')}`,
+      });
+      expect(again.status).toBe(304);
+      expect(again.headers.get('content-security-policy')).toBe(
+        "frame-ancestors 'none'",
+      );
+    });
+
+    it('Range still works, and If-Range with another ETag sends the whole file', async () => {
+      const id = await seed({ sha256: SHA });
+      const ranged = await call(id, 'original', 'bytes=10-19', {
+        'if-range': `"${SHA}"`,
+      });
+      expect(ranged.status).toBe(206);
+      expect(ranged.headers.get('etag')).toBe(`"${SHA}"`);
+      expect(Buffer.from(await ranged.arrayBuffer()).toString()).toBe(
+        '0123456789',
+      );
+      const stale = await call(id, 'original', 'bytes=10-19', {
+        'if-range': '"old"',
+      });
+      expect(stale.status).toBe(200);
+      expect(stale.headers.get('content-length')).toBe('100');
+    });
+
+    it('reads only the columns it needs (never extracted_text)', async () => {
+      const id = await seed();
+      const select = vi.spyOn(db, 'select');
+      try {
+        expect((await call(id, 'original')).status).toBe(200);
+        const fileQuery = select.mock.calls.find(
+          ([cols]) => cols !== undefined && 'storagePath' in (cols as object),
+        );
+        expect(fileQuery).toBeDefined();
+        expect(Object.keys(fileQuery?.[0] as object).sort()).toEqual(
+          [
+            'id',
+            'mimeType',
+            'originalFilename',
+            'previewKind',
+            'previewPath',
+            'sha256',
+            'storagePath',
+          ].sort(),
+        );
+      } finally {
+        select.mockRestore();
+      }
     });
   });
 

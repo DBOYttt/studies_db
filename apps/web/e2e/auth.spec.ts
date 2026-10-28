@@ -1,4 +1,12 @@
+import { createRequire } from 'node:module';
 import { type APIRequestContext, expect, test } from '@playwright/test';
+import { PDF_WORKER_CACHE, pdfWorkerFile } from '../lib/cache-headers';
+
+const pdfjsVersion = (
+  createRequire(import.meta.url)('pdfjs-dist/package.json') as {
+    version: string;
+  }
+).version;
 
 // Next parses Next-Router-State-Tree as JSON.parse(decodeURIComponent(header)).
 // A segment is a string or, for dynamic ones, [param, value, type, siblings].
@@ -87,6 +95,9 @@ test('plain requests without a cookie are redirected by the proxy', async ({
   }
   const info = await request.get('/login-info', { maxRedirects: 0 });
   expect(info.status()).toBe(200);
-  const worker = await request.get('/pdf.worker.min.mjs', { maxRedirects: 0 });
+  const worker = await request.get(`/${pdfWorkerFile(pdfjsVersion)}`, {
+    maxRedirects: 0,
+  });
   expect(worker.status()).toBe(200);
+  expect(worker.headers()['cache-control']).toBe(PDF_WORKER_CACHE);
 });

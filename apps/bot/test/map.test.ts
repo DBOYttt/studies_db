@@ -138,6 +138,15 @@ describe('reactForResult', () => {
     if (emoji) expect(react).toHaveBeenCalledWith(emoji);
     else expect(react).not.toHaveBeenCalled();
   });
+  it.each([
+    [['skipped'] as IngestResult[], ['⚠️']],
+    [['created', 'skipped'] as IngestResult[], ['✅', '⚠️']],
+    [['failed', 'skipped'] as IngestResult[], ['❌', '⚠️']],
+  ])('%j adds a warning for skipped files -> %j', async (results, emojis) => {
+    const react = vi.fn().mockResolvedValue(undefined);
+    await reactForResult({ react } as unknown as Message, results);
+    expect(react.mock.calls.map((c) => c[0])).toEqual(emojis);
+  });
   it('swallows reaction errors', async () => {
     const react = vi.fn().mockRejectedValue(new Error('perm'));
     vi.spyOn(console, 'error').mockImplementation(() => {});

@@ -22,7 +22,8 @@ const idOf = (v: string | string[] | undefined): number | null => {
 
 /**
  * Defaults of the add form from
- * `?subject=<id>&class=<id>&group=<id>&date=YYYY-MM-DD&kind=`.
+ * `?subject=<id>&class=<id>&group=<id>&date=YYYY-MM-DD&kind=&title=`
+ * (the timetable's "Add test" suggests a title).
  */
 export function newEventDefaults(sp: SP): EventFormValues {
   const date = one(sp.date);
@@ -31,7 +32,7 @@ export function newEventDefaults(sp: SP): EventFormValues {
   const classId = subjectId === null ? null : idOf(sp.class);
   return {
     kind: Object.hasOwn(EVENT_KINDS, kind) ? (kind as EventKind) : 'kolokwium',
-    title: '',
+    title: one(sp.title).trim().slice(0, 100),
     subjectId,
     classId,
     groupId: classId === null ? null : idOf(sp.group),
@@ -41,6 +42,11 @@ export function newEventDefaults(sp: SP): EventFormValues {
     place: '',
     note: '',
   };
+}
+
+/** Heading and crumb of the add form: "Add test" when the link asks for one. */
+export function newEventHeading(sp: SP): 'Add test' | 'Add event' {
+  return one(sp.kind) === 'kolokwium' ? 'Add test' : 'Add event';
 }
 
 /**

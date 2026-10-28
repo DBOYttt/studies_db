@@ -290,7 +290,11 @@ export function AdminSqlConsole({
           <span className="font-mono text-accent-ink">studies_db</span>:
         </legend>
         <div className="px-3 pt-2 pb-3">
-          <div className="min-w-0 overflow-hidden rounded border border-line-strong focus-within:border-accent">
+          {/* min-h: the editor's 176px (editorTheme) + borders, reserved before CodeMirror mounts. */}
+          <div
+            data-testid="admin-sql-editor"
+            className="min-h-[178px] min-w-0 overflow-hidden rounded border border-line-strong bg-page focus-within:border-accent"
+          >
             <CodeMirror
               value={query}
               onChange={setQuery}

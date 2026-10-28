@@ -156,6 +156,46 @@ describe('studies_rw grants', () => {
     });
   });
 
+  // Catch-up and event posts follow these ids into Discord.
+  describe('Discord link columns', () => {
+    const deniedLinks = [
+      "UPDATE subjects SET discord_channel_id = '1'",
+      "UPDATE topics SET discord_thread_id = '1'",
+      "UPDATE tags SET discord_tag_id = '1'",
+      `INSERT INTO subjects (name, code, semester, ects, discord_channel_id)
+       VALUES ('x', 'XLINK', 1, 1, '1')`,
+      `INSERT INTO topics (title, discord_thread_id) VALUES ('x', '1')`,
+      `INSERT INTO tags (subject_id, name, discord_tag_id) VALUES (1, 'x', '1')`,
+      "REPLACE INTO subjects (id, discord_channel_id) VALUES (1, '1')",
+    ];
+    it.each(deniedLinks)('refuses: %s', async (sql) => {
+      await asRw(async (c) => {
+        await expect(c.query(sql)).rejects.toMatchObject({
+          errno: expect.toSatisfy((n: number) => [1142, 1143].includes(n)),
+        });
+      });
+    });
+
+    it('may read them and edit, insert and delete the other columns', async () => {
+      await asRw(async (c) => {
+        await c.query('SELECT discord_channel_id FROM subjects');
+        await c.query('SELECT discord_thread_id FROM topics');
+        await c.query('SELECT discord_tag_id FROM tags');
+        await c.query('UPDATE subjects SET name = name, platform_url = NULL');
+        await c.query(
+          'UPDATE topics SET title = title, deleted_at = NULL WHERE id = -1',
+        );
+        await c.query('UPDATE tags SET name = name WHERE id = -1');
+        await c.query(
+          "INSERT INTO subjects (name, code, semester, ects) VALUES ('x', 'XLINK', 1, 1)",
+        );
+        await c.query("DELETE FROM subjects WHERE code = 'XLINK'");
+        await c.query('DELETE FROM topics WHERE id = -1');
+        await c.query('DELETE FROM tags WHERE id = -1');
+      });
+    });
+  });
+
   it('is idempotent and resets manual extra grants', async () => {
     const url = process.env.TEST_DATABASE_URL as string;
     const admin = await mysql.createConnection({ uri: url });

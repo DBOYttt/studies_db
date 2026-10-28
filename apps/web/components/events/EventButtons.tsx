@@ -65,6 +65,7 @@ export function EventButtons({
       </div>
     );
   }
+  const danger = `${btn} border-err-fg text-err-fg`;
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex flex-wrap items-center gap-2">
@@ -72,63 +73,69 @@ export function EventButtons({
           <PencilSimple size={15} aria-hidden />
           Edit
         </Link>
-        {confirming ? (
-          <>
-            <span className="text-muted">Delete this event?</span>
-            {inSeries ? (
-              <>
-                <button
-                  type="button"
-                  disabled={pending}
-                  className={`${btn} border-err-fg text-err-fg`}
-                  onClick={() =>
-                    run(() => deleteEventAction(id, base, 'one', version))
-                  }
-                >
-                  Only this one
-                </button>
-                <button
-                  type="button"
-                  disabled={pending}
-                  className={`${btn} border-err-fg text-err-fg`}
-                  onClick={() =>
-                    run(() => deleteEventAction(id, base, 'following', version))
-                  }
-                >
-                  This and following
-                </button>
-              </>
-            ) : (
+        <button
+          type="button"
+          className={btn}
+          aria-expanded={confirming}
+          onClick={() => setConfirming(true)}
+        >
+          <Trash size={15} aria-hidden />
+          Delete
+        </button>
+      </div>
+      {/* The question gets its own row, so the buttons above never move. */}
+      {confirming && (
+        <fieldset
+          aria-label="Delete this event?"
+          className="m-0 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-err-line bg-err-bg px-3 py-2"
+        >
+          <span className="w-full font-semibold text-err-fg sm:w-auto">
+            Delete this event?
+          </span>
+          {inSeries ? (
+            <>
               <button
                 type="button"
                 disabled={pending}
-                className={`${btn} border-err-fg text-err-fg`}
+                className={danger}
                 onClick={() =>
                   run(() => deleteEventAction(id, base, 'one', version))
                 }
               >
-                Yes, delete
+                Only this one
               </button>
-            )}
+              <button
+                type="button"
+                disabled={pending}
+                className={danger}
+                onClick={() =>
+                  run(() => deleteEventAction(id, base, 'following', version))
+                }
+              >
+                This and following
+              </button>
+            </>
+          ) : (
             <button
               type="button"
-              className={btn}
-              onClick={() => setConfirming(false)}
+              disabled={pending}
+              className={danger}
+              onClick={() =>
+                run(() => deleteEventAction(id, base, 'one', version))
+              }
             >
-              Cancel
+              Yes, delete
             </button>
-          </>
-        ) : (
+          )}
           <button
             type="button"
             className={btn}
-            onClick={() => setConfirming(true)}
+            onClick={() => setConfirming(false)}
           >
-            <Trash size={15} aria-hidden />
-            Delete
+            Cancel
           </button>
-        )}
-      </div>
+        </fieldset>
+      )}
       {error && (
         <span role="alert" className="text-err-fg">
           {error}

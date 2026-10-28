@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from 'node:crypto';
-import { and, eq, gt, isNull } from 'drizzle-orm';
+import { and, eq, gt, isNull, lte } from 'drizzle-orm';
 import type { Db, DbExecutor } from './client.js';
 import { loginTokens, sessions, users } from './schema.js';
 
@@ -119,6 +119,21 @@ export async function deleteSession(
   await db
     .delete(sessions)
     .where(eq(sessions.tokenHash, hashToken(sessionToken)));
+}
+
+/**
+ * Deletes sessions and login tokens past their expiry (the worker runs it
+ * daily). Expired rows are already refused on use; this keeps the tables small.
+ */
+export async function purgeExpiredAuth(
+  db: DbExecutor,
+  now: Date = new Date(),
+): Promise<{ sessions: number; loginTokens: number }> {
+  const [s] = await db.delete(sessions).where(lte(sessions.expiresAt, now));
+  const [t] = await db
+    .delete(loginTokens)
+    .where(lte(loginTokens.expiresAt, now));
+  return { sessions: s.affectedRows, loginTokens: t.affectedRows };
 }
 
 export async function setBanned(

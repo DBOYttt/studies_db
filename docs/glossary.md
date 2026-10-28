@@ -152,3 +152,31 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Wybierz zajęcia | Pick a session |
 | Wejściówka na każdych zajęciach | Entry quiz every session |
 | Włącz / Wyłącz (entry quiz) | Turn on / Turn off |
+
+## Audit fixes (T6: copy, defaults and flows)
+
+| Polish | English |
+| --- | --- |
+| Akcje (grid header) | Actions |
+| Od / Do (event time fields) | Starts / Ends |
+| Dodaj kolokwium (event form heading from "Add test") | Add test |
+| Wszystkie grupy (nie wybrano) (My groups select) | All groups (not picked) |
+| Pokazywane są wszystkie grupy. Wybierz swoje | Showing all groups. Pick yours |
+| N zajęć ukrytych: wybierz grupę dla … | N classes hidden: pick a group for … |
+| Pliki (reports, Start, sidebar) | Files ("Materials" stays the event page heading) |
+| Kolokwia i egzaminy w ciągu 30 dni (report) | Tests and exams in the next 30 days |
+| Wejściówka włączona / wyłączona / nie w tym tygodniu (audit labels) | Entry quiz turned on / turned off / not this week |
+| Zablokowano / odblokowano dostęp (audit labels) | Access blocked / unblocked |
+
+## Audit fixes (T7: mobile, icons, admin)
+
+| Polish | English |
+| --- | --- |
+| Użytkownik (audit log column and filter, was "Admin") | User |
+| Tylko admini (User filter option) | Admins only |
+| Cel (audit log column, was "Table") | Target |
+| Szczegóły (audit log column, was "Statement") | Details |
+| Wiersze we wszystkich widokach (Structure total) | Rows across views |
+| Platforma przedmiotu (both modes, was "UPeL / platform") | Subject platform |
+| N plików, M tematów (both searches) | N files, M topics |
+| Pokaż tematy w trybie zaawansowanym | Show topics in Advanced |

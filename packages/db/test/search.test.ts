@@ -99,6 +99,13 @@ beforeAll(async () => {
     `${'wypełniacz '.repeat(5000)}unikalnyslowo na końcu`,
   );
   await addMaterial(t2, u.id, 'plc.txt', 'Programujemy sterownik PLC w labie.');
+  await addMaterial(
+    t1,
+    u.id,
+    'wyklad3.txt',
+    'Złożoność obliczeniowa algorytmów sortowania.',
+  );
+  await addMaterial(t1, u.id, 'łańcuchy_Markowa.txt', null);
   await insertMaterial(
     db,
     {
@@ -214,6 +221,26 @@ describe('searchAll', () => {
   it('finds Polish diacritics', async () => {
     const hits = await searchAll(db, { q: 'łożysko' });
     expect(hits.map((h) => h.filename)).toContain('lozysko.txt');
+  });
+  it('ignores diacritics in file text, ł included', async () => {
+    const ids = async (q: string) =>
+      (await searchAll(db, { q })).map((h) => h.materialId).sort();
+    const folded = await ids('zlozonosc');
+    expect(folded).toHaveLength(1);
+    expect(folded).toEqual(await ids('złożoność'));
+    expect(folded).toEqual(await ids('ZŁOŻONOŚĆ'));
+    const [hit] = await searchAll(db, { q: 'zlozonosc' });
+    expect(hit.filename).toBe('wyklad3.txt');
+    expect(hit.snippet).toContain('«Złożoność»');
+  });
+  it('ignores ł in file names', async () => {
+    for (const q of ['łańcuchy', 'lancuchy', 'Łańcuchy markowa']) {
+      const hits = await searchAll(db, { q });
+      expect(
+        hits.map((h) => h.filename),
+        q,
+      ).toContain('łańcuchy_Markowa.txt');
+    }
   });
   it('finds 2-character words', async () => {
     const hits = await searchAll(db, { q: 'AI' });

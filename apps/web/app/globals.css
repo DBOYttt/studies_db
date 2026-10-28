@@ -190,11 +190,26 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * Native validation (and focus) scrolls a control to the top edge of the
+ * scroller; keep the label above it in view.
+ */
+@layer base {
+  input,
+  select,
+  textarea {
+    scroll-margin-top: 3rem;
+  }
+}
+
+/* No inline padding: a hit inside a word must not split it ("kolokwium-sql"). */
 mark {
   background: var(--mark);
   color: inherit;
   border-radius: 2px;
-  padding: 0 2px;
+  padding: 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* Unstyled anchors (no class) get the design's link look. */
@@ -214,7 +229,27 @@ a.link:hover {
   text-decoration: underline;
 }
 
-/* Preview panel: the only motion in the app. Transform + opacity, 150 ms. */
+/* Timetable footer bars (Test / Entry quiz): rise in with the week. */
+@keyframes bar-in {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.bar-in {
+  animation: bar-in 150ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-in {
+    animation: none;
+  }
+}
+
+/* Preview panel. Transform + opacity, 150 ms. */
 @keyframes panel-in {
   from {
     opacity: 0;
@@ -232,6 +267,18 @@ a.link:hover {
   .panel-in {
     animation: none;
   }
+}
+
+/*
+ * Required-field marker after a label's text. The alt text after "/" keeps
+ * the star out of the accessible name (the input says "required" itself);
+ * browsers without it read the star.
+ */
+.req::after {
+  content: " *";
+  /* biome-ignore lint/suspicious/noDuplicateProperties: the line above is the fallback without alt text */
+  content: " *" / "";
+  color: var(--err-fg);
 }
 
 /* Data map (React Flow): follow the app tokens in both color schemes. */

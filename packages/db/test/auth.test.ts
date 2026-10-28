@@ -7,6 +7,7 @@ import {
   getSessionUser,
   hashToken,
   LOGIN_TOKEN_TTL_MS,
+  purgeExpiredAuth,
   SESSION_TTL_MS,
   setBanned,
   upsertUser,
@@ -168,5 +169,42 @@ describe('auth', () => {
     expect(must(await getSessionUser(db, s.sessionToken)).isAdmin).toBe(false);
     await db.update(users).set({ isAdmin: true }).where(eq(users.id, u.id));
     expect(must(await getSessionUser(db, s.sessionToken)).isAdmin).toBe(true);
+  });
+});
+
+describe('purgeExpiredAuth', () => {
+  it('deletes expired sessions and login tokens, keeps live ones', async () => {
+    const u = await newUser();
+    const t0 = new Date('2026-01-01T12:00:00Z');
+    const oldToken = await createLoginToken(db, u.id, t0);
+    const oldSession = must(
+      await consumeLoginToken(db, await createLoginToken(db, u.id, t0), t0),
+    );
+    const now = new Date(t0.getTime() + SESSION_TTL_MS + 1000);
+    const liveToken = await createLoginToken(db, u.id, now);
+    const liveSession = must(
+      await consumeLoginToken(db, await createLoginToken(db, u.id, now), now),
+    );
+
+    const removed = await purgeExpiredAuth(db, now);
+    expect(removed.sessions).toBeGreaterThanOrEqual(1);
+    expect(removed.loginTokens).toBeGreaterThanOrEqual(2);
+
+    const tokenHashes = (
+      await db
+        .select({ h: loginTokens.tokenHash })
+        .from(loginTokens)
+        .where(eq(loginTokens.userId, u.id))
+    ).map((r) => r.h);
+    expect(tokenHashes).toContain(hashToken(liveToken));
+    expect(tokenHashes).not.toContain(hashToken(oldToken));
+    const sessionHashes = (
+      await db
+        .select({ h: sessions.tokenHash })
+        .from(sessions)
+        .where(eq(sessions.userId, u.id))
+    ).map((r) => r.h);
+    expect(sessionHashes).toEqual([hashToken(liveSession.sessionToken)]);
+    expect(sessionHashes).not.toContain(hashToken(oldSession.sessionToken));
   });
 });

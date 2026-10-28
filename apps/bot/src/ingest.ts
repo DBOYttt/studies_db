@@ -36,17 +36,79 @@ export type AttachmentInput = {
   topicId?: number;
 };
 
+/**
+ * Bytes per user per `windowMs`, counted by when each file was posted (not
+ * when it is ingested), so a catch-up after downtime keeps the files of past
+ * hours. Kept in memory (a restart forgets it); one small entry per stored
+ * file of a limited user.
+ */
+export class UserByteQuota {
+  private readonly used = new Map<string, { at: number; bytes: number }[]>();
+  constructor(
+    readonly maxBytes: number,
+    readonly windowMs: number,
+  ) {}
+
+  /**
+   * True when `bytes` posted at `at` keep every window of `windowMs` that
+   * contains `at` within `maxBytes`, whatever order the files arrive in.
+   */
+  fits(user: string, at: number, bytes: number): boolean {
+    const near = (this.used.get(user) ?? []).filter(
+      (e) => Math.abs(e.at - at) < this.windowMs,
+    );
+    // Windows [s, s + windowMs) containing `at` start in (at - windowMs, at].
+    // What a window holds only changes where an entry leaves it (s just past
+    // an earlier entry: s = e.at) or enters it (s = e.at - windowMs + 1 for a
+    // later entry), so those starts and the first one are enough.
+    const starts = [
+      at - this.windowMs + 1,
+      ...near.map((e) => (e.at <= at ? e.at : e.at - this.windowMs + 1)),
+    ];
+    return starts.every(
+      (s) =>
+        near
+          .filter((e) => e.at >= s && e.at < s + this.windowMs)
+          .reduce((sum, e) => sum + e.bytes, bytes) <= this.maxBytes,
+    );
+  }
+
+  charge(user: string, at: number, bytes: number): void {
+    const list = this.used.get(user) ?? [];
+    list.push({ at, bytes });
+    this.used.set(user, list);
+  }
+}
+
+export type IngestLimits = {
+  /** Larger attachments are skipped (by declared size) or aborted mid-download. */
+  maxFileBytes: number;
+  /** Per-uploader volume; files the bot posts for web uploads are not charged. */
+  quota: UserByteQuota;
+};
+
+const MiB = 1024 * 1024;
+/** R3: 50 MiB per file, 500 MiB per user per hour. */
+export const DEFAULT_INGEST_LIMITS: IngestLimits = {
+  maxFileBytes: 50 * MiB,
+  quota: new UserByteQuota(500 * MiB, 60 * 60_000),
+};
+
 export type IngestDeps = {
   db: Db;
   storageDir: string;
   fetchBody: (url: string) => Promise<ReadableStream<Uint8Array>>;
+  /** Defaults to `DEFAULT_INGEST_LIMITS` (shared by the whole process). */
+  limits?: IngestLimits;
 };
 
+/** `skipped`: over a size or volume limit, not stored. */
 export type IngestResult =
   | 'created'
   | 'duplicate'
   | 'exists'
   | 'ignored'
+  | 'skipped'
   | 'failed';
 
 const exists = (p: string) =>
@@ -75,6 +137,26 @@ export async function ingestAttachment(
       .limit(1);
     if (dup) return 'exists';
 
+    const limits = deps.limits ?? DEFAULT_INGEST_LIMITS;
+    if (a.size > limits.maxFileBytes) {
+      console.warn(
+        `skipped attachment ${a.attachmentId} (${a.filename}): ${a.size} bytes is over the ${limits.maxFileBytes}-byte limit`,
+      );
+      return 'skipped';
+    }
+    // Web uploads (known topic) are limited by the web; not charged here.
+    const charged = a.topicId === undefined;
+    const postedAt = a.postedAt.getTime();
+    if (
+      charged &&
+      !limits.quota.fits(a.uploader.discordUserId, postedAt, a.size)
+    ) {
+      console.warn(
+        `skipped attachment ${a.attachmentId} (${a.filename}): uploader ${a.uploader.discordUserId} is over the hourly volume limit`,
+      );
+      return 'skipped';
+    }
+
     const tmpDir = join(storageDir, 'tmp');
     await mkdir(tmpDir, { recursive: true });
     await mkdir(join(storageDir, 'originals'), { recursive: true });
@@ -87,8 +169,13 @@ export async function ingestAttachment(
     let bytes = 0;
     const hasher = new Transform({
       transform(chunk: Buffer, _enc, cb) {
-        hash.update(chunk);
         bytes += chunk.length;
+        // The declared size can't be trusted for the body: stop at the cap.
+        if (bytes > limits.maxFileBytes) {
+          cb(new Error(`body over the ${limits.maxFileBytes}-byte limit`));
+          return;
+        }
+        hash.update(chunk);
         cb(null, chunk);
       },
     });
@@ -133,7 +220,10 @@ export async function ingestAttachment(
       plan.jobs,
     );
     if (res.status === 'exists') return 'exists';
-    return alreadyOnDisk ? 'duplicate' : 'created';
+    if (alreadyOnDisk) return 'duplicate';
+    // Only files that took new space count (not failures or duplicates).
+    if (charged) limits.quota.charge(a.uploader.discordUserId, postedAt, bytes);
+    return 'created';
   } catch (err) {
     console.error(
       `ingest failed for attachment ${a.attachmentId} (${a.filename}):`,

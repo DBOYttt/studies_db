@@ -12,6 +12,7 @@ import {
   topics,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import { ChannelType, type Client } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import {
   afterAll,
@@ -22,7 +23,12 @@ import {
   it,
   vi,
 } from 'vitest';
-import { catchUp, type ForumSource, fetchAllPages } from '../src/catchup.js';
+import {
+  catchUp,
+  discordForumSource,
+  type ForumSource,
+  fetchAllPages,
+} from '../src/catchup.js';
 import type { AttachmentInput } from '../src/ingest.js';
 import type { ThreadInfo } from '../src/types.js';
 
@@ -242,5 +248,59 @@ describe('fetchAllPages', () => {
     });
     expect(calls).toBe(2);
     expect(out).toEqual([1, 2]);
+  });
+});
+
+describe('discordForumSource only reads forums of the configured guild', () => {
+  const channels = new Map<string, unknown>([
+    [
+      'f-here',
+      {
+        guildId: 'G1',
+        type: ChannelType.GuildForum,
+        availableTags: [{ id: 't1', name: 'Wykład' }],
+      },
+    ],
+    [
+      'f-there',
+      {
+        guildId: 'G2',
+        type: ChannelType.GuildForum,
+        availableTags: [{ id: 't2', name: 'Secret' }],
+      },
+    ],
+    [
+      'th-there',
+      {
+        guildId: 'G2',
+        isThread: () => true,
+        messages: { fetch: vi.fn() },
+      },
+    ],
+  ]);
+  const client = {
+    channels: { fetch: async (id: string) => channels.get(id) ?? null },
+  } as unknown as Client;
+  const source = discordForumSource(client, 'G1');
+
+  it('lists tags of a forum in the guild', async () => {
+    expect(await source.listTags('f-here')).toEqual([
+      { id: 't1', name: 'Wykład' },
+    ]);
+  });
+
+  it('refuses a forum of another guild', async () => {
+    await expect(source.listTags('f-there')).rejects.toThrow();
+    await expect(source.listThreads('f-there')).rejects.toThrow();
+  });
+
+  it('reads no messages of a thread in another guild', async () => {
+    const out = [];
+    for await (const m of source.listMessages('th-there', null)) out.push(m);
+    expect(out).toEqual([]);
+    const th = channels.get('th-there') as {
+      messages: { fetch: ReturnType<typeof vi.fn> };
+    };
+    expect(th.messages.fetch).not.toHaveBeenCalled();
   });
 });

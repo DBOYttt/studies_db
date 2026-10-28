@@ -278,10 +278,13 @@ describe('listSimpleFiles', () => {
 
 describe('searchSimpleFiles', () => {
   const names = async (q: string) =>
-    (await searchSimpleFiles(db, q)).map((x) => x.filename);
-  it('returns [] for a blank query', async () => {
+    (await searchSimpleFiles(db, q)).files.map((x) => x.filename);
+  it('returns nothing for a blank query', async () => {
     expect(await names('')).toEqual([]);
-    expect(await names('   ')).toEqual([]);
+    expect(await searchSimpleFiles(db, '   ')).toEqual({
+      files: [],
+      topics: 0,
+    });
   });
   it('matches % and _ literally', async () => {
     expect(await names('100%')).toEqual(['100%_done.pdf']);
@@ -298,10 +301,23 @@ describe('searchSimpleFiles', () => {
     expect(await names('entropia')).toEqual(['notatki.pdf']);
     expect(await names('zebra')).toEqual(['zebra.pdf']);
   });
+  it('keeps the text snippet of content hits', async () => {
+    const [ft] = (await searchSimpleFiles(db, 'entropia')).files;
+    expect(ft.snippet).toBe('«entropia» układu zamkniętego');
+    const [both] = (await searchSimpleFiles(db, 'zebra')).files;
+    expect(both.snippet).toContain('«zebra»');
+    // a name-only hit (no extracted text) has no snippet
+    const [name] = (await searchSimpleFiles(db, 'macierze')).files;
+    expect(name.snippet).toBeUndefined();
+  });
+  it('counts the topics whose title matches', async () => {
+    expect((await searchSimpleFiles(db, 'macierze')).topics).toBe(1);
+    expect((await searchSimpleFiles(db, 'entropia')).topics).toBe(0);
+  });
   it('survives search metacharacters and honours the limit', async () => {
     for (const q of ['(', '[', '"', '+-', 'a'.repeat(300)])
-      await expect(searchSimpleFiles(db, q)).resolves.toBeInstanceOf(Array);
-    expect(await searchSimpleFiles(db, 'pdf', 2)).toHaveLength(2);
+      await expect(searchSimpleFiles(db, q)).resolves.toHaveProperty('files');
+    expect((await searchSimpleFiles(db, 'pdf', 2)).files).toHaveLength(2);
   });
 });
 

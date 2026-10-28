@@ -1,17 +1,38 @@
 import { spawn } from 'node:child_process';
+import { tmpdir } from 'node:os';
 
 const MAX_BUFFER = 64 * 1024 * 1024;
+
+/**
+ * The environment of a conversion tool: PATH, a throwaway HOME, LANG and
+ * TMPDIR only. The tools read untrusted documents, so they never see the
+ * worker's secrets (DATABASE_URL, feed URLs).
+ */
+export function childEnv(
+  env: NodeJS.ProcessEnv,
+  home: string,
+): NodeJS.ProcessEnv {
+  const out: NodeJS.ProcessEnv = {
+    PATH: env.PATH ?? '/usr/local/bin:/usr/bin:/bin',
+    HOME: home,
+    LANG: env.LANG || 'C.UTF-8',
+  };
+  if (env.TMPDIR) out.TMPDIR = env.TMPDIR;
+  return out;
+}
 
 export function run(
   bin: string,
   args: string[],
   timeoutMs: number,
+  opts: { home?: string } = {},
 ): Promise<{ stdout: string }> {
   return new Promise((resolve, reject) => {
     // detached => child leads its own process group, so the whole tree can be killed.
     const child = spawn(bin, args, {
       detached: true,
       stdio: ['ignore', 'pipe', 'pipe'],
+      env: childEnv(process.env, opts.home ?? tmpdir()),
     });
     const out: Buffer[] = [];
     const err: Buffer[] = [];

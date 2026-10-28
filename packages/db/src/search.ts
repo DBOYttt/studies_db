@@ -1,5 +1,6 @@
 import { sql } from 'drizzle-orm';
 import type { DbExecutor } from './client.js';
+import { foldStroke } from './text.js';
 
 export type SearchHit = {
   materialId: number | null;
@@ -103,6 +104,9 @@ export async function searchAll(
   const q = sanitizeQuery(opts.q);
   if (!q) return [];
   const firstWord = q.split(' ')[0];
+  // search_name and search_text have ł folded (the collation handles the
+  // other diacritics), so the materials query is folded the same way.
+  const fq = foldStroke(q);
   const limit = clampLimit(opts.limit);
   const subj = opts.subjectId
     ? sql`AND t.subject_id = ${opts.subjectId}`
@@ -117,16 +121,16 @@ export async function searchAll(
              s.code AS subject_code, s.name AS subject_name,
              m.original_filename AS filename,
              SUBSTRING(COALESCE(m.extracted_text, m.original_filename),
-               GREATEST(1, LOCATE(${firstWord}, COALESCE(m.extracted_text, m.original_filename)) - 300),
+               GREATEST(1, LOCATE(${foldStroke(firstWord)}, COALESCE(m.search_text, m.original_filename)) - 300),
                1000) AS body,
-             MATCH(m.search_name, m.extracted_text)
-               AGAINST (${q} IN NATURAL LANGUAGE MODE) AS score
+             MATCH(m.search_name, m.search_text)
+               AGAINST (${fq} IN NATURAL LANGUAGE MODE) AS score
       FROM materials m
       JOIN topics t ON t.id = m.topic_id
       JOIN subjects s ON s.id = t.subject_id
       WHERE m.deleted_at IS NULL AND t.deleted_at IS NULL
-        AND MATCH(m.search_name, m.extracted_text)
-            AGAINST (${q} IN NATURAL LANGUAGE MODE)
+        AND MATCH(m.search_name, m.search_text)
+            AGAINST (${fq} IN NATURAL LANGUAGE MODE)
         ${subj} ${tag}
       UNION ALL
       SELECT NULL, t.id, t.title, s.code, s.name, NULL, t.title,

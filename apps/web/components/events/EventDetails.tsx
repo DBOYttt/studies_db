@@ -8,9 +8,11 @@ import { formatDate } from '@/lib/format';
 import { isoFiles } from '@/lib/simple-page';
 import type { SimpleFile } from '@/lib/simple-queries';
 import { EventButtons } from './EventButtons';
+import { EventKindIcon } from './EventKindIcon';
 import { EventUploads, type UploadItem } from './EventUploads';
 import { LinkedPosts } from './LinkedPosts';
 import { PostLine } from './PostLine';
+import { SavedStatus } from './SavedStatus';
 
 export type EventPageData = {
   id: number;
@@ -24,12 +26,16 @@ export type EventPageData = {
   subjectId: number | null;
   subjectCode: string | null;
   subjectName: string | null;
+  /** "Laboratorium", "Gr. 1" (content, Polish), or null. */
+  className: string | null;
+  groupName: string | null;
   createdByName: string | null;
   updatedByName: string | null;
   /** Part of a series ("Part of a series"). */
   series: { rule: 'weekly' | 'biweekly'; until: string } | null;
   deleted: boolean;
-  postLine: string;
+  /** Only when the post failed or is missing; null hides the line. */
+  postLine: string | null;
   /** The post failed or is missing: "Try again". */
   canRetryPost: boolean;
   version: number;
@@ -51,6 +57,7 @@ export function EventDetails({
   editHref,
   selectedFileId,
   canRestore,
+  savedText = null,
 }: {
   e: EventPageData;
   base: 'simple' | 'advanced';
@@ -58,6 +65,8 @@ export function EventDetails({
   editHref: string;
   selectedFileId: number | null;
   canRestore: boolean;
+  /** "Event added." / "Changes saved." right after the add / edit redirect. */
+  savedText?: string | null;
 }) {
   const kind = EVENT_KINDS[e.kind];
   const rows: [string, string][] = [
@@ -65,6 +74,11 @@ export function EventDetails({
   ];
   if (e.subjectCode)
     rows.push(['Subject', `${e.subjectCode} · ${e.subjectName}`]);
+  if (e.className)
+    rows.push([
+      'Class',
+      e.groupName ? `${e.className} ${e.groupName}` : e.className,
+    ]);
   if (e.place) rows.push(['Place', e.place]);
   if (e.series) {
     const [y, m, d] = e.series.until.split('-').map(Number);
@@ -80,14 +94,15 @@ export function EventDetails({
   return (
     <>
       <div className="flex flex-col gap-1">
-        <span className="self-start rounded bg-box-head px-1.5 py-0.5 text-xs font-semibold text-accent-ink">
-          <span aria-hidden>{kind.symbol} </span>
+        <span className="inline-flex items-center gap-1 self-start rounded bg-box-head px-1.5 py-0.5 text-xs font-semibold text-accent-ink">
+          <EventKindIcon kind={e.kind} size={13} />
           {kind.label}
         </span>
         <h1 className="mt-1 mb-0 text-[22px] font-semibold tracking-[-0.01em] text-balance">
           {e.title}
         </h1>
       </div>
+      <SavedStatus text={savedText} />
       {e.deleted && (
         <div
           role="status"
@@ -109,7 +124,9 @@ export function EventDetails({
           {e.note}
         </p>
       )}
-      <PostLine eventId={e.id} text={e.postLine} canRetry={e.canRetryPost} />
+      {e.postLine && (
+        <PostLine eventId={e.id} text={e.postLine} canRetry={e.canRetryPost} />
+      )}
       {(!e.deleted || canRestore) && (
         <EventButtons
           id={e.id}
@@ -126,7 +143,7 @@ export function EventDetails({
         withSubject={!e.subjectId}
         selectedId={selectedFileId}
         baseHref={baseHref}
-        emptyText="No materials. They appear once you link posts that have files."
+        emptyText="No files yet. Add files below or link a post that has them."
       />
       {!e.deleted && (
         <>

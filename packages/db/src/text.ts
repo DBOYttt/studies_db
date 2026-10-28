@@ -3,6 +3,14 @@ export function plural(n: number, one: string, many: string): string {
   return `${n} ${Math.abs(n) === 1 ? one : many}`;
 }
 
+/**
+ * `ł`/`Ł` → `l`/`L`. utf8mb4_unicode_ci already treats the other Polish
+ * diacritics (ą ć ę ń ó ś ź ż) as their base letters, but not ł, so the
+ * FULLTEXT columns and queries fold it by hand (see `materials.search_text`).
+ */
+export const foldStroke = (s: string): string =>
+  s.replace(/ł/g, 'l').replace(/Ł/g, 'L');
+
 /** Short English month names, index = `getUTCMonth()` ("Sep", never "Sept"). */
 export const MONTHS_SHORT = [
   'Jan',

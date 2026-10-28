@@ -21,6 +21,7 @@ import { EVENT_NOT_FOUND } from '@studies/db/text';
 import { asc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
+import { invalidateCounts } from './count-cache';
 import { getDb, getRoPool } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
@@ -48,6 +49,7 @@ const eventHref = (base: Base, id: number) =>
 const planHref = (base: Base) => (base === 'simple' ? '/s/plan' : '/plan');
 
 function refresh(id?: number) {
+  invalidateCounts();
   revalidatePath('/s/plan');
   revalidatePath('/plan');
   if (id !== undefined) {
@@ -131,13 +133,15 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
       .limit(1);
     refresh(first?.id);
     redirect(
-      first ? eventHref(baseOf(form), first.id) : planHref(baseOf(form)),
+      first
+        ? `${eventHref(baseOf(form), first.id)}?saved=added`
+        : planHref(baseOf(form)),
     );
   }
   const r = await addEvent(getDb(), user.id, input, 'web');
   if (!r.ok || r.id === undefined) return r;
   refresh(r.id);
-  redirect(eventHref(baseOf(form), r.id));
+  redirect(`${eventHref(baseOf(form), r.id)}?saved=added`);
 }
 
 /** Saves an edit and returns to the event page; returns only a refusal. */
@@ -175,7 +179,7 @@ export async function updateEventAction(
   );
   if (!r.ok) return r;
   refresh(id);
-  redirect(eventHref(baseOf(form), id));
+  redirect(`${eventHref(baseOf(form), id)}?saved=edited`);
 }
 
 export async function deleteEventAction(

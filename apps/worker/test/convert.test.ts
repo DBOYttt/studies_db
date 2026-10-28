@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { convertToPdf } from '../src/convert.js';
 import { extractPdfText } from '../src/extract.js';
+import { wrapBin } from './wrap-bin.js';
 
 const fx = (n: string) =>
   fileURLToPath(new URL(`./fixtures/${n}`, import.meta.url));
@@ -38,19 +39,18 @@ describe('convertToPdf', () => {
 
   it('kills the whole process tree and rejects on timeout', async () => {
     const pidFile = join(dir, 'grandchild.pid');
-    process.env.FAKE_PIDFILE = pidFile;
+    const bin = await wrapBin(dir, fx('fake-soffice.sh'), {
+      FAKE_PIDFILE: pidFile,
+    });
     const t = Date.now();
-    try {
-      await expect(
-        convertToPdf(fx('sample.docx'), join(dir, 'd.pdf'), {
-          bin: fx('fake-soffice.sh'),
-          timeoutMs: 200,
-        }),
-      ).rejects.toThrow(/timed out/);
-    } finally {
-      delete process.env.FAKE_PIDFILE;
-    }
-    expect(Date.now() - t).toBeLessThan(1000);
+    await expect(
+      convertToPdf(fx('sample.docx'), join(dir, 'd.pdf'), {
+        bin,
+        // Room for macOS to scan the freshly written wrapper on first exec.
+        timeoutMs: 1500,
+      }),
+    ).rejects.toThrow(/timed out/);
+    expect(Date.now() - t).toBeLessThan(2500);
     const childPid = Number((await readFile(pidFile, 'utf8')).trim());
     expect(childPid).toBeGreaterThan(0);
     await new Promise((r) => setTimeout(r, 200));

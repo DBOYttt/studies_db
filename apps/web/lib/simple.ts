@@ -1,5 +1,7 @@
 /** Pure, client-safe helpers of the simple view. */
 import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
+import { formatDate } from './format';
+import { wallShortDate, wallTime } from './plan-view';
 
 /**
  * One UTF-16 unit folded like `stripMarks(...).toLowerCase()` of @studies/db
@@ -42,21 +44,47 @@ export function highlightParts(
 
 export const REPORT_META: { icon: 'Books' | 'Medal' | 'Exam'; desc: string }[] =
   [
-    { icon: 'Books', desc: 'How many materials each subject has.' },
+    { icon: 'Books', desc: 'How many files each subject has.' },
     { icon: 'Medal', desc: 'Who has added the most files.' },
-    { icon: 'Exam', desc: 'Topics tagged Kolokwium in the last 30 days.' },
+    { icon: 'Exam', desc: 'Test and Exam events in the next 30 days.' },
   ];
 
 export const REPORT_LABELS: Record<string, string> = {
   code: 'Code',
   name: 'Subject',
-  materials: 'Materials',
+  materials: 'Files',
   display_name: 'Author',
   files: 'Files',
   id: 'No.',
-  title: 'Topic',
+  title: 'Title',
   created_at: 'Added',
+  starts_at: 'When',
+  type: 'Type',
+  subject_code: 'Subject',
 };
+
+/** A wall DATETIME as the RO console returns it (ISO with Z, or SQL text). */
+const wallValue = (v: string | Date): Date =>
+  v instanceof Date
+    ? v
+    : new Date(/[zZ]$/.test(v) ? v : `${v.replace(' ', 'T')}Z`);
+
+/**
+ * One cell of a ready-made report. `starts_at` (events) is Warsaw wall time,
+ * so it shows its own date and time (`Fri 30 Oct, 23:30`) from the UTC fields;
+ * `created_at` is a real instant, shown as a Warsaw date.
+ */
+export function reportCellText(col: string, v: unknown): string {
+  if (v === null || v === undefined) return '—';
+  if (col === 'starts_at' && (typeof v === 'string' || v instanceof Date)) {
+    const d = wallValue(v);
+    if (!Number.isNaN(d.getTime()))
+      return `${wallShortDate(d)}, ${wallTime(d)}`;
+  }
+  if (col === 'created_at' && (typeof v === 'string' || v instanceof Date))
+    return formatDate(v);
+  return String(v);
+}
 
 export type FileIconName =
   | 'FilePdf'
@@ -306,9 +334,9 @@ export const MAX_ROWS = 1000;
 
 /** CSV file names of the three ready-made reports (same order as EXAMPLE_QUERIES). */
 export const REPORT_SLUGS = [
-  'materials-per-subject',
+  'files-per-subject',
   'most-active-uploaders',
-  'tests-last-30-days',
+  'tests-exams-next-30-days',
 ] as const;
 
 /** `?r=0|1|2`; anything else (missing, junk, out of range) is the first report. */
@@ -316,3 +344,7 @@ export function parseReportIndex(raw: string | string[] | undefined): number {
   const v = Array.isArray(raw) ? raw[0] : raw;
   return v !== undefined && /^[0-2]$/.test(v) ? Number(v) : 0;
 }
+
+/** The same search in Advanced mode (it also lists topic hits). */
+export const advancedSearchHref = (q: string): string =>
+  `/mode?to=advanced&next=${encodeURIComponent(`/search?q=${encodeURIComponent(q)}`)}`;

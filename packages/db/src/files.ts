@@ -1,5 +1,6 @@
 import { isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { foldStroke } from './text.js';
 
 export type PreviewKind = 'pdf' | 'image' | 'text' | 'none';
 export type JobType = 'convert' | 'extract_text';
@@ -49,9 +50,15 @@ export function fileExtension(filename: string): string {
   return /^[a-z0-9]{1,10}$/.test(ext) ? ext : '';
 }
 
-/** Filename with `_`, `-`, `.` turned into spaces so FULLTEXT can tokenize it. */
+/**
+ * Filename with `_`, `-`, `.` turned into spaces so FULLTEXT can tokenize it,
+ * and `ł` folded (foldStroke) like the other diacritics.
+ */
 export function searchNameFor(filename: string): string {
-  return filename.replace(/[_.-]/g, ' ').replace(/\s+/g, ' ').trim();
+  return foldStroke(filename)
+    .replace(/[_.-]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 export function planProcessing(

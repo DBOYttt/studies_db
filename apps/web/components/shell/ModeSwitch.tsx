@@ -1,6 +1,6 @@
 'use client';
 
-import { Sparkle, TerminalWindow } from '@phosphor-icons/react';
+import { Code, ListBullets } from '@phosphor-icons/react';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import type { UiMode } from '@/lib/mode';
@@ -10,7 +10,7 @@ function Segments({ mode }: { mode: UiMode }) {
   const search = useSearchParams().toString();
   const next = encodeURIComponent(search ? `${pathname}?${search}` : pathname);
   const base =
-    'flex items-center gap-1 rounded px-2 py-0.5 text-[12px] font-medium';
+    'flex items-center gap-1 rounded px-2 py-0.5 text-[12px] font-medium max-md:px-1.5 max-md:text-[11px]';
   const item = (
     to: UiMode,
     label: string,
@@ -27,13 +27,13 @@ function Segments({ mode }: { mode: UiMode }) {
       return (
         <span aria-current="true" title={title} className={cls}>
           {icon}
-          <span className="max-md:sr-only">{label}</span>
+          {label}
         </span>
       );
     return (
       <a href={`/mode?to=${to}&next=${next}`} title={title} className={cls}>
         {icon}
-        <span className="max-md:sr-only">{label}</span>
+        {label}
       </a>
     );
   };
@@ -42,11 +42,16 @@ function Segments({ mode }: { mode: UiMode }) {
       aria-label="View mode"
       className="flex items-center gap-0.5 rounded-md border border-line p-0.5"
     >
-      {item('simple', 'Simple', <Sparkle aria-hidden />)}
+      {item(
+        'simple',
+        'Simple',
+        <ListBullets aria-hidden className="max-[380px]:hidden" />,
+        'Lists of subjects, files and the timetable',
+      )}
       {item(
         'advanced',
         'Advanced',
-        <TerminalWindow aria-hidden />,
+        <Code aria-hidden className="max-[380px]:hidden" />,
         'Show SQL, views and the database structure',
       )}
     </nav>

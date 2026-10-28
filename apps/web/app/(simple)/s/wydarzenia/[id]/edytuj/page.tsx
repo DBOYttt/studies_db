@@ -1,13 +1,13 @@
 import { EventForm } from '@/components/events/EventForm';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadEventForm } from '@/lib/event-form-page';
 import { parseEventId } from '@/lib/event-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
-import { listSubjectCards } from '@/lib/simple-queries';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +21,7 @@ export default async function SimpleEditEvent({
   const db = getDb();
   const [{ values: initial, deleted }, cards, options] = await Promise.all([
     loadEventForm(id),
-    listSubjectCards(db),
+    cachedSubjectCards(),
     listEventSubjectOptions(db),
   ]);
   return (

@@ -6,20 +6,33 @@ import {
   type PlanSession,
 } from '../lib/plan';
 import {
+  BADGE_BAR_H,
+  badgeBarText,
   badgeLabel,
+  badgeLayout,
+  badgePadBottom,
   badgeTitle,
   blockKind,
   dayHeader,
   entryQuizEditHref,
   formatSyncTime,
   fromWeekSession,
+  hiddenNote,
+  MY_GROUPS_HELP,
   markActionError,
+  mergedBarText,
+  myGroupsHref,
   nextSessionWhat,
+  panelDescription,
   SAVE_FAILED,
   sessionLinks,
+  sessionPanelHeading,
+  showAllGroupsPrompt,
   skipLabel,
   syncFailed,
+  syncLine,
   toWeekSession,
+  unpickedHidden,
   wallLongDate,
   wallShortDate,
   wallSqlText,
@@ -251,6 +264,77 @@ describe('timetable badges', () => {
     expect(badgeTitle({ ...quiz, note: null })).toBe('Entry quiz');
   });
 
+  it('splits a footer bar into its label, a short label and the detail', () => {
+    expect(badgeBarText(test1)).toEqual({
+      label: 'Test',
+      short: 'Test',
+      detail: 'Kolokwium 1',
+    });
+    expect(badgeBarText(test2)).toEqual({
+      label: '2 tests',
+      short: 'Tests',
+      detail: 'Kolokwium 1, Poprawa',
+    });
+    expect(badgeBarText(quiz)).toEqual({
+      label: 'Entry quiz',
+      short: 'Quiz',
+      detail: 'Rozdział 3',
+    });
+    expect(badgeBarText({ ...quiz, note: null })).toEqual({
+      label: 'Entry quiz',
+      short: 'Quiz',
+      detail: null,
+    });
+  });
+
+  it('merges an entry quiz and tests into one bar text', () => {
+    expect(mergedBarText([quiz, test1])).toEqual({
+      label: 'Quiz + Test',
+      short: 'Q+T',
+      title: 'Entry quiz: Rozdział 3. Test: Kolokwium 1',
+    });
+    expect(mergedBarText([test2, quiz])).toEqual({
+      label: 'Quiz + 2 tests',
+      short: 'Q+T',
+      title: 'Entry quiz: Rozdział 3. 2 tests: Kolokwium 1, Poprawa',
+    });
+  });
+
+  it('lays out footer bars so the subject and class lines stay clear', () => {
+    // Block heights: n quarter-hour rows of 14 px, minus 2.
+    // 60 min: 54 px, too short for any bar.
+    expect(badgeLayout(54, 1)).toBe('stripe');
+    expect(badgeLayout(54, 2)).toBe('stripe');
+    // 75 min: 68 px holds one bar.
+    expect(badgeLayout(68, 1)).toBe('bars');
+    expect(badgeLayout(68, 2)).toBe('merged');
+    // 90 min: 82 px holds one bar, so a quiz and a test merge.
+    expect(badgeLayout(82, 1)).toBe('bars');
+    expect(badgeLayout(82, 2)).toBe('merged');
+    // 105 min: 96 px holds both bars.
+    expect(badgeLayout(96, 2)).toBe('bars');
+    expect(badgeLayout(96, 0)).toBe('none');
+  });
+
+  it('reserves the bar stack plus a gap under the text, never less than two lines', () => {
+    expect(badgePadBottom('none', 0)).toBe(3);
+    expect(badgePadBottom('stripe', 2)).toBe(13);
+    expect(badgePadBottom('bars', 1)).toBe(3 + BADGE_BAR_H + 3);
+    expect(badgePadBottom('bars', 2)).toBe(3 + 2 * BADGE_BAR_H + 2 + 3);
+    expect(badgePadBottom('merged', 2)).toBe(3 + BADGE_BAR_H + 3);
+    for (const [h, n] of [
+      [68, 1],
+      [82, 1],
+      [82, 2],
+      [96, 2],
+      [124, 2],
+    ] as const) {
+      const layout = badgeLayout(h, n);
+      // 3 px top padding + two 14 px lines.
+      expect(h - 3 - badgePadBottom(layout, n)).toBeGreaterThanOrEqual(28);
+    }
+  });
+
   it('links Edit to the entry quiz section of the subject page', () => {
     expect(entryQuizEditHref(sessionLinks(session, ctx))).toBe(
       '/subjects/BD?class=laboratorium&group=2#entry-quiz',
@@ -275,6 +359,59 @@ describe('timetable badges', () => {
     expect(dto.linkedEventId).toBe(12);
     const back = fromWeekSession(JSON.parse(JSON.stringify(dto)));
     expect(back.badges).toEqual([test2, quiz]);
+  });
+});
+
+describe('session panel copy', () => {
+  it('names the subject, class and date in the heading', () => {
+    expect(sessionPanelHeading(session)).toBe(
+      'BD · Laboratorium Grupa 2 · Tue 13 Oct',
+    );
+    expect(
+      sessionPanelHeading({
+        ...session,
+        sessionKind: 'exam',
+        className: null,
+        groupName: null,
+      }),
+    ).toBe('BD · Exam · Tue 13 Oct');
+    expect(
+      sessionPanelHeading({ ...session, className: null, groupName: null }),
+    ).toBe('BD · Laboratorium · Tue 13 Oct');
+    expect(
+      sessionPanelHeading({
+        ...session,
+        subjectCode: '',
+        classKind: null,
+        className: null,
+        groupName: null,
+      }),
+    ).toBe('Bazy danych · Tue 13 Oct');
+  });
+
+  it('drops the description when it only repeats the subject and class', () => {
+    expect(panelDescription(session)).toBeNull();
+    expect(
+      panelDescription({
+        ...session,
+        className: 'Ćwiczenia',
+        groupName: 'Gr. 2',
+        label: 'Ćwiczenia gr 2',
+      }),
+    ).toBeNull();
+    expect(
+      panelDescription({
+        ...session,
+        label: 'Bazy danych — Laboratorium',
+      }),
+    ).toBeNull();
+    expect(panelDescription({ ...session, label: '' })).toBeNull();
+    expect(panelDescription({ ...session, label: 'Laboratorium 3' })).toBe(
+      'Laboratorium 3',
+    );
+    expect(
+      panelDescription({ ...session, label: 'Projekt zespołowy, sala 2' }),
+    ).toBe('Projekt zespołowy, sala 2');
   });
 });
 
@@ -369,5 +506,68 @@ describe('markActionError', () => {
       }),
     ).toBe(SAVE_FAILED);
     expect(SAVE_FAILED).toBe('Could not save. Try again.');
+  });
+});
+
+describe('My groups copy matches filterMyGroups', () => {
+  // AM2 Laboratorium (class 2) has groups 3 and 4, BD Projekt (class 5) has
+  // groups 6 and 7; the lecture has no group.
+  const lecture = { ...session, id: 1, classId: 9, groupId: null };
+  const am2gr3 = { ...session, id: 2, subjectCode: 'AM2', groupId: 3 };
+  const am2gr4 = { ...session, id: 3, subjectCode: 'AM2', groupId: 4 };
+  const bd6 = { ...session, id: 4, classId: 5, groupId: 6 };
+  const bd7 = { ...session, id: 5, classId: 5, groupId: 7 };
+  const all = [lecture, am2gr3, am2gr4, bd6, bd7];
+
+  it('lectures stay; only the picked group of a picked class stays', () => {
+    const kept = filterMyGroups(all, { '5': 6 }).map((s) => s.id);
+    expect(kept).toEqual([1, 4]);
+    // So the help text says unpicked classes are hidden, not "stay visible".
+    expect(MY_GROUPS_HELP).toContain('lectures');
+    expect(MY_GROUPS_HELP).toContain('hidden');
+    expect(MY_GROUPS_HELP).not.toContain('stay visible');
+    expect(MY_GROUPS_HELP).toContain('All groups (not picked)');
+  });
+  it('counts only the sessions hidden for want of a pick, with their codes', () => {
+    // AM2 has no pick: both its groups are hidden; BD Gr. 7 is hidden on
+    // purpose (Gr. 6 is picked) and is not asked about.
+    expect(unpickedHidden(all, { '5': 6 })).toEqual({
+      count: 2,
+      codes: ['AM2'],
+    });
+    expect(unpickedHidden(all, { '2': 3, '5': 6 })).toEqual({
+      count: 0,
+      codes: [],
+    });
+    // Without any pick nothing is filtered, so nothing is hidden.
+    expect(unpickedHidden(all, {})).toEqual({ count: 0, codes: [] });
+  });
+  it('the hidden note names the classes to pick a group for', () => {
+    expect(hiddenNote({ count: 1, codes: ['AM2'] })).toBe(
+      '1 class hidden: pick a group for AM2',
+    );
+    expect(hiddenNote({ count: 9, codes: ['AM2', 'BD', 'FIZ', 'SO'] })).toBe(
+      '9 classes hidden: pick a group for AM2, BD, FIZ…',
+    );
+  });
+  it('My groups links stay in the current mode', () => {
+    expect(myGroupsHref(true)).toBe('/s/plan?tab=groups');
+    expect(myGroupsHref(false)).toBe('/plan?tab=groups');
+  });
+  it('"Showing all groups" only while no group is saved and the week has groups', () => {
+    expect(showAllGroupsPrompt(all, {})).toBe(true);
+    expect(showAllGroupsPrompt(all, { '5': 6 })).toBe(false);
+    expect(showAllGroupsPrompt([lecture], {})).toBe(false);
+  });
+});
+
+describe('syncLine', () => {
+  it('names the last sync, or says the stored classes are shown', () => {
+    expect(syncLine(W(2026, 10, 20, 8, 5))).toBe(
+      `Last synced: ${formatSyncTime(W(2026, 10, 20, 8, 5))}`,
+    );
+    expect(syncLine(null)).toBe(
+      'Not synced from UniTime yet. The timetable shows the classes stored so far.',
+    );
   });
 });

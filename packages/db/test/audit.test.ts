@@ -1,6 +1,12 @@
 import { eq } from 'drizzle-orm';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { getAudit, listAdmins, listAudit, writeAudit } from '../src/audit.js';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
+import {
+  getAudit,
+  listAdmins,
+  listAudit,
+  listAuditRows,
+  writeAudit,
+} from '../src/audit.js';
 import { upsertUser } from '../src/auth.js';
 import type { Db } from '../src/client.js';
 import { CONTENT_TABLES, PUBLIC_VIEWS } from '../src/constants.js';
@@ -135,5 +141,34 @@ describe('audit', () => {
     expect(CONTENT_TABLES as readonly string[]).not.toContain('admin_audit');
     expect(CONTENT_TABLES).toContain('subjects');
     expect(CONTENT_TABLES).toHaveLength(16);
+  });
+  it('listAuditRows filters by target and action prefix without a count', async () => {
+    await db.delete(adminAudit);
+    const e1 = await writeAudit(db, {
+      userId: a,
+      action: 'event.add',
+      target: '7',
+    });
+    await writeAudit(db, { userId: a, action: 'sql.execute', target: '7' });
+    const s1 = await writeAudit(db, {
+      userId: b,
+      action: 'event.series_edit',
+      target: 'series:3',
+    });
+    await writeAudit(db, { userId: b, action: 'event.add', target: '8' });
+    const select = vi.spyOn(db, 'select');
+    try {
+      const rows = await listAuditRows(db, {
+        limit: 50,
+        offset: 0,
+        target: ['7', 'series:3'],
+        actionPrefix: 'event.',
+      });
+      expect(rows.map((r) => r.id)).toEqual([s1, e1]);
+      expect(rows.map((r) => r.userName)).toEqual(['Bob', 'Alice']);
+      expect(select).toHaveBeenCalledTimes(1);
+    } finally {
+      select.mockRestore();
+    }
   });
 });

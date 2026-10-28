@@ -4,7 +4,7 @@
  * `event_upload` (later `setup`, `setup_dry_run`, `resync`). Targets are
  * strings like `event:<id>`.
  */
-import { and, desc, eq, inArray, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Db, DbExecutor } from './client.js';
 import { botRequests } from './schema.js';
 
@@ -165,4 +165,30 @@ export async function lastBotRequest(
     .orderBy(desc(botRequests.id))
     .limit(1);
   return row ?? null;
+}
+
+/** Finished requests are kept this long (the event page shows the last one). */
+export const BOT_REQUEST_KEEP_MS = 30 * 24 * 3600_000;
+
+/**
+ * Deletes `done`/`failed` requests created and finished more than
+ * `keepMs` before `now`. Queued and running ones are never touched. Returns
+ * how many were deleted.
+ */
+export async function pruneBotRequests(
+  db: DbExecutor,
+  now: Date,
+  keepMs = BOT_REQUEST_KEEP_MS,
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - keepMs);
+  const [res] = await db
+    .delete(botRequests)
+    .where(
+      and(
+        inArray(botRequests.status, ['done', 'failed']),
+        lt(botRequests.createdAt, cutoff),
+        or(isNull(botRequests.finishedAt), lt(botRequests.finishedAt, cutoff)),
+      ),
+    );
+  return res.affectedRows;
 }

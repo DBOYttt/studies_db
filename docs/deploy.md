@@ -36,6 +36,22 @@ The `worker` service does not load `.env` as a whole: compose passes it only `DA
 `STORAGE_DIR`). It opens files named by DB rows, so it should not hold the Discord token or other secrets.
 If you add a worker setting, list it under `worker.environment` in `compose.yaml`.
 
+The worker image runs as user `node` (uid 1000) and writes only `$STORAGE_DIR/previews`, which the `migrate`
+service creates and hands to uid 1000 on every `compose up` (existing previews included). It reads the
+originals the bot (root) writes with mode 0644. Compose caps the worker at `mem_limit`
+(`WORKER_MEM_LIMIT`, default `2g`) and `pids_limit: 512`, and `soffice`/`pdftotext` get only `PATH`, a
+throwaway `HOME`, `LANG` and `TMPDIR`, never `DATABASE_URL`. Known residual risk: conversions still have network
+access (the worker needs the DB and the UniTime feed). Cutting it off needs a separate conversion container
+without a network, which is deferred.
+
+### Admin role position (security)
+
+`/setup` creates the `Studies Admin` role at the bottom of the role list and warns about it. Anyone with
+Manage Roles can give themselves a role below their own highest role, and this one carries bot admin, web
+admin and the read-write SQL console. After the first `/setup`, drag the role above every role held by people
+who must not be admins (Server Settings → Roles), and give Manage Roles (and Manage Server, which can run
+`/setup`) only to admins. A banned user is refused on every Discord admin path even if they keep the role.
+
 ## 2. Cloudflare Tunnel
 
 1. Cloudflare Zero Trust dashboard -> Networks -> Tunnels -> Create tunnel (Cloudflared).
@@ -134,6 +150,34 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
 2. Optional: set `UNITIME_EXAM_ICAL_URL` (the exam timetable feed, see "Plan zajęć" below) and recreate `worker`.
 3. Re-run `/setup` so the pinned `#panel` message gets the "Entry quizzes" row. Slash command definitions did
    not change, so there is nothing to register.
+
+### Upgrading to the bot and worker hardening (2026-10-25 audit)
+
+1. Rebuild and recreate the stack (`podman compose --profile app up -d --build`). The `migrate` service now also
+   chowns `$STORAGE_DIR/previews` to uid 1000 before the worker (now user `node`) starts; without it new
+   previews fail with `EACCES`.
+2. Check the admin role's position (see "Admin role position" above).
+3. Discord attachments over 50 MiB, or past 500 MiB per user per hour (counted by the time the message was
+   posted), are skipped with a log line and a ⚠️ reaction, and not mirrored. A second rename of an event post
+   within 10 minutes waits until the 10 minutes are up; the bot then renames it on its own.
+4. Migrations 0021 (`v_materials` hides files of deleted topics) and 0022 (indexes on `bot_requests`,
+   `admin_audit` and `materials`) run with the `migrate` service. 0022 builds indexes, so on a large
+   `admin_audit` table the migrate step takes a little longer.
+5. File originals are now cached by the browser for a year (they never change for an id). Logging out asks
+   the browser to clear the site's cache (`Clear-Site-Data: "cache"`), but that is best-effort: not every
+   browser honours it, and a session that simply expires never sends it.
+6. Migrations 0023 and 0024 make search ignore `ł` like the other diacritics: 0023 adds the stored
+   generated column `materials.search_text` (a copy of `extracted_text` with `ł` folded), 0024 folds
+   `ł` in `search_name` and moves the `ft_materials` FULLTEXT index to `(search_name, search_text)`.
+   Both rebuild `materials`, and `search_text` roughly doubles the space the extracted text takes, so
+   take a backup first (`scripts/backup.sh`) and expect the migrate step to take longer on a large table.
+   If 0024 fails at `ADD FULLTEXT` (after its `DROP INDEX`), it is not recorded and a re-run fails at
+   `DROP INDEX`. Fix the cause, re-create the index by hand, then re-run migrate (it drops and re-adds the
+   index and records 0024):
+
+   ```sql
+   ALTER TABLE `materials` ADD FULLTEXT `ft_materials` (`search_name`, `search_text`);
+   ```
 
 ## Tagi forum
 

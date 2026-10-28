@@ -30,6 +30,40 @@ export class SafeSyncError extends Error {
   override name = 'SafeSyncError';
 }
 
+const MAX_REDIRECTS = 5;
+
+/**
+ * Follows redirects by hand, and only on the same host without a downgrade
+ * from https to http: the feed must not be able to send the worker to an
+ * internal or plain-HTTP address.
+ */
+async function fetchSameHost(
+  doFetch: typeof fetch,
+  url: string,
+  signal: AbortSignal,
+  host: string,
+): Promise<Response> {
+  let current = new URL(url);
+  for (let hop = 0; ; hop++) {
+    const res = await doFetch(current, { signal, redirect: 'manual' });
+    const location = res.headers.get('location');
+    if (res.status < 300 || res.status >= 400 || !location) return res;
+    await res.body?.cancel().catch(() => {});
+    if (hop >= MAX_REDIRECTS)
+      throw new SafeSyncError(`Too many redirects from ${host}`);
+    const next = new URL(location, current);
+    const downgrade =
+      current.protocol === 'https:' && next.protocol !== 'https:';
+    if (
+      next.host !== current.host ||
+      downgrade ||
+      !['http:', 'https:'].includes(next.protocol)
+    )
+      throw new SafeSyncError(`${host} redirected to another host`);
+    current = next;
+  }
+}
+
 export async function fetchTimetable(
   url: string,
   o: { timeoutMs?: number; maxBytes?: number; fetchImpl?: typeof fetch } = {},
@@ -39,7 +73,7 @@ export async function fetchTimetable(
   const doFetch = o.fetchImpl ?? fetch;
   const signal = AbortSignal.timeout(o.timeoutMs ?? DEFAULT_TIMEOUT_MS);
   try {
-    const res = await doFetch(url, { signal, redirect: 'follow' });
+    const res = await fetchSameHost(doFetch, url, signal, host);
     if (res.status >= 400)
       throw new SafeSyncError(`HTTP ${res.status} from ${host}`);
     const type = res.headers.get('content-type') ?? '';

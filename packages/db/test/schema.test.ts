@@ -108,6 +108,31 @@ describe('schema', () => {
       expect(keys).not.toContain(k);
   });
 
+  it('v_materials hides files of a soft-deleted topic, keeps subject-less ones', async () => {
+    const [gone] = await db
+      .insert(topics)
+      .values({ title: 'Usunięty', discordThreadId: 't-gone' })
+      .$returningId();
+    const [event] = await db
+      .insert(topics)
+      .values({ title: 'Wydarzenie', discordThreadId: 't-event' })
+      .$returningId();
+    await db.insert(materials).values(base('vm-gone', { topicId: gone.id }));
+    await db.insert(materials).values(base('vm-event', { topicId: event.id }));
+    const names = async () => {
+      const [rows] = await pool.query<mysql.RowDataPacket[]>(
+        "SELECT original_filename FROM v_materials WHERE original_filename IN ('vm-gone.pdf', 'vm-event.pdf') ORDER BY original_filename",
+      );
+      return rows.map((r) => r.original_filename);
+    };
+    expect(await names()).toEqual(['vm-event.pdf', 'vm-gone.pdf']);
+    await db
+      .update(topics)
+      .set({ deletedAt: new Date() })
+      .where(eq(topics.id, gone.id));
+    expect(await names()).toEqual(['vm-event.pdf']);
+  });
+
   it('v_users hides discord ids and ban flag', async () => {
     const [rows] = await pool.query<mysql.RowDataPacket[]>(
       'SELECT * FROM v_users',

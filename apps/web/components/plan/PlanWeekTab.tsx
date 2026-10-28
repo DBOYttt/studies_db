@@ -6,6 +6,7 @@ import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   defaultWeek,
+  type IsoWeek,
   isoWeekOf,
   nowWall,
   parseIsoWeek,
@@ -14,7 +15,11 @@ import {
   weekDays,
   weekStart,
 } from '@/lib/plan';
-import { annotatePlanWeek, newEventHref } from '@/lib/plan-events';
+import {
+  annotatePlanWeek,
+  eventsForFilter,
+  newEventHref,
+} from '@/lib/plan-events';
 import {
   listMyGroupOptions,
   listWeekSessions,
@@ -27,6 +32,34 @@ import { requireUser } from '@/lib/session';
 
 const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
+
+/**
+ * The week shown without `?week=` (`defaultWeek`): when that is the current
+ * week, the ends of its sessions and events (as the plan filter keeps them)
+ * decide whether it is already over.
+ */
+async function openingWeek(
+  pool: ReturnType<typeof getRoPool>,
+  now: Date,
+  filter: PlanFilter,
+): Promise<IsoWeek> {
+  const range = await sessionRange(pool, filter);
+  const current = isoWeekOf(now);
+  const week = defaultWeek(now, range);
+  if (week.year !== current.year || week.week !== current.week) return week;
+  const [{ rows }, events] = await Promise.all([
+    listWeekSessions(pool, current, filter),
+    listEventsInRange(
+      pool,
+      weekStart(current),
+      weekStart(shiftWeek(current, 1)),
+    ),
+  ]);
+  const ends = [...rows, ...eventsForFilter(events, filter)].map(
+    (s) => s.endsAt,
+  );
+  return defaultWeek(now, range, ends);
+}
 
 /**
  * Week timetable of /plan, a subject or a lecturer (server part): `?week=`
@@ -55,8 +88,7 @@ export async function PlanWeekTab({
   const user = myGroupsFilter ? await requireUser() : null;
   const raw = typeof rawWeek === 'string' ? rawWeek : undefined;
   try {
-    const week =
-      parseIsoWeek(raw) ?? defaultWeek(now, await sessionRange(pool, filter));
+    const week = parseIsoWeek(raw) ?? (await openingWeek(pool, now, filter));
     const [{ rows: classRows }, events, links, options, stored] =
       await Promise.all([
         listWeekSessions(pool, week, filter),

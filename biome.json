@@ -11,7 +11,7 @@
       "!**/node_modules",
       "!**/.next",
       "!**/.next-*",
-      "!**/public/pdf.worker.min.mjs",
+      "!**/public/pdf.worker.*.min.mjs",
       "!**/next-env.d.ts",
       "!**/test-results",
       "!**/playwright-report"

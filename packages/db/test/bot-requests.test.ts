@@ -6,6 +6,7 @@ import {
   failStaleBotRequests,
   finishBotRequest,
   lastBotRequest,
+  pruneBotRequests,
 } from '../src/bot-requests.js';
 import { createDb, type Db } from '../src/client.js';
 import { botRequests } from '../src/schema.js';
@@ -152,5 +153,41 @@ describe('bot request queue', () => {
     expect(rows.get(queued.id)?.status).toBe('queued');
     // every running request when olderThanMs is 0
     expect(await failStaleBotRequests(db, now, 0)).toBe(1);
+  });
+
+  it('pruneBotRequests deletes only finished requests older than the cutoff', async () => {
+    const now = new Date('2030-03-01T12:00:00Z');
+    const old = new Date('2030-01-01T12:00:00Z');
+    const recent = new Date('2030-02-25T12:00:00Z');
+    const add = async (
+      status: 'queued' | 'running' | 'done' | 'failed',
+      createdAt: Date,
+      finishedAt: Date | null,
+    ) => {
+      const [r] = await db.insert(botRequests).values({
+        kind: 'event_post_upsert',
+        target: `event:${status}:${createdAt.getTime()}`,
+        status,
+        createdAt,
+        finishedAt,
+      });
+      return r.insertId;
+    };
+    await add('done', old, old);
+    await add('failed', old, old);
+    const keepQueued = await add('queued', old, null);
+    const keepRunning = await add('running', old, null);
+    const keepRecent = await add('done', recent, recent);
+    // created long ago but finished recently: kept too
+    const keepLateFinish = await add('failed', old, recent);
+    expect(await pruneBotRequests(db, now)).toBe(2);
+    const left = (await db.select({ id: botRequests.id }).from(botRequests))
+      .map((r) => r.id)
+      .sort((a, b) => a - b);
+    expect(left).toEqual(
+      [keepQueued, keepRunning, keepRecent, keepLateFinish].sort(
+        (a, b) => a - b,
+      ),
+    );
   });
 });

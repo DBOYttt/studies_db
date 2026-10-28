@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SkipLink } from './SkipLink';
 
 /**
  * Outer grid of the app (design: 264px navigation panel + main column).
@@ -125,6 +126,7 @@ export function ShellFrame({
 
   return (
     <div className="grid h-[100dvh] grid-cols-[minmax(0,1fr)] overflow-hidden md:grid-cols-[264px_minmax(0,1fr)]">
+      <SkipLink />
       <div
         aria-hidden="true"
         onClick={() => close(true)}
@@ -177,7 +179,8 @@ export function ShellFrame({
         </header>
         <main
           id="content"
-          className="min-h-0 flex-1 overflow-auto px-[var(--content-px)] pt-[var(--content-pt)] pb-7 [--content-pt:16px] [--content-px:12px] md:[--content-px:18px]"
+          tabIndex={-1}
+          className="outline-none min-h-0 flex-1 overflow-auto px-[var(--content-px)] pt-[var(--content-pt)] pb-7 [--content-pt:16px] [--content-px:12px] md:[--content-px:18px]"
         >
           {children}
         </main>

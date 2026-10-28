@@ -4,6 +4,8 @@ import {
   FolderDashed,
 } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
+import { Fragment } from 'react';
+import { Highlight } from '@/components/Highlight';
 import { formatDate, formatSize } from '@/lib/format';
 import { fileIcon, highlightParts, statusBadge, withParam } from '@/lib/simple';
 import type { SimpleFile } from '@/lib/simple-queries';
@@ -12,6 +14,8 @@ import { FileTypeIcon, TONE } from './FileTypeIcon';
 /** A SimpleFile as it crosses into rendering: dates may be ISO strings. */
 export type FileRowData = Omit<SimpleFile, 'createdAt'> & {
   createdAt: Date | string;
+  /** Search results: where the text matched, «hit» marked. */
+  snippet?: string;
 };
 
 const BADGE = {
@@ -52,9 +56,7 @@ export function FileRow({
     `added by ${f.uploader}`,
     formatDate(f.createdAt),
     formatSize(f.sizeBytes),
-  ]
-    .filter(Boolean)
-    .join(' · ');
+  ].filter((m): m is string => Boolean(m));
   return (
     <li
       className={`flex items-center gap-3 px-3.5 py-2.5 transition-colors duration-100 max-sm:flex-wrap ${
@@ -72,6 +74,7 @@ export function FileRow({
             href={href}
             scroll={false}
             aria-current={selected ? 'true' : undefined}
+            lang="pl"
             className="font-semibold break-all text-accent-ink hover:text-accent-ink-hover hover:underline"
           >
             <Marked text={f.filename} q={q} />
@@ -84,16 +87,34 @@ export function FileRow({
             </span>
           )}
         </div>
-        <div className="break-words text-fg/80">
+        <div lang="pl" className="break-words text-fg/80">
           <Marked text={f.topicTitle} q={q} />
         </div>
-        <div className="text-xs text-faint">{meta}</div>
+        {f.snippet && (
+          <p
+            lang="pl"
+            className="m-0 line-clamp-2 break-words text-[13px] text-muted"
+          >
+            <Highlight text={f.snippet} />
+          </p>
+        )}
+        {/* Each value stays whole ("181 B", "22 Oct 2026"); lines break between them. */}
+        <div className="text-xs text-faint">
+          {meta.map((m, i) => (
+            // biome-ignore lint/suspicious/noArrayIndexKey: meta parts are positional
+            <Fragment key={i}>
+              {i > 0 && ' · '}
+              <span className="whitespace-nowrap">{m}</span>
+            </Fragment>
+          ))}
+        </div>
       </div>
       <div className="flex shrink-0 gap-1.5 max-sm:w-full max-sm:pl-[50px]">
         <Link
           href={href}
           scroll={false}
           aria-label={`Preview file ${f.filename}`}
+          data-preview-trigger={f.id}
           className={btn}
         >
           <Eye size={15} aria-hidden />

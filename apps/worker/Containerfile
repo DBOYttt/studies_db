@@ -11,4 +11,7 @@ COPY . .
 # tsx is a devDependency used at runtime, so install the full dependency set.
 RUN pnpm install --frozen-lockfile --prod=false --filter @studies/worker...
 WORKDIR /app/apps/worker
+# Not root: soffice/pdftotext read untrusted documents. The worker writes only
+# STORAGE_DIR/previews, which the migrate service hands to uid 1000 (node).
+USER node
 CMD ["node", "--import", "tsx", "src/index.ts"]

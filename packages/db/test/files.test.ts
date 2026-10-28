@@ -142,6 +142,9 @@ describe('searchNameFor', () => {
     );
     expect(searchNameFor('  a--b__c..d  ')).toBe('a b c d');
   });
+  it('folds ł so FULLTEXT matches it like the other diacritics', () => {
+    expect(searchNameFor('Łańcuchy_złożone.pdf')).toBe('Lańcuchy zlożone pdf');
+  });
 });
 
 describe('resolveStorageDir', () => {

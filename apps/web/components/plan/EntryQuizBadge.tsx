@@ -4,6 +4,8 @@ import { PencilSimple, X } from '@phosphor-icons/react';
 import Link from 'next/link';
 import {
   type FocusEvent,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactNode,
   useCallback,
   useEffect,
   useId,
@@ -27,8 +29,13 @@ const actionBtn =
  * an all-groups mark "Not this week (all groups)", every group) and
  * "Edit" (the class section of the subject page). The popover is portalled
  * and fixed below the badge, so the block's clipping does not cut it off.
- * Escape or a click outside closes it and focus returns to the badge; Tab
- * out of it (focus leaving both the popover and the badge) closes it too.
+ * Escape or a click outside closes it and focus returns to the badge. Tab
+ * past its last control (or Shift+Tab before its first) closes it and
+ * returns focus to the badge too, so the user keeps their place in the grid
+ * (the popover is portalled to the end of <body>); focus leaving both the
+ * popover and the badge otherwise closes it.
+ * After a skip `onSkipped` runs (the timetable opens the session panel with
+ * an Undo); without it focus parks on the block.
  */
 export function EntryQuizBadge({
   markId,
@@ -37,7 +44,10 @@ export function EntryQuizBadge({
   onDate,
   dateLabel,
   editHref,
+  label,
+  onSkipped,
   className,
+  children = 'Entry quiz',
 }: {
   markId: number;
   note: string | null;
@@ -48,7 +58,12 @@ export function EntryQuizBadge({
   /** e.g. "Tue 13 Oct". */
   dateLabel: string;
   editHref: string;
+  /** Accessible name, e.g. "Entry quiz: Rozdział 2" (the bar may shorten). */
+  label?: string;
+  onSkipped?: () => void;
   className: string;
+  /** Visible content; its text must be part of `label` (label in name). */
+  children?: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
   const [pos, setPos] = useState<{ top: number; left: number } | null>(null);
@@ -59,12 +74,14 @@ export function EntryQuizBadge({
 
   // The badge goes away with the refresh: park focus on its block first.
   const parkFocus = useCallback(() => {
-    btnRef.current
-      ?.closest('[data-testid="plan-block"]')
-      ?.querySelector<HTMLElement>('[data-block-main]')
-      ?.focus();
+    if (onSkipped) onSkipped();
+    else
+      btnRef.current
+        ?.closest('[data-testid="plan-block"]')
+        ?.querySelector<HTMLElement>('[data-block-main]')
+        ?.focus();
     setOpen(false);
-  }, []);
+  }, [onSkipped]);
   const { skip, pending, error, setError } = useSkipMark(
     markId,
     onDate,
@@ -86,6 +103,20 @@ export function EntryQuizBadge({
     if (to && (popRef.current?.contains(to) || btnRef.current?.contains(to)))
       return;
     close(false);
+  };
+
+  /** Tab off either end of the popover: close it, back to the badge. */
+  const onPopKey = (e: ReactKeyboardEvent) => {
+    if (e.key !== 'Tab') return;
+    const list =
+      popRef.current?.querySelectorAll<HTMLElement>('button, a[href]');
+    if (!list || list.length === 0) return;
+    const cur = document.activeElement;
+    const edge = e.shiftKey ? list[0] : list[list.length - 1];
+    // From the popover box itself only Shift+Tab leaves it.
+    if (cur === popRef.current ? !e.shiftKey : cur !== edge) return;
+    e.preventDefault();
+    close(true);
   };
 
   const place = useCallback(() => {
@@ -145,12 +176,13 @@ export function EntryQuizBadge({
         aria-haspopup="dialog"
         aria-expanded={open}
         aria-controls={open ? popId : undefined}
+        aria-label={label}
         title={note ? `Entry quiz: ${note}` : 'Entry quiz'}
         onClick={() => (open ? close(false) : setOpen(true))}
         onBlur={open ? onFocusOut : undefined}
         className={className}
       >
-        Entry quiz
+        {children}
       </button>
       {open &&
         createPortal(
@@ -162,6 +194,7 @@ export function EntryQuizBadge({
             // Clicks on text inside keep focus in the dialog (no focusout).
             tabIndex={-1}
             onBlur={onFocusOut}
+            onKeyDown={onPopKey}
             className="fixed z-50 flex flex-col gap-2 rounded-md border border-line-strong bg-panel p-3 text-[13px] text-fg shadow-[0_4px_16px_rgba(0,0,0,0.08)]"
             style={{
               width: POP_W,
@@ -186,9 +219,15 @@ export function EntryQuizBadge({
                 <X size={14} aria-hidden />
               </button>
             </div>
-            <p className="m-0 break-words text-muted">
-              {note ?? 'Every session of this class starts with one.'}
-            </p>
+            {note ? (
+              <p lang="pl" className="m-0 break-words text-muted">
+                {note}
+              </p>
+            ) : (
+              <p className="m-0 break-words text-muted">
+                Every session of this class starts with one.
+              </p>
+            )}
             <div className="flex flex-wrap gap-1.5">
               <button
                 type="button"

@@ -39,6 +39,7 @@ export async function convertToPdf(
         safeInput,
       ],
       opts.timeoutMs ?? 120_000,
+      { home: tmp },
     );
     const produced = join(outDir, 'input.pdf');
     if (!(await readdir(outDir)).includes('input.pdf')) {

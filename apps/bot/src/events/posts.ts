@@ -14,13 +14,13 @@ import {
   ChannelType,
   type Client,
   DiscordAPIError,
-  escapeMarkdown,
   type ForumChannel,
   RESTJSONErrorCodes,
 } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import { EVENTS_FORUM_SETTING } from '../config.js';
 import { dayMonth, wallDate } from '../dates.js';
+import { escapeUserText } from '../markdown.js';
 import type { UploadSink } from './uploads.js';
 
 export const DELETED_TEXT = 'Event deleted';
@@ -98,10 +98,10 @@ export function seriesPostContent(
     `**${EVENT_KINDS[base.kind].label}**${base.subjectCode ? ` · ${base.subjectCode}${base.subjectName ? ` — ${base.subjectName}` : ''}` : ''}`,
     `Repeats: ${RULE_LABELS[rule]}, ${time}, ${plural(dates.length, 'occurrence', 'occurrences')} (${dm(dates[0])} – ${dmy(dates[dates.length - 1])})`,
     `Next: ${upcoming.map(dm).join(', ')}${later > upcoming.length ? ', …' : ''}`,
-    ...(base.place ? [`Place: ${escapeMarkdown(base.place)}`] : []),
-    ...(base.note ? [`Note: ${escapeMarkdown(base.note)}`] : []),
+    ...(base.place ? [`Place: ${escapeUserText(base.place)}`] : []),
+    ...(base.note ? [`Note: ${escapeUserText(base.note)}`] : []),
     ...(base.createdByName
-      ? [`Added by ${escapeMarkdown(base.createdByName)}`]
+      ? [`Added by ${escapeUserText(base.createdByName)}`]
       : []),
     `Details and files: ${webBaseUrl}/s/wydarzenia/${next.id}`,
   ];
@@ -130,7 +130,7 @@ export function eventWhenText(e: EventDetails): string {
 export function eventPostContent(e: EventDetails, webBaseUrl: string): string {
   const link = `Details and files: ${webBaseUrl}/s/wydarzenia/${e.id}`;
   // User text is escaped so it can't format the post; the link stays raw.
-  const md = (t: string | null) => (t ? escapeMarkdown(t) : t);
+  const md = (t: string | null) => (t ? escapeUserText(t) : t);
   const tail = [
     ...(e.createdByName ? [`Added by ${md(e.createdByName)}`] : []),
     ...(e.updatedByName && e.updatedByName !== e.createdByName
@@ -220,19 +220,55 @@ export function eventForumCheck(db: Db): EventForumCheck {
 }
 
 /**
+ * Discord allows about 2 renames of a channel per 10 minutes and the REST
+ * client waits out the limit instead of failing, which would stall the
+ * poller: a post renamed less than this long ago keeps its old title until the
+ * window ends, when `retryRename` queues a new upsert of that post.
+ */
+export const RENAME_WINDOW_MS = 10 * 60_000;
+
+/**
  * `isEventForum` guards every thread the bot acts on: the thread ids come from
  * the DB, which the admin SQL console can write, so only the bot's own posts
- * in an event forum count. Anything else is treated as gone (a fresh post is
- * made and re-linked).
+ * in an event forum of the configured guild count. Anything else is treated
+ * as gone (a fresh post is made and re-linked).
  */
 export function discordEventPostGuild(
   client: Client,
   isEventForum: EventForumCheck,
-): EventPostGuild {
+  opts: {
+    guildId: string;
+    now?: () => number;
+    /** Queues an upsert of the post in `threadId` (a postponed rename is due). */
+    retryRename?: (threadId: string) => unknown;
+  },
+): EventPostGuild & { dispose(): void } {
+  const now = opts.now ?? Date.now;
+  /** Thread id → when this process last renamed it (kept in memory). */
+  const renamedAt = new Map<string, number>();
+  /** Thread id → the pending retry of a postponed rename (one per thread). */
+  const retries = new Map<string, NodeJS.Timeout>();
+  const scheduleRetry = (threadId: string, last: number) => {
+    if (retries.has(threadId) || !opts.retryRename) return;
+    const retry = opts.retryRename;
+    const timer = setTimeout(
+      () => {
+        retries.delete(threadId);
+        Promise.resolve()
+          .then(() => retry(threadId))
+          .catch((err) =>
+            console.error(`cannot queue the rename of ${threadId}:`, err),
+          );
+      },
+      Math.max(0, last + RENAME_WINDOW_MS - now()),
+    );
+    timer.unref?.();
+    retries.set(threadId, timer);
+  };
   const forumOf = async (id: string): Promise<ForumChannel> => {
     const c = await client.channels.fetch(id);
-    if (c?.type !== ChannelType.GuildForum) {
-      throw new Error(`channel ${id} is not a forum`);
+    if (c?.type !== ChannelType.GuildForum || c.guildId !== opts.guildId) {
+      throw new Error(`channel ${id} is not a forum of the server`);
     }
     return c;
   };
@@ -251,6 +287,7 @@ export function discordEventPostGuild(
       if (!c?.isThread())
         throw new PostGoneError(`channel ${id} is not a thread`);
       if (
+        c.guildId !== opts.guildId ||
         c.ownerId !== client.user?.id ||
         !c.parentId ||
         !(await isEventForum(c.parentId))
@@ -289,8 +326,17 @@ export function discordEventPostGuild(
           : undefined;
       await orGone(async () => {
         // Renames are rate limited (about 2 per 10 minutes): only when the
-        // title changed, and a refusal doesn't stop the rest of the edit.
-        if (t.name !== post.title) {
+        // title changed and the last rename is old enough (RENAME_WINDOW_MS),
+        // and a refusal doesn't stop the rest of the edit.
+        const last = renamedAt.get(t.id);
+        const recent = last !== undefined && now() - last < RENAME_WINDOW_MS;
+        if (t.name !== post.title && recent) {
+          console.log(`rename of event post ${t.id} postponed (rate limit)`);
+          scheduleRetry(t.id, last);
+        } else if (t.name !== post.title) {
+          for (const [id, at] of renamedAt)
+            if (now() - at >= RENAME_WINDOW_MS) renamedAt.delete(id);
+          renamedAt.set(t.id, now());
           await t.setName(post.title, AUDIT_REASON).catch((err) => {
             if (isGone(err)) throw err;
             console.error(`cannot rename event post ${t.id}:`, err);
@@ -335,6 +381,10 @@ export function discordEventPostGuild(
         if (err instanceof PostGoneError) return false;
         throw err;
       }
+    },
+    dispose() {
+      for (const timer of retries.values()) clearTimeout(timer);
+      retries.clear();
     },
   };
 }

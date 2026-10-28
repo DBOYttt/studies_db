@@ -10,8 +10,8 @@ import {
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
+import { LazySqlConsole } from '@/components/lazy-tabs';
 import { ResultGrid } from '@/components/ResultGrid';
-import { SqlConsole } from '@/components/SqlConsole';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
 import { ViewSearchForm } from '@/components/ViewSearchForm';
 import { parsePreviewId, previewColumn, toCells } from '@/lib/cells';
@@ -340,7 +340,7 @@ async function SqlTab({
           Could not load the column list: {error}
         </div>
       )}
-      <SqlConsole
+      <LazySqlConsole
         key={initialQuery}
         initialQuery={initialQuery}
         schema={schema ?? {}}

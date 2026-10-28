@@ -53,7 +53,7 @@ export default async function StructurePage() {
           </div>
         )}
         <div className="shrink-0 overflow-auto rounded-md border border-line-strong">
-          <table className="w-full min-w-[720px] border-collapse">
+          <table className="w-full min-w-[640px] border-collapse">
             <thead>
               <tr className="bg-surface text-left">
                 <th className={th}>View</th>
@@ -61,7 +61,6 @@ export default async function StructurePage() {
                 <th className={`${th} text-right`}>Rows</th>
                 <th className={th}>Type</th>
                 <th className={th}>Columns</th>
-                <th className={th}>Size</th>
               </tr>
             </thead>
             <tbody>
@@ -112,7 +111,6 @@ export default async function StructurePage() {
                     <td className={`${td} font-mono text-muted`}>
                       {columns ? columns[v].length : '—'}
                     </td>
-                    <td className={`${td} text-subtle`}>—</td>
                   </tr>
                 );
               })}
@@ -120,11 +118,11 @@ export default async function StructurePage() {
                 <td className="px-2.5 py-[7px]">
                   {plural(n, 'view', 'views')}
                 </td>
-                <td className="px-2.5 py-[7px]">Total</td>
+                <td className="px-2.5 py-[7px]">Rows across views</td>
                 <td className="px-2.5 py-[7px] text-right font-mono">
                   {total ?? '—'}
                 </td>
-                <td className="px-2.5 py-[7px]" colSpan={3} />
+                <td className="px-2.5 py-[7px]" colSpan={2} />
               </tr>
             </tbody>
           </table>

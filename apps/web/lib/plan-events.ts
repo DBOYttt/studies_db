@@ -54,10 +54,14 @@ export const canAddTest = (
 
 /**
  * "Add test" of a session: the event form as a Test of the session's
- * subject, class and group, with the session picked (date, time and room).
+ * subject, class and group, with the session picked (date, time and room)
+ * and a suggested title ("Test – ASD Laboratorium"), so it saves untyped.
  */
 export function newTestHref(
-  s: Pick<PlanSession, 'id' | 'subjectId' | 'classId' | 'groupId'>,
+  s: Pick<
+    PlanSession,
+    'id' | 'subjectId' | 'subjectCode' | 'classId' | 'className' | 'groupId'
+  >,
   simple: boolean,
 ): string {
   const q = new URLSearchParams({
@@ -67,6 +71,10 @@ export function newTestHref(
   if (s.classId !== null) q.set('class', String(s.classId));
   if (s.groupId !== null) q.set('group', String(s.groupId));
   q.set('session', String(s.id));
+  q.set(
+    'title',
+    ['Test –', s.subjectCode, s.className].filter(Boolean).join(' '),
+  );
   return `${simple ? '/s' : ''}/wydarzenia/nowe?${q}`;
 }
 

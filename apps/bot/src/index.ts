@@ -11,6 +11,7 @@ import { registerEvents } from './discord/events.js';
 import { fetchAttachmentBody } from './discord/map.js';
 import { discordEventPostGuild, eventForumCheck } from './events/posts.js';
 import {
+  enqueueRenameRetry,
   recoverInterruptedRequests,
   startEventPoller,
 } from './events/worker.js';
@@ -52,6 +53,7 @@ client.on(
 );
 
 let eventPoller: ReturnType<typeof startEventPoller> | undefined;
+let eventPostGuild: ReturnType<typeof discordEventPostGuild> | undefined;
 let reminderTick: ReturnType<typeof startReminderTick> | undefined;
 client.once(Events.ClientReady, async (c) => {
   console.log(`Bot gotowy jako ${c.user.tag}`);
@@ -70,9 +72,13 @@ client.once(Events.ClientReady, async (c) => {
   } catch (err) {
     console.error('enqueueMissingEventPosts:', err);
   }
+  eventPostGuild = discordEventPostGuild(client, eventForumCheck(db), {
+    guildId: config.discordGuildId,
+    retryRename: (threadId) => enqueueRenameRetry(db, threadId),
+  });
   eventPoller = startEventPoller({
     db,
-    guild: discordEventPostGuild(client, eventForumCheck(db)),
+    guild: eventPostGuild,
     webBaseUrl: config.webBaseUrl,
     storageDir: ingest.storageDir,
   });
@@ -82,7 +88,9 @@ client.once(Events.ClientReady, async (c) => {
     guild: discordReminderGuild(client),
     webBaseUrl: config.webBaseUrl,
   });
-  catchUp(ingest, discordForumSource(client), { ignoreWatermark: false }).then(
+  catchUp(ingest, discordForumSource(client, config.discordGuildId), {
+    ignoreWatermark: false,
+  }).then(
     (r) =>
       console.log(
         `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,
@@ -96,6 +104,7 @@ let shuttingDown = false;
 async function shutdown(code: number): Promise<never> {
   if (!shuttingDown) {
     shuttingDown = true;
+    eventPostGuild?.dispose();
     try {
       // Both loops stop between steps; don't let a slow Discord call hold
       // the shutdown past the container's grace period.

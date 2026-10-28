@@ -38,6 +38,108 @@ test('SQL write console: preview, execute, audit log', async ({ page }) => {
   await expect(page.getByText(statement).first()).toBeVisible();
 });
 
+test('audit log reads as a log: user, plain action, named target, details', async ({
+  page,
+}) => {
+  await page.goto('/admin/audit');
+  const table = page.getByRole('table');
+  for (const h of ['Time', 'User', 'Action', 'Target', 'Details'])
+    await expect(table.getByRole('columnheader', { name: h })).toBeVisible();
+  // One filter for who: the User select (no separate Everyone/Admins toggle).
+  await expect(
+    page.getByRole('navigation', { name: 'Audit log scope' }),
+  ).toHaveCount(0);
+  await expect(
+    page.getByLabel('User').locator('option', { hasText: 'Admins only' }),
+  ).toHaveCount(1);
+  const row = table
+    .getByRole('row')
+    .filter({ hasText: 'Kolokwium audytu' })
+    .first();
+  await expect(row).toContainText('Ewa Testowa');
+  await expect(row).toContainText('Event added');
+  await expect(row).toContainText('via the website');
+  await expect(row).toContainText(/\d{2}:\d{2}:\d{2} CES?T/);
+  await expect(
+    row.getByRole('link', { name: 'Test: Kolokwium audytu FIZ, 26 Jan' }),
+  ).toHaveAttribute('href', `/wydarzenia/${process.env.E2E_AUDIT_EVENT_ID}`);
+});
+
+test('at 375 px the audit Action column is on screen', async ({ page }) => {
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.goto('/admin/audit');
+  const action = page
+    .getByRole('row')
+    .filter({ hasText: 'Kolokwium audytu' })
+    .first()
+    .getByText('Event added');
+  const box = await action.boundingBox();
+  expect((box?.x ?? 999) + (box?.width ?? 0)).toBeLessThanOrEqual(375);
+});
+
+test('admin SQL editor keeps its height from the first paint (no shift)', async ({
+  page,
+  browser,
+}) => {
+  await page.goto('/admin/sql');
+  const editor = page.getByTestId('admin-sql-editor');
+  await expect(editor.locator('.cm-editor')).toBeVisible();
+  const hydrated = (await editor.boundingBox())?.height ?? 0;
+  // Server HTML only: what the page looks like before CodeMirror mounts.
+  const cookies = await page.context().cookies();
+  const ctx = await browser.newContext({ javaScriptEnabled: false });
+  try {
+    await ctx.addCookies(cookies);
+    const raw = await ctx.newPage();
+    await raw.goto('http://localhost:3100/admin/sql');
+    const first = (await raw.getByTestId('admin-sql-editor').boundingBox())
+      ?.height;
+    expect(first).toBeGreaterThanOrEqual(178);
+    expect(Math.abs((first ?? 0) - hydrated)).toBeLessThanOrEqual(1);
+  } finally {
+    await ctx.close();
+  }
+});
+
+test('Structure lists rows without a Size column and labels the total', async ({
+  page,
+}) => {
+  await page.goto('/structure');
+  await expect(page.getByRole('columnheader', { name: 'Rows' })).toBeVisible();
+  await expect(page.getByRole('columnheader', { name: 'Size' })).toHaveCount(0);
+  await expect(
+    page.getByRole('cell', { name: 'Rows across views' }),
+  ).toBeVisible();
+});
+
+test('the app icon is served, signed in or not (no favicon 404)', async ({
+  page,
+  browser,
+}) => {
+  const missing: string[] = [];
+  page.on('response', (r) => {
+    if (r.status() === 404) missing.push(r.url());
+  });
+  await page.goto('/');
+  const href = await page
+    .locator('link[rel="icon"]')
+    .first()
+    .getAttribute('href');
+  expect(href).toMatch(/^\/icon\.svg/);
+  await page.waitForLoadState('load');
+  expect(missing).toEqual([]);
+  const ctx = await browser.newContext();
+  try {
+    const res = await ctx.request.get(`http://localhost:3100${href}`, {
+      maxRedirects: 0,
+    });
+    expect(res.status()).toBe(200);
+    expect(res.headers()['content-type']).toContain('image/svg+xml');
+  } finally {
+    await ctx.close();
+  }
+});
+
 test('simple sidebar shows Admin panel for the admin', async ({ browser }) => {
   const context = await browser.newContext({ locale: 'pl-PL' });
   try {

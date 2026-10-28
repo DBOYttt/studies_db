@@ -10,7 +10,7 @@ import { and, asc, eq, gte, inArray, isNull, lt, sql } from 'drizzle-orm';
 import { writeAudit } from './audit.js';
 import type { Db, DbExecutor } from './client.js';
 import { CLASS_MARK_KINDS, type ClassMarkKind } from './constants.js';
-import { CONFLICT, checkUser, type EventSource, isRefusal } from './events.js';
+import { checkUser, type EventSource, isRefusal } from './events.js';
 import {
   classes,
   classGroups,
@@ -22,6 +22,10 @@ import {
 import { withTxRetry } from './tx.js';
 
 export type MarkSource = EventSource;
+
+/** A stale `expectedVersion` (someone else changed the mark meanwhile). */
+export const MARK_CONFLICT =
+  "Someone changed this entry quiz while you were editing. Your changes weren't saved — reload to see the current version.";
 
 export type MarkResult =
   | { ok: true; message: string; id: number; version: number }
@@ -205,7 +209,7 @@ export async function editMark(
   return withTxRetry(db, async (tx) => {
     const m = await lockMark(tx, id);
     if (!m || m.deletedAt !== null) return fail(MARK_NOT_FOUND);
-    if (m.version !== opts.expectedVersion) return fail(CONFLICT);
+    if (m.version !== opts.expectedVersion) return fail(MARK_CONFLICT);
     await tx
       .update(classMarks)
       .set({ note, updatedBy: userId, updatedAt: new Date(), version: bump })
@@ -237,7 +241,7 @@ export async function removeMark(
       opts.expectedVersion !== undefined &&
       m.version !== opts.expectedVersion
     ) {
-      return fail(CONFLICT);
+      return fail(MARK_CONFLICT);
     }
     const now = new Date();
     await tx

@@ -232,6 +232,12 @@ export const materials = mysqlTable(
     previewPath: varchar('preview_path', { length: 500 }),
     previewKind: mysqlEnum('preview_kind', PREVIEW_KINDS).notNull(),
     extractedText: mediumtext('extracted_text'),
+    // extracted_text with ł folded (foldStroke), for FULLTEXT: the collation
+    // already ignores the other diacritics. Kept in sync by MariaDB.
+    searchText: mediumtext('search_text').generatedAlwaysAs(
+      sql`REPLACE(REPLACE(\`extracted_text\`, 'ł', 'l'), 'Ł', 'L')`,
+      { mode: 'stored' },
+    ),
     status: mysqlEnum('status', ['pending', 'ready', 'failed'])
       .notNull()
       .default('pending'),
@@ -241,6 +247,10 @@ export const materials = mysqlTable(
   (t) => [
     index('idx_materials_sha256').on(t.sha256),
     index('idx_materials_message').on(t.discordMessageId),
+    // Newest-first lists of live materials (ORDER BY created_at DESC, id DESC).
+    index('idx_materials_recent').on(t.deletedAt, t.createdAt, t.id),
+    // The worker's finalize sweep reads only the (rare) pending rows.
+    index('idx_materials_status').on(t.status),
   ],
 );
 
@@ -297,7 +307,11 @@ export const adminAudit = mysqlTable(
     details: json('details'),
     createdAt: now(),
   },
-  (t) => [index('idx_admin_audit_created_at').on(t.createdAt)],
+  (t) => [
+    index('idx_admin_audit_created_at').on(t.createdAt),
+    // Event history: target IN (…) AND action LIKE 'event.%' ORDER BY id DESC.
+    index('idx_admin_audit_target').on(t.target, t.action, t.id),
+  ],
 );
 
 export const botState = mysqlTable('bot_state', {
@@ -539,7 +553,12 @@ export const botRequests = mysqlTable(
     startedAt: datetime('started_at'),
     finishedAt: datetime('finished_at'),
   },
-  (t) => [index('idx_bot_requests_status').on(t.status, t.createdAt)],
+  (t) => [
+    index('idx_bot_requests_status').on(t.status, t.createdAt),
+    // lastBotRequest and the enqueue locking read look up one (kind, target);
+    // the locking read then locks only that key range.
+    index('idx_bot_requests_kind_target').on(t.kind, t.target, t.status, t.id),
+  ],
 );
 
 // Files a user uploaded on the website for an event. The bot posts them into

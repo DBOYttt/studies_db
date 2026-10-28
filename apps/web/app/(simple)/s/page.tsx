@@ -4,11 +4,12 @@ import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
+import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getRoPool } from '@/lib/db';
 import { nowWall } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { listSimpleFiles, listSubjectCards } from '@/lib/simple-queries';
+import { listSimpleFiles } from '@/lib/simple-queries';
 import { upcomingForUser } from '@/lib/upcoming-events';
 
 export const dynamic = 'force-dynamic';
@@ -23,7 +24,7 @@ export default async function SimpleStart({
   const user = await requireUser();
   const sp = await searchParams;
   const db = getDb();
-  const cardsP = listSubjectCards(db);
+  const cardsP = cachedSubjectCards();
   const [cards, recent, preview, upcoming] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5 }),
@@ -48,16 +49,16 @@ export default async function SimpleStart({
         )
       }
     >
+      <h1 className="sr-only">Start</h1>
+      {/* What's next first: upcoming events above the subject grid. */}
+      <UpcomingEvents events={upcoming} />
       <div>
-        <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
-          Subjects
-        </h1>
+        <h2 className="mt-3 mb-0 text-base font-semibold">Subjects</h2>
         <p className="mt-1 mb-0 text-pretty text-muted">
           Pick a subject to see its class materials.
         </p>
       </div>
       <SubjectCards cards={cards} />
-      <UpcomingEvents events={upcoming} />
       <h2 className="mt-3 mb-0 text-base font-semibold">Recently added</h2>
       <FileList
         files={isoFiles(recent.rows)}

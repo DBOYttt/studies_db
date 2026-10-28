@@ -22,14 +22,14 @@ Never edit source files. Your only writes are your report and your screenshots.
 
 Get a fresh one-time link with `pnpm -s qa:login <persona>` (run from the repo root). Links are valid for 15 minutes
 and work once.
-- In the browser, open the link and click **Zaloguj się**.
+- In the browser, open the link and click **Sign in**.
 - With curl, POST the token instead:
   `curl -c jar -X POST -H 'Origin: http://localhost:3200' --data-urlencode token=<t> http://localhost:3200/auth/callback`.
 
 Personas: `student`, `novice`, `admin` (is_admin), `curator` (is_admin), `mobile`, `a11y`, `chaos`, `attacker`,
 `banned` (is banned, so its login must fail).
 
-The UI is Polish. It has two modes: simple (`/s/...`, the default) and advanced (phpMyAdmin-style, `/plan`,
+The UI is English (content such as subject, file and class-type names stays Polish). It has two modes: simple (`/s/...`, the default) and advanced (phpMyAdmin-style, `/plan`,
 `/sql`, `/admin`...). Switch between them with the toggle in the top bar.
 
 ## Browser
