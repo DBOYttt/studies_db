@@ -18,6 +18,7 @@ import {
   topicTags,
   upsertUser,
   users,
+  writeAudit,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
@@ -684,6 +685,29 @@ export default async function globalSetup() {
       'web',
     );
     if (!uklQuiz.ok) throw new Error(`e2e UKL entry quiz: ${uklQuiz.message}`);
+
+    // Audit log (admin.spec.ts) and mobile pages (mobile.spec.ts): an event
+    // far ahead, with its event.add audit row.
+    const [{ id: auditEventId }] = await db
+      .insert(events)
+      .values({
+        kind: 'kolokwium',
+        title: 'Kolokwium audytu',
+        subjectId,
+        startsAt: new Date(Date.UTC(2027, 0, 26, 10)),
+        endsAt: new Date(Date.UTC(2027, 0, 26, 11)),
+        createdBy: userId,
+        updatedBy: userId,
+      })
+      .$returningId();
+    await writeAudit(db, {
+      userId,
+      action: 'event.add',
+      target: String(auditEventId),
+      details: { source: 'web' },
+    });
+    process.env.E2E_AUDIT_EVENT_ID = String(auditEventId);
+    process.env.E2E_TOKEN_MOBILE = await createLoginToken(db, userId);
 
     process.env.E2E_TOKEN = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_EXPLORER = await createLoginToken(db, userId);

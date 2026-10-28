@@ -1,5 +1,6 @@
 'use client';
 
+import { CaretLeft, CaretRight, Minus, Plus } from '@phosphor-icons/react';
 import { useEffect, useRef, useState } from 'react';
 import { Document, Page, pdfjs } from 'react-pdf';
 import 'react-pdf/dist/Page/AnnotationLayer.css';
@@ -48,47 +49,67 @@ export default function PdfViewer({ src }: { src: string }) {
     );
   }
   const btn =
-    'rounded border border-[var(--border)] px-2 py-1 disabled:opacity-40';
+    'inline-flex h-7 items-center gap-1 rounded border border-[var(--border)] px-2 disabled:opacity-40';
   return (
     <div className="space-y-2">
-      <div className="flex flex-wrap items-center gap-2 text-sm">
-        <button
-          type="button"
-          className={btn}
-          disabled={page <= 1}
-          onClick={() => setPage(page - 1)}
+      {/* One row at every width: pages on the left, zoom on the right. */}
+      <div
+        data-testid="pdf-toolbar"
+        className="flex flex-nowrap items-center justify-between gap-2 text-sm"
+      >
+        <div className="flex min-w-0 items-center gap-1.5">
+          <button
+            type="button"
+            className={btn}
+            aria-label="Previous page"
+            disabled={page <= 1}
+            onClick={() => setPage(page - 1)}
+          >
+            <CaretLeft size={14} aria-hidden />
+            <span aria-hidden className="max-sm:hidden">
+              Previous
+            </span>
+          </button>
+          <span className="whitespace-nowrap tabular-nums">
+            Page {page} / {pages || '…'}
+          </span>
+          <button
+            type="button"
+            className={btn}
+            aria-label="Next page"
+            disabled={page >= pages}
+            onClick={() => setPage(page + 1)}
+          >
+            <span aria-hidden className="max-sm:hidden">
+              Next
+            </span>
+            <CaretRight size={14} aria-hidden />
+          </button>
+        </div>
+        <fieldset
+          aria-label="Zoom"
+          className="m-0 flex min-w-0 shrink-0 items-center gap-1 border-0 p-0"
         >
-          ‹ Previous
-        </button>
-        <span>
-          Page {page} / {pages || '…'}
-        </span>
-        <button
-          type="button"
-          className={btn}
-          disabled={page >= pages}
-          onClick={() => setPage(page + 1)}
-        >
-          Next ›
-        </button>
-        <span className="mx-2 text-[var(--muted)]">|</span>
-        <button
-          type="button"
-          className={btn}
-          aria-label="Zoom out"
-          onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
-        >
-          −
-        </button>
-        <span>{Math.round(zoom * 100)}%</span>
-        <button
-          type="button"
-          className={btn}
-          aria-label="Zoom in"
-          onClick={() => setZoom(Math.min(3, zoom + 0.25))}
-        >
-          +
-        </button>
+          <button
+            type="button"
+            className={btn}
+            aria-label="Zoom out"
+            onClick={() => setZoom(Math.max(0.5, zoom - 0.25))}
+          >
+            <Minus size={14} aria-hidden />
+          </button>
+          <span className="w-11 text-center tabular-nums">
+            {Math.round(zoom * 100)}%
+          </span>
+          <button
+            type="button"
+            className={btn}
+            aria-label="Zoom in"
+            onClick={() => setZoom(Math.min(3, zoom + 0.25))}
+          >
+            <Plus size={14} aria-hidden />
+          </button>
+        </fieldset>
       </div>
       <div
         ref={boxRef}

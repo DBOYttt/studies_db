@@ -1,6 +1,7 @@
 /** Pure helpers for the /admin "Audit log" screens. */
-import { fixSept } from '@studies/db/text';
-import { AUDIT_LABELS } from './event-view';
+import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
+import { fixSept, MONTHS_SHORT } from '@studies/db/text';
+import { AUDIT_LABELS, auditSummary } from './event-view';
 import { historyLabel } from './sql-editor';
 
 export const AUDIT_PAGE_SIZE = 50;
@@ -47,7 +48,10 @@ export interface AuditQuery {
   page: number;
   userId?: number;
   action?: AuditAction;
-  /** `?who=admins`: only rows of current admins (default: everyone). */
+  /**
+   * `?who=admins` (or `?user=admins`, the User select's "Admins only"):
+   * only rows of current admins (default: everyone).
+   */
   adminsOnly?: boolean;
 }
 
@@ -61,12 +65,13 @@ const posInt = (v: string | undefined) =>
 /** `?user=&action=&page=` of /admin/audit; invalid values are dropped. */
 export function parseAuditQuery(sp: SP): AuditQuery {
   const q: AuditQuery = { page: posInt(one(sp.page)) ?? 1 };
-  const userId = posInt(one(sp.user));
+  const user = one(sp.user);
+  const userId = posInt(user);
   if (userId !== undefined) q.userId = userId;
   const action = one(sp.action);
   if (AUDIT_ACTIONS.includes(action as AuditAction))
     q.action = action as AuditAction;
-  if (one(sp.who) === 'admins') q.adminsOnly = true;
+  if (one(sp.who) === 'admins' || user === 'admins') q.adminsOnly = true;
   return q;
 }
 
@@ -89,12 +94,75 @@ const timeFmt = new Intl.DateTimeFormat('en-GB', {
   minute: '2-digit',
   second: '2-digit',
   hourCycle: 'h23',
+  timeZoneName: 'short',
 });
 
-/** Audit time as `D Mon YYYY, HH:mm:ss` in Europe/Warsaw. */
+/** Audit time as `D Mon YYYY, HH:mm:ss CET` (or CEST) in Europe/Warsaw. */
 export const formatAuditTime = (d: Date | string): string =>
   fixSept(timeFmt.format(typeof d === 'string' ? new Date(d) : d));
 
 /** One-line statement cut to 120 characters for the log table. */
 export const auditStatementPreview = (s: string | null): string =>
   s ? historyLabel(s, 120) : '';
+
+/** What an audit row's target points at, when the app can name it. */
+export type AuditTargetRef =
+  | { type: 'event'; id: number }
+  | { type: 'series'; id: number }
+  | { type: 'class_mark'; id: number }
+  | { type: 'subject'; code: string };
+
+/** Actions whose target is a subject code (bot admin panel). */
+const SUBJECT_ACTIONS = new Set([
+  'subject.add',
+  'subject.edit',
+  'class.edit',
+  'lecturer.assign',
+]);
+
+/**
+ * The thing an audit row is about: `14` of an `event.*` row is event 14,
+ * `series:3` a series, `class_mark:3` an entry quiz, a subject code of the
+ * subject/class actions. Anything else (tables, user ids) is null and is
+ * shown as stored.
+ */
+export function parseAuditTarget(
+  action: string,
+  target: string | null,
+): AuditTargetRef | null {
+  if (!target) return null;
+  const m = /^(series|event|class_mark):([1-9]\d{0,9})$/.exec(target);
+  if (m) {
+    const type = m[1] as 'series' | 'event' | 'class_mark';
+    return { type, id: Number(m[2]) };
+  }
+  if (action.startsWith('event.') && /^[1-9]\d{0,9}$/.test(target))
+    return { type: 'event', id: Number(target) };
+  if (SUBJECT_ACTIONS.has(action)) return { type: 'subject', code: target };
+  return null;
+}
+
+/** An event as one audit target: `Test: Kolokwium 1 ASD, 26 Oct` (wall time). */
+export function eventTargetLabel(e: {
+  kind: EventKind;
+  title: string;
+  subjectCode: string | null;
+  startsAt: Date;
+}): string {
+  const day = `${e.startsAt.getUTCDate()} ${MONTHS_SHORT[e.startsAt.getUTCMonth()]}`;
+  const subject = e.subjectCode ? ` ${e.subjectCode}` : '';
+  return `${EVENT_KINDS[e.kind].label}: ${e.title}${subject}, ${day}`;
+}
+
+/**
+ * The Details column: the statement of SQL rows, else a one-line summary
+ * of the details (changed fields, source).
+ */
+export function auditDetails(r: {
+  action: string;
+  statement: string | null;
+  details: unknown;
+}): string {
+  if (r.statement) return auditStatementPreview(r.statement);
+  return auditSummary(r.action, r.details);
+}

@@ -190,6 +190,18 @@ body {
   outline-offset: 2px;
 }
 
+/*
+ * Native validation (and focus) scrolls a control to the top edge of the
+ * scroller; keep the label above it in view.
+ */
+@layer base {
+  input,
+  select,
+  textarea {
+    scroll-margin-top: 3rem;
+  }
+}
+
 /* No inline padding: a hit inside a word must not split it ("kolokwium-sql"). */
 mark {
   background: var(--mark);

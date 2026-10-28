@@ -175,29 +175,56 @@ export async function listSimpleFiles(
   return { rows: rows.map(toSimpleFile), total: n };
 }
 
-/** Name/topic/subject substring (literal) matches first, then full-text content hits. */
+/** A search result file; `snippet` («hit» marked) when its text matched. */
+export type SimpleSearchFile = SimpleFile & { snippet?: string };
+
+/** Simple search: matching files, and how many topics matched by title. */
+export interface SimpleSearchResult {
+  files: SimpleSearchFile[];
+  /** Topic-title hits; simple mode lists files only, Advanced shows these. */
+  topics: number;
+}
+
+/**
+ * Name/topic/subject substring (literal) matches first, then full-text
+ * content hits. Files whose text matched keep the search snippet.
+ */
 export async function searchSimpleFiles(
   db: Db,
   q: string,
   limit = 100,
-): Promise<SimpleFile[]> {
+): Promise<SimpleSearchResult> {
   const term = q.trim().slice(0, 200);
-  if (!term) return [];
+  if (!term) return { files: [], topics: 0 };
   const pat = `%${term.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
   const like = (col: AnyColumn) =>
     sql`LOWER(${col}) LIKE LOWER(${pat}) ESCAPE '\\\\'`;
-  const byLike = await simpleFileSelect(db)
-    .where(
-      and(
-        ...live(),
-        sql`(${like(materials.originalFilename)} OR ${like(topics.title)} OR ${like(subjects.name)})`,
-      ),
-    )
-    .orderBy(desc(materials.createdAt), desc(materials.id))
-    .limit(limit);
-  const out = byLike.map(toSimpleFile);
-  if (out.length >= limit) return out;
-  const hits = await searchAll(db, { q: term, limit });
+  const [byLike, hits] = await Promise.all([
+    simpleFileSelect(db)
+      .where(
+        and(
+          ...live(),
+          sql`(${like(materials.originalFilename)} OR ${like(topics.title)} OR ${like(subjects.name)})`,
+        ),
+      )
+      .orderBy(desc(materials.createdAt), desc(materials.id))
+      .limit(limit),
+    searchAll(db, { q: term, limit }),
+  ]);
+  // A file without extracted text "matches" by its name only: no snippet.
+  const snippets = new Map<number, string>();
+  for (const h of hits) {
+    if (h.materialId == null || snippets.has(h.materialId)) continue;
+    if (h.snippet.replace(/[«»]/g, '') !== h.filename)
+      snippets.set(h.materialId, h.snippet);
+  }
+  const withSnippet = (f: SimpleFile): SimpleSearchFile => {
+    const snippet = snippets.get(f.id);
+    return snippet === undefined ? f : { ...f, snippet };
+  };
+  const topicCount = hits.filter((h) => h.materialId == null).length;
+  const out = byLike.map((r) => withSnippet(toSimpleFile(r)));
+  if (out.length >= limit) return { files: out, topics: topicCount };
   const seen = new Set(out.map((r) => r.id));
   const ids = [
     ...new Set(
@@ -206,17 +233,18 @@ export async function searchSimpleFiles(
         .filter((id): id is number => id != null && !seen.has(id)),
     ),
   ];
-  if (ids.length === 0) return out;
-  const extra = new Map(
-    (
-      await simpleFileSelect(db).where(
-        and(...live(), inArray(materials.id, ids)),
-      )
-    ).map((r) => [r.id, toSimpleFile(r)]),
-  );
-  for (const id of ids) {
-    const r = extra.get(id);
-    if (r && out.length < limit) out.push(r);
+  if (ids.length > 0) {
+    const extra = new Map(
+      (
+        await simpleFileSelect(db).where(
+          and(...live(), inArray(materials.id, ids)),
+        )
+      ).map((r) => [r.id, toSimpleFile(r)]),
+    );
+    for (const id of ids) {
+      const r = extra.get(id);
+      if (r && out.length < limit) out.push(withSnippet(r));
+    }
   }
-  return out;
+  return { files: out, topics: topicCount };
 }

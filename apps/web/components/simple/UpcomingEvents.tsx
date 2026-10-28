@@ -1,5 +1,5 @@
-import { EVENT_KINDS } from '@studies/db/constants';
 import Link from 'next/link';
+import { EventKindIcon } from '@/components/events/EventKindIcon';
 import type { PlanSession } from '@/lib/plan';
 import { eventPageHref, eventWhenShort } from '@/lib/plan-events';
 
@@ -31,10 +31,12 @@ export function UpcomingEvents({ events }: { events: PlanSession[] }) {
                 className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5 px-3.5 py-2 hover:bg-list-hover"
               >
                 <span className="font-semibold text-fg">
-                  <span aria-hidden>
-                    {e.eventKind ? EVENT_KINDS[e.eventKind].symbol : ''}{' '}
-                  </span>
-                  {e.eventTitle ?? e.label}
+                  {e.eventKind && (
+                    <>
+                      <EventKindIcon kind={e.eventKind} label />{' '}
+                    </>
+                  )}
+                  <span lang="pl">{e.eventTitle ?? e.label}</span>
                 </span>
                 <span className="font-mono text-xs text-accent-ink">
                   {eventWhenShort(e)}

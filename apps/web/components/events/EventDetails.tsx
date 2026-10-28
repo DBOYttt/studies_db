@@ -8,6 +8,7 @@ import { formatDate } from '@/lib/format';
 import { isoFiles } from '@/lib/simple-page';
 import type { SimpleFile } from '@/lib/simple-queries';
 import { EventButtons } from './EventButtons';
+import { EventKindIcon } from './EventKindIcon';
 import { EventUploads, type UploadItem } from './EventUploads';
 import { LinkedPosts } from './LinkedPosts';
 import { PostLine } from './PostLine';
@@ -93,8 +94,8 @@ export function EventDetails({
   return (
     <>
       <div className="flex flex-col gap-1">
-        <span className="self-start rounded bg-box-head px-1.5 py-0.5 text-xs font-semibold text-accent-ink">
-          <span aria-hidden>{kind.symbol} </span>
+        <span className="inline-flex items-center gap-1 self-start rounded bg-box-head px-1.5 py-0.5 text-xs font-semibold text-accent-ink">
+          <EventKindIcon kind={e.kind} size={13} />
           {kind.label}
         </span>
         <h1 className="mt-1 mb-0 text-[22px] font-semibold tracking-[-0.01em] text-balance">

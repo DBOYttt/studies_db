@@ -2,9 +2,10 @@ import type { AuditRow } from '@studies/db';
 import Link from 'next/link';
 import {
   auditActionLabel,
-  auditStatementPreview,
+  auditDetails,
   formatAuditTime,
 } from '@/lib/admin-audit';
+import type { AuditTarget } from '@/lib/admin-audit-targets';
 
 const th =
   'sticky top-0 z-[1] whitespace-nowrap border-b border-l border-b-line-strong border-l-line bg-surface px-2.5 py-[7px] text-left font-sans font-semibold first:border-l-0';
@@ -31,12 +32,29 @@ export function AuditActionLabel({ action }: { action: string }) {
   );
 }
 
-/** Audit log rows (Overview and Audit log): time, admin, action, target, rows, statement. */
+/** `15 Jan 2026, 12:05:09 CET` as date and time that wrap as a whole. */
+function AuditTime({ at }: { at: Date }) {
+  const [day, time] = formatAuditTime(at).split(', ');
+  return (
+    <>
+      <span className="whitespace-nowrap">{day},</span>{' '}
+      <span className="whitespace-nowrap">{time}</span>
+    </>
+  );
+}
+
+/**
+ * Audit log rows (Overview and Audit log): time, user, action, target
+ * (named and linked where `targets` knows it), rows, details.
+ */
 export function AuditTable({
   rows,
+  targets,
   emptyText,
 }: {
   rows: AuditRow[];
+  /** From loadAuditTargets, by audit row id. */
+  targets?: Map<number, AuditTarget>;
   emptyText: string;
 }) {
   if (rows.length === 0) {
@@ -58,63 +76,81 @@ export function AuditTable({
               Time
             </th>
             <th scope="col" className={th}>
-              Admin
+              User
             </th>
             <th scope="col" className={th}>
               Action
             </th>
             <th scope="col" className={th}>
-              Table
+              Target
             </th>
             <th scope="col" className={`${th} text-right`}>
               Rows
             </th>
             <th scope="col" className={th}>
-              Statement
+              Details
             </th>
           </tr>
         </thead>
         <tbody>
-          {rows.map((r, i) => (
-            <tr
-              key={r.id}
-              className={`${i % 2 ? 'bg-zebra' : ''} hover:bg-row-hover`}
-            >
-              <td className={td}>
-                <Link
-                  href={`/admin/audit/${r.id}`}
-                  aria-label={`Entry ${r.id}`}
-                  className="text-accent-ink hover:text-accent-ink-hover hover:underline"
-                >
-                  {r.id}
-                </Link>
-              </td>
-              <td className={`${td} whitespace-nowrap tabular-nums`}>
-                {formatAuditTime(r.createdAt)}
-              </td>
-              <td className={`${td} whitespace-nowrap font-sans`}>
-                {r.userName}
-              </td>
-              <td className={td}>
-                <AuditActionLabel action={r.action} />
-              </td>
-              <td className={td}>
-                {r.target ?? <span className="text-faint">—</span>}
-              </td>
-              <td className={`${td} text-right tabular-nums`}>
-                {r.rowsAffected ?? <span className="text-faint">—</span>}
-              </td>
-              <td className={`${td} min-w-[280px]`}>
-                <Link
-                  href={`/admin/audit/${r.id}`}
-                  title={r.statement ?? undefined}
-                  className="break-all text-fg hover:text-accent-ink-hover hover:underline"
-                >
-                  {auditStatementPreview(r.statement)}
-                </Link>
-              </td>
-            </tr>
-          ))}
+          {rows.map((r, i) => {
+            const target = targets?.get(r.id);
+            const details = auditDetails(r);
+            return (
+              <tr
+                key={r.id}
+                className={`${i % 2 ? 'bg-zebra' : ''} hover:bg-row-hover`}
+              >
+                <td className={td}>
+                  <Link
+                    href={`/admin/audit/${r.id}`}
+                    aria-label={`Entry ${r.id}`}
+                    className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+                  >
+                    {r.id}
+                  </Link>
+                </td>
+                <td className={`${td} tabular-nums`}>
+                  <AuditTime at={r.createdAt} />
+                </td>
+                <td className={`${td} font-sans`}>{r.userName}</td>
+                <td className={td}>
+                  <AuditActionLabel action={r.action} />
+                </td>
+                <td className={`${td} font-sans`}>
+                  {target?.href ? (
+                    <Link
+                      href={target.href}
+                      title={r.target ?? undefined}
+                      className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+                    >
+                      {target.label}
+                    </Link>
+                  ) : target ? (
+                    <span title={r.target ?? undefined}>{target.label}</span>
+                  ) : (
+                    (r.target ?? <span className="text-faint">—</span>)
+                  )}
+                </td>
+                <td className={`${td} text-right tabular-nums`}>
+                  {r.rowsAffected ?? <span className="text-faint">—</span>}
+                </td>
+                <td className={`${td} min-w-[220px]`}>
+                  {details ? (
+                    <Link
+                      href={`/admin/audit/${r.id}`}
+                      title={r.statement ?? undefined}
+                      className={`${r.statement ? 'break-all' : 'font-sans break-words'} text-fg hover:text-accent-ink-hover hover:underline`}
+                    >
+                      {details}
+                    </Link>
+                  ) : (
+                    <span className="text-faint">—</span>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </div>

@@ -37,6 +37,10 @@ const child = spawn('npx', ['next', 'dev', '--webpack', '-p', String(port)], {
     STORAGE_DIR: storage,
     WEB_BASE_URL: `http://localhost:${port}`,
     DISCORD_GUILD_ID: 'qaguild',
+    // Keep more compiled pages in memory for longer (next.config.ts
+    // onDemandEntries), so agents reloading many routes don't recompile.
+    NEXT_DEV_PAGES_BUFFER: '30',
+    NEXT_DEV_MAX_INACTIVE_MS: String(15 * 60_000),
   },
 });
 child.on('exit', (code) => process.exit(code ?? 0));

@@ -123,7 +123,7 @@ test('Lecturers tab: office hours, room and platform links', async ({
     classes.getByRole('link', { name: 'Platform ↗' }),
   ).toHaveAttribute('href', 'https://platforma.example.edu/cwiczenia');
   await expect(
-    page.getByRole('link', { name: 'UPeL / platform ↗' }),
+    page.getByRole('link', { name: 'Subject platform ↗' }),
   ).toHaveAttribute('href', 'https://upel.example.edu/course/plan');
 });
 

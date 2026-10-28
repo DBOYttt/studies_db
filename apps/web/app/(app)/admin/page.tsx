@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { AuditTable } from '@/components/admin/AuditTable';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
+import { loadAuditTargets } from '@/lib/admin-audit-targets';
 import { getAdminOverview } from '@/lib/admin-overview';
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/session';
@@ -17,7 +18,9 @@ const boxHead =
 /** /admin "Overview": counts, admins and the newest audit entries. */
 export default async function AdminOverviewPage() {
   await requireAdmin();
-  const { admins, recent, counts } = await getAdminOverview(getDb());
+  const db = getDb();
+  const { admins, recent, counts } = await getAdminOverview(db);
+  const targets = await loadAuditTargets(db, recent);
   const stats: [string, number, string?][] = [
     ['Subjects', counts.subjects],
     ['Topics', counts.topics],
@@ -79,6 +82,7 @@ export default async function AdminOverviewPage() {
             </div>
             <AuditTable
               rows={recent}
+              targets={targets}
               emptyText="The audit log is empty. Changes from the SQL — write console will appear here."
             />
           </section>

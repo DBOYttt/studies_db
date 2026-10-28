@@ -319,3 +319,7 @@ export function parseReportIndex(raw: string | string[] | undefined): number {
   const v = Array.isArray(raw) ? raw[0] : raw;
   return v !== undefined && /^[0-2]$/.test(v) ? Number(v) : 0;
 }
+
+/** The same search in Advanced mode (it also lists topic hits). */
+export const advancedSearchHref = (q: string): string =>
+  `/mode?to=advanced&next=${encodeURIComponent(`/search?q=${encodeURIComponent(q)}`)}`;

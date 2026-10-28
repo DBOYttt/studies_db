@@ -2,6 +2,7 @@ import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import { cacheHeaderRules } from './lib/cache-headers';
+import { onDemandEntriesFromEnv } from './lib/dev-config';
 import { securityHeaderRules } from './lib/security-headers';
 
 // Load the repo-root .env (Next only reads apps/web/.env). Real env vars win.
@@ -16,6 +17,8 @@ const config: NextConfig = {
   transpilePackages: ['@studies/db'],
   serverExternalPackages: ['mysql2'],
   poweredByHeader: false,
+  // Dev only: a bigger compiled-page buffer for the QA sandbox (qa-serve.mjs).
+  onDemandEntries: onDemandEntriesFromEnv(process.env),
   // Nothing uses next/image; keep /_next/image from fetching or resizing.
   images: { unoptimized: true },
   async headers() {

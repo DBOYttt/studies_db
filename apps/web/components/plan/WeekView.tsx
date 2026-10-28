@@ -17,6 +17,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { EventKindIcon } from '@/components/events/EventKindIcon';
 import {
   DAY_END_MIN,
   DAY_START_MIN,
@@ -837,7 +838,7 @@ function ExamEventBlock({
   );
 }
 
-/** Event: outlined (no fill), kind symbol + title; links to the event page. */
+/** Event: outlined (no fill), kind icon + title; links to the event page. */
 function EventBlock({
   s,
   simple,
@@ -880,7 +881,11 @@ function EventBlock({
     >
       <span className="sr-only">{blockDayPrefix(s.startsAt, time)}</span>
       <span className="truncate font-semibold">
-        <span aria-hidden>{kind?.symbol} </span>
+        {s.eventKind && (
+          <>
+            <EventKindIcon kind={s.eventKind} size={11} label />{' '}
+          </>
+        )}
         <span lang="pl">{title}</span>
       </span>
       {!strip && s.subjectCode && (

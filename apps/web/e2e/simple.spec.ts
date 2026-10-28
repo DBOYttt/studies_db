@@ -136,6 +136,38 @@ test('search highlights hits with <mark>', async ({ page }) => {
   await expect(marks.first()).toHaveCSS('padding-right', '0px');
 });
 
+test('search shows the text snippet and counts files and topics', async ({
+  page,
+}) => {
+  await page.goto('/s/search?q=wspolczynnik');
+  const main = page.getByRole('main');
+  await expect(main.getByText('1 file, 0 topics')).toBeVisible();
+  // The text hit ("Współczynnik", diacritics folded) is shown and marked.
+  await expect(main.locator('li mark').first()).toHaveText('Współczynnik');
+  await expect(main.getByText(/tarcia: tarcie statyczne/)).toBeVisible();
+  // A topic hit is counted and points to Advanced, which lists it.
+  await page.goto('/s/search?q=tarcie');
+  await expect(main.getByText(/\d+ files?, 1 topic\b/)).toBeVisible();
+  await expect(
+    main.getByRole('link', { name: 'Show topics in Advanced' }),
+  ).toHaveAttribute(
+    'href',
+    /^\/mode\?to=advanced&next=%2Fsearch%3Fq%3Dtarcie$/,
+  );
+});
+
+test('event kinds are line icons, named for screen readers', async ({
+  page,
+}) => {
+  await page.goto('/s/plan?week=2026-W39');
+  const block = page
+    .getByTestId('plan-event')
+    .filter({ hasText: 'Niedzielne konsultacje' });
+  await expect(block).toHaveAccessibleName(/Other: Niedzielne konsultacje/);
+  await expect(block.locator('svg')).toHaveCount(1);
+  await expect(block).not.toContainText('📌');
+});
+
 test('reports: card shows table with Author header and CSV link', async ({
   page,
 }) => {

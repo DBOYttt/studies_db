@@ -2,10 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   AUDIT_PAGE_SIZE,
   auditActionLabel,
+  auditDetails,
   auditHref,
   auditStatementPreview,
+  eventTargetLabel,
   formatAuditTime,
   parseAuditQuery,
+  parseAuditTarget,
 } from '../lib/admin-audit';
 
 describe('parseAuditQuery', () => {
@@ -23,6 +26,11 @@ describe('parseAuditQuery', () => {
       adminsOnly: true,
     });
     expect(parseAuditQuery({ who: 'x' })).toEqual({ page: 1 });
+    // the User select's "Admins only" option
+    expect(parseAuditQuery({ user: 'admins' })).toEqual({
+      page: 1,
+      adminsOnly: true,
+    });
     expect(auditHref({ page: 2, adminsOnly: true })).toBe(
       '/admin/audit?who=admins&page=2',
     );
@@ -47,18 +55,18 @@ describe('auditHref', () => {
 });
 
 describe('formatAuditTime', () => {
-  it('formats in Europe/Warsaw', () => {
+  it('formats in Europe/Warsaw with the zone', () => {
     // 2026-01-15 11:05:09 UTC = 12:05:09 in Warsaw (CET)
     expect(formatAuditTime(new Date(Date.UTC(2026, 0, 15, 11, 5, 9)))).toBe(
-      '15 Jan 2026, 12:05:09',
+      '15 Jan 2026, 12:05:09 CET',
     );
     // summer time (CEST, UTC+2)
     expect(formatAuditTime(new Date(Date.UTC(2026, 6, 1, 22, 0, 0)))).toBe(
-      '2 Jul 2026, 00:00:00',
+      '2 Jul 2026, 00:00:00 CEST',
     );
     // September is "Sep", not the en-GB "Sept"
     expect(formatAuditTime(new Date(Date.UTC(2026, 8, 7, 8, 0, 0)))).toBe(
-      '7 Sep 2026, 10:00:00',
+      '7 Sep 2026, 10:00:00 CEST',
     );
   });
 });
@@ -123,5 +131,97 @@ describe('auditActionLabel', () => {
   });
   it('falls back to the raw key for an unknown action', () => {
     expect(auditActionLabel('x.y')).toBe('x.y');
+  });
+});
+
+describe('parseAuditTarget', () => {
+  it('reads events, series and entry quizzes', () => {
+    expect(parseAuditTarget('event.add', '14')).toEqual({
+      type: 'event',
+      id: 14,
+    });
+    expect(parseAuditTarget('event.edit', 'series:3')).toEqual({
+      type: 'series',
+      id: 3,
+    });
+    expect(parseAuditTarget('event.post_retry', 'event:5')).toEqual({
+      type: 'event',
+      id: 5,
+    });
+    expect(parseAuditTarget('class_mark.add', 'class_mark:3')).toEqual({
+      type: 'class_mark',
+      id: 3,
+    });
+  });
+  it('reads subject codes of subject, class and lecturer actions', () => {
+    for (const a of [
+      'subject.add',
+      'subject.edit',
+      'class.edit',
+      'lecturer.assign',
+    ])
+      expect(parseAuditTarget(a, 'ASD'), a).toEqual({
+        type: 'subject',
+        code: 'ASD',
+      });
+  });
+  it('leaves other targets alone', () => {
+    expect(parseAuditTarget('sql.execute', 'subjects')).toBeNull();
+    expect(parseAuditTarget('reminders.update', '7')).toBeNull();
+    expect(parseAuditTarget('lecturer.edit', '7')).toBeNull();
+    expect(parseAuditTarget('event.add', null)).toBeNull();
+    expect(parseAuditTarget('event.add', 'x')).toBeNull();
+  });
+});
+
+describe('eventTargetLabel', () => {
+  it('reads as kind: title subject, day month (wall time)', () => {
+    expect(
+      eventTargetLabel({
+        kind: 'kolokwium',
+        title: 'Kolokwium 1',
+        subjectCode: 'ASD',
+        startsAt: new Date(Date.UTC(2026, 9, 26, 23, 30)),
+      }),
+    ).toBe('Test: Kolokwium 1 ASD, 26 Oct');
+    expect(
+      eventTargetLabel({
+        kind: 'wyjazd',
+        title: 'Wyjazd',
+        subjectCode: null,
+        startsAt: new Date(Date.UTC(2026, 8, 3, 8)),
+      }),
+    ).toBe('Trip: Wyjazd, 3 Sep');
+  });
+});
+
+describe('auditDetails', () => {
+  it('shows the statement of SQL rows', () => {
+    expect(
+      auditDetails({
+        action: 'sql.execute',
+        statement: 'UPDATE t\n SET a = 1',
+        details: null,
+      }),
+    ).toBe('UPDATE t SET a = 1');
+  });
+  it('sums up the details of other rows', () => {
+    expect(
+      auditDetails({
+        action: 'event.edit',
+        statement: null,
+        details: { source: 'web', changes: { title: {}, startsAt: {} } },
+      }),
+    ).toBe('changed: title, start · via the website');
+    expect(
+      auditDetails({
+        action: 'class_mark.add',
+        statement: null,
+        details: { source: 'discord' },
+      }),
+    ).toBe('via Discord');
+    expect(
+      auditDetails({ action: 'plan.sync', statement: null, details: null }),
+    ).toBe('');
   });
 });

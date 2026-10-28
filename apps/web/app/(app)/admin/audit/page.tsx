@@ -10,6 +10,7 @@ import {
   auditHref,
   parseAuditQuery,
 } from '@/lib/admin-audit';
+import { loadAuditTargets } from '@/lib/admin-audit-targets';
 import { getDb } from '@/lib/db';
 import { plural } from '@/lib/format';
 import { requireAdmin } from '@/lib/session';
@@ -25,7 +26,7 @@ const pagerLink =
 const pagerOff =
   'rounded border border-line bg-bar px-2.5 py-1 text-faint opacity-60';
 
-/** /admin/audit "Audit log": paged audit log with admin and action filters. */
+/** /admin/audit "Audit log": paged audit log with user and action filters. */
 export default async function AdminAuditPage({
   searchParams,
 }: {
@@ -44,6 +45,7 @@ export default async function AdminAuditPage({
     }),
     listAdmins(db),
   ]);
+  const targets = await loadAuditTargets(db, rows);
   const pageCount = Math.max(1, Math.ceil(total / AUDIT_PAGE_SIZE));
   const filtered =
     q.userId !== undefined || q.action !== undefined || q.adminsOnly === true;
@@ -58,52 +60,21 @@ export default async function AdminAuditPage({
         tabs={adminTabs('audit')}
       />
       <div className="flex flex-col gap-3">
-        <nav
-          aria-label="Audit log scope"
-          className="flex w-fit overflow-hidden rounded-md border border-line-strong"
-        >
-          {(
-            [
-              ['Everyone', false],
-              ['Admins', true],
-            ] as const
-          ).map(([label, only], i) => {
-            const active = (q.adminsOnly === true) === only;
-            return (
-              <Link
-                key={label}
-                href={auditHref({
-                  ...q,
-                  adminsOnly: only || undefined,
-                  page: 1,
-                })}
-                aria-current={active ? 'page' : undefined}
-                className={`px-3 py-[5px] ${i > 0 ? 'border-l border-line-strong' : ''} ${
-                  active
-                    ? 'bg-selected font-semibold text-fg'
-                    : 'bg-panel text-accent-ink hover:bg-list-hover hover:underline'
-                }`}
-              >
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
         <form
           method="get"
           action="/admin/audit"
           aria-label="Audit log filters"
           className="flex flex-wrap items-end gap-3 rounded-md border border-line-strong bg-bar px-3 py-2.5"
         >
-          {q.adminsOnly && <input type="hidden" name="who" value="admins" />}
           <label className="flex flex-col gap-1">
-            <span className="text-xs text-muted">Admin</span>
+            <span className="text-xs text-muted">User</span>
             <select
               name="user"
-              defaultValue={q.userId ?? ''}
+              defaultValue={q.adminsOnly ? 'admins' : (q.userId ?? '')}
               className={control}
             >
               <option value="">Everyone</option>
+              <option value="admins">Admins only</option>
               {!userKnown && <option value={q.userId}>#{q.userId}</option>}
               {admins.map((a) => (
                 <option key={a.id} value={a.id}>
@@ -148,6 +119,7 @@ export default async function AdminAuditPage({
 
         <AuditTable
           rows={rows}
+          targets={targets}
           emptyText={
             filtered
               ? 'No entries match the selected filters.'

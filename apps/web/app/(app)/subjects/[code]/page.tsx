@@ -313,7 +313,7 @@ function SubjectHeader({
         {subject.platformUrl && (
           <p className="mt-1 text-xs">
             <ExternalLink url={subject.platformUrl}>
-              UPeL / platform ↗
+              Subject platform ↗
             </ExternalLink>
           </p>
         )}

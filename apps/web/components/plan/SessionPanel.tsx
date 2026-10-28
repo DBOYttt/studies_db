@@ -10,9 +10,10 @@ import {
   TerminalWindow,
   X,
 } from '@phosphor-icons/react';
-import { CLASS_NAMES, EVENT_KINDS } from '@studies/db/constants';
+import { CLASS_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
+import { EventKindIcon } from '@/components/events/EventKindIcon';
 import type { PlanBadge, PlanSession } from '@/lib/plan';
 import { canAddTest, eventPageHref, newTestHref } from '@/lib/plan-events';
 import {
@@ -285,7 +286,7 @@ function TestLinks({
             href={eventPageHref(id, simple)}
             className="link inline-flex items-baseline gap-1 break-words"
           >
-            <span aria-hidden>{EVENT_KINDS.kolokwium.symbol}</span>
+            <EventKindIcon kind="kolokwium" size={13} className="self-center" />
             <span>{badge.titles[i] || 'Untitled'}</span>
           </Link>
         </li>
