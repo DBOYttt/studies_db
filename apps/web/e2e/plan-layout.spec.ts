@@ -266,6 +266,27 @@ test('the panel: heading, no repeated description, "Add test", tests, bar state'
   const legend = page.getByRole('list', { name: 'Class types' });
   await expect(legend.getByText('Test', { exact: true })).toBeVisible();
   await expect(legend.getByText('Entry quiz', { exact: true })).toBeVisible();
+  // The swatches draw the bars as they look: in the ink of their block's
+  // left edge (a filled Test bar, a dashed Entry quiz rule).
+  const swatch = async (name: string) =>
+    legend.locator(`[data-legend-swatch="${name}"]`).evaluate((tile) => {
+      const bar = tile.firstElementChild as HTMLElement;
+      const t = getComputedStyle(tile);
+      const b = getComputedStyle(bar);
+      return {
+        edge: t.borderLeftColor,
+        bg: t.backgroundColor,
+        fill: b.backgroundColor,
+        rule: b.borderTopColor,
+        ruleStyle: b.borderTopStyle,
+      };
+    });
+  const test = await swatch('test');
+  expect(test.fill).toBe(test.edge);
+  const quiz = await swatch('quiz');
+  expect(quiz.rule).toBe(quiz.edge);
+  expect(quiz.ruleStyle).toBe('dashed');
+  expect(quiz.bg).toBe(test.bg);
 });
 
 test('"Not this week" in the panel offers an Undo that restores the bar', async ({

@@ -118,6 +118,20 @@ const kindStyle = (k: ClassKind | null): CSSProperties =>
       } as CSSProperties);
 
 /**
+ * Legend swatches of the Test and Entry quiz bars: a tiny block with its bar
+ * at the bottom. The bars take the ink of the class they sit on (`--k-fg`),
+ * so one coloured swatch would match only one class; the swatch is a neutral
+ * block instead (the no-class style, in the muted ink) whose bar has the same
+ * colour as its own left edge, which is how every bar relates to its block.
+ */
+const BAR_SWATCH =
+  'inline-flex h-3 w-4 flex-col justify-end rounded-sm border-l-[3px] border-[var(--k-fg)] bg-[var(--k-bg)] px-px pb-px';
+const BAR_SWATCH_STYLE = {
+  '--k-bg': 'var(--surface)',
+  '--k-fg': 'var(--muted)',
+} as CSSProperties;
+
+/**
  * Week timetable: days side by side, 07:00–20:00 in 15-minute rows,
  * overlapping sessions split the column (layoutDay). Blocks open
  * SessionPanel. Data and links come from the server (no function props), so
@@ -432,8 +446,12 @@ export function WeekView({
                   <li className="flex items-center gap-1.5">
                     <span
                       aria-hidden
-                      className="inline-block h-1.5 w-3 rounded-sm bg-muted"
-                    />
+                      data-legend-swatch="test"
+                      className={BAR_SWATCH}
+                      style={BAR_SWATCH_STYLE}
+                    >
+                      <span className="block h-1 rounded-[1px] bg-[var(--k-fg)]" />
+                    </span>
                     Test
                   </li>
                 )}
@@ -441,8 +459,12 @@ export function WeekView({
                   <li className="flex items-center gap-1.5">
                     <span
                       aria-hidden
-                      className="inline-block h-1.5 w-3 border-t-2 border-dashed border-muted"
-                    />
+                      data-legend-swatch="quiz"
+                      className={BAR_SWATCH}
+                      style={BAR_SWATCH_STYLE}
+                    >
+                      <span className="block h-1 border-t-2 border-dashed border-[var(--k-fg)]" />
+                    </span>
                     Entry quiz
                   </li>
                 )}
