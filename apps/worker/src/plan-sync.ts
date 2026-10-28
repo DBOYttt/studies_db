@@ -1,14 +1,16 @@
 import {
   type Db,
+  fetchTimetable,
   getPlanSyncStatus,
   type PlanSyncStatus,
   recordPlanSync,
+  SafeSyncError,
   type SyncStats,
   syncTimetable,
 } from '@studies/db';
 
-const DEFAULT_TIMEOUT_MS = 30_000;
-const DEFAULT_MAX_BYTES = 5 * 1024 * 1024;
+export { fetchTimetable, SafeSyncError };
+
 const DEFAULT_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const DEFAULT_POLL_MS = 60_000;
 
@@ -18,91 +20,6 @@ function hostOf(url: string): string {
     return new URL(url).host;
   } catch {
     return 'unknown host';
-  }
-}
-
-/**
- * A fetch failure whose message we wrote ourselves and that names only the
- * host, so it may be shown to users (`/plan sync`, admin panel) as is.
- * Any other error may embed the URL and is replaced by a generic message.
- */
-export class SafeSyncError extends Error {
-  override name = 'SafeSyncError';
-}
-
-const MAX_REDIRECTS = 5;
-
-/**
- * Follows redirects by hand, and only on the same host without a downgrade
- * from https to http: the feed must not be able to send the worker to an
- * internal or plain-HTTP address.
- */
-async function fetchSameHost(
-  doFetch: typeof fetch,
-  url: string,
-  signal: AbortSignal,
-  host: string,
-): Promise<Response> {
-  let current = new URL(url);
-  for (let hop = 0; ; hop++) {
-    const res = await doFetch(current, { signal, redirect: 'manual' });
-    const location = res.headers.get('location');
-    if (res.status < 300 || res.status >= 400 || !location) return res;
-    await res.body?.cancel().catch(() => {});
-    if (hop >= MAX_REDIRECTS)
-      throw new SafeSyncError(`Too many redirects from ${host}`);
-    const next = new URL(location, current);
-    const downgrade =
-      current.protocol === 'https:' && next.protocol !== 'https:';
-    if (
-      next.host !== current.host ||
-      downgrade ||
-      !['http:', 'https:'].includes(next.protocol)
-    )
-      throw new SafeSyncError(`${host} redirected to another host`);
-    current = next;
-  }
-}
-
-export async function fetchTimetable(
-  url: string,
-  o: { timeoutMs?: number; maxBytes?: number; fetchImpl?: typeof fetch } = {},
-): Promise<string> {
-  const host = hostOf(url);
-  const maxBytes = o.maxBytes ?? DEFAULT_MAX_BYTES;
-  const doFetch = o.fetchImpl ?? fetch;
-  const signal = AbortSignal.timeout(o.timeoutMs ?? DEFAULT_TIMEOUT_MS);
-  try {
-    const res = await fetchSameHost(doFetch, url, signal, host);
-    if (res.status >= 400)
-      throw new SafeSyncError(`HTTP ${res.status} from ${host}`);
-    const type = res.headers.get('content-type') ?? '';
-    if (!type.toLowerCase().includes('text/calendar')) {
-      throw new SafeSyncError(
-        `Unexpected response type (${type || 'none'}) from ${host}`,
-      );
-    }
-    if (!res.body) throw new SafeSyncError(`Empty response from ${host}`);
-    const reader = res.body.getReader();
-    const chunks: Uint8Array[] = [];
-    let total = 0;
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      total += value.byteLength;
-      if (total > maxBytes) {
-        await reader.cancel().catch(() => {});
-        throw new SafeSyncError(`The response from ${host} is too large`);
-      }
-      chunks.push(value);
-    }
-    return Buffer.concat(chunks).toString('utf8');
-  } catch (err) {
-    if (signal.aborted)
-      throw new SafeSyncError(`Timed out waiting for ${host}`);
-    // Only our own host-only messages pass through; anything else may embed the URL.
-    if (err instanceof SafeSyncError) throw err;
-    throw new SafeSyncError(`Could not download the timetable from ${host}`);
   }
 }
 
