@@ -17,16 +17,22 @@ import {
   entryQuizEditHref,
   formatSyncTime,
   fromWeekSession,
+  hiddenNote,
+  MY_GROUPS_HELP,
   markActionError,
   mergedBarText,
+  myGroupsHref,
   nextSessionWhat,
   panelDescription,
   SAVE_FAILED,
   sessionLinks,
   sessionPanelHeading,
+  showAllGroupsPrompt,
   skipLabel,
   syncFailed,
+  syncLine,
   toWeekSession,
+  unpickedHidden,
   wallLongDate,
   wallShortDate,
   wallSqlText,
@@ -500,5 +506,68 @@ describe('markActionError', () => {
       }),
     ).toBe(SAVE_FAILED);
     expect(SAVE_FAILED).toBe('Could not save. Try again.');
+  });
+});
+
+describe('My groups copy matches filterMyGroups', () => {
+  // AM2 Laboratorium (class 2) has groups 3 and 4, BD Projekt (class 5) has
+  // groups 6 and 7; the lecture has no group.
+  const lecture = { ...session, id: 1, classId: 9, groupId: null };
+  const am2gr3 = { ...session, id: 2, subjectCode: 'AM2', groupId: 3 };
+  const am2gr4 = { ...session, id: 3, subjectCode: 'AM2', groupId: 4 };
+  const bd6 = { ...session, id: 4, classId: 5, groupId: 6 };
+  const bd7 = { ...session, id: 5, classId: 5, groupId: 7 };
+  const all = [lecture, am2gr3, am2gr4, bd6, bd7];
+
+  it('lectures stay; only the picked group of a picked class stays', () => {
+    const kept = filterMyGroups(all, { '5': 6 }).map((s) => s.id);
+    expect(kept).toEqual([1, 4]);
+    // So the help text says unpicked classes are hidden, not "stay visible".
+    expect(MY_GROUPS_HELP).toContain('lectures');
+    expect(MY_GROUPS_HELP).toContain('hidden');
+    expect(MY_GROUPS_HELP).not.toContain('stay visible');
+    expect(MY_GROUPS_HELP).toContain('All groups (not picked)');
+  });
+  it('counts only the sessions hidden for want of a pick, with their codes', () => {
+    // AM2 has no pick: both its groups are hidden; BD Gr. 7 is hidden on
+    // purpose (Gr. 6 is picked) and is not asked about.
+    expect(unpickedHidden(all, { '5': 6 })).toEqual({
+      count: 2,
+      codes: ['AM2'],
+    });
+    expect(unpickedHidden(all, { '2': 3, '5': 6 })).toEqual({
+      count: 0,
+      codes: [],
+    });
+    // Without any pick nothing is filtered, so nothing is hidden.
+    expect(unpickedHidden(all, {})).toEqual({ count: 0, codes: [] });
+  });
+  it('the hidden note names the classes to pick a group for', () => {
+    expect(hiddenNote({ count: 1, codes: ['AM2'] })).toBe(
+      '1 class hidden: pick a group for AM2',
+    );
+    expect(hiddenNote({ count: 9, codes: ['AM2', 'BD', 'FIZ', 'SO'] })).toBe(
+      '9 classes hidden: pick a group for AM2, BD, FIZ…',
+    );
+  });
+  it('My groups links stay in the current mode', () => {
+    expect(myGroupsHref(true)).toBe('/s/plan?tab=groups');
+    expect(myGroupsHref(false)).toBe('/plan?tab=groups');
+  });
+  it('"Showing all groups" only while no group is saved and the week has groups', () => {
+    expect(showAllGroupsPrompt(all, {})).toBe(true);
+    expect(showAllGroupsPrompt(all, { '5': 6 })).toBe(false);
+    expect(showAllGroupsPrompt([lecture], {})).toBe(false);
+  });
+});
+
+describe('syncLine', () => {
+  it('names the last sync, or says the stored classes are shown', () => {
+    expect(syncLine(W(2026, 10, 20, 8, 5))).toBe(
+      `Last synced: ${formatSyncTime(W(2026, 10, 20, 8, 5))}`,
+    );
+    expect(syncLine(null)).toBe(
+      'Not synced from UniTime yet. The timetable shows the classes stored so far.',
+    );
   });
 });

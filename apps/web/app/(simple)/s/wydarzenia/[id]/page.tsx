@@ -1,5 +1,3 @@
-import { Plus } from '@phosphor-icons/react/dist/ssr';
-import Link from 'next/link';
 import { EventDetails } from '@/components/events/EventDetails';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
@@ -9,6 +7,7 @@ import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview, navSubjects } from '@/lib/simple-page';
+import { savedStatus } from '@/lib/status-text';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,13 +51,6 @@ export default async function SimpleEvent({
         )
       }
     >
-      <Link
-        href="/s/wydarzenia/nowe"
-        className="link inline-flex items-center gap-1 self-start text-[13px]"
-      >
-        <Plus size={13} aria-hidden />
-        Add event
-      </Link>
       <EventDetails
         e={e}
         base="simple"
@@ -66,6 +58,7 @@ export default async function SimpleEvent({
         editHref={`${baseHref}/edytuj`}
         selectedFileId={preview?.file.id ?? null}
         canRestore={user.isAdmin}
+        savedText={savedStatus(sp.saved)}
       />
     </SimpleShell>
   );

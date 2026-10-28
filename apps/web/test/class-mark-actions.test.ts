@@ -1,6 +1,5 @@
 import {
   adminAudit,
-  CONFLICT,
   classMarkSkips,
   classMarks,
   classSessions,
@@ -10,6 +9,7 @@ import {
   ensureClass,
   ensureGroup,
   MARK_ALREADY_ON,
+  MARK_CONFLICT,
   MARK_NOT_FOUND,
   subjects,
   upsertUser,
@@ -161,7 +161,7 @@ describe('class mark actions', () => {
 
     expect(await A.editMarkAction(m.id, 'Nowa', 7)).toEqual({
       ok: false,
-      message: CONFLICT,
+      message: MARK_CONFLICT,
     });
     expect(await A.editMarkAction(m.id, 'Nowa', 0)).toMatchObject({
       ok: true,

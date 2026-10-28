@@ -127,7 +127,14 @@ for (const width of [1440, 375]) {
 
 test('the current week does not widen the page at 375 px', async ({ page }) => {
   await page.setViewportSize({ width: 375, height: 812 });
+  // "Today" opens the current week even once today's lecture is over (the
+  // default week moves on to next week then).
   await page.goto('/s/plan');
+  await page
+    .getByRole('navigation', { name: 'Weeks' })
+    .getByRole('link', { name: 'Today' })
+    .click();
+  await expect(page).toHaveURL(/\/s\/plan\?week=\d{4}-W\d{2}$/);
   await expect(block(page, 'U-1 105')).toBeVisible();
   await expect(page.getByTestId('plan-day').first()).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBe(

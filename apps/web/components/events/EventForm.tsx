@@ -58,7 +58,9 @@ const primaryBtn =
   'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[6px] font-semibold text-on-accent hover:bg-accent-fill-hover aria-disabled:opacity-60';
 
 /**
- * Add / edit form of an event. "When" is three inputs (date, start, end)
+ * Add / edit form of an event, one field width throughout. Subject, class,
+ * group and "Pick a session" come first (the pick fills the When fields
+ * below). "When" is three inputs (date, start, end)
  * that the Server Action composes into `DD.MM.YYYY [HH:MM[-HH:MM]]`. Class and
  * group follow the chosen subject. For a Test with a class, "Pick a session"
  * lists the class/group's upcoming sessions and fills date, time and place
@@ -252,105 +254,6 @@ export function EventForm({
           </select>
         </label>
         <label className={label}>
-          <span className="req">Title</span>
-          <input
-            name="title"
-            required
-            lang="pl"
-            maxLength={100}
-            defaultValue={initial.title}
-            className={input}
-          />
-        </label>
-        <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-3">
-          <label className={label}>
-            <span className="req">Date</span>
-            <input
-              type="date"
-              name="date"
-              required
-              value={date}
-              onChange={(e) => {
-                setDate(e.target.value);
-                setSessionId(''); // no longer that session
-                setStatus('');
-              }}
-              className={input}
-            />
-          </label>
-          <label className={label}>
-            From (time)
-            <input
-              type="time"
-              name="start"
-              aria-describedby="event-all-day-hint"
-              value={startTime}
-              onChange={(e) => {
-                setStartTime(e.target.value);
-                setSessionId('');
-                setStatus('');
-              }}
-              className={input}
-            />
-          </label>
-          <label className={label}>
-            To (time)
-            <input
-              type="time"
-              name="end"
-              aria-describedby="event-all-day-hint"
-              value={endTime}
-              onChange={(e) => {
-                setEndTime(e.target.value);
-                setSessionId('');
-                setStatus('');
-              }}
-              className={input}
-            />
-          </label>
-        </div>
-        <p id="event-all-day-hint" className="m-0 -mt-2 text-xs text-muted">
-          Without a time the event lasts all day.
-        </p>
-        {eventId === undefined && (
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
-            <label className={label}>
-              Repeat
-              <select
-                name="repeat"
-                value={repeat}
-                onChange={(e) => setRepeat(e.target.value)}
-                className={input}
-              >
-                <option value="">Don&apos;t repeat</option>
-                <option value="weekly">every week</option>
-                <option value="biweekly">every 2 weeks</option>
-              </select>
-            </label>
-            {repeat && (
-              <label className={label}>
-                <span className="req">Until</span>
-                <input type="date" name="until" required className={input} />
-              </label>
-            )}
-          </div>
-        )}
-        {initial.inSeries && (
-          <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
-            <legend className="mb-1 p-0 text-[13px] font-semibold text-fg">
-              Apply changes to
-            </legend>
-            <label className="flex items-center gap-2">
-              <input type="radio" name="scope" value="one" defaultChecked />
-              Only this one
-            </label>
-            <label className="flex items-center gap-2">
-              <input type="radio" name="scope" value="following" />
-              This and following
-            </label>
-          </fieldset>
-        )}
-        <label className={label}>
           Subject
           <select
             name="subjectId"
@@ -372,7 +275,7 @@ export function EventForm({
           </select>
         </label>
         {subject && subject.classes.length > 0 && (
-          <div className="grid grid-cols-1 gap-3.5 sm:grid-cols-2">
+          <div className="flex flex-col gap-3.5">
             <label className={label}>
               Class
               <select
@@ -455,6 +358,105 @@ export function EventForm({
               {status}
             </span>
           </div>
+        )}
+        <label className={label}>
+          <span className="req">Title</span>
+          <input
+            name="title"
+            required
+            lang="pl"
+            maxLength={100}
+            defaultValue={initial.title}
+            className={input}
+          />
+        </label>
+        <div className="flex flex-col gap-3.5">
+          <label className={label}>
+            <span className="req">Date</span>
+            <input
+              type="date"
+              name="date"
+              required
+              value={date}
+              onChange={(e) => {
+                setDate(e.target.value);
+                setSessionId(''); // no longer that session
+                setStatus('');
+              }}
+              className={input}
+            />
+          </label>
+          <label className={label}>
+            Starts
+            <input
+              type="time"
+              name="start"
+              aria-describedby="event-all-day-hint"
+              value={startTime}
+              onChange={(e) => {
+                setStartTime(e.target.value);
+                setSessionId('');
+                setStatus('');
+              }}
+              className={input}
+            />
+          </label>
+          <label className={label}>
+            Ends
+            <input
+              type="time"
+              name="end"
+              aria-describedby="event-all-day-hint"
+              value={endTime}
+              onChange={(e) => {
+                setEndTime(e.target.value);
+                setSessionId('');
+                setStatus('');
+              }}
+              className={input}
+            />
+          </label>
+        </div>
+        <p id="event-all-day-hint" className="m-0 -mt-2 text-xs text-muted">
+          Without a time the event lasts all day.
+        </p>
+        {eventId === undefined && (
+          <div className="flex flex-col gap-3.5">
+            <label className={label}>
+              Repeat
+              <select
+                name="repeat"
+                value={repeat}
+                onChange={(e) => setRepeat(e.target.value)}
+                className={input}
+              >
+                <option value="">Don&apos;t repeat</option>
+                <option value="weekly">every week</option>
+                <option value="biweekly">every 2 weeks</option>
+              </select>
+            </label>
+            {repeat && (
+              <label className={label}>
+                <span className="req">Until</span>
+                <input type="date" name="until" required className={input} />
+              </label>
+            )}
+          </div>
+        )}
+        {initial.inSeries && (
+          <fieldset className="m-0 flex flex-col gap-1 border-0 p-0">
+            <legend className="mb-1 p-0 text-[13px] font-semibold text-fg">
+              Apply changes to
+            </legend>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="scope" value="one" defaultChecked />
+              Only this one
+            </label>
+            <label className="flex items-center gap-2">
+              <input type="radio" name="scope" value="following" />
+              This and following
+            </label>
+          </fieldset>
         )}
         <label className={label}>
           Place

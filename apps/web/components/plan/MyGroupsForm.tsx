@@ -9,6 +9,7 @@ import {
 } from '@/lib/my-groups-actions';
 import { type MyGroups, sanitizeMyGroups } from '@/lib/plan';
 import type { MyGroupOption } from '@/lib/plan-queries';
+import { MY_GROUPS_HELP } from '@/lib/plan-view';
 import { STATUS } from '@/lib/status-text';
 
 const primaryBtn =
@@ -122,9 +123,7 @@ export function MyGroupsForm({
         </h2>
       </div>
       <p className="m-0 border-b border-line px-3 py-2 text-muted">
-        Pick your group in each class that is split into groups. The week view
-        then shows only those groups. Lectures and classes you haven&apos;t
-        picked a group for stay visible. Your choice is saved to your account.
+        {MY_GROUPS_HELP}
       </p>
       {options.length === 0 ? (
         <p className="m-0 px-3 py-6 text-center text-muted">
@@ -153,7 +152,7 @@ export function MyGroupsForm({
                   onChange={(e) => set(o.classId, e.target.value)}
                   className={selectCls}
                 >
-                  <option value="">All</option>
+                  <option value="">All groups (not picked)</option>
                   {o.groups.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}

@@ -611,7 +611,7 @@ export function ResultGrid({
               </th>
               {hasActions && (
                 <th className="sticky top-0 z-[1] border-b border-line-strong bg-surface px-2 py-[7px]">
-                  <span className="sr-only">Akcje</span>
+                  <span className="sr-only">Actions</span>
                 </th>
               )}
               {columns.map((col, i) => {

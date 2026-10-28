@@ -611,6 +611,9 @@ export async function unlinkTopic(
 export type EventDetails = typeof events.$inferSelect & {
   subjectCode: string | null;
   subjectName: string | null;
+  /** Class and group names (`Laboratorium`, `Gr. 1`), or null. */
+  className: string | null;
+  groupName: string | null;
   createdByName: string | null;
   updatedByName: string | null;
   linkedTopicIds: number[];
@@ -639,6 +642,8 @@ export async function getEvent(
       event: events,
       subjectCode: subjects.code,
       subjectName: subjects.name,
+      className: classes.name,
+      groupName: classGroups.name,
       seriesId: eventSeries.id,
       seriesRule: eventSeries.rule,
       seriesUntil: eventSeries.until,
@@ -648,6 +653,8 @@ export async function getEvent(
     })
     .from(events)
     .leftJoin(subjects, eq(subjects.id, events.subjectId))
+    .leftJoin(classes, eq(classes.id, events.classId))
+    .leftJoin(classGroups, eq(classGroups.id, events.groupId))
     .leftJoin(eventSeries, eq(eventSeries.id, events.seriesId))
     .leftJoin(createdByUser, eq(createdByUser.id, events.createdBy))
     .leftJoin(updatedByUser, eq(updatedByUser.id, events.updatedBy))
@@ -667,6 +674,8 @@ export async function getEvent(
     ...row,
     subjectCode: hit.subjectCode ?? null,
     subjectName: hit.subjectName ?? null,
+    className: hit.className ?? null,
+    groupName: hit.groupName ?? null,
     createdByName: hit.createdByName ?? null,
     updatedByName: hit.updatedByName ?? null,
     linkedTopicIds: links.map((l) => l.topicId),

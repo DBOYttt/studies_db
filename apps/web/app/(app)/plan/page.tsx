@@ -22,7 +22,7 @@ import {
   parseEntityTab,
 } from '@/lib/entity-page';
 import { planListPage } from '@/lib/plan-queries';
-import { formatSyncTime, syncFailed, wallSqlText } from '@/lib/plan-view';
+import { syncFailed, syncLine, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
@@ -91,11 +91,7 @@ export default async function PlanPage({
         {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
         {tab === 'groups' && <GroupsTab weekHref="/plan" />}
         {status && (
-          <p className="m-0 text-xs text-muted">
-            {status.lastOkAt
-              ? `Last sync: ${formatSyncTime(status.lastOkAt)}`
-              : 'The timetable has not been synced yet'}
-          </p>
+          <p className="m-0 text-xs text-muted">{syncLine(status.lastOkAt)}</p>
         )}
       </div>
     </>

@@ -4,13 +4,14 @@ import {
   addMark,
   editMark,
   listMarks,
+  MARK_CONFLICT,
   removeMark,
   restoreMark,
   skipDate,
   unskipDate,
 } from '../src/class-marks.js';
 import type { Db } from '../src/client.js';
-import { BANNED_MESSAGE, CONFLICT } from '../src/events.js';
+import { BANNED_MESSAGE } from '../src/events.js';
 import {
   adminAudit,
   classes,
@@ -22,6 +23,12 @@ import {
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 
 const ALREADY_ON = 'Entry quiz is already on for this class.';
+
+it('the stale-version refusal names the entry quiz, not an event', () => {
+  expect(MARK_CONFLICT).toBe(
+    "Someone changed this entry quiz while you were editing. Your changes weren't saved — reload to see the current version.",
+  );
+});
 
 describe('class marks (entry quiz)', () => {
   let db: Db;
@@ -311,7 +318,7 @@ describe('class marks (entry quiz)', () => {
         { expectedVersion: 0 },
         'web',
       ),
-    ).toEqual({ ok: false, message: CONFLICT });
+    ).toEqual({ ok: false, message: MARK_CONFLICT });
     expect(
       await editMark(
         db,
@@ -408,7 +415,7 @@ describe('class marks (entry quiz)', () => {
   it('removes (soft), restores as admin, and refuses a restore over an active mark', async () => {
     expect(
       await removeMark(db, id.u, id.m, { expectedVersion: 0 }, 'web'),
-    ).toEqual({ ok: false, message: CONFLICT });
+    ).toEqual({ ok: false, message: MARK_CONFLICT });
     const r = await removeMark(db, id.u, id.m, { expectedVersion: 1 }, 'web');
     expect(r).toEqual({
       ok: true,

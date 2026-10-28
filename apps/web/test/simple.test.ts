@@ -49,6 +49,15 @@ describe('static maps', () => {
     expect(REPORT_META.map((r) => r.icon)).toEqual(['Books', 'Medal', 'Exam']);
     expect(REPORT_LABELS.files).toBe('Files');
     expect(REPORT_LABELS.created_at).toBe('Added');
+    // One word per concept: the sidebar says "files", so do the reports;
+    // the Tests report is about Test events, not tagged topics.
+    expect(REPORT_META.map((r) => r.desc)).toEqual([
+      'How many files each subject has.',
+      'Who has added the most files.',
+      'Test and Exam events in the next 30 days.',
+    ]);
+    expect(REPORT_LABELS.materials).toBe('Files');
+    expect(REPORT_LABELS.starts_at).toBe('When');
   });
   it('fileIcon and statusBadge', () => {
     expect(

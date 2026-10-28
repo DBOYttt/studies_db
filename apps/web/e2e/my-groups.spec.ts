@@ -43,7 +43,9 @@ test('a choice left in localStorage is imported once and removed', async ({
   const cleared = page.waitForResponse((r) => r.request().method() === 'POST');
   await page.getByRole('button', { name: 'Clear' }).click();
   await cleared;
-  await expect(select.locator('option:checked')).toHaveText('All');
+  await expect(select.locator('option:checked')).toHaveText(
+    'All groups (not picked)',
+  );
   await expect(
     page.getByRole('form', { name: 'My groups' }).getByRole('status'),
   ).toHaveText('Groups cleared.');
@@ -99,10 +101,36 @@ test('a stale localStorage key never resurrects cleared groups', async ({
   await page.reload();
   await expect(
     page.getByLabel(/Plan testowy.*Ćwiczenia/).locator('option:checked'),
-  ).toHaveText('All');
+  ).toHaveText('All groups (not picked)');
   expect(
     await page.evaluate((key) => localStorage.getItem(key), KEY),
   ).toBeNull();
+});
+
+test('in simple mode every My groups link stays under /s', async ({ page }) => {
+  const week = '/s/plan?week=2026-W42';
+  await page.goto(week);
+  await expect(page.getByText('Showing all groups.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Pick yours' })).toHaveAttribute(
+    'href',
+    GROUPS,
+  );
+  await page.goto(GROUPS);
+  const saved = page.waitForResponse((r) => r.request().method() === 'POST');
+  await page
+    .getByLabel(/Plan testowy.*Ćwiczenia/)
+    .selectOption({ label: 'Gr. 2' });
+  await saved;
+  await page.goto(week);
+  await expect(page.getByText('Filter: My groups')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'change' })).toHaveAttribute(
+    'href',
+    GROUPS,
+  );
+  const cleared = page.waitForResponse((r) => r.request().method() === 'POST');
+  await page.goto(GROUPS);
+  await page.getByRole('button', { name: 'Clear' }).click();
+  await cleared;
 });
 
 test('Reminders checkboxes persist', async ({ page }) => {

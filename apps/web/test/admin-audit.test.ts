@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   AUDIT_PAGE_SIZE,
+  auditActionLabel,
   auditHref,
   auditStatementPreview,
   formatAuditTime,
@@ -80,4 +81,47 @@ describe('auditStatementPreview', () => {
 
 it('pages by 50', () => {
   expect(AUDIT_PAGE_SIZE).toBe(50);
+});
+
+describe('auditActionLabel', () => {
+  it('names every action the apps write, in plain words', () => {
+    expect(auditActionLabel('sql.execute')).toBe('SQL executed');
+    expect(auditActionLabel('class_mark.add')).toBe('Entry quiz turned on');
+    expect(auditActionLabel('class_mark.remove')).toBe('Entry quiz turned off');
+    expect(auditActionLabel('class_mark.skip')).toBe(
+      'Entry quiz: not this week',
+    );
+    expect(auditActionLabel('event.add')).toBe('Event added');
+    expect(auditActionLabel('user.ban')).toBe('Access blocked');
+    for (const a of [
+      'sql.rejected',
+      'class_mark.edit',
+      'class_mark.restore',
+      'class_mark.unskip',
+      'event.edit',
+      'event.delete',
+      'event.restore',
+      'event.link',
+      'event.unlink',
+      'event.upload',
+      'event.upload_retry',
+      'event.post_retry',
+      'user.unban',
+      'reminders.update',
+      'bot.setup',
+      'bot.setup_dry_run',
+      'bot.resync',
+      'plan.sync',
+      'subject.add',
+      'subject.edit',
+      'class.edit',
+      'lecturer.add',
+      'lecturer.edit',
+      'lecturer.assign',
+    ])
+      expect(auditActionLabel(a), a).not.toBe(a);
+  });
+  it('falls back to the raw key for an unknown action', () => {
+    expect(auditActionLabel('x.y')).toBe('x.y');
+  });
 });

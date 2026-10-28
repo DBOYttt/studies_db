@@ -296,6 +296,11 @@ describe('event actions', () => {
         .from(events)
         .where(eq(events.id, r.id as number));
       expect(e).toMatchObject({ classId: id.cA, groupId: id.gA1 });
+      // The event page names the class and group.
+      expect(await getEvent(db, r.id as number)).toMatchObject({
+        className: 'Laboratorium',
+        groupName: 'Gr. 1',
+      });
     });
     it('the 11th event within an hour is refused', async () => {
       for (let i = 0; i < 10; i++) {

@@ -26,6 +26,13 @@ test('week view shows blocks with rooms and the session panel', async ({
 });
 
 test('My groups filters groups, persists, and clears', async ({ page }) => {
+  // No group saved yet: a prompt says every group is shown.
+  await page.goto(WEEK);
+  await expect(page.getByText('Showing all groups.')).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Pick yours' })).toHaveAttribute(
+    'href',
+    '/plan?tab=groups',
+  );
   await page.goto('/plan?tab=groups');
   const select = page.getByLabel(/Plan testowy.*Ćwiczenia/);
   await select.selectOption({ label: 'Gr. 2' });
@@ -43,11 +50,13 @@ test('My groups filters groups, persists, and clears', async ({ page }) => {
   );
   await expect(blocks.filter({ hasText: 'B-2 202' })).toContainText('Gr. 2');
   await expect(blocks.filter({ hasText: 'A-1 101' })).toHaveCount(1);
-  const note = page.getByRole('link', {
-    name: 'Hidden classes: 1 — fill in My groups',
-  });
-  await expect(note).toBeVisible();
-  await expect(note).toHaveAttribute('href', '/plan?tab=groups');
+  // Gr. 1 is hidden on purpose (Gr. 2 is picked): no "pick a group" note.
+  await expect(page.getByText(/hidden: pick a group/)).toHaveCount(0);
+  await expect(page.getByText('Showing all groups.')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'change' })).toHaveAttribute(
+    'href',
+    '/plan?tab=groups',
+  );
 
   await page.reload();
   await expect(page.getByText('Filter: My groups')).toBeVisible();
@@ -71,7 +80,8 @@ test('My groups filters groups, persists, and clears', async ({ page }) => {
     await expect(clearedPanel).toBeVisible({ timeout: 1000 });
   }).toPass();
   await expect(page.getByText('Filter: My groups')).toHaveCount(0);
-  await expect(page.getByText(/Hidden classes/)).toHaveCount(0);
+  await expect(page.getByText(/hidden: pick a group/)).toHaveCount(0);
+  await expect(page.getByText('Showing all groups.')).toBeVisible();
   await expect(blocks).toHaveCount(4);
 });
 

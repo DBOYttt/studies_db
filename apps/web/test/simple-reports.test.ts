@@ -2,6 +2,7 @@ import {
   consumeLoginToken,
   createLoginToken,
   type Db,
+  events,
   subjects,
   upsertUser,
 } from '@studies/db';
@@ -53,6 +54,49 @@ beforeAll(async () => {
     displayName: 'Ann',
     avatarUrl: null,
   });
+  // Report 2 lists Test and Exam events of the next 30 days, nothing else.
+  const [{ id: mechId }] = await db
+    .select({ id: subjects.id })
+    .from(subjects)
+    .limit(1);
+  const inDays = (d: number) => new Date(Date.now() + d * 86_400_000);
+  await db.insert(events).values([
+    {
+      kind: 'kolokwium',
+      title: 'Kolokwium 1',
+      subjectId: mechId,
+      startsAt: inDays(3),
+      createdBy: userId,
+    },
+    {
+      kind: 'egzamin',
+      title: 'Egzamin',
+      subjectId: mechId,
+      startsAt: inDays(20),
+      createdBy: userId,
+    },
+    {
+      kind: 'inne',
+      title: 'Spotkanie',
+      subjectId: mechId,
+      startsAt: inDays(4),
+      createdBy: userId,
+    },
+    {
+      kind: 'kolokwium',
+      title: 'Stare',
+      subjectId: mechId,
+      startsAt: inDays(-5),
+      createdBy: userId,
+    },
+    {
+      kind: 'kolokwium',
+      title: 'Daleko',
+      subjectId: mechId,
+      startsAt: inDays(40),
+      createdBy: userId,
+    },
+  ]);
   const r = await consumeLoginToken(db, await createLoginToken(db, userId));
   sid = (r as { sessionToken: string }).sessionToken;
   cookieSid = sid;
@@ -109,7 +153,19 @@ describe('GET /s/reports/csv', () => {
   it('invalid r falls back to report 0', async () => {
     const res = await call('9');
     expect((await res.text()).replace(/^﻿/, '').split('\r\n')[0]).toBe(
-      'Code,Subject,Materials',
+      'Code,Subject,Files',
     );
+  });
+  it('r=2 lists the Tests and Exams of the next 30 days', async () => {
+    const res = await call('2');
+    expect(res.headers.get('Content-Disposition')).toBe(
+      'attachment; filename="tests-exams-next-30-days.csv"',
+    );
+    const lines = (await res.text()).replace(/^\uFEFF/, '').split('\r\n');
+    expect(lines[0]).toBe('When,Type,Subject,Title');
+    const body = lines.slice(1).filter(Boolean);
+    expect(body).toHaveLength(2);
+    expect(body[0]).toMatch(/,Test,MECH,Kolokwium 1$/);
+    expect(body[1]).toMatch(/,Exam,MECH,Egzamin$/);
   });
 });

@@ -170,9 +170,9 @@ describe('example queries', () => {
   }
   it('has exactly the three named examples', () => {
     expect(EXAMPLE_QUERIES.map((e) => e.name)).toEqual([
-      'Materials per subject',
+      'Files per subject',
       'Most active uploaders',
-      'Tests from the last 30 days',
+      'Tests and exams in the next 30 days',
     ]);
   });
 });

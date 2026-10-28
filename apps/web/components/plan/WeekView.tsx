@@ -21,7 +21,6 @@ import {
   DAY_END_MIN,
   DAY_START_MIN,
   filterMyGroups,
-  hiddenByMyGroups,
   type IsoWeek,
   type MyGroups,
   type PlanBadge,
@@ -40,8 +39,12 @@ import {
   dayHeader,
   entryQuizEditHref,
   fromWeekSession,
+  hiddenNote,
   mergedBarText,
+  myGroupsHref,
   type SessionLinks,
+  showAllGroupsPrompt,
+  unpickedHidden,
   type WeekSession,
   wallDateKey,
   wallTime,
@@ -137,10 +140,15 @@ export function WeekView({
     () => (filterOn ? (filterMyGroups(all, myGroups) as Session[]) : all),
     [all, filterOn, myGroups],
   );
+  // Only the sessions hidden for want of a pick are worth a note; the other
+  // groups of a picked class are hidden on purpose.
   const hidden = useMemo(
-    () => (filterOn ? hiddenByMyGroups(all, myGroups) : 0),
+    () => (filterOn ? unpickedHidden(all, myGroups) : null),
     [all, filterOn, myGroups],
   );
+  const allGroups =
+    myGroupsFilter && !filterOn && showAllGroupsPrompt(all, myGroups);
+  const groupsHref = myGroupsHref(simple);
   const days = useMemo(() => dayIsos.map((d) => new Date(d)), [dayIsos]);
   const columns = useMemo(() => dayColumns(days, shown), [days, shown]);
   const hasAllDay = columns.some((c) => c.allDay.length > 0);
@@ -223,23 +231,32 @@ export function WeekView({
       </div>
 
       {filterOn && (
-        <div className="flex items-center gap-1.5 self-start rounded-md border border-line-strong bg-box-head px-2.5 py-1">
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 self-start rounded-md border border-line-strong bg-box-head px-2.5 py-1">
           <Funnel size={14} className="text-accent-ink" aria-hidden />
           <span>Filter: My groups</span>
           <Link
-            href="/plan?tab=groups"
+            href={groupsHref}
             className="text-accent-ink hover:text-accent-ink-hover hover:underline"
           >
             change
           </Link>
-          {hidden > 0 && (
-            <Link
-              href="/plan?tab=groups"
-              className="ml-1 text-muted hover:underline"
-            >
-              Hidden classes: {hidden} — fill in My groups
+          {hidden && hidden.count > 0 && (
+            <Link href={groupsHref} className="ml-1 text-muted hover:underline">
+              {hiddenNote(hidden)}
             </Link>
           )}
+        </div>
+      )}
+      {allGroups && (
+        <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 self-start rounded-md border border-line-strong bg-box-head px-2.5 py-1">
+          <Funnel size={14} className="text-accent-ink" aria-hidden />
+          <span>Showing all groups.</span>
+          <Link
+            href={groupsHref}
+            className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+          >
+            Pick yours
+          </Link>
         </div>
       )}
 

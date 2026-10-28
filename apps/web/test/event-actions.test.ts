@@ -156,7 +156,7 @@ describe('event actions', () => {
       A.createEventAction(
         form({ subjectId: String(subjectId), base: 'advanced' }),
       ),
-    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+/);
+    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+\?saved=added$/);
     // the v_events count in the nav is dropped from the cache
     expect(counts.invalidated).toBeGreaterThan(invalidated);
     const [ev] = await eventRows();
@@ -165,7 +165,7 @@ describe('event actions', () => {
 
     await expect(
       A.updateEventAction(ev.id, form({ title: 'Nowy tytuł' })),
-    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}`);
+    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}?saved=edited`);
     expect((await eventRows())[0].title).toBe('Nowy tytuł');
 
     expect((await A.linkTopicAction(ev.id, topicId)).ok).toBe(true);
@@ -328,10 +328,13 @@ describe('retryPostAction', () => {
     const user = { id: alice.id, isAdmin: false } as never;
     let page = await loadEventPage(id, user);
     expect(page.canRetryPost).toBe(true);
+    // No post and nothing queued: the line explains the "Try again".
+    expect(page.postLine).toBe('Discord post: none');
     await A.retryPostAction(id);
     page = await loadEventPage(id, user);
     expect(page.canRetryPost).toBe(false);
-    expect(page.postLine).toBe('Discord post: being prepared');
+    // On its way: nothing to tell a student.
+    expect(page.postLine).toBeNull();
     await db
       .update(botRequests)
       .set({ status: 'failed', error: 'Brak forum' })
@@ -342,6 +345,7 @@ describe('retryPostAction', () => {
     await db.update(events).set({ topicId }).where(eq(events.id, id));
     page = await loadEventPage(id, user);
     expect(page.canRetryPost).toBe(false);
+    expect(page.postLine).toBeNull();
   });
 });
 

@@ -90,12 +90,27 @@ describe('helpers', () => {
     );
   });
   it('"+ Test" opens the form prefilled with the session', () => {
-    const s = { ...base, type: 'class' as const, id: 42, classId: 3 };
-    expect(newTestHref({ ...s, groupId: 8 }, true)).toBe(
-      '/s/wydarzenia/nowe?kind=kolokwium&subject=5&class=3&group=8&session=42',
+    const s = {
+      ...base,
+      type: 'class' as const,
+      id: 42,
+      classId: 3,
+      className: 'Laboratorium',
+    };
+    const title = (href: string) =>
+      new URLSearchParams(href.split('?')[1]).get('title');
+    const simple = newTestHref({ ...s, groupId: 8 }, true);
+    expect(simple).toMatch(
+      /^\/s\/wydarzenia\/nowe\?kind=kolokwium&subject=5&class=3&group=8&session=42&title=/,
     );
-    expect(newTestHref(s, false)).toBe(
-      '/wydarzenia/nowe?kind=kolokwium&subject=5&class=3&session=42',
+    // The title is prefilled, so "Add event" needs no typing.
+    expect(title(simple)).toBe('Test – FIZ Laboratorium');
+    const adv = newTestHref(s, false);
+    expect(adv).toMatch(
+      /^\/wydarzenia\/nowe\?kind=kolokwium&subject=5&class=3&session=42&title=/,
+    );
+    expect(title(newTestHref({ ...s, className: null }, false))).toBe(
+      'Test – FIZ',
     );
   });
   it('"+ Test" only on confirmed class sessions', () => {

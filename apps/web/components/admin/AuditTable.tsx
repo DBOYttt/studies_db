@@ -1,8 +1,7 @@
 import type { AuditRow } from '@studies/db';
 import Link from 'next/link';
 import {
-  AUDIT_ACTION_LABELS,
-  type AuditAction,
+  auditActionLabel,
   auditStatementPreview,
   formatAuditTime,
 } from '@/lib/admin-audit';
@@ -11,19 +10,23 @@ const th =
   'sticky top-0 z-[1] whitespace-nowrap border-b border-l border-b-line-strong border-l-line bg-surface px-2.5 py-[7px] text-left font-sans font-semibold first:border-l-0';
 const td = 'border-b border-l border-line px-2.5 py-[5px] first:border-l-0';
 
-/** Action as a small square label; rejected statements read as errors. */
+/**
+ * Action as a small square label in plain words ("Entry quiz turned on"),
+ * with the stored key (`class_mark.add`) in the tooltip; rejected
+ * statements read as errors.
+ */
 export function AuditActionLabel({ action }: { action: string }) {
   const rejected = action === 'sql.rejected';
   return (
     <span
-      title={AUDIT_ACTION_LABELS[action as AuditAction] ?? action}
+      title={action}
       className={`inline-block rounded border px-1.5 font-mono text-[11.5px] ${
         rejected
           ? 'border-err-line bg-err-bg text-err-fg'
           : 'border-line-strong bg-page text-accent-ink'
       }`}
     >
-      {action}
+      {auditActionLabel(action)}
     </span>
   );
 }

@@ -26,6 +26,14 @@ test('login lands on Start with subject cards and Recently added', async ({
     page.getByRole('heading', { name: 'Subjects' }).first(),
   ).toBeVisible();
   const main = page.getByRole('main');
+  // What's next first: Upcoming events sit above the subject grid.
+  const events = await main
+    .getByRole('heading', { name: 'Upcoming events' })
+    .boundingBox();
+  const subjects = await main
+    .getByRole('heading', { name: 'Subjects' })
+    .boundingBox();
+  expect(events?.y).toBeLessThan(subjects?.y ?? 0);
   for (const code of ['FIZ', 'MECH', 'PLAN']) {
     await expect(
       main.getByRole('link', { name: new RegExp(`^${code}\\b`) }),
@@ -123,6 +131,9 @@ test('search highlights hits with <mark>', async ({ page }) => {
   const marks = page.getByRole('main').locator('mark');
   await expect(marks.first()).toBeVisible();
   await expect(marks.first()).toHaveText(/lab/i);
+  // No inline padding, so a hit inside a word doesn't split it.
+  await expect(marks.first()).toHaveCSS('padding-left', '0px');
+  await expect(marks.first()).toHaveCSS('padding-right', '0px');
 });
 
 test('reports: card shows table with Author header and CSV link', async ({

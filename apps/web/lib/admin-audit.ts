@@ -1,5 +1,6 @@
 /** Pure helpers for the /admin "Audit log" screens. */
 import { fixSept } from '@studies/db/text';
+import { AUDIT_LABELS } from './event-view';
 import { historyLabel } from './sql-editor';
 
 export const AUDIT_PAGE_SIZE = 50;
@@ -12,6 +13,35 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'sql.execute': 'SQL executed',
   'sql.rejected': 'SQL rejected',
 };
+
+/** Plain names of every action the web, bot and db write (`admin_audit`). */
+const ACTION_NAMES: Record<string, string> = {
+  ...AUDIT_ACTION_LABELS,
+  ...AUDIT_LABELS,
+  'class_mark.add': 'Entry quiz turned on',
+  'class_mark.edit': 'Entry quiz note changed',
+  'class_mark.remove': 'Entry quiz turned off',
+  'class_mark.restore': 'Entry quiz restored',
+  'class_mark.skip': 'Entry quiz: not this week',
+  'class_mark.unskip': 'Entry quiz: skip undone',
+  'user.ban': 'Access blocked',
+  'user.unban': 'Access unblocked',
+  'reminders.update': 'Reminders changed',
+  'bot.setup': 'Server set up',
+  'bot.setup_dry_run': 'Server setup previewed',
+  'bot.resync': 'Resync',
+  'plan.sync': 'Timetable sync requested',
+  'subject.add': 'Subject added',
+  'subject.edit': 'Subject changed',
+  'class.edit': 'Class changed',
+  'lecturer.add': 'Lecturer added',
+  'lecturer.edit': 'Lecturer changed',
+  'lecturer.assign': 'Lecturer assigned',
+};
+
+/** The plain name of an audit action; an unknown one stays its raw key. */
+export const auditActionLabel = (action: string): string =>
+  ACTION_NAMES[action] ?? action;
 
 export interface AuditQuery {
   page: number;

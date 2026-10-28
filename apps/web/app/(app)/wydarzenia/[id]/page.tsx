@@ -1,5 +1,4 @@
-import { CalendarBlank, Plus } from '@phosphor-icons/react/dist/ssr';
-import Link from 'next/link';
+import { CalendarBlank } from '@phosphor-icons/react/dist/ssr';
 import { EventDetails } from '@/components/events/EventDetails';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -9,6 +8,7 @@ import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview } from '@/lib/simple-page';
+import { savedStatus } from '@/lib/status-text';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,13 +38,6 @@ export default async function EventPage({
         tabs={dbTabs('plan')}
       />
       <div className="flex max-w-4xl flex-col gap-3.5">
-        <Link
-          href="/wydarzenia/nowe"
-          className="link inline-flex items-center gap-1 self-start text-[13px]"
-        >
-          <Plus size={13} aria-hidden />
-          Add event
-        </Link>
         <EventDetails
           e={e}
           base="advanced"
@@ -52,6 +45,7 @@ export default async function EventPage({
           editHref={`${baseHref}/edytuj`}
           selectedFileId={preview?.file.id ?? null}
           canRestore={user.isAdmin}
+          savedText={savedStatus(sp.saved)}
         />
         {preview && (
           <div className="rounded-lg border border-line-strong">

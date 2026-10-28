@@ -42,20 +42,23 @@ export function highlightParts(
 
 export const REPORT_META: { icon: 'Books' | 'Medal' | 'Exam'; desc: string }[] =
   [
-    { icon: 'Books', desc: 'How many materials each subject has.' },
+    { icon: 'Books', desc: 'How many files each subject has.' },
     { icon: 'Medal', desc: 'Who has added the most files.' },
-    { icon: 'Exam', desc: 'Topics tagged Kolokwium in the last 30 days.' },
+    { icon: 'Exam', desc: 'Test and Exam events in the next 30 days.' },
   ];
 
 export const REPORT_LABELS: Record<string, string> = {
   code: 'Code',
   name: 'Subject',
-  materials: 'Materials',
+  materials: 'Files',
   display_name: 'Author',
   files: 'Files',
   id: 'No.',
-  title: 'Topic',
+  title: 'Title',
   created_at: 'Added',
+  starts_at: 'When',
+  type: 'Type',
+  subject_code: 'Subject',
 };
 
 export type FileIconName =
@@ -306,9 +309,9 @@ export const MAX_ROWS = 1000;
 
 /** CSV file names of the three ready-made reports (same order as EXAMPLE_QUERIES). */
 export const REPORT_SLUGS = [
-  'materials-per-subject',
+  'files-per-subject',
   'most-active-uploaders',
-  'tests-last-30-days',
+  'tests-exams-next-30-days',
 ] as const;
 
 /** `?r=0|1|2`; anything else (missing, junk, out of range) is the first report. */

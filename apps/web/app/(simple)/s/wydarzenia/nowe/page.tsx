@@ -3,7 +3,7 @@ import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
-import { loadNewEventForm } from '@/lib/event-form-page';
+import { loadNewEventForm, newEventHeading } from '@/lib/event-form-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
@@ -25,6 +25,7 @@ export default async function SimpleNewEvent({
     listEventSubjectOptions(db),
     loadNewEventForm(sp),
   ]);
+  const heading = newEventHeading(sp);
   return (
     <SimpleShell
       subjects={navSubjects(cards)}
@@ -32,13 +33,13 @@ export default async function SimpleNewEvent({
       crumbs={[
         { label: 'Start', href: '/s' },
         { label: 'Timetable', href: '/s/plan' },
-        { label: 'Add event' },
+        { label: heading },
       ]}
       user={user}
       adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
     >
       <h1 className="m-0 text-[22px] font-semibold tracking-[-0.01em]">
-        Add event
+        {heading}
       </h1>
       <EventForm
         options={options}

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
-// Lists lines with Polish diacritics in the UI-facing source. The interface is
-// English (docs/glossary.md); content and class-type tags stay Polish.
+// Lists lines with Polish diacritics, or common Polish UI words that have none
+// ("Akcje", "Zapisz", ...), in the UI-facing source. The interface is English
+// (docs/glossary.md); content and class-type tags stay Polish.
 // Usage: node scripts/check-ui-language.mjs [paths...]   (exit 1 on any hit)
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
@@ -17,6 +18,12 @@ const DEFAULT_SCOPE = [
 ];
 const EXT = /\.(ts|tsx|mjs|js|jsx)$/;
 const POLISH = /[ąćęłńóśźżĄĆĘŁŃÓŚŹŻ]/;
+/**
+ * Polish interface words without diacritics, as whole words (case-sensitive,
+ * so identifiers like `akcjeId` don't match). Extend it when one slips in.
+ */
+const POLISH_WORDS =
+  /(?<![\w$])(Akcje|Akcja|Zapisz|Anuluj|Edytuj|Szukaj|Wyszukaj|Dodaj|Pobierz|Zamknij|Wyloguj|Zaloguj|Przedmioty|Wydarzenia|Wszystkie|Brak|Wybierz|Pliki|Grupy|Zajecia|Prowadzacy)(?![\w$])/;
 const SKIP_LINE = /console\.|localeCompare|toLocale/;
 
 /** Whole files that are content or data, not UI copy. */
@@ -35,6 +42,8 @@ const ALLOW_LINES = [
   ],
   [/^packages\/db\/src\/search\.ts$/, /replace\(\/[łŁ]\//],
   [/^apps\/web\/lib\/simple\.ts$/, /replace\(\/[łŁ]\//],
+  // Titles older versions gave the pinned posts (matched, never shown).
+  [/^apps\/bot\/src\/setup\/info\.ts$/, /^'ℹ️ Wydarzenia',$/],
 ];
 
 function* walk(p) {
@@ -85,7 +94,7 @@ for (const t of targets) {
         if (isComment(text) || SKIP_LINE.test(text)) return;
         // A trailing `// comment` is not UI copy.
         const code = text.replace(/\s\/\/.*$/, '');
-        if (!POLISH.test(code)) return;
+        if (!POLISH.test(code) && !POLISH_WORDS.test(code)) return;
         if (lineAllow.some((re) => re.test(code))) return;
         hits++;
         console.log(`${rel}:${i + 1}: ${text}`);

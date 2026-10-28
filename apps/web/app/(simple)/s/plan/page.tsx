@@ -12,7 +12,7 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
-import { formatSyncTime, syncFailed } from '@/lib/plan-view';
+import { syncFailed, syncLine } from '@/lib/plan-view';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
 
@@ -102,11 +102,7 @@ export default async function SimplePlan({
         <GroupsTab weekHref="/s/plan" />
       )}
       {status && (
-        <p className="m-0 text-xs text-muted">
-          {status.lastOkAt
-            ? `Last synced: ${formatSyncTime(status.lastOkAt)}`
-            : 'The timetable has not been synced yet'}
-        </p>
+        <p className="m-0 text-xs text-muted">{syncLine(status.lastOkAt)}</p>
       )}
     </SimpleShell>
   );

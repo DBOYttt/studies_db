@@ -34,15 +34,15 @@ function dateIn(days: number): string {
   return new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10);
 }
 
-test('add an event; its page says the Discord post is being prepared', async ({
+test('add an event; its page does not bother students with the Discord post', async ({
   page,
 }) => {
   await page.goto('/s/wydarzenia/nowe');
   await page.getByLabel('Type').selectOption('kolokwium');
   await page.getByLabel('Title', { exact: true }).fill('Kolokwium z tarcia');
   await page.getByLabel('Date').fill(dateIn(7));
-  await page.getByLabel('From (time)').fill('10:00');
-  await page.getByLabel('To (time)').fill('11:30');
+  await page.getByLabel('Starts').fill('10:00');
+  await page.getByLabel('Ends').fill('11:30');
   await page
     .getByRole('combobox', { name: 'Subject' })
     .selectOption({ label: 'FIZ · Fizyka techniczna' });
@@ -54,9 +54,20 @@ test('add an event; its page says the Discord post is being prepared', async ({
   await expect(
     page.getByRole('heading', { name: 'Kolokwium z tarcia' }),
   ).toBeVisible();
-  await expect(page.getByText('Discord post: being prepared')).toBeVisible();
+  // A one-shot confirmation, announced in a status line; the URL loses
+  // ?saved= so a reload doesn't repeat it.
+  await expect(
+    page.getByRole('status').filter({ hasText: /^Event added\.$/ }),
+  ).toBeVisible();
+  await expect(page.getByText(/Discord post/)).toHaveCount(0);
+  // No top "Add event" link on an event page.
+  await expect(
+    page.getByRole('main').getByRole('link', { name: /Add event/ }),
+  ).toHaveCount(0);
   await expect(page.getByText('C-12')).toBeVisible();
-  await expect(page.getByText('Event added')).toBeVisible();
+  await expect(page.getByText('Event added', { exact: true })).toBeVisible();
+  await page.reload();
+  await expect(page.getByText('Event added.')).toHaveCount(0);
 });
 
 function isoWeekParam(iso: string): string {
@@ -106,7 +117,7 @@ test('required fields are marked and the all-day hint describes the times', asyn
     '',
   );
   await expect(page.getByLabel('Date')).toHaveAttribute('required', '');
-  for (const name of ['From (time)', 'To (time)']) {
+  for (const name of ['Starts', 'Ends']) {
     await expect(page.getByLabel(name)).toHaveAccessibleDescription(
       'Without a time the event lasts all day.',
     );
@@ -160,6 +171,9 @@ test('edit the title', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(eventUrl);
   await expect(
+    page.getByRole('status').filter({ hasText: /^Changes saved\.$/ }),
+  ).toBeVisible();
+  await expect(
     page.getByRole('heading', { name: 'Kolokwium z tarcia (poprawione)' }),
   ).toBeVisible();
   await expect(page.getByText('Event changed')).toBeVisible();
@@ -169,7 +183,11 @@ test('link a seeded post; its files appear under Materials', async ({
   page,
 }) => {
   await page.goto(eventUrl);
-  await expect(page.getByText('No materials')).toBeVisible();
+  await expect(
+    page.getByText(
+      'No files yet. Add files below or link a post that has them.',
+    ),
+  ).toBeVisible();
   await page.getByLabel('Search posts by title').fill('tarcie');
   await page.getByRole('button', { name: 'Search' }).click();
   await page.getByRole('button', { name: /Link post Kolokwium 1/ }).click();
@@ -179,7 +197,11 @@ test('link a seeded post; its files appear under Materials', async ({
   await expect(page.getByText('sample.pdf')).toBeVisible();
   await expect(page.getByText('notatki.docx')).toBeVisible();
   await page.getByRole('button', { name: /Unlink post Kolokwium 1/ }).click();
-  await expect(page.getByText('No materials')).toBeVisible();
+  await expect(
+    page.getByText(
+      'No files yet. Add files below or link a post that has them.',
+    ),
+  ).toBeVisible();
 });
 
 test('linking a second post announces "Post linked." again', async ({
@@ -216,12 +238,13 @@ test('uploading a file shows it as sending… (no bot in e2e)', async ({
   page,
 }) => {
   await page.goto(eventUrl);
-  await page.getByLabel('Files to add').setInputFiles({
+  // Hydrated first: choosing files sends them (one control).
+  await page.waitForLoadState('networkidle');
+  await page.getByLabel('Add files').setInputFiles({
     name: 'notatki.txt',
     mimeType: 'text/plain',
     buffer: Buffer.from('hello'),
   });
-  await page.getByRole('button', { name: 'Add files' }).click();
   await expect(page.getByText('notatki.txt')).toBeVisible();
   await expect(page.getByText('sending…')).toBeVisible();
   // Survives a reload: the status comes from the DB.
@@ -237,10 +260,10 @@ test('a large upload (2 x 7.5 MB) succeeds', async ({ page }) => {
     mimeType: 'application/octet-stream',
     buffer: Buffer.alloc(7.5 * 1024 * 1024, 1),
   });
+  await page.waitForLoadState('networkidle');
   await page
-    .getByLabel('Files to add')
+    .getByLabel('Add files')
     .setInputFiles([big('duzy1.bin'), big('duzy2.bin')]);
-  await page.getByRole('button', { name: 'Add files' }).click();
   await expect(page.getByText('duzy1.bin')).toBeVisible();
   await expect(page.getByText('duzy2.bin')).toBeVisible();
   await expect(page.getByText(/Could not|too large|Invalid/)).toHaveCount(0);
@@ -293,8 +316,8 @@ test.describe('recurring event', () => {
     await page.getByLabel('Type').selectOption('zajecia_dodatkowe');
     await page.getByLabel('Title', { exact: true }).fill(title);
     await page.getByLabel('Date').fill(dateIn(7));
-    await page.getByLabel('From (time)').fill('12:00');
-    await page.getByLabel('To (time)').fill('13:00');
+    await page.getByLabel('Starts').fill('12:00');
+    await page.getByLabel('Ends').fill('13:00');
     await page.getByLabel('Repeat').selectOption('weekly');
     await page.getByLabel('Until', { exact: true }).fill(dateIn(21));
     await page.getByRole('button', { name: 'Add event' }).click();
@@ -488,19 +511,23 @@ test.describe('assessments on the timetable', () => {
     const add = panel.getByRole('link', { name: 'Add test' });
     await expect(add).toHaveAttribute(
       'href',
-      /^\/s\/wydarzenia\/nowe\?kind=kolokwium&subject=\d+&class=\d+&group=\d+&session=\d+$/,
+      /^\/s\/wydarzenia\/nowe\?kind=kolokwium&subject=\d+&class=\d+&group=\d+&session=\d+&title=[^&]+$/,
     );
     await add.click();
 
     await expect(page).toHaveURL(/\/s\/wydarzenia\/nowe\?/);
+    await expect(page.getByRole('heading', { name: 'Add test' })).toBeVisible();
     await expect(page.getByLabel('Type')).toHaveValue('kolokwium');
+    await expect(page.getByLabel('Title', { exact: true })).toHaveValue(
+      'Test – SESJ Laboratorium',
+    );
     const pick = page.getByLabel('Pick a session');
     await expect(pick.locator('option:checked')).toHaveText(
       /, 14:00–15:30 · F-6 601$/,
     );
     await expect(page.getByLabel('Date')).toHaveValue(dateIn(7));
-    await expect(page.getByLabel('From (time)')).toHaveValue('14:00');
-    await expect(page.getByLabel('To (time)')).toHaveValue('15:30');
+    await expect(page.getByLabel('Starts')).toHaveValue('14:00');
+    await expect(page.getByLabel('Ends')).toHaveValue('15:30');
     await expect(page.getByLabel('Place')).toHaveValue('F-6 601');
 
     // Picking the next session fills date, time and place.
@@ -520,13 +547,19 @@ test.describe('assessments on the timetable', () => {
     await expect(filled).toHaveText('');
     await page.getByLabel('Date').fill(dateIn(7));
 
-    await page.getByLabel('Title', { exact: true }).fill('Kolokwium z sesji');
+    // No typing needed: the suggested title saves as it is.
     await page.getByRole('button', { name: 'Add event' }).click();
     await expect(page).toHaveURL(/\/s\/wydarzenia\/\d+$/);
+    await expect(
+      page.getByRole('heading', { name: 'Test – SESJ Laboratorium' }),
+    ).toBeVisible();
+    const details = page.getByRole('main').locator('dl');
+    await expect(details.getByText('Class', { exact: true })).toBeVisible();
+    await expect(details.getByText('Laboratorium Gr. 1')).toBeVisible();
 
     await page.goto(week());
     await expect(
-      lab(page).getByRole('link', { name: 'Test: Kolokwium z sesji' }),
+      lab(page).getByRole('link', { name: 'Test: Test – SESJ Laboratorium' }),
     ).toBeVisible();
   });
 
@@ -575,7 +608,7 @@ test.describe('assessments on the timetable', () => {
     // 90 min with the Test: one merged "Quiz + Test" bar.
     await expect(
       lab(page).getByRole('button', {
-        name: 'Entry quiz: Rozdział 4. Test: Kolokwium z sesji',
+        name: 'Entry quiz: Rozdział 4. Test: Test – SESJ Laboratorium',
       }),
     ).toBeVisible();
   });

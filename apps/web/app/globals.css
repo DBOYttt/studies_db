@@ -190,11 +190,14 @@ body {
   outline-offset: 2px;
 }
 
+/* No inline padding: a hit inside a word must not split it ("kolokwium-sql"). */
 mark {
   background: var(--mark);
   color: inherit;
   border-radius: 2px;
-  padding: 0 2px;
+  padding: 0;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
 
 /* Unstyled anchors (no class) get the design's link look. */

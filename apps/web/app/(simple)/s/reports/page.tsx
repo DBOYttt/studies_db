@@ -21,7 +21,10 @@ const NUMERIC_COLUMNS = new Set(['materials', 'files', 'id']);
 
 const cellText = (col: string, v: unknown): string => {
   if (v === null || v === undefined) return '—';
-  if (col === 'created_at' && (typeof v === 'string' || v instanceof Date))
+  if (
+    (col === 'created_at' || col === 'starts_at') &&
+    (typeof v === 'string' || v instanceof Date)
+  )
     return formatDate(v);
   return String(v);
 };

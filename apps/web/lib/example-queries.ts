@@ -5,13 +5,13 @@ export interface ExampleQuery {
 
 export const EXAMPLE_QUERIES: readonly ExampleQuery[] = [
   {
-    name: 'Materials per subject',
-    sql: `SELECT s.code, s.name, COUNT(m.id) AS materials
+    name: 'Files per subject',
+    sql: `SELECT s.code, s.name, COUNT(m.id) AS files
 FROM v_subjects s
 LEFT JOIN v_topics t ON t.subject_id = s.id
 LEFT JOIN v_materials m ON m.topic_id = t.id
 GROUP BY s.id, s.code, s.name
-ORDER BY materials DESC`,
+ORDER BY files DESC`,
   },
   {
     name: 'Most active uploaders',
@@ -23,13 +23,14 @@ ORDER BY files DESC
 LIMIT 10`,
   },
   {
-    name: 'Tests from the last 30 days',
-    sql: `SELECT t.id, t.title, t.created_at
-FROM v_topics t
-JOIN v_topic_tags tt ON tt.topic_id = t.id
-JOIN v_tags g ON g.id = tt.tag_id
-WHERE g.name = 'Kolokwium'
-  AND t.created_at >= NOW() - INTERVAL 30 DAY
-ORDER BY t.created_at DESC`,
+    name: 'Tests and exams in the next 30 days',
+    sql: `SELECT e.starts_at,
+  CASE e.kind WHEN 'kolokwium' THEN 'Test' ELSE 'Exam' END AS type,
+  e.subject_code, e.title
+FROM v_events e
+WHERE e.kind IN ('kolokwium', 'egzamin')
+  AND e.starts_at >= NOW()
+  AND e.starts_at < NOW() + INTERVAL 30 DAY
+ORDER BY e.starts_at, e.id`,
   },
 ];

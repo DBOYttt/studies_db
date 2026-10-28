@@ -28,7 +28,7 @@ const LABEL: Record<UploadItem['status'], string> = {
 const btn =
   'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60';
 
-/** "Add files" plus the status of the event's recent uploads. */
+/** "Add files" (one control: picking files sends them) plus the status of the event's recent uploads. */
 export function EventUploads({
   eventId,
   initial,
@@ -82,11 +82,14 @@ export function EventUploads({
     }
   }
 
-  async function submit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
+  // One control: choosing files sends them straight away.
+  async function send() {
     const files = Array.from(input.current?.files ?? []);
+    // Cleared at once, so choosing the same file again (after a refusal)
+    // still fires a change.
+    if (input.current) input.current.value = '';
     setError(null);
-    if (files.length === 0) return setError('No files selected.');
+    if (files.length === 0) return;
     if (files.length > MAX_UPLOAD_FILES) {
       return setError(
         `You can send at most ${MAX_UPLOAD_FILES} files at once.`,
@@ -116,7 +119,6 @@ export function EventUploads({
         (u): UploadItem => ({ ...u, status: 'queued', error: null }),
       );
       setItems((cur) => [...added.reverse(), ...cur]);
-      if (input.current) input.current.value = '';
     } catch {
       setError('Could not send the files.');
     } finally {
@@ -126,20 +128,23 @@ export function EventUploads({
 
   return (
     <div className="flex max-w-xl flex-col gap-2">
-      <form onSubmit={submit} className="flex flex-wrap items-center gap-2">
+      <label
+        className={`${btn} self-start cursor-pointer focus-within:outline-2 focus-within:outline-offset-2 focus-within:outline-accent ${
+          busy ? 'pointer-events-none opacity-60' : ''
+        }`}
+      >
+        <UploadSimple size={15} aria-hidden />
+        {busy ? 'Sending…' : 'Add files'}
         <input
           ref={input}
           type="file"
           name="files"
           multiple
-          aria-label="Files to add"
-          className="max-w-full text-[13px]"
+          disabled={busy}
+          onChange={send}
+          className="sr-only"
         />
-        <button type="submit" disabled={busy} className={btn}>
-          <UploadSimple size={15} aria-hidden />
-          Add files
-        </button>
-      </form>
+      </label>
       <p className="m-0 text-xs text-faint">
         Up to {MAX_UPLOAD_FILES} files, each up to{' '}
         {MAX_UPLOAD_BYTES / 1024 / 1024} MB,{' '}

@@ -8,11 +8,18 @@
  * real instant (plan_sync) and formats it in Europe/Warsaw.
  */
 import { CLASS_NAMES } from '@studies/db/constants';
-import { fixSept, MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
+import {
+  fixSept,
+  MONTHS_SHORT,
+  plural,
+  WEEKDAYS_SHORT,
+} from '@studies/db/text';
 import { explorerHref } from './explorer';
 import {
+  filterMyGroups,
   formatIsoWeek,
   type IsoWeek,
+  type MyGroups,
   type PlanBadge,
   type PlanSession,
   shiftWeek,
@@ -381,4 +388,61 @@ export function syncFailed(s: {
   if (!s.lastError) return false;
   if (!s.lastOkAt) return true;
   return s.lastRunAt !== null && s.lastRunAt.getTime() > s.lastOkAt.getTime();
+}
+
+/** "Last synced: …", or a plain note that the stored classes are shown. */
+export function syncLine(lastOkAt: Date | null): string {
+  return lastOkAt
+    ? `Last synced: ${formatSyncTime(lastOkAt)}`
+    : 'Not synced from UniTime yet. The timetable shows the classes stored so far.';
+}
+
+/* ---------- My groups ---------- */
+
+/** The My groups tab of the current mode (simple links stay under /s). */
+export const myGroupsHref = (simple: boolean) =>
+  simple ? '/s/plan?tab=groups' : '/plan?tab=groups';
+
+/**
+ * Help of the My groups form. It must say what `filterMyGroups` does: with a
+ * group picked anywhere, lectures stay, only the picked group of each picked
+ * class stays, and group sessions of classes left unpicked are hidden.
+ */
+export const MY_GROUPS_HELP =
+  'Pick your group in each class that is split into groups. Until you pick one, the week view shows every group. Once you do, it shows lectures and only the groups you picked; group sessions of classes left on "All groups (not picked)" are hidden. Your choice is saved to your account.';
+
+/**
+ * Sessions `filterMyGroups` hides only because their class has no pick (not
+ * the other groups of a picked class), with the subject codes to pick for.
+ */
+export function unpickedHidden(
+  sessions: PlanSession[],
+  g: MyGroups,
+): { count: number; codes: string[] } {
+  if (Object.keys(g).length === 0) return { count: 0, codes: [] };
+  const kept = new Set(filterMyGroups(sessions, g));
+  const hidden = sessions.filter(
+    (s) => !kept.has(s) && g[String(s.classId)] === undefined,
+  );
+  return {
+    count: hidden.length,
+    codes: [...new Set(hidden.map((s) => s.subjectCode))],
+  };
+}
+
+/** "N classes hidden: pick a group for AM2, BD…" (at most three codes). */
+export function hiddenNote(h: { count: number; codes: string[] }): string {
+  const shown = h.codes.slice(0, 3).join(', ');
+  const more = h.codes.length > 3 ? '…' : '';
+  return `${plural(h.count, 'class', 'classes')} hidden: pick a group for ${shown}${more}`;
+}
+
+/** "Showing all groups. Pick yours": no group saved, and the week has groups. */
+export function showAllGroupsPrompt(
+  sessions: PlanSession[],
+  g: MyGroups,
+): boolean {
+  return (
+    Object.keys(g).length === 0 && sessions.some((s) => s.groupId !== null)
+  );
 }

@@ -12,7 +12,19 @@ export const STATUS = {
   sessionFilled: 'Date, time and place filled in.',
   postLinked: 'Post linked.',
   postUnlinked: 'Post unlinked.',
+  eventAdded: 'Event added.',
+  eventSaved: 'Changes saved.',
 } as const;
+
+/**
+ * The event page's one-shot `?saved=` (set by the add / edit redirect): its
+ * confirmation line, or null for anything else.
+ */
+export function savedStatus(v: string | string[] | undefined): string | null {
+  if (v === 'added') return STATUS.eventAdded;
+  if (v === 'edited') return STATUS.eventSaved;
+  return null;
+}
 
 export type QuizChange = 'on' | 'off' | 'restore' | 'note' | 'unskip';
 
