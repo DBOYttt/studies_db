@@ -58,7 +58,9 @@ export async function GET(req: NextRequest) {
   return new Response(confirmPage(token, next), {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
-      'Referrer-Policy': 'no-referrer',
+      // same-origin (not no-referrer): the sign-in POST then carries a real
+      // Origin, which browsers without Fetch Metadata need to pass the check.
+      'Referrer-Policy': 'same-origin',
       'X-Robots-Tag': 'noindex',
       'Cache-Control': 'no-store',
       'Content-Security-Policy':

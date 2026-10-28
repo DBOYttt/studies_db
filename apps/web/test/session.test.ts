@@ -99,7 +99,7 @@ describe('/auth/callback', () => {
     const res = await get(token);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toMatch(/^text\/html/);
-    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('referrer-policy')).toBe('same-origin');
     expect(res.headers.get('set-cookie')).toBeNull();
     const html = await res.text();
     expect(html).toContain('Sign in to Studies DB');
@@ -184,7 +184,7 @@ describe('/auth/callback', () => {
     expect(ok.cookies.get('sid')?.value).toBeTruthy();
   });
 
-  it('POST from the no-referrer confirmation page (Origin: null) works', async () => {
+  it('POST with an opaque Origin: null (no-referrer browser setting) works', async () => {
     const res = await post(token, {
       origin: 'null',
       'sec-fetch-site': 'same-origin',

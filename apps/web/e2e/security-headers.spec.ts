@@ -26,7 +26,7 @@ test('the login confirmation keeps its stricter route headers', async ({
   expect(res.status()).toBe(200);
   const h = res.headers();
   expect(h['content-security-policy']).toMatch(/^default-src 'none';/);
-  expect(h['referrer-policy']).toBe('no-referrer');
+  expect(h['referrer-policy']).toBe('same-origin');
   expect(h['x-frame-options']).toBe('DENY');
 });
 
