@@ -8,8 +8,17 @@
 // Refuses to run on a non-empty database unless `--reset` is given. `--reset`
 // empties every table of this database except the migrations journal,
 // `bot_settings` (admin role, panels, #wydarzenia, digest dates) and the
-// `users` rows of real Discord accounts (numeric ids, with their admin/ban
-// flags); subjects get their Discord forum id back by code.
+// `users` rows of real Discord accounts (numeric ids, with their ids and
+// admin/ban flags). Each subject gets its Discord forum id back by code, and
+// only the tags that forum really has (real tag ids; the bot's tag sync
+// would delete the others). Before emptying, the links are printed and saved
+// to STORAGE_DIR/seed-reset-links.json; a run interrupted after that point
+// leaves an empty-looking database, and the next `pnpm db:seed` (no --reset
+// needed) restores the links from the file. The file is removed on success.
+//
+// The first bot start after a reset rescans the linked forums from scratch
+// (bot_state is emptied): their real threads, old event posts included,
+// become topics next to the seeded ones.
 // See seed-core.ts.
 import { createLoginToken } from '../auth.js';
 import { createDb } from '../client.js';
@@ -36,6 +45,11 @@ try {
     `  ${s.events} events (${s.series} series), ${s.marks} entry quizzes, ${s.botRequests} bot requests queued`,
   );
   console.log(`files written to ${storageDir}`);
+  if (s.kept.relinked.length) {
+    console.log(
+      `\nNote: the next bot start rescans the re-linked forums (${s.kept.relinked.join(', ')}) from scratch; their real threads, old event posts included, become topics next to the seeded ones.`,
+    );
+  }
   for (const [label, id] of [
     ['seed-u1 (student)', s.loginUsers.student],
     ['seed-admin (admin)', s.loginUsers.admin],

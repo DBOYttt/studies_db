@@ -1,10 +1,11 @@
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { eq, isNotNull, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull, sql } from 'drizzle-orm';
 import type mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
+  LINKS_FILE,
   SeedRefusedError,
   type SeedSummary,
   seedDatabase,
@@ -34,6 +35,7 @@ import {
   reminderPrefs,
   sessions,
   subjects,
+  tags,
   topics,
   userGroups,
   users,
@@ -300,18 +302,38 @@ describe('seed on an empty database', () => {
 });
 
 describe('seed --reset', () => {
-  let adminRoleBefore: string | undefined;
+  const ADMIN_ROLE = '900000000000000001';
+  const ASD_FORUM = '800000000000000001';
+  const ASD_TEST_TAG = '700000000000000001';
+  const BANNED_ID = '123456789012345679';
+  let realId: number;
+  let bannedId: number;
+
+  const snapshot = async () => ({
+    subjects: await db.select().from(subjects).orderBy(subjects.id),
+    users: await db.select().from(users).orderBy(users.id),
+    events: await db.select().from(events).orderBy(events.id),
+    tags: await db.select().from(tags).orderBy(tags.id),
+  });
 
   beforeAll(async () => {
     await db.insert(botSettings).values([
-      { key: 'admin_role_id', value: '900000000000000001' },
+      { key: 'admin_role_id', value: ADMIN_ROLE },
       { key: 'events_forum_id', value: '900000000000000002' },
     ]);
-    adminRoleBefore = '900000000000000001';
+    const [asd] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'ASD'));
     await db
       .update(subjects)
-      .set({ discordChannelId: '800000000000000001' })
-      .where(eq(subjects.code, 'ASD'));
+      .set({ discordChannelId: ASD_FORUM })
+      .where(eq(subjects.id, asd.id));
+    // The bot synced the real forum's "Kolokwium" tag (a numeric id).
+    await db
+      .update(tags)
+      .set({ discordTagId: ASD_TEST_TAG })
+      .where(and(eq(tags.subjectId, asd.id), eq(tags.name, 'Kolokwium')));
     await db.insert(subjects).values({
       code: 'OLD',
       name: 'Old subject',
@@ -319,7 +341,7 @@ describe('seed --reset', () => {
       ects: 1,
       discordChannelId: '800000000000000009',
     });
-    const [{ id }] = await db
+    [{ id: realId }] = await db
       .insert(users)
       .values({
         discordUserId: REAL_ID,
@@ -327,20 +349,31 @@ describe('seed --reset', () => {
         isAdmin: true,
       })
       .$returningId();
+    [{ id: bannedId }] = await db
+      .insert(users)
+      .values({
+        discordUserId: BANNED_ID,
+        displayName: 'Real Banned',
+        isBanned: true,
+      })
+      .$returningId();
     await db.insert(sessions).values({
-      userId: id,
+      userId: realId,
       tokenHash: 'x'.repeat(64),
       expiresAt: new Date(Date.now() + DAY_MS),
     });
   });
 
-  it('refuses without --reset on a non-empty database', async () => {
+  it('refuses without --reset on a non-empty database and changes nothing', async () => {
+    const before = await snapshot();
     await expect(
       seedDatabase(db, { storageDir, log: () => {} }),
     ).rejects.toBeInstanceOf(SeedRefusedError);
+    expect(await snapshot()).toEqual(before);
+    expect(existsSync(join(storageDir, LINKS_FILE))).toBe(false);
   });
 
-  it('keeps bot settings and real users, re-links channels by code', async () => {
+  it('keeps bot settings and real users, re-links forums and real tags by code', async () => {
     const lines: string[] = [];
     const again = await seedDatabase(db, {
       storageDir,
@@ -349,7 +382,7 @@ describe('seed --reset', () => {
     });
     const settings = await db.select().from(botSettings);
     expect(settings.find((s) => s.key === 'admin_role_id')?.value).toBe(
-      adminRoleBefore,
+      ADMIN_ROLE,
     );
     expect(settings).toHaveLength(2);
 
@@ -357,7 +390,17 @@ describe('seed --reset', () => {
       .select()
       .from(users)
       .where(eq(users.discordUserId, REAL_ID));
-    expect(real).toMatchObject({ isAdmin: true, displayName: 'Real Person' });
+    expect(real).toMatchObject({
+      id: realId,
+      isAdmin: true,
+      isBanned: false,
+      displayName: 'Real Person',
+    });
+    const [banned] = await db
+      .select()
+      .from(users)
+      .where(eq(users.discordUserId, BANNED_ID));
+    expect(banned).toMatchObject({ id: bannedId, isBanned: true });
     expect(await db.select().from(sessions)).toHaveLength(0);
     // Seed users exist once each.
     const seedUsers = await db
@@ -365,24 +408,93 @@ describe('seed --reset', () => {
       .from(users)
       .where(sql`${users.discordUserId} LIKE 'seed-%'`);
     expect(seedUsers).toHaveLength(7);
+    expect(again.users).toBe(9);
 
     const subs = await db.select().from(subjects);
-    expect(subs.find((s) => s.code === 'ASD')?.discordChannelId).toBe(
-      '800000000000000001',
-    );
+    const asd = subs.find((s) => s.code === 'ASD');
+    expect(asd?.discordChannelId).toBe(ASD_FORUM);
     expect(subs.some((s) => s.code === 'OLD')).toBe(false);
     expect(
       subs.filter((s) => s.code !== 'ASD').every((s) => !s.discordChannelId),
     ).toBe(true);
 
+    // The re-linked subject has only its real forum tags, so the bot's tag
+    // sync keeps them; the others keep their seed tags.
+    const asdTags = await db
+      .select()
+      .from(tags)
+      .where(eq(tags.subjectId, asd?.id as number));
+    expect(asdTags.map((t) => [t.name, t.discordTagId])).toEqual([
+      ['Kolokwium', ASD_TEST_TAG],
+    ]);
+    const [[{ n: tagged }]] = (await db.execute(
+      sql`SELECT COUNT(*) AS n FROM topic_tags WHERE tag_id = ${asdTags[0].id}`,
+    )) as unknown as [[{ n: number }]];
+    expect(Number(tagged)).toBe(1);
+    expect(again.kept.skippedTags).toBe(3);
+    const other = await db
+      .select()
+      .from(tags)
+      .where(sql`${tags.subjectId} <> ${asd?.id}`);
+    expect(other.every((t) => t.discordTagId.startsWith('seed-tag-'))).toBe(
+      true,
+    );
+
     expect(again.kept.relinked).toEqual(['ASD']);
     expect(again.kept.dropped).toEqual(['OLD']);
-    expect(again.kept.users).toEqual(['Real Person']);
+    expect(again.kept.users).toEqual(['Real Person', 'Real Banned']);
     expect(again.kept.settings).toBe(2);
-    expect(lines.join('\n')).toMatch(/OLD/);
+    const out = lines.join('\n');
+    expect(out).toContain(`ASD=${ASD_FORUM}`);
+    expect(out).toContain(`OLD=800000000000000009`);
+    expect(existsSync(join(storageDir, LINKS_FILE))).toBe(false);
 
     const all = await db.select({ id: events.id }).from(events);
     expect(all).toHaveLength(first.events);
     expect(again.botRequests).toBe(first.botRequests);
+  });
+
+  it('an interrupted reset leaves the links in a file; the next run restores them', async () => {
+    await expect(
+      seedDatabase(db, {
+        storageDir,
+        reset: true,
+        log: () => {},
+        afterEmpty: () => {
+          throw new Error('interrupted');
+        },
+      }),
+    ).rejects.toThrow('interrupted');
+    expect(await db.select().from(subjects)).toHaveLength(0);
+    const saved = JSON.parse(
+      readFileSync(join(storageDir, LINKS_FILE), 'utf8'),
+    );
+    expect(saved).toEqual([
+      {
+        code: 'ASD',
+        channelId: ASD_FORUM,
+        tags: [{ name: 'Kolokwium', discordTagId: ASD_TEST_TAG }],
+      },
+    ]);
+
+    // The database looks empty now: no --reset needed, the file is used.
+    const lines: string[] = [];
+    const again = await seedDatabase(db, {
+      storageDir,
+      log: (l) => lines.push(l),
+    });
+    expect(lines.join('\n')).toMatch(/interrupted --reset/);
+    expect(again.kept.relinked).toEqual(['ASD']);
+    const [asd] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'ASD'));
+    expect(asd.discordChannelId).toBe(ASD_FORUM);
+    const asdTags = await db
+      .select({ id: tags.discordTagId })
+      .from(tags)
+      .where(eq(tags.subjectId, asd.id));
+    expect(asdTags).toEqual([{ id: ASD_TEST_TAG }]);
+    expect(existsSync(join(storageDir, LINKS_FILE))).toBe(false);
   });
 });

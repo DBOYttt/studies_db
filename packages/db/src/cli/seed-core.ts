@@ -3,7 +3,13 @@
 // domain functions (events, series, entry quizzes, My groups, reminders) so
 // it is consistent, audited and queued for the bot like real data.
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { deflateSync } from 'node:zlib';
 import { asc, count, eq, isNotNull, isNull, sql } from 'drizzle-orm';
@@ -44,6 +50,7 @@ import {
   users,
   webUploads,
 } from '../schema.js';
+import { stripMarks } from '../search.js';
 
 // ---------------------------------------------------------------- files
 
@@ -791,6 +798,8 @@ export interface SeedOptions {
   /** Empty the database first (keeps the Discord wiring and real users). */
   reset?: boolean;
   log?: (line: string) => void;
+  /** Tests only: runs right after `reset` emptied the database. */
+  afterEmpty?: () => Promise<void> | void;
 }
 
 export interface SeedSummary {
@@ -815,8 +824,24 @@ export interface SeedSummary {
     users: string[];
     relinked: string[];
     dropped: string[];
+    /** Seed tags left out of re-linked subjects (no real forum tag id). */
+    skippedTags: number;
   };
 }
+
+/**
+ * The Discord wiring of the previous data, saved to this file in STORAGE_DIR
+ * before `--reset` empties anything and removed after a successful seed. A
+ * run that finds it (an interrupted reset) restores the links from it.
+ */
+export const LINKS_FILE = 'seed-reset-links.json';
+
+/** A subject's forum and its real forum tags (numeric ids), by code. */
+export type SubjectLink = {
+  code: string;
+  channelId: string;
+  tags: { name: string; discordTagId: string }[];
+};
 
 const SPECIAL_USERS = {
   admin: { discordUserId: 'seed-admin', displayName: 'Marta Starościna' },
@@ -877,25 +902,61 @@ function must<T extends { ok: boolean; message: string }>(
 
 type Kept = SeedSummary['kept'];
 
+const isSnowflake = (id: string) => /^[0-9]+$/.test(id);
+/** Tag identity as /setup compares names: trimmed, case- and diacritic-insensitive. */
+const tagKey = (name: string) => stripMarks(name.trim()).toLowerCase();
+
+/** Linked subjects with their real forum tags. */
+async function readLinks(db: Db): Promise<SubjectLink[]> {
+  const rows = await db
+    .select({
+      id: subjects.id,
+      code: subjects.code,
+      channelId: subjects.discordChannelId,
+    })
+    .from(subjects)
+    .where(isNotNull(subjects.discordChannelId))
+    .orderBy(asc(subjects.code));
+  const out: SubjectLink[] = [];
+  for (const r of rows) {
+    const t = await db
+      .select({ name: tags.name, discordTagId: tags.discordTagId })
+      .from(tags)
+      .where(eq(tags.subjectId, r.id))
+      .orderBy(asc(tags.id));
+    out.push({
+      code: r.code,
+      channelId: r.channelId as string,
+      tags: t.filter((x) => isSnowflake(x.discordTagId)),
+    });
+  }
+  return out;
+}
+
+function loadPendingLinks(path: string): SubjectLink[] | null {
+  if (!existsSync(path)) return null;
+  const parsed = JSON.parse(readFileSync(path, 'utf8')) as SubjectLink[];
+  if (!Array.isArray(parsed)) throw new Error(`seed: ${path} is not a list`);
+  return parsed;
+}
+
+/** By code; `first` wins, `more` fills in the codes it lacks. */
+function mergeLinks(first: SubjectLink[], more: SubjectLink[]): SubjectLink[] {
+  const by = new Map(first.map((l) => [l.code, l]));
+  for (const l of more) if (!by.has(l.code)) by.set(l.code, l);
+  return [...by.values()].sort((x, y) => x.code.localeCompare(y.code));
+}
+
 /**
  * `--reset`: empties every base table of this database (DATABASE()) except
  * the migrations journal, `bot_settings` and `users`, then deletes the users
  * that are not real Discord accounts (non-numeric ids). FK checks are off
  * only for the TRUNCATEs (InnoDB refuses TRUNCATE of a referenced table);
  * the DELETE runs with them on, when every referencing table is already
- * empty. Returns the subject → forum links to restore by code.
+ * empty. Each TRUNCATE commits on its own, so the caller saves the forum
+ * links to LINKS_FILE first.
  */
-async function emptyForReset(
-  db: Db,
-  pool: mysql.Pool,
-): Promise<{ links: { code: string; channelId: string }[]; kept: Kept }> {
-  const links = (
-    await db
-      .select({ code: subjects.code, channelId: subjects.discordChannelId })
-      .from(subjects)
-      .where(isNotNull(subjects.discordChannelId))
-      .orderBy(asc(subjects.code))
-  ).map((l) => ({ code: l.code, channelId: l.channelId as string }));
+async function emptyForReset(db: Db, pool: mysql.Pool): Promise<Kept> {
   const conn = await pool.getConnection();
   try {
     const [rows] = await conn.query<mysql.RowDataPacket[]>(
@@ -921,13 +982,11 @@ async function emptyForReset(
     .orderBy(asc(users.id));
   const [{ n }] = await db.select({ n: count() }).from(botSettings);
   return {
-    links,
-    kept: {
-      settings: Number(n),
-      users: keptUsers.map((u) => u.name),
-      relinked: [],
-      dropped: [],
-    },
+    settings: Number(n),
+    users: keptUsers.map((u) => u.name),
+    relinked: [],
+    dropped: [],
+    skippedTags: 0,
   };
 }
 
@@ -938,22 +997,43 @@ export async function seedDatabase(
   const log = opts.log ?? console.log;
   const pool = (db as unknown as { $client: mysql.Pool }).$client;
   const storageDir = opts.storageDir;
+  const linksPath = join(storageDir, LINKS_FILE);
   const [[{ n }]] = (await db.execute(
     sql`SELECT COUNT(*) AS n FROM subjects`,
   )) as unknown as [[{ n: number }]];
-  let links: { code: string; channelId: string }[] = [];
-  let kept: Kept = { settings: 0, users: [], relinked: [], dropped: [] };
+  const pending = loadPendingLinks(linksPath);
+  let links: SubjectLink[] = pending ?? [];
+  let kept: Kept = {
+    settings: 0,
+    users: [],
+    relinked: [],
+    dropped: [],
+    skippedTags: 0,
+  };
   if (Number(n) > 0) {
     if (!opts.reset) {
       throw new SeedRefusedError(
         'Database already has data. Re-run with --reset to empty it first (pnpm db:seed --reset).',
       );
     }
-    ({ links, kept } = await emptyForReset(db, pool));
+    links = mergeLinks(await readLinks(db), links);
+    mkdirSync(storageDir, { recursive: true });
+    writeFileSync(linksPath, `${JSON.stringify(links, null, 2)}\n`);
+    log(
+      `forum links saved to ${linksPath} (restored by the next run if this one fails):`,
+    );
+    for (const l of links) log(`  ${l.code}=${l.channelId}`);
+    kept = await emptyForReset(db, pool);
     log(
       `emptied existing data; kept bot_settings (${kept.settings} keys) and ${kept.users.length} real users${kept.users.length ? ` (${kept.users.join(', ')})` : ''}`,
     );
+    await opts.afterEmpty?.();
+  } else if (pending) {
+    log(
+      `restoring forum links from an interrupted --reset (${linksPath}): ${pending.map((l) => l.code).join(', ') || 'none'}`,
+    );
   }
+  const linkOf = new Map(links.map((l) => [l.code, l]));
 
   const userIds: number[] = [];
   for (const s of STUDENTS) {
@@ -1012,15 +1092,31 @@ export async function seedDatabase(
         ects: s.ects,
         description: s.description,
         platformUrl: s.platformUrl,
+        // The previous data's forum, by code (see LINKS_FILE).
+        discordChannelId: linkOf.get(s.code)?.channelId ?? null,
       })
       .$returningId();
     subjectIds.set(s.code, subjectId);
 
+    // A re-linked subject only gets tags its real forum has, under their real
+    // ids: the bot's tag sync deletes every tag whose id the forum lacks (and
+    // its topic_tags with it).
+    const link = linkOf.get(s.code);
+    const realTag = new Map(
+      (link?.tags ?? []).map((t) => [tagKey(t.name), t.discordTagId]),
+    );
     const tagIds = new Map<string, number>();
     for (const [ti, name] of s.tags.entries()) {
+      const discordTagId = link
+        ? realTag.get(tagKey(name))
+        : `seed-tag-${si}-${ti}`;
+      if (!discordTagId) {
+        kept.skippedTags++;
+        continue;
+      }
       const [{ id }] = await db
         .insert(tags)
-        .values({ subjectId, name, discordTagId: `seed-tag-${si}-${ti}` })
+        .values({ subjectId, name, discordTagId })
         .$returningId();
       tagIds.set(name, id);
     }
@@ -1109,9 +1205,9 @@ export async function seedDatabase(
         .$returningId();
       topicIdOf.set(t.title, topicId);
       for (const name of t.tags ?? []) {
-        await db
-          .insert(topicTags)
-          .values({ topicId, tagId: tagIds.get(name) as number });
+        const tagId = tagIds.get(name);
+        if (tagId !== undefined)
+          await db.insert(topicTags).values({ topicId, tagId });
       }
 
       for (const f of t.files) {
@@ -1149,13 +1245,11 @@ export async function seedDatabase(
     }
   }
 
-  // Discord forums of the previous data, back on the subject of the same code.
   for (const l of links) {
-    const [res] = await db
-      .update(subjects)
-      .set({ discordChannelId: l.channelId })
-      .where(eq(subjects.code, l.code));
-    (res.affectedRows > 0 ? kept.relinked : kept.dropped).push(l.code);
+    (SUBJECTS.some((x) => x.code === l.code)
+      ? kept.relinked
+      : kept.dropped
+    ).push(l.code);
   }
   if (kept.relinked.length) {
     log(`re-linked Discord forums: ${kept.relinked.join(', ')}`);
@@ -1163,6 +1257,11 @@ export async function seedDatabase(
   if (kept.dropped.length) {
     log(
       `dropped forum links of unknown subject codes: ${kept.dropped.join(', ')}`,
+    );
+  }
+  if (kept.skippedTags) {
+    log(
+      `left out ${kept.skippedTags} seed tags that the re-linked forums don't have`,
     );
   }
 
@@ -1474,10 +1573,13 @@ export async function seedDatabase(
     .from(classMarks)
     .where(isNull(classMarks.deletedAt));
 
+  // Seeded through: the saved links are no longer needed.
+  rmSync(linksPath, { force: true });
+
   return {
     subjects: SUBJECTS.length,
     lecturers: LECTURERS.length,
-    users: userIds.length + 2,
+    users: userIds.length + 2 + kept.users.length,
     files: fileCount,
     sessions: sessionRows.length,
     exams: EXAMS.length,
