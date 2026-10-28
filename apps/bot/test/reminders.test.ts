@@ -23,7 +23,10 @@ import {
   createReminderMemory,
   DIGEST_THREAD_SETTING,
   digestText,
+  discordReminderGuild,
   dmText,
+  NOT_A_DISCORD_ACCOUNT,
+  NotDiscordAccountError,
   type ReminderGuild,
   runReminderTick,
 } from '../src/reminders.js';
@@ -223,6 +226,38 @@ describe('runReminderTick', () => {
       'Unknown user',
     );
     expect(await db.select().from(reminderLog)).toHaveLength(1);
+  });
+
+  it('a non-snowflake id (seed-*, qa-*) is refused before any API call', async () => {
+    const fetch = vi.fn();
+    const g = discordReminderGuild({
+      users: { fetch },
+    } as unknown as Parameters<typeof discordReminderGuild>[0]);
+    for (const id of ['seed-u1', 'qa-student', '123', '1'.repeat(21)]) {
+      await expect(g.sendDm(id, 'x')).rejects.toBeInstanceOf(
+        NotDiscordAccountError,
+      );
+    }
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it('a non-Discord account is disabled once with a reason, not retried', async () => {
+    await event(W(2026, 10, 20, 10));
+    const errors = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const g = fakeGuild();
+    g.guild.sendDm = vi
+      .fn()
+      .mockRejectedValue(new NotDiscordAccountError('seed-u1'));
+    await runReminderTick(deps(g.guild), W(2026, 10, 19, 10));
+    expect(await getReminderPrefs(db, uid)).toEqual({
+      dayBefore: false,
+      hourBefore: false,
+      disabledReason: NOT_A_DISCORD_ACCOUNT,
+    });
+    expect(NOT_A_DISCORD_ACCOUNT).toBe('Not a Discord account');
+    expect(await db.select().from(reminderLog)).toHaveLength(1);
+    expect(errors).not.toHaveBeenCalled();
+    errors.mockRestore();
   });
 
   it('sends one DM per due entry, logs it, and a new tick sends nothing twice', async () => {

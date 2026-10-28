@@ -42,7 +42,10 @@ const MAX_MESSAGE = 2000;
 
 /** The Discord operations the tick needs; `discordReminderGuild` is the real one. */
 export interface ReminderGuild {
-  /** Throws on failure; a closed DM has `code` 50007. */
+  /**
+   * Throws on failure; a closed DM has `code` 50007, an id that is no
+   * Discord snowflake throws `NotDiscordAccountError`.
+   */
   sendDm(discordUserId: string, content: string): Promise<void>;
   /**
    * Posts `content` in the digest thread (reopening it), or creates the thread
@@ -143,8 +146,24 @@ export function digestText(
   return out;
 }
 
+/** `disabled_reason` of a user whose id is no Discord account (seed, QA, e2e). */
+export const NOT_A_DISCORD_ACCOUNT = 'Not a Discord account';
+const SNOWFLAKE = /^\d{17,20}$/;
+
+/**
+ * A DM to an id that is not a Discord snowflake (`seed-u1`, `qa-student`).
+ * Discord would answer 400 Invalid Form Body, which looks transient.
+ */
+export class NotDiscordAccountError extends Error {
+  constructor(discordUserId: string) {
+    super(`not a Discord user id: ${discordUserId}`);
+    this.name = 'NotDiscordAccountError';
+  }
+}
+
 /** Why a DM can never be delivered to this user; null for transient errors. */
 function undeliverableReason(err: unknown): string | null {
+  if (err instanceof NotDiscordAccountError) return NOT_A_DISCORD_ACCOUNT;
   const code = (err as { code?: unknown } | null)?.code;
   if (code === RESTJSONErrorCodes.CannotSendMessagesToThisUser) {
     return DM_DISABLED_REASON;
@@ -327,6 +346,9 @@ export function discordReminderGuild(client: Client): ReminderGuild {
   const NO_MENTIONS = { parse: [] as never[] };
   return {
     async sendDm(discordUserId, content) {
+      if (!SNOWFLAKE.test(discordUserId)) {
+        throw new NotDiscordAccountError(discordUserId);
+      }
       const user = await client.users.fetch(discordUserId);
       await user.send({ content, allowedMentions: NO_MENTIONS });
     },
