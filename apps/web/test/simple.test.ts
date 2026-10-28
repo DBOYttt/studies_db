@@ -11,6 +11,7 @@ import {
   parseSimpleFilters,
   REPORT_LABELS,
   REPORT_META,
+  reportCellText,
   statusBadge,
   withParam,
 } from '../lib/simple';
@@ -305,5 +306,24 @@ describe('groupLecturers', () => {
       room: 'D-10 205',
       classes: [{ kind: 'wyklad', label: 'Wykład · all groups' }],
     });
+  });
+});
+
+describe('reportCellText', () => {
+  it('shows a wall starts_at with its wall date and time', () => {
+    // 23:30 wall time must not roll over to the next day.
+    const d = new Date('2026-10-30T23:30:00Z');
+    expect(reportCellText('starts_at', d)).toBe('Fri 30 Oct, 23:30');
+    expect(reportCellText('starts_at', '2026-10-30T23:30:00.000Z')).toBe(
+      'Fri 30 Oct, 23:30',
+    );
+    expect(reportCellText('starts_at', '2026-10-30 23:30:00')).toBe(
+      'Fri 30 Oct, 23:30',
+    );
+  });
+  it('keeps created_at as a date, null as a dash, the rest as text', () => {
+    expect(reportCellText('created_at', null)).toBe('—');
+    expect(reportCellText('title', 'Kolokwium')).toBe('Kolokwium');
+    expect(reportCellText('files', 3)).toBe('3');
   });
 });

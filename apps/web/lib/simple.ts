@@ -1,5 +1,7 @@
 /** Pure, client-safe helpers of the simple view. */
 import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
+import { formatDate } from './format';
+import { wallShortDate, wallTime } from './plan-view';
 
 /**
  * One UTF-16 unit folded like `stripMarks(...).toLowerCase()` of @studies/db
@@ -60,6 +62,29 @@ export const REPORT_LABELS: Record<string, string> = {
   type: 'Type',
   subject_code: 'Subject',
 };
+
+/** A wall DATETIME as the RO console returns it (ISO with Z, or SQL text). */
+const wallValue = (v: string | Date): Date =>
+  v instanceof Date
+    ? v
+    : new Date(/[zZ]$/.test(v) ? v : `${v.replace(' ', 'T')}Z`);
+
+/**
+ * One cell of a ready-made report. `starts_at` (events) is Warsaw wall time,
+ * so it shows its own date and time (`Fri 30 Oct, 23:30`) from the UTC fields;
+ * `created_at` is a real instant, shown as a Warsaw date.
+ */
+export function reportCellText(col: string, v: unknown): string {
+  if (v === null || v === undefined) return '—';
+  if (col === 'starts_at' && (typeof v === 'string' || v instanceof Date)) {
+    const d = wallValue(v);
+    if (!Number.isNaN(d.getTime()))
+      return `${wallShortDate(d)}, ${wallTime(d)}`;
+  }
+  if (col === 'created_at' && (typeof v === 'string' || v instanceof Date))
+    return formatDate(v);
+  return String(v);
+}
 
 export type FileIconName =
   | 'FilePdf'

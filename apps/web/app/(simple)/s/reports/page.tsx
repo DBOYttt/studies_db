@@ -6,9 +6,14 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
-import { formatDate, plural } from '@/lib/format';
+import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
-import { MAX_ROWS, parseReportIndex, REPORT_LABELS } from '@/lib/simple';
+import {
+  MAX_ROWS,
+  parseReportIndex,
+  REPORT_LABELS,
+  reportCellText,
+} from '@/lib/simple';
 import { navSubjects } from '@/lib/simple-page';
 import { runReadonlyQuery } from '@/lib/sql-console';
 
@@ -18,16 +23,6 @@ type SP = Record<string, string | string[] | undefined>;
 
 /** Counts and ids (the DB driver sends COUNT() as a string, so go by name). */
 const NUMERIC_COLUMNS = new Set(['materials', 'files', 'id']);
-
-const cellText = (col: string, v: unknown): string => {
-  if (v === null || v === undefined) return '—';
-  if (
-    (col === 'created_at' || col === 'starts_at') &&
-    (typeof v === 'string' || v instanceof Date)
-  )
-    return formatDate(v);
-  return String(v);
-};
 
 export default async function SimpleReports({
   searchParams,
@@ -147,7 +142,7 @@ function ReportTable({
                     numeric[i] ? 'text-right tabular-nums' : ''
                   } ${v === null || v === undefined ? 'text-faint' : ''}`}
                 >
-                  {cellText(columns[i], v)}
+                  {reportCellText(columns[i], v)}
                 </td>
               ))}
             </tr>

@@ -6,6 +6,7 @@ import {
   subjects,
   upsertUser,
 } from '@studies/db';
+import { nowWall } from '@studies/db/plan';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
@@ -59,7 +60,11 @@ beforeAll(async () => {
     .select({ id: subjects.id })
     .from(subjects)
     .limit(1);
-  const inDays = (d: number) => new Date(Date.now() + d * 86_400_000);
+  // events.starts_at is Warsaw wall time: build the edge cases from wall now.
+  const wall = nowWall();
+  const inDays = (d: number) => new Date(wall.getTime() + d * 86_400_000);
+  const late = inDays(2);
+  late.setUTCHours(23, 30, 0, 0);
   await db.insert(events).values([
     {
       kind: 'kolokwium',
@@ -87,6 +92,30 @@ beforeAll(async () => {
       title: 'Stare',
       subjectId: mechId,
       startsAt: inDays(-5),
+      createdBy: userId,
+    },
+    {
+      // Late in the evening: still listed, on its own wall date.
+      kind: 'kolokwium',
+      title: 'Wieczorem',
+      subjectId: mechId,
+      startsAt: late,
+      createdBy: userId,
+    },
+    {
+      // Started 30 min ago (wall): no longer upcoming.
+      kind: 'kolokwium',
+      title: 'Trwa',
+      subjectId: mechId,
+      startsAt: new Date(wall.getTime() - 30 * 60_000),
+      createdBy: userId,
+    },
+    {
+      // 30 min before the end of the 30-day window: still inside it.
+      kind: 'egzamin',
+      title: 'Na granicy',
+      subjectId: mechId,
+      startsAt: new Date(wall.getTime() + 30 * 86_400_000 - 30 * 60_000),
       createdBy: userId,
     },
     {
@@ -164,8 +193,10 @@ describe('GET /s/reports/csv', () => {
     const lines = (await res.text()).replace(/^\uFEFF/, '').split('\r\n');
     expect(lines[0]).toBe('When,Type,Subject,Title');
     const body = lines.slice(1).filter(Boolean);
-    expect(body).toHaveLength(2);
-    expect(body[0]).toMatch(/,Test,MECH,Kolokwium 1$/);
-    expect(body[1]).toMatch(/,Exam,MECH,Egzamin$/);
+    expect(body).toHaveLength(4);
+    expect(body[0]).toMatch(/,Test,MECH,Wieczorem$/);
+    expect(body[1]).toMatch(/,Test,MECH,Kolokwium 1$/);
+    expect(body[2]).toMatch(/,Exam,MECH,Egzamin$/);
+    expect(body[3]).toMatch(/,Exam,MECH,Na granicy$/);
   });
 });
