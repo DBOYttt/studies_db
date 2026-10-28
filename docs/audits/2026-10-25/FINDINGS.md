@@ -54,5 +54,6 @@ and `pnpm audit`.
   - bot I3: `last_error` holds paths only.
   - bot I4: a SIGKILL leaves `soffice` processes behind. This is operational and noted in the deploy docs.
   - bot I5: Manage Server is allowed to run `/setup`, by design.
+  - web L1 residual (one-click login CSRF): a login link issued to someone else still signs the visitor in as that account once they click "Sign in" on the confirmation page. Pre-existing and accepted in T1.
 - **Security still to verify:** the runtime F4 dev stack frames. They appeared on `next dev`; the final gate checks a production build (`next start`) for the same request.
 - **Performance:** L2, L3, L8 and L9 are acceptable at this data size and are noted for later.

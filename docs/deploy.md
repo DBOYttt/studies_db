@@ -163,13 +163,21 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
 4. Migrations 0021 (`v_materials` hides files of deleted topics) and 0022 (indexes on `bot_requests`,
    `admin_audit` and `materials`) run with the `migrate` service. 0022 builds indexes, so on a large
    `admin_audit` table the migrate step takes a little longer.
-5. File originals are now cached by the browser for a year (they never change for an id); logging out clears
-   the site's browser cache.
+5. File originals are now cached by the browser for a year (they never change for an id). Logging out asks
+   the browser to clear the site's cache (`Clear-Site-Data: "cache"`), but that is best-effort: not every
+   browser honours it, and a session that simply expires never sends it.
 6. Migrations 0023 and 0024 make search ignore `ł` like the other diacritics: 0023 adds the stored
    generated column `materials.search_text` (a copy of `extracted_text` with `ł` folded), 0024 folds
    `ł` in `search_name` and moves the `ft_materials` FULLTEXT index to `(search_name, search_text)`.
    Both rebuild `materials`, and `search_text` roughly doubles the space the extracted text takes, so
    take a backup first (`scripts/backup.sh`) and expect the migrate step to take longer on a large table.
+   If 0024 fails at `ADD FULLTEXT` (after its `DROP INDEX`), it is not recorded and a re-run fails at
+   `DROP INDEX`. Fix the cause, re-create the index by hand, then re-run migrate (it drops and re-adds the
+   index and records 0024):
+
+   ```sql
+   ALTER TABLE `materials` ADD FULLTEXT `ft_materials` (`search_name`, `search_text`);
+   ```
 
 ## Tagi forum
 
