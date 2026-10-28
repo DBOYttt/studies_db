@@ -42,6 +42,9 @@ export function EventUploads({
   const [items, setItems] = useState<UploadItem[]>(initial);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Read synchronously by send(): a pick in the same tick as the first one
+  // must not see a stale `busy`.
+  const sending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
   const url = `/api/wydarzenia/${eventId}/pliki`;
   const active = items.some(
@@ -88,6 +91,9 @@ export function EventUploads({
     // Cleared at once, so choosing the same file again (after a refusal)
     // still fires a change.
     if (input.current) input.current.value = '';
+    // aria-disabled (not disabled) keeps focus on the input while sending,
+    // so a pick made meanwhile is ignored here.
+    if (busy || sending.current) return;
     setError(null);
     if (files.length === 0) return;
     if (files.length > MAX_UPLOAD_FILES) {
@@ -107,6 +113,7 @@ export function EventUploads({
     }
     const form = new FormData();
     for (const f of files) form.append('files', f);
+    sending.current = true;
     setBusy(true);
     try {
       const res = await fetch(url, { method: 'POST', body: form });
@@ -122,6 +129,7 @@ export function EventUploads({
     } catch {
       setError('Could not send the files.');
     } finally {
+      sending.current = false;
       setBusy(false);
     }
   }
@@ -140,7 +148,7 @@ export function EventUploads({
           type="file"
           name="files"
           multiple
-          disabled={busy}
+          aria-disabled={busy}
           onChange={send}
           className="sr-only"
         />

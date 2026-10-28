@@ -253,6 +253,48 @@ test('uploading a file shows it as sending… (no bot in e2e)', async ({
   await expect(page.getByText('sending…')).toBeVisible();
 });
 
+test('the file input keeps focus while sending; a pick while busy is ignored', async ({
+  page,
+}) => {
+  await page.goto(eventUrl);
+  await page.waitForLoadState('networkidle');
+  // Hold the upload so the "busy" state can be checked.
+  let release!: () => void;
+  const gate = new Promise<void>((r) => {
+    release = r;
+  });
+  let posts = 0;
+  await page.route('**/api/wydarzenia/*/pliki', async (route) => {
+    if (route.request().method() !== 'POST') return route.continue();
+    posts++;
+    await gate;
+    await route.continue();
+  });
+  const input = page.locator('input[type="file"][name="files"]');
+  const control = page.locator('label', { has: input });
+  await input.focus();
+  await input.setInputFiles({
+    name: 'fokus1.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('one'),
+  });
+  await expect(control).toHaveText('Sending…');
+  await expect(input).toBeFocused();
+  // A second pick while the first is still sending starts nothing.
+  await input.setInputFiles({
+    name: 'fokus2.txt',
+    mimeType: 'text/plain',
+    buffer: Buffer.from('two'),
+  });
+  await expect(input).toBeFocused();
+  release();
+  await expect(page.getByText('fokus1.txt')).toBeVisible();
+  await expect(control).toHaveText('Add files');
+  await expect(input).toBeFocused();
+  expect(posts).toBe(1);
+  await expect(page.getByText('fokus2.txt')).toHaveCount(0);
+});
+
 test('a large upload (2 x 7.5 MB) succeeds', async ({ page }) => {
   await page.goto(eventUrl);
   const big = (name: string) => ({
