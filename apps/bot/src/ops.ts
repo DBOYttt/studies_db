@@ -32,6 +32,9 @@ export const BUSY_TEXT = '/setup is already running. Try again in a moment.';
 
 let setupRunning = false;
 
+/** True while a locked run (/setup, a resync) is in progress. */
+export const setupBusy = (): boolean => setupRunning;
+
 /**
  * Runs `fn` unless another locked run is in progress ('busy'). One /setup at a
  * time: two concurrent runs could both create a forum.
