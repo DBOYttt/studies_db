@@ -21,6 +21,9 @@ const config: NextConfig = {
   onDemandEntries: onDemandEntriesFromEnv(process.env),
   // Nothing uses next/image; keep /_next/image from fetching or resizing.
   images: { unoptimized: true },
+  // "Import from UniTime" accepts a .ics upload of up to 2 MiB (checked again
+  // in the action); the default 1 MB would refuse it before the action runs.
+  experimental: { serverActions: { bodySizeLimit: '3mb' } },
   async headers() {
     return [
       ...securityHeaderRules(process.env.NODE_ENV),
