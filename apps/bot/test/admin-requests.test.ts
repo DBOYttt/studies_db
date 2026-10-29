@@ -1,6 +1,7 @@
 import {
   adminAudit,
   botRequests,
+  botSettings,
   type Db,
   enqueueAdminBotRequest,
   enqueueBotRequest,
@@ -165,6 +166,21 @@ describe('drainAdminRequests', () => {
     expect(deps.runSetup).not.toHaveBeenCalled();
     const [u] = await db.select().from(users).where(eq(users.id, adminId));
     expect(u.isAdmin).toBe(false);
+  });
+
+  it('without a pinned admin role: Run /setup from Discord first, flag kept', async () => {
+    await db.delete(botSettings).where(eq(botSettings.key, 'admin_role_id'));
+    const id = await enqueue('setup_dry_run');
+    const deps = fakeDeps();
+    await drainAdminRequests(deps, { log });
+    const r = await request(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe('Run /setup from Discord first.');
+    expect(deps.fetchGuild).not.toHaveBeenCalled();
+    expect(deps.runSetup).not.toHaveBeenCalled();
+    const [u] = await db.select().from(users).where(eq(users.id, adminId));
+    expect(u.isAdmin).toBe(true);
+    expect(await db.select().from(adminAudit)).toEqual([]);
   });
 
   it('a banned admin is refused', async () => {

@@ -58,10 +58,15 @@ const NUM_RE = /^\d+$/;
 const ID_RE = /^[1-9]\d{0,9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-/** A text field; a missing or non-text entry reads as empty. */
+/**
+ * A text field; a missing or non-text entry reads as empty. Line breaks are
+ * normalised to LF: browsers submit a textarea's newlines as CRLF, while the
+ * bot, the seed and `maxLength` count them as one LF, so an untouched
+ * multi-line value would otherwise read as changed and twice as long.
+ */
 export function field(form: FormData, name: string): string {
   const v = form.get(name);
-  return typeof v === 'string' ? v : '';
+  return typeof v === 'string' ? v.replace(/\r\n?/g, '\n') : '';
 }
 
 const tooLong = (label: string, max: number) =>

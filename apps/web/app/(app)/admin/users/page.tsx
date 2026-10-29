@@ -1,6 +1,7 @@
 import { MagnifyingGlass, Users } from '@phosphor-icons/react/dist/ssr';
 import { listUsersAdmin } from '@studies/db';
 import Link from 'next/link';
+import { redirect } from 'next/navigation';
 import { ActionButton } from '@/components/admin/ActionButton';
 import {
   box,
@@ -42,6 +43,8 @@ export default async function AdminUsersPage({
     offset: (q.page - 1) * USERS_PAGE_SIZE,
   });
   const pageCount = Math.max(1, Math.ceil(total / USERS_PAGE_SIZE));
+  // Past the last page (a stale link, or rows gone): go to the last one.
+  if (q.page > pageCount) redirect(usersHref({ ...q, page: pageCount }));
 
   return (
     <>
@@ -96,7 +99,11 @@ export default async function AdminUsersPage({
           </div>
           {rows.length === 0 ? (
             <p className="m-0 px-3 py-4 text-muted">
-              {q.q ? 'No user matches this search.' : 'No users yet.'}
+              {total > 0
+                ? 'No users on this page.'
+                : q.q
+                  ? 'No user matches this search.'
+                  : 'No users yet.'}
             </p>
           ) : (
             <div className="overflow-x-auto">
@@ -145,6 +152,7 @@ export default async function AdminUsersPage({
                           <span className="text-muted">This is you</span>
                         ) : (
                           <ActionButton
+                            key={u.isBanned ? 'blocked' : 'active'}
                             action={setBanAction}
                             fields={{
                               discordUserId: u.discordUserId,

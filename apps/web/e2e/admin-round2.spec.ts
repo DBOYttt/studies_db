@@ -257,17 +257,26 @@ test('block and unblock a user, behind a confirm', async ({ page }) => {
 
   await row.getByRole('button', { name: 'Block', exact: true }).click();
   await row.getByRole('button', { name: 'Confirm block' }).click();
-  await expect(row.getByRole('status')).toHaveText(
-    'Blocked access to the website.',
-  );
   await expect(row).toContainText('Blocked');
+  // The toggled button starts fresh: no old message beside it.
+  await expect(
+    row.getByRole('button', { name: 'Unblock', exact: true }),
+  ).toBeVisible();
+  await expect(row.getByRole('status')).toHaveText('');
 
   await row.getByRole('button', { name: 'Unblock', exact: true }).click();
   await row.getByRole('button', { name: 'Confirm unblock' }).click();
-  await expect(row.getByRole('status')).toHaveText(
-    'Unblocked access to the website.',
-  );
   await expect(row).toContainText('Active');
+  await expect(
+    row.getByRole('button', { name: 'Block', exact: true }),
+  ).toBeVisible();
+
+  // A page past the last one lands on the last page.
+  await page.goto('/admin/users?q=Blokowany&page=99');
+  await expect(page).toHaveURL(/\/admin\/users\?q=Blokowany$/);
+  await expect(
+    page.getByRole('row').filter({ hasText: 'Bartek Blokowany' }),
+  ).toHaveCount(1);
 
   // The admin's own row has no block button.
   await page.goto('/admin/users?q=e2e-admin');
@@ -286,9 +295,6 @@ test('queue a setup preview, see it queued, cancel it', async ({ page }) => {
   ).toBeVisible();
   const bot = page.getByRole('region', { name: 'Discord server' });
   await bot.getByRole('button', { name: 'Preview changes' }).click();
-  await expect(bot.getByRole('status').filter({ hasText: /\S/ })).toHaveText(
-    'Request queued. The bot will pick it up within a few seconds.',
-  );
   const requests = page.getByRole('region', { name: 'Bot requests' });
   const row = requests
     .getByRole('row')

@@ -60,6 +60,9 @@ export default async function AdminSyncPage() {
   ]);
   const now = new Date();
   const active = hasActiveRequest(requests);
+  const activeId = requests.find(
+    (r) => r.status === 'queued' || r.status === 'running',
+  )?.id;
   const stale = staleNotice(requests, now);
   const planPending =
     plan.requestedAt !== null &&
@@ -100,7 +103,7 @@ export default async function AdminSyncPage() {
         crumbs={[ADMIN_CRUMB, { label: 'Sync', href: '/admin/sync' }]}
         tabs={adminTabs('sync')}
       />
-      <AutoRefresh active={active || planPending} />
+      <AutoRefresh active={active} />
       <div className="flex max-w-[1200px] flex-col gap-4">
         <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">Sync</h1>
 
@@ -135,7 +138,8 @@ export default async function AdminSyncPage() {
               </p>
               {planPending && (
                 <p className="m-0 text-muted">
-                  A sync is requested; the worker runs it within a minute.
+                  A sync is requested and waits for the worker (within a minute
+                  while it runs). Reload to see the result.
                 </p>
               )}
               <ActionButton
@@ -167,6 +171,9 @@ export default async function AdminSyncPage() {
                 >
                   <p className="m-0 max-w-[48ch] text-muted">{b.help}</p>
                   <ActionButton
+                    // A new instance when the queue changes, so an old
+                    // "Request queued" line never outlives its request.
+                    key={`${b.kind}-${activeId ?? 'idle'}`}
                     action={requestBotAction}
                     fields={{ kind: b.kind }}
                     label={b.label}

@@ -179,6 +179,18 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
    ALTER TABLE `materials` ADD FULLTEXT `ft_materials` (`search_name`, `search_text`);
    ```
 
+### Upgrading to admin panel round 2 (migration 0025)
+
+1. Migration 0025 only adds `bot_requests.report` (`ADD COLUMN`, instant on MariaDB 10.3+, no data step);
+   it runs with the `migrate` service.
+2. Redeploy `bot` together with `web`. An old bot never takes the new `setup`, `setup_dry_run` and `resync`
+   requests, so the Sync page would show them as queued and say the bot is not responding.
+3. No `pnpm --filter @studies/bot register` is needed: no command definitions changed.
+4. The first `/setup` must come from Discord. Until it has pinned the admin role (`admin_role_id`), web
+   requests fail with `Run /setup from Discord first.`.
+5. The boot catch-up now holds the `/setup` lock for its whole run, so a `/setup` (or a web setup) right
+   after a restart may answer that setup is already running; try again when the catch-up is done.
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these

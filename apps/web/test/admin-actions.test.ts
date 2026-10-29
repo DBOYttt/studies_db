@@ -297,6 +297,47 @@ describe('admin actions: subjects', () => {
     expect(await audits()).toHaveLength(before);
   });
 
+  it('a CRLF copy of a stored LF description is No changes. (browsers send CRLF)', async () => {
+    // 995 chars with LF; the CRLF copy is 1003, past the 1000 limit if
+    // measured raw.
+    const lf = `${'a'.repeat(490)}\n${'b'.repeat(490)}\n\n${'c'.repeat(12)}`;
+    await db.insert(subjects).values({
+      name: 'Wielolinijkowy',
+      code: 'CRLF',
+      semester: 1,
+      ects: 2,
+      description: lf,
+    });
+    const before = (await audits()).length;
+    const form = {
+      code: 'CRLF',
+      name: 'Wielolinijkowy',
+      semester: '1',
+      ects: '2',
+      description: lf.replaceAll('\n', '\r\n'),
+      platformUrl: '',
+    };
+    expect(await A.editSubjectAction(null, fd(form))).toEqual({
+      ok: true,
+      message: 'No changes.',
+      unchanged: true,
+    });
+    expect(await audits()).toHaveLength(before);
+    // Another field edited: the description is neither rewritten nor listed.
+    expect(await A.editSubjectAction(null, fd({ ...form, ects: '3' }))).toEqual(
+      { ok: true, message: 'Updated subject CRLF.' },
+    );
+    const [s] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'CRLF'));
+    expect(s.description).toBe(lf);
+    expect((await lastAudit()).details).toEqual({
+      fields: ['ects'],
+      source: 'web',
+    });
+  });
+
   it('refuses - as a name on add', async () => {
     expect(
       await A.addSubjectAction(null, subjectForm({ name: '-', code: 'DASH' })),

@@ -26,6 +26,8 @@ import { type Audit, runResync, runSetup, withSetupLock } from './ops.js';
 
 export const ADMIN_POLL_INTERVAL_MS = 5_000;
 export const NOT_ADMIN_MESSAGE = 'The requester is no longer an admin.';
+/** No admin role is pinned yet: only a Discord /setup can pin it. */
+export const NO_ROLE_MESSAGE = 'Run /setup from Discord first.';
 export const NOT_MEMBER_MESSAGE =
   'The requester is not a member of the server.';
 const INVALID_MESSAGE = 'Invalid request.';
@@ -103,6 +105,10 @@ async function runRequest(
   if (!user?.isAdmin || user.isBanned) {
     throw new AdminRequestError(NOT_ADMIN_MESSAGE);
   }
+  // Without a pinned role nobody can be checked, and the flag is left alone:
+  // the first /setup (which pins the role) must come from Discord.
+  const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
+  if (roleId === null) throw new AdminRequestError(NO_ROLE_MESSAGE);
   const guild = await deps.fetchGuild();
   let roles: string[];
   try {
@@ -118,8 +124,7 @@ async function runRequest(
   }
   // users.is_admin may be stale: the stored role is what counts, and the flag
   // follows it (as syncAdminFlag does).
-  const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
-  if (roleId === null || !roles.includes(roleId)) {
+  if (!roles.includes(roleId)) {
     await db.update(users).set({ isAdmin: false }).where(eq(users.id, userId));
     throw new AdminRequestError(NOT_ADMIN_MESSAGE);
   }

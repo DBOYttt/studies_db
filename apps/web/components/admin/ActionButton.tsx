@@ -24,7 +24,8 @@ const dangerBtn =
  * pattern): a second, explicit button runs it, and Cancel backs out.
  * `disabled` keeps the button focusable but `aria-disabled`, and a submit
  * then does nothing; `disabledText` says why. The result goes to a polite
- * `role="status"` or a `role="alert"`.
+ * `role="status"` or a `role="alert"`. Callers key it on what the button
+ * means (e.g. blocked or not), so a toggled button starts with no message.
  */
 export function ActionButton({
   action,
@@ -51,6 +52,9 @@ export function ActionButton({
 }) {
   const [state, formAction, pending] = useActionState(action, null);
   const [asking, setAsking] = useState(false);
+  // The last result is hidden once a new question opens, so an old message
+  // never sits beside it; a new result shows again.
+  const [stale, setStale] = useState(false);
   const busy = useRef(false);
   const askRef = useRef<HTMLButtonElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -66,7 +70,10 @@ export function ActionButton({
     if (!pending) busy.current = false;
   }, [pending]);
   useEffect(() => {
-    if (state) setAsking(false);
+    if (state) {
+      setAsking(false);
+      setStale(false);
+    }
   }, [state]);
 
   const off = disabled || pending;
@@ -97,7 +104,9 @@ export function ActionButton({
           title={disabled ? disabledText : undefined}
           className={btn}
           onClick={() => {
-            if (!off) setAsking(true);
+            if (off) return;
+            setAsking(true);
+            setStale(true);
           }}
         >
           {icon}
@@ -139,9 +148,9 @@ export function ActionButton({
         </button>
       )}
       <div role="status" className="text-ok-fg not-empty:mt-1.5">
-        {state?.ok && !pending ? state.message : null}
+        {state?.ok && !pending && !stale ? state.message : null}
       </div>
-      {state && !state.ok && !pending && (
+      {state && !state.ok && !pending && !stale && (
         <p role="alert" className="m-0 mt-1.5 text-err-fg">
           {state.message}
         </p>
