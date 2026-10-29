@@ -258,6 +258,30 @@ describe('previewGroupImportAction', () => {
     expect(r).toMatchObject({ ok: true, notice: NO_CLASSES_MESSAGE });
   });
 
+  it('says the classes are not in Studies DB when nothing matched', async () => {
+    await signIn();
+    const unknown = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'DTSTART;TZID=Europe/Warsaw:20261001T094500',
+      'DTEND;TZID=Europe/Warsaw:20261001T104500',
+      'STATUS:CONFIRMED',
+      'UID:x1',
+      'SUMMARY:Nieznany przedmiot (1rok)',
+      'DESCRIPTION:CWA 1',
+      'END:VEVENT',
+      'END:VCALENDAR',
+      '',
+    ].join('\r\n');
+    const r = await previewGroupImportAction(form({ file: icsFile(unknown) }));
+    expect(r).toMatchObject({
+      ok: true,
+      notice:
+        'None of these classes are in Studies DB yet (1 entry not matched).',
+    });
+  });
+
   it('allows 6 imports per 10 minutes, then refuses', async () => {
     await signIn();
     for (let i = 0; i < 6; i++) {

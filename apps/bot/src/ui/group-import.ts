@@ -8,7 +8,7 @@ import {
   GROUP_IMPORT_LIMIT,
   GROUP_IMPORT_WINDOW_MS,
   type GroupImportPreview,
-  NO_CLASSES_MESSAGE,
+  groupImportNotice,
   plural,
 } from '@studies/db';
 import { escapeUserText } from '../markdown.js';
@@ -41,7 +41,8 @@ export function groupImportSummary(
   result: { set: number; changed: ReadonlySet<number> },
 ): string {
   const { matched, ambiguous, unmatched } = preview;
-  if (matched.length === 0 && ambiguous.length === 0) return NO_CLASSES_MESSAGE;
+  const empty = groupImportNotice(preview);
+  if (empty !== null) return empty;
   const already = matched.filter((m) => !result.changed.has(m.classId)).length;
   const lines = [
     `Saved ${plural(result.set, 'group', 'groups')}${already > 0 ? ` (${already} already saved)` : ''}.`,

@@ -3,12 +3,14 @@ import type { Db } from '../client.js';
 import { CLASS_KINDS, type ClassKind } from '../constants.js';
 import { getMyGroups } from '../my-groups.js';
 import { classes, classGroups, subjects, userGroups } from '../schema.js';
+import { plural } from '../text.js';
 import { classifyEvent } from './classify.js';
 import { SafeSyncError } from './fetch.js';
 import { expandOccurrences, parseIcs } from './ics.js';
 
 export interface GroupImportPreview {
   calendarName: string | null;
+  /** Events in the calendar, not counting cancelled ones. */
   totalEvents: number;
   matched: {
     classId: number;
@@ -39,6 +41,24 @@ const UNMATCHED_CAP = 50;
 export const NO_CLASSES_MESSAGE =
   'This calendar has no classes yet. UniTime may not have published your timetable; try again later or pick your groups below.';
 export const NOT_A_CALENDAR_MESSAGE = 'That is not a UniTime calendar (.ics).';
+/**
+ * The calendar has classes, but none of them (subject, class or group) is in
+ * Studies DB; `n` is the number of unmatched entries.
+ */
+export const notInDbMessage = (n: number) =>
+  `None of these classes are in Studies DB yet (${plural(n, 'entry', 'entries')} not matched).`;
+
+/**
+ * The notice for a preview with nothing to pick: the no-classes message for
+ * an empty (or fully skipped) calendar, the not-in-DB one when every entry
+ * is unmatched; null when something matched or is ambiguous.
+ */
+export function groupImportNotice(p: GroupImportPreview): string | null {
+  if (previewHasNothing(p)) return NO_CLASSES_MESSAGE;
+  if (p.matched.length === 0 && p.ambiguous.length === 0)
+    return notInDbMessage(p.unmatched.length);
+  return null;
+}
 
 export const TOO_MANY_IMPORTS = 'Too many imports. Try again in a few minutes.';
 export const IMPORT_FAILED = 'Could not read the calendar.';
@@ -87,7 +107,7 @@ export async function planGroupImport(
   }
   const preview: GroupImportPreview = {
     calendarName: cal.name || null,
-    totalEvents: cal.events.length,
+    totalEvents: cal.events.filter((ev) => ev.status !== 'cancelled').length,
     matched: [],
     ambiguous: [],
     unmatched: [],
@@ -119,7 +139,8 @@ export async function planGroupImport(
       continue;
     }
     entries.push({
-      unitimeName: c.unitimeName,
+      // The column holds 200 characters; the sync truncates the same way.
+      unitimeName: c.unitimeName.slice(0, 200),
       subjectName: c.subjectName,
       label: c.label,
       kind: c.kind,

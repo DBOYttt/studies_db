@@ -6,7 +6,10 @@ import { classes, classGroups, subjects, users } from '../src/schema.js';
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 import {
   applyGroupImport,
+  groupImportNotice,
+  NO_CLASSES_MESSAGE,
   NotACalendarError,
+  notInDbMessage,
   planGroupImport,
   previewHasNothing,
 } from '../src/unitime/group-import.js';
@@ -193,7 +196,8 @@ describe('weighting and cancellation', () => {
         { desc: 'CWA 9', start: '20261003', status: 'CANCELLED' },
       ]),
     );
-    expect(p.totalEvents).toBe(3);
+    // Cancelled entries are not counted.
+    expect(p.totalEvents).toBe(1);
     expect(p.matched.map((m) => m.groupId)).toEqual([grp['AM.cwiczenia.2']]);
     expect(p.unmatched).toEqual([]);
   });
@@ -253,5 +257,49 @@ describe('applyGroupImport', () => {
     expect(res).toEqual({ set: 1, skipped: 1 });
     const mine = await getMyGroups(db, userId);
     expect(mine[String(cls['AM.cwiczenia'])]).toBe(grp['AM.cwiczenia.4']);
+  });
+});
+
+describe('long names and notices', () => {
+  it('matches a subject by the first 200 characters of its UniTime name', async () => {
+    const long = `${'Bardzo dluga nazwa przedmiotu '.repeat(8)}(1rok)`;
+    expect(long.length).toBeGreaterThan(200);
+    await addSubject('LONG', long.slice(0, 200), { cwiczenia: [1] });
+    const text = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'BEGIN:VEVENT',
+      'DTSTART;TZID=Europe/Warsaw:20261001T094500',
+      'DTEND;TZID=Europe/Warsaw:20261001T104500',
+      'STATUS:CONFIRMED',
+      'UID:long1',
+      `SUMMARY:${long}`,
+      'DESCRIPTION:CWA 1',
+      'END:VEVENT',
+      'END:VCALENDAR',
+    ].join('\r\n');
+    const p = await planGroupImport(db, userId, text);
+    expect(p.matched.map((m) => m.groupId)).toEqual([grp['LONG.cwiczenia.1']]);
+  });
+
+  it('says why there is nothing to pick', async () => {
+    const empty = await planGroupImport(
+      db,
+      userId,
+      fixture('personal-empty.ics'),
+    );
+    expect(groupImportNotice(empty)).toBe(NO_CLASSES_MESSAGE);
+    const unknown = await planGroupImport(
+      db,
+      userId,
+      ics([{ desc: 'CWA 9', start: '20261001' }]),
+    );
+    expect(unknown.unmatched).toHaveLength(1);
+    expect(groupImportNotice(unknown)).toBe(notInDbMessage(1));
+    expect(notInDbMessage(2)).toBe(
+      'None of these classes are in Studies DB yet (2 entries not matched).',
+    );
+    const ok = await planGroupImport(db, userId, fixture('personal.ics'));
+    expect(groupImportNotice(ok)).toBeNull();
   });
 });

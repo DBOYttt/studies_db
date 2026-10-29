@@ -352,18 +352,19 @@ async function showGroups(
 }
 
 /**
- * Imports My groups from a personal UniTime calendar link: rate limit,
- * link guard, fetch, plan, save the changed groups. Replies with the summary,
+ * Imports My groups from a personal UniTime calendar link: link guard,
+ * rate limit, fetch, plan, save the changed groups. Replies with the summary,
  * then the refreshed groups view. Errors are the web's safe messages; the
  * link is never logged or echoed.
  */
 async function runGroupImport(ctx: StudentContext, url: string) {
   const o = ctx.deps.groupImport ?? {};
+  // Like the web: a rejected link does not count towards the limit.
+  const guard = normalizeImportUrl(url, importAllowedHosts(o.env));
+  if (!guard.ok) return ctx.show(notice(guard.error));
   const limiter = o.limiter ?? groupImportLimiter;
   if (!limiter.check(`discord:${ctx.userId}`))
     return ctx.show(notice(TOO_MANY_IMPORTS));
-  const guard = normalizeImportUrl(url, importAllowedHosts(o.env));
-  if (!guard.ok) return ctx.show(notice(guard.error));
   const { db } = ctx.deps.ingest;
   let summary: string;
   try {

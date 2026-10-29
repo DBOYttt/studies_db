@@ -5,12 +5,11 @@ import {
   fetchImportCalendar,
   GROUP_IMPORT_MAX_PAIRS,
   type GroupImportPreview,
+  groupImportNotice,
   importAllowedHosts,
   importErrorMessage,
-  NO_CLASSES_MESSAGE,
   normalizeImportUrl,
   planGroupImport,
-  previewHasNothing,
 } from '@studies/db';
 import { revalidatePath } from 'next/cache';
 import { getDb } from './db';
@@ -62,10 +61,7 @@ export async function previewGroupImportAction(
     const text =
       'text' in source ? source.text : await fetchImportCalendar(source.url);
     const preview = await planGroupImport(getDb(), user.id, text);
-    const empty =
-      previewHasNothing(preview) ||
-      (preview.matched.length === 0 && preview.ambiguous.length === 0);
-    return { ok: true, preview, notice: empty ? NO_CLASSES_MESSAGE : null };
+    return { ok: true, preview, notice: groupImportNotice(preview) };
   } catch (err) {
     // Not logged: the error may embed the link.
     return { ok: false, error: importErrorMessage(err) };

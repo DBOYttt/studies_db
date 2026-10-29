@@ -128,7 +128,7 @@ describe('groupImportSummary', () => {
     ]);
   });
 
-  it('is the no-classes message when nothing matched', () => {
+  it('is the no-classes message for an empty calendar, the not-in-DB one when nothing matched', () => {
     expect(groupImportSummary(preview(), { set: 0, changed: new Set() })).toBe(
       NO_CLASSES_MESSAGE,
     );
@@ -139,7 +139,9 @@ describe('groupImportSummary', () => {
         }),
         { set: 0, changed: new Set() },
       ),
-    ).toBe(NO_CLASSES_MESSAGE);
+    ).toBe(
+      'None of these classes are in Studies DB yet (1 entry not matched).',
+    );
   });
 
   it('stays under the text limit', () => {
@@ -447,6 +449,21 @@ describe('import from UniTime in #panel', () => {
       'Your access to the website is blocked.',
     );
     expect(f).not.toHaveBeenCalled();
+  });
+
+  it('a rejected link does not count towards the limit', async () => {
+    const f = calendarFetch();
+    const h = handler(f, createRateLimiter(6, 10 * 60_000));
+    for (let n = 0; n < 7; n++) {
+      const i = interaction(SUBMIT, 'https://evil.example/cal');
+      await h(i);
+      expect(textOf(i.editReply.mock.calls[0][0])).toBe(
+        'Only links from plan.agh.edu.pl can be imported.',
+      );
+    }
+    const i = interaction(SUBMIT, URL_OK);
+    await h(i);
+    expect(textOf(i.editReply.mock.calls[0][0])).toContain('Saved 1 group.');
   });
 
   it('the 7th import in the window is refused', async () => {
