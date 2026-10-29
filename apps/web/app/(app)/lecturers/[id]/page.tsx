@@ -117,7 +117,10 @@ export default async function LecturerPage({
       />
       <div className="flex flex-col gap-3.5">
         <div className="min-w-0">
-          <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">
+          <h1
+            lang="pl"
+            className="m-0 text-xl font-semibold tracking-[-0.01em]"
+          >
             {fullName}
           </h1>
           <p className="mt-0.5 font-mono text-xs text-muted">
@@ -139,7 +142,7 @@ export default async function LecturerPage({
               {lecturer.office_hours && (
                 <>
                   <dt className="text-muted">Office hours:</dt>
-                  <dd className="m-0 whitespace-pre-line">
+                  <dd lang="pl" className="m-0 whitespace-pre-line">
                     {lecturer.office_hours}
                   </dd>
                 </>
@@ -147,7 +150,9 @@ export default async function LecturerPage({
               {lecturer.room && (
                 <>
                   <dt className="text-muted">Room:</dt>
-                  <dd className="m-0">{lecturer.room}</dd>
+                  <dd lang="pl" className="m-0">
+                    {lecturer.room}
+                  </dd>
                 </>
               )}
             </dl>
@@ -222,6 +227,7 @@ async function ClassesTab({ id }: { id: number }) {
                   {!underWhole && (
                     <Link
                       href={explorerHref(r.subjectCode, {})}
+                      lang="pl"
                       className={link}
                     >
                       {r.subjectName}
@@ -230,7 +236,7 @@ async function ClassesTab({ id }: { id: number }) {
                 </td>
                 <td className={td}>
                   {!underWhole && (
-                    <Link href={classUrl} className={link}>
+                    <Link href={classUrl} lang="pl" className={link}>
                       {r.className}
                     </Link>
                   )}
@@ -246,6 +252,7 @@ async function ClassesTab({ id }: { id: number }) {
                         classKind: r.classKind,
                         group: r.groupNumber,
                       })}
+                      lang="pl"
                       className={link}
                     >
                       {r.groupName}

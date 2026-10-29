@@ -93,6 +93,7 @@ export default async function TagPage({
             id {tag.id}, subject{' '}
             <Link
               href={explorerHref(tag.subject_code, {})}
+              lang="pl"
               className="text-accent-ink hover:text-accent-ink-hover hover:underline"
             >
               {tag.subject_name}
