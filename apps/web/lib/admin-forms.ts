@@ -26,8 +26,15 @@ import {
  * equivalent of the bot's `-`.
  */
 
-/** The state of every admin form (`useActionState`). */
-export type ActionState = { ok: boolean; message: string } | null;
+/**
+ * The state of every admin form (`useActionState`). `unchanged` marks an
+ * edit that matched the stored row (`No changes.`): nothing was applied.
+ */
+export type ActionState = {
+  ok: boolean;
+  message: string;
+  unchanged?: true;
+} | null;
 
 export type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
 
@@ -45,7 +52,8 @@ export const EMPTY_NAME = 'The name cannot be empty.';
 export const INVALID_URL = 'Invalid URL.';
 export const INVALID_EMAIL = 'Invalid email address.';
 
-const CODE_RE = /^[A-Za-z0-9._-]{1,20}$/;
+/** The bot's subject code rule (case-insensitive; stored upper-cased). */
+export const CODE_RE = /^[A-Za-z0-9._-]{1,20}$/;
 const NUM_RE = /^\d+$/;
 const ID_RE = /^[1-9]\d{0,9}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;

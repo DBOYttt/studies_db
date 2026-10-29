@@ -1,4 +1,5 @@
 /** Helpers of the admin Subjects and Lecturers pages. */
+import { CODE_RE } from './admin-forms';
 
 /**
  * The `[code]` segment of /admin/subjects/[code], trimmed and upper-cased
@@ -16,7 +17,7 @@ export function parseSubjectParam(raw: string): string | null {
     }
   }
   const code = v.trim().toUpperCase();
-  return /^[A-Z0-9._-]{1,20}$/.test(code) ? code : null;
+  return CODE_RE.test(code) ? code : null;
 }
 
 /** `dr Jan Kowalski`, or the bare name without a title. */

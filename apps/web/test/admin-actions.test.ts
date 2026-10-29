@@ -293,7 +293,7 @@ describe('admin actions: subjects', () => {
           platformUrl: '',
         }),
       ),
-    ).toEqual({ ok: true, message: 'No changes.' });
+    ).toEqual({ ok: true, message: 'No changes.', unchanged: true });
     expect(await audits()).toHaveLength(before);
   });
 

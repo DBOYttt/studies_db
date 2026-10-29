@@ -131,7 +131,8 @@ export async function editSubjectAction(
   if (urlChanged(v.platformUrl, cur.platformUrl))
     patch.platformUrl = v.platformUrl;
   const fields = Object.keys(patch);
-  if (fields.length === 0) return { ok: true, message: NO_CHANGES };
+  if (fields.length === 0)
+    return { ok: true, message: NO_CHANGES, unchanged: true };
   const r = await editSubject(db, cur.code, patch);
   if (r.ok) {
     await audit(user.id, 'subject.edit', cur.code.toUpperCase(), { fields });
@@ -175,7 +176,8 @@ export async function editClassAction(
   if (urlChanged(v.platformUrl, cur.platformUrl))
     input.platformUrl = v.platformUrl;
   const fields = Object.keys(input);
-  if (fields.length === 0) return { ok: true, message: NO_CHANGES };
+  if (fields.length === 0)
+    return { ok: true, message: NO_CHANGES, unchanged: true };
   const r = await editClass(db, {
     subjectCode: v.code,
     kind: v.kind,
@@ -224,7 +226,8 @@ export async function editLecturerAction(
     patch.officeHours = v.officeHours;
   if (textOrNull(v.room) !== cur.room) patch.room = v.room;
   const fields = Object.keys(patch);
-  if (fields.length === 0) return { ok: true, message: NO_CHANGES };
+  if (fields.length === 0)
+    return { ok: true, message: NO_CHANGES, unchanged: true };
   const r = await editLecturer(db, id, patch);
   if (r.ok) {
     await audit(user.id, 'lecturer.edit', String(id), { fields });

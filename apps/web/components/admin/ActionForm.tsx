@@ -18,7 +18,8 @@ type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
  * the submit button is `aria-disabled` while the action runs; a second
  * submit then does nothing. Submitting goes through `onSubmit`, so a refused
  * form keeps what was typed (a form `action` would reset it); with
- * `resetOnSuccess` an applied change clears the form for the next entry.
+ * `resetOnSuccess` an applied change (not an `unchanged` one) clears the
+ * form for the next entry.
  */
 export function ActionForm({
   action,
@@ -52,7 +53,7 @@ export function ActionForm({
   }, [pending]);
 
   useEffect(() => {
-    if (state?.ok && resetOnSuccess && state.message !== 'No changes.')
+    if (state?.ok && resetOnSuccess && !state.unchanged)
       formRef.current?.reset();
   }, [state, resetOnSuccess]);
 

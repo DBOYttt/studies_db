@@ -122,7 +122,9 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   await page.goto(`/admin/subjects/${CODE}`);
   await expect(page.getByText('No classes yet.')).toBeVisible();
   const assign = page.getByRole('region', { name: 'Assign a lecturer' });
-  await assign.getByLabel('Lecturer').selectOption({ label: LECTURER_LABEL });
+  await assign
+    .locator('select[name="lecturerId"]')
+    .selectOption({ label: LECTURER_LABEL });
   await assign.getByLabel('Class type').selectOption({ label: 'Wykład' });
   await assign.getByRole('button', { name: 'Assign' }).click();
   await expect(assign.getByRole('status')).toHaveText(
@@ -130,16 +132,16 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   );
 
   const card = page.getByRole('region', { name: 'Wykład', exact: true });
-  const settings = card.getByRole('form', { name: 'Class settings' });
+  const settings = card.getByRole('form', { name: 'Wykład settings' });
   const assignHere = card.getByRole('form', {
-    name: 'Assign a lecturer to this class',
+    name: 'Assign a lecturer to Wykład',
   });
   await expect(card.getByRole('list', { name: 'Lecturers' })).toContainText(
     LECTURER_LABEL,
   );
   // Per-class assign, to one group.
   await assignHere
-    .getByLabel('Lecturer')
+    .locator('select[name="lecturerId"]')
     .selectOption({ label: LECTURER_LABEL });
   await assignHere.getByLabel('Group').fill('2');
   await assignHere.getByRole('button', { name: 'Assign' }).click();
@@ -183,27 +185,45 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
 test('the audit log has a row for each change, from the website', async ({
   page,
 }) => {
+  // This spec's lecturer id, from its link on the Lecturers tab.
+  await page.goto('/admin/lecturers');
+  const href = await page
+    .getByRole('row')
+    .filter({ hasText: LECTURER })
+    .getByRole('link', { name: LECTURER })
+    .getAttribute('href');
+  const lecturerId = href?.match(/(\d+)$/)?.[1] ?? '';
+  expect(lecturerId).not.toBe('');
+
   await page.goto('/admin/audit');
   const table = page.getByRole('table');
-  for (const label of [
-    'Subject added',
-    'Subject changed',
-    'Lecturer added',
-    'Lecturer assigned',
-    'Class changed',
-    'Lecturer changed',
-  ]) {
-    const row = table.getByRole('row').filter({ hasText: label }).first();
-    await expect(row).toContainText('Adam Administrator');
-    await expect(row).toContainText('via the website');
+  const rows = (label: string) =>
+    table.getByRole('row').filter({ hasText: label });
+  // Subject actions: target is this spec's code (a link to the subject).
+  const bySubject = (label: string) =>
+    rows(label).filter({
+      has: page.getByRole('link', { name: CODE, exact: true }),
+    });
+  // Lecturer actions: target is this spec's lecturer id, as stored.
+  const byLecturer = (label: string) =>
+    rows(label).filter({
+      has: page.getByRole('cell', { name: lecturerId, exact: true }),
+    });
+  const expected: [ReturnType<typeof rows>, number][] = [
+    [bySubject('Subject added'), 1],
+    [bySubject('Subject changed'), 1],
+    [bySubject('Lecturer assigned'), 2],
+    [bySubject('Class changed'), 1],
+    [byLecturer('Lecturer added'), 1],
+    [byLecturer('Lecturer changed'), 1],
+  ];
+  for (const [found, n] of expected) {
+    await expect(found).toHaveCount(n);
+    for (let i = 0; i < n; i++) {
+      await expect(found.nth(i)).toContainText('Adam Administrator');
+      await expect(found.nth(i)).toContainText('via the website');
+    }
   }
-  await expect(
-    table
-      .getByRole('row')
-      .filter({ hasText: 'Subject added' })
-      .first()
-      .getByRole('link', { name: CODE }),
-  ).toBeVisible();
 });
 
 test('form controls carry the field limits', async ({ page }) => {

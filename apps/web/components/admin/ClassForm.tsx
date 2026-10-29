@@ -3,6 +3,7 @@
 import {
   ASSESSMENT_NAMES,
   ASSESSMENTS,
+  CLASS_NAMES,
   type ClassKind,
 } from '@studies/db/constants';
 import { FIELD_MAX } from '@studies/db/fields';
@@ -28,7 +29,7 @@ export function ClassForm({
     <ActionForm
       action={editClassAction}
       submitLabel="Save class"
-      label="Class settings"
+      label={`${CLASS_NAMES[kind]} settings`}
     >
       <input type="hidden" name="code" value={code} />
       <input type="hidden" name="kind" value={kind} />

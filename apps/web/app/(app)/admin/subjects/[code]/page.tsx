@@ -132,7 +132,11 @@ export default async function AdminSubjectPage({
                   <p className="m-0 border-b border-line px-3 py-2 text-muted">
                     A class type the subject does not have yet is created.
                   </p>
-                  <AssignLecturerForm code={subject.code} lecturers={options} />
+                  <AssignLecturerForm
+                    code={subject.code}
+                    lecturers={options}
+                    label="Assign a lecturer to any class"
+                  />
                 </>
               )}
             </section>
@@ -188,7 +192,10 @@ export default async function AdminSubjectPage({
                         />
                       </div>
                       <div className="min-w-0 border-t border-line md:border-t-0">
-                        <h4 className="m-0 px-3 pt-3 text-[13px] font-semibold">
+                        <h4
+                          id={`${headId}-lecturers`}
+                          className="m-0 px-3 pt-3 text-[13px] font-semibold"
+                        >
                           Lecturers
                         </h4>
                         {c.lecturers.length === 0 ? (
@@ -196,7 +203,10 @@ export default async function AdminSubjectPage({
                             None assigned.
                           </p>
                         ) : (
-                          <ul aria-label="Lecturers" className="px-3 pt-1">
+                          <ul
+                            aria-labelledby={`${headId}-lecturers`}
+                            className="px-3 pt-1"
+                          >
                             {c.lecturers.map((l) => (
                               <li
                                 key={`${l.lecturerId}-${l.groupName ?? ''}`}
@@ -221,7 +231,7 @@ export default async function AdminSubjectPage({
                             code={subject.code}
                             kind={c.kind}
                             lecturers={options}
-                            label="Assign a lecturer to this class"
+                            label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
                           />
                         )}
                       </div>
