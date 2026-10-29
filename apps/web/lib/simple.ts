@@ -1,7 +1,7 @@
 /** Pure, client-safe helpers of the simple view. */
 import { CLASS_KINDS, type ClassKind } from '@studies/db/constants';
 import { formatDate } from './format';
-import { wallShortDate, wallTime } from './plan-view';
+import { wallShortDate, wallSqlText, wallTime } from './plan-view';
 
 /**
  * One UTF-16 unit folded like `stripMarks(...).toLowerCase()` of @studies/db
@@ -84,6 +84,15 @@ export function reportCellText(col: string, v: unknown): string {
   if (col === 'created_at' && (typeof v === 'string' || v instanceof Date))
     return formatDate(v);
   return String(v);
+}
+
+/** CSV cell of a report: `starts_at` is wall time, so `YYYY-MM-DD HH:MM:SS` with no `Z`. */
+export function reportCsvCell(col: string, v: unknown): unknown {
+  if (col === 'starts_at' && (typeof v === 'string' || v instanceof Date)) {
+    const d = wallValue(v);
+    if (!Number.isNaN(d.getTime())) return wallSqlText(d.toISOString());
+  }
+  return v;
 }
 
 export type FileIconName =
