@@ -49,7 +49,7 @@ export async function importMyGroupsAction(groups: MyGroups): Promise<boolean> {
 }
 
 /**
- * Saves the "Przypomnienia" checkboxes (24 h / 1 h before). Banned users have
+ * Saves the Reminders checkboxes (24 h / 1 h before). Banned users have
  * no session, so `requireUser` already turns them away.
  */
 export async function saveRemindersAction(

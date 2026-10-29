@@ -30,7 +30,7 @@ import { escapeUserText } from './markdown.js';
 type Pool = Parameters<typeof dueDms>[1];
 
 export const TICK_MS = 60_000;
-/** bot_settings key of the long-lived "Przypomnienia" thread in #wydarzenia. */
+/** bot_settings key of the long-lived digest ("Reminders") thread in #wydarzenia. */
 export const DIGEST_THREAD_SETTING = 'events_digest_thread_id';
 export const DIGEST_THREAD_NAME = '📅 Reminders';
 /**
