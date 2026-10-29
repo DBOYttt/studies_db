@@ -194,6 +194,12 @@ describe('GET /s/reports/csv', () => {
     expect(lines[0]).toBe('When,Type,Subject,Title');
     const body = lines.slice(1).filter(Boolean);
     expect(body).toHaveLength(4);
+    for (const line of body) {
+      const when = line.split(',')[0];
+      expect(when).not.toMatch(/Z$/);
+      expect(when).toMatch(/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/);
+    }
+    expect(body[0].split(',')[0].slice(11, 16)).toBe('23:30');
     expect(body[0]).toMatch(/,Test,MECH,Wieczorem$/);
     expect(body[1]).toMatch(/,Test,MECH,Kolokwium 1$/);
     expect(body[2]).toMatch(/,Exam,MECH,Egzamin$/);

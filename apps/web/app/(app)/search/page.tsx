@@ -77,7 +77,7 @@ export default async function SearchPage({
               >
                 <option value="">All subjects</option>
                 {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>
+                  <option key={s.id} value={s.id} lang="pl">
                     {s.name}
                   </option>
                 ))}
@@ -93,7 +93,7 @@ export default async function SearchPage({
               >
                 <option value="">All tags</option>
                 {tags.map((t) => (
-                  <option key={t.id} value={t.id}>
+                  <option key={t.id} value={t.id} lang="pl">
                     {t.name} ({t.subjectCode})
                   </option>
                 ))}

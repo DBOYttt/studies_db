@@ -8,6 +8,7 @@ import {
   parseReportIndex,
   REPORT_LABELS,
   REPORT_SLUGS,
+  reportCsvCell,
 } from '@/lib/simple';
 import { runReadonlyQuery } from '@/lib/sql-console';
 
@@ -35,11 +36,19 @@ export async function GET(req: Request) {
     });
   }
   const header = res.columns.map((c) => REPORT_LABELS[c] ?? c);
-  return new Response(toCsv(header, res.rows), {
-    headers: {
-      'Content-Type': 'text/csv; charset=utf-8',
-      'Content-Disposition': `attachment; filename="${REPORT_SLUGS[r]}.csv"`,
-      'Cache-Control': 'private, no-store',
+  return new Response(
+    toCsv(
+      header,
+      res.rows.map((row) =>
+        row.map((v, i) => reportCsvCell(res.columns[i], v)),
+      ),
+    ),
+    {
+      headers: {
+        'Content-Type': 'text/csv; charset=utf-8',
+        'Content-Disposition': `attachment; filename="${REPORT_SLUGS[r]}.csv"`,
+        'Cache-Control': 'private, no-store',
+      },
     },
-  });
+  );
 }

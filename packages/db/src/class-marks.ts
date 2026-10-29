@@ -263,7 +263,7 @@ export async function removeMark(
   });
 }
 
-/** Admin only. Refused while another active mark covers the same class/group/kind. */
+/** Admin only. Refused while another active mark covers the same class/group/kind, or an all-groups one covers a group mark. */
 export async function restoreMark(
   db: Db,
   adminId: number,
@@ -285,6 +285,16 @@ export async function restoreMark(
     const m = await lockMark(tx, id);
     if (!m || m.deletedAt === null) return fail(MARK_NOT_FOUND);
     if (await activeExists(tx, m)) return fail(MARK_ALREADY_ON);
+    if (
+      m.groupId !== null &&
+      (await activeExists(tx, {
+        classId: m.classId,
+        groupId: null,
+        kind: m.kind,
+      }))
+    ) {
+      return fail(MARK_ALREADY_ON_ALL);
+    }
     await tx
       .update(classMarks)
       .set({

@@ -304,7 +304,7 @@ function SubjectHeader({
   return (
     <div className="flex flex-wrap items-end justify-between gap-x-6 gap-y-2">
       <div className="min-w-0">
-        <h1 className="m-0 text-xl font-semibold tracking-[-0.01em]">
+        <h1 lang="pl" className="m-0 text-xl font-semibold tracking-[-0.01em]">
           {subject.name}
         </h1>
         <p className="mt-0.5 font-mono text-xs text-muted">
@@ -318,7 +318,10 @@ function SubjectHeader({
           </p>
         )}
         {subject.description && (
-          <p className="mt-1.5 max-w-[65ch] whitespace-pre-line text-muted">
+          <p
+            lang="pl"
+            className="mt-1.5 max-w-[65ch] whitespace-pre-line text-muted"
+          >
             {subject.description}
           </p>
         )}

@@ -127,6 +127,7 @@ describe('planGroupImport', () => {
     const p = await planGroupImport(db, userId, fixture('personal.ics'));
     const m = p.matched.find((x) => x.classId === cls['CH.cwiczenia']);
     expect(m?.currentGroupId).toBe(grp['CH.cwiczenia.1']);
+    expect(m?.currentGroupName).toBe('Gr. 1');
     await setMyGroup(db, userId, cls['CH.cwiczenia'], null);
   });
 

@@ -36,13 +36,9 @@ type Result = { preview: GroupImportPreview; notice: string | null };
 /**
  * "Import from UniTime": reads a personal UniTime calendar (link or .ics
  * file), lists the groups it finds and saves the changed ones into My
- * groups. `groupNames` (group id → name) names the group a class had before.
+ * groups.
  */
-export function GroupImport({
-  groupNames,
-}: {
-  groupNames: Record<number, string>;
-}) {
+export function GroupImport() {
   const router = useRouter();
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -218,8 +214,8 @@ export function GroupImport({
                       <span className="text-muted" lang="en">
                         {' '}
                         (
-                        {groupNames[m.currentGroupId]
-                          ? `was ${groupNames[m.currentGroupId]}`
+                        {m.currentGroupName
+                          ? `was ${m.currentGroupName}`
                           : 'was another group'}
                         )
                       </span>

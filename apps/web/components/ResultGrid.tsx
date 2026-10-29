@@ -425,6 +425,7 @@ export function ResultGrid({
         <button
           type="button"
           onClick={() => onPreview(previewId)}
+          lang="pl"
           className={`${linkCls} ${linkText}`}
         >
           {text}
@@ -432,6 +433,7 @@ export function ResultGrid({
       ) : (
         <Link
           href={previewHref(previewId) ?? '#'}
+          lang="pl"
           className={`link ${linkText}`}
           scroll={false}
         >
@@ -450,7 +452,7 @@ export function ResultGrid({
       <>
         {typeof c === 'object' &&
           c.badges?.map((b) => (
-            <span key={b.id} className="ml-1">
+            <span key={b.id} lang="pl" className="ml-1">
               <TagBadge name={b.name} />
             </span>
           ))}

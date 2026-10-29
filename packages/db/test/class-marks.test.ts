@@ -22,6 +22,7 @@ import {
 } from '../src/schema.js';
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 
+const ALREADY_ON_ALL = 'Entry quiz is already on for all groups of this class.';
 const ALREADY_ON = 'Entry quiz is already on for this class.';
 
 it('the stale-version refusal names the entry quiz, not an event', () => {
@@ -458,6 +459,12 @@ describe('class marks (entry quiz)', () => {
       ok: false,
       message: 'Only an admin can restore an entry quiz.',
     });
+    // An all-groups mark is on, so a group mark would never show.
+    expect(await restoreMark(db, id.admin, id.m, 'web')).toEqual({
+      ok: false,
+      message: ALREADY_ON_ALL,
+    });
+    expect((await removeMark(db, id.u, id.mAll, {}, 'web')).ok).toBe(true);
     const back = await restoreMark(db, id.admin, id.m, 'web');
     expect(back).toEqual({
       ok: true,
@@ -465,10 +472,7 @@ describe('class marks (entry quiz)', () => {
       id: id.m,
       version: 3,
     });
-    expect((await listMarks(db, [id.lab])).map((m) => m.id)).toEqual([
-      id.m,
-      id.mAll,
-    ]);
+    expect((await listMarks(db, [id.lab])).map((m) => m.id)).toEqual([id.m]);
     expect((await auditRows('class_mark.restore', id.m))[0]).toMatchObject({
       userId: id.admin,
       details: { source: 'web' },
@@ -478,9 +482,7 @@ describe('class marks (entry quiz)', () => {
       message: 'Entry quiz not found.',
     });
 
-    // Turn off, turn a new one on, then try to restore the old one (with
-    // the all-groups mark off, which would refuse the group mark).
-    expect((await removeMark(db, id.u, id.mAll, {}, 'web')).ok).toBe(true);
+    // Turn off, turn a new one on, then try to restore the old one.
     expect(await removeMark(db, id.u, id.m, {}, 'web')).toEqual({
       ok: true,
       message: 'Entry quiz turned off.',

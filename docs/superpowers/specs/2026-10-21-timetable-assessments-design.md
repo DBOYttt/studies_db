@@ -56,7 +56,9 @@ An event that matches no session stays a normal event block. Only `kolokwium` tu
 At most one non-deleted mark per (`class_id`, `group_id`, `kind`); enforced in code inside the transaction with
 `SELECT … FOR UPDATE` (MariaDB has no partial unique index). The group must belong to the class. A group mark is
 refused while an all-groups mark of the same class and kind is active ("Entry quiz is already on for all groups of
-this class."); overlaps made before that rule are tolerated.
+this class."); overlaps made before that rule are tolerated. Turning on an all-groups entry quiz hides any existing group marks of
+that class and kind on the timetable (the all-groups mark takes precedence), and restoring a group mark is refused
+while an all-groups one is on.
 
 `class_mark_skips` ("not this week"):
 - `id` int PK, `mark_id` int FK → class_marks ON DELETE CASCADE, `on_date` date, `created_by` int FK → users,
