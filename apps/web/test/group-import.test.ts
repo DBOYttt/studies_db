@@ -22,7 +22,9 @@ import {
 } from 'vitest';
 
 let db: Db;
-vi.mock('@/lib/db', () => ({ getDb: () => db }));
+// Set to make the next DB call throw (a non-fetch, non-calendar error).
+let brokenDb: Db | null = null;
+vi.mock('@/lib/db', () => ({ getDb: () => brokenDb ?? db }));
 
 // The signed-in user; null means "no session" (requireUser redirects).
 let current: { id: number } | null = null;
@@ -170,7 +172,10 @@ describe('previewGroupImportAction', () => {
     const r = await previewGroupImportAction(
       form({ url: '  ', file: icsFile('') }),
     );
-    expect(r.ok).toBe(false);
+    expect(r).toEqual({
+      ok: false,
+      error: 'Paste a UniTime link or choose a .ics file.',
+    });
   });
 
   it('previews a valid file, without the link anywhere in the result', async () => {
@@ -222,33 +227,27 @@ describe('previewGroupImportAction', () => {
       }),
     );
     const r = await previewGroupImportAction(form({ url: SECRET_URL }));
-    expect(r.ok).toBe(false);
-    if (r.ok) return;
-    expect(r.error).toContain(URL_HOST);
-    expect(r.error).not.toContain('s3cret-token');
+    expect(r).toEqual({
+      ok: false,
+      error: `Could not download the timetable from ${URL_HOST}`,
+    });
   });
 
   it('turns any other error into a generic message', async () => {
     await signIn();
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        // A body that blows up mid-read with the URL in the message.
-        return {
-          status: 200,
-          headers: new Headers({ 'content-type': 'text/calendar' }),
-          body: {
-            getReader() {
-              throw new Error(`boom ${SECRET_URL}`);
-            },
-          },
-        } as unknown as Response;
-      }),
-    );
-    const r = await previewGroupImportAction(form({ url: SECRET_URL }));
-    expect(r.ok).toBe(false);
-    if (r.ok) return;
-    expect(r.error).not.toContain('s3cret-token');
+    brokenDb = {
+      select: () => {
+        throw new Error(`db down while reading ${SECRET_URL}`);
+      },
+    } as unknown as Db;
+    try {
+      const r = await previewGroupImportAction(
+        form({ file: icsFile(fixture) }),
+      );
+      expect(r).toEqual({ ok: false, error: 'Could not read the calendar.' });
+    } finally {
+      brokenDb = null;
+    }
   });
 
   it('gives the no-classes notice for a calendar without classes', async () => {

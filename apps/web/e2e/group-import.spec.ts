@@ -18,10 +18,12 @@ test('a UniTime calendar file fills My groups', async ({ page }) => {
   const status = section.getByRole('status');
   await expect(status).toContainText('Chemia ogólna · Ćwiczenia: Gr. 2');
   await expect(status).toContainText('entries not matched');
-  const apply = section.getByRole('button', { name: 'Apply 1 groups' });
+  const apply = section.getByRole('button', { name: 'Apply 1 group' });
   await expect(apply).toBeVisible();
   await apply.click();
   await expect(status).toHaveText('Groups saved: 1.');
+  // The form is cleared for the next import.
+  await expect(section.getByLabel('or upload a .ics file')).toHaveValue('');
 
   await expect(
     page.getByLabel(/Chemia ogólna.*Ćwiczenia/).locator('option:checked'),
@@ -42,6 +44,8 @@ test('a link from another host is refused without being echoed', async ({
 }) => {
   await page.goto(GROUPS);
   const section = page.getByRole('region', { name: 'Import from UniTime' });
+  // A file chosen first is dropped once a link is typed: the link is used.
+  await section.getByLabel('or upload a .ics file').setInputFiles(FIXTURE);
   await section
     .getByLabel('UniTime calendar link')
     .fill('https://evil.example.com/cal.ics?token=secret');
@@ -49,4 +53,5 @@ test('a link from another host is refused without being echoed', async ({
   const alert = section.getByRole('alert');
   await expect(alert).toContainText('can be imported');
   await expect(alert).not.toContainText('secret');
+  await expect(section.getByLabel('or upload a .ics file')).toHaveValue('');
 });

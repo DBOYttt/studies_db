@@ -4,6 +4,7 @@ import { CalendarPlus, Check, Eye } from '@phosphor-icons/react';
 import type { GroupImportPreview } from '@studies/db';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useRef, useState } from 'react';
+import { plural } from '@/lib/format';
 import {
   applyGroupImportAction,
   previewGroupImportAction,
@@ -50,8 +51,15 @@ export function GroupImport({
   // Read synchronously: a second click in the same tick must not see a
   // stale `busy`.
   const working = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
+  const urlRef = useRef<HTMLInputElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   async function run(kind: 'preview' | 'apply', job: () => Promise<void>) {
+    const fallback =
+      kind === 'apply'
+        ? 'Could not save the groups.'
+        : 'Could not read the calendar.';
     if (working.current) return;
     working.current = true;
     setBusy(kind);
@@ -59,7 +67,7 @@ export function GroupImport({
     try {
       await job();
     } catch {
-      setError('Could not read the calendar.');
+      setError(fallback);
     } finally {
       working.current = false;
       setBusy(null);
@@ -99,6 +107,7 @@ export function GroupImport({
         return;
       }
       setResult(null);
+      formRef.current?.reset();
       setSaved(`Groups saved: ${r.set}.`);
       router.refresh();
     });
@@ -106,7 +115,7 @@ export function GroupImport({
   const p = result?.preview;
   const skipped = p
     ? [
-        p.skipped.exam && `${p.skipped.exam} exams`,
+        p.skipped.exam && plural(p.skipped.exam, 'exam', 'exams'),
         p.skipped.noKind && `${p.skipped.noKind} without a class type`,
         p.skipped.noGroup && `${p.skipped.noGroup} without a group`,
       ].filter(Boolean)
@@ -128,6 +137,7 @@ export function GroupImport({
         copy the link.
       </p>
       <form
+        ref={formRef}
         onSubmit={onPreview}
         className="flex flex-col gap-2 border-b border-line px-3 py-2.5 sm:flex-row sm:items-end sm:gap-3"
       >
@@ -136,6 +146,11 @@ export function GroupImport({
           <input
             type="url"
             name="url"
+            ref={urlRef}
+            // One source at a time: typing a link drops a chosen file.
+            onChange={(e) => {
+              if (e.target.value && fileRef.current) fileRef.current.value = '';
+            }}
             maxLength={500}
             autoComplete="off"
             spellCheck={false}
@@ -148,6 +163,12 @@ export function GroupImport({
           <input
             type="file"
             name="file"
+            ref={fileRef}
+            // ...and choosing a file drops the typed link.
+            onChange={(e) => {
+              if (e.target.files?.length && urlRef.current)
+                urlRef.current.value = '';
+            }}
             accept=".ics,text/calendar"
             className="max-w-full font-normal text-muted file:mr-2 file:rounded file:border file:border-line-strong file:bg-panel file:px-2 file:py-[3px] file:text-accent-ink"
           />
@@ -222,7 +243,7 @@ export function GroupImport({
             {p.unmatched.length > 0 && (
               <details className="border-b border-line px-3 py-1.5">
                 <summary className="cursor-pointer text-muted">
-                  {p.unmatched.length} entries not matched
+                  {plural(p.unmatched.length, 'entry', 'entries')} not matched
                 </summary>
                 <ul className="mt-1 mb-0.5" lang="pl">
                   {p.unmatched.map((u) => (
@@ -261,7 +282,7 @@ export function GroupImport({
                     <Check size={14} aria-hidden />
                     {busy === 'apply'
                       ? 'Saving…'
-                      : `Apply ${changes.length} groups`}
+                      : `Apply ${plural(changes.length, 'group', 'groups')}`}
                   </button>
                 )}
               </div>
