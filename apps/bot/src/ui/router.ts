@@ -105,15 +105,16 @@ export async function handleUi(
     return;
   }
 
-  // A modal must be the first response, so it is not acknowledged.
-  const opensModal = action.kind === 'groupsImport';
+  // A modal must be the first response within 3 s, so it opens at once:
+  // the submit's ban gate refuses a banned user before anything is fetched.
+  if (action.kind === 'groupsImport') {
+    if (i.isModalSubmit()) throw new Error('a modal cannot open a modal');
+    await i.showModal(groupImportModal());
+    return;
+  }
   // The login answer and the import result are messages of their own: keep
   // the panel they came from.
-  if (!opensModal)
-    await ack(
-      i,
-      action.kind === 'login' || action.kind === 'groupsImportSubmit',
-    );
+  await ack(i, action.kind === 'login' || action.kind === 'groupsImportSubmit');
   const member = i.member;
   const { userId } = await syncAdminFlag(
     deps.ingest.db,
@@ -121,13 +122,7 @@ export async function handleUi(
     memberRoleIds(i),
   );
   if (await isBanned(deps, userId)) {
-    if (opensModal) await i.reply(ephemeral(notice(BANNED_TEXT)));
-    else await show(i, notice(BANNED_TEXT));
-    return;
-  }
-  if (opensModal) {
-    if (i.isModalSubmit()) throw new Error('a modal cannot open a modal');
-    await i.showModal(groupImportModal());
+    await show(i, notice(BANNED_TEXT));
     return;
   }
   await runStudentAction(

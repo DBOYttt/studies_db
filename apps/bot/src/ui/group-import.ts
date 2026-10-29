@@ -24,22 +24,42 @@ export const groupImportLimiter = createRateLimiter(
 /** Matched groups listed by name; the rest are counted. */
 const SHOWN = 15;
 
+/** Ambiguous classes named in the summary; the rest are "…". */
+const AMBIGUOUS_SHOWN = 3;
+/** Characters per name in the summary. */
+const NAME_MAX = 100;
+
+const name = (s: string) => escapeUserText(clip(s, NAME_MAX));
+
+/**
+ * The import result. `result.set` is what was saved; `result.changed` holds
+ * the class ids the import changed, so the other matched classes were
+ * already saved.
+ */
 export function groupImportSummary(
   preview: GroupImportPreview,
-  result: { set: number },
+  result: { set: number; changed: ReadonlySet<number> },
 ): string {
   const { matched, ambiguous, unmatched } = preview;
   if (matched.length === 0 && ambiguous.length === 0) return NO_CLASSES_MESSAGE;
-  const lines = [`Saved ${plural(result.set, 'group', 'groups')}.`];
+  const already = matched.filter((m) => !result.changed.has(m.classId)).length;
+  const lines = [
+    `Saved ${plural(result.set, 'group', 'groups')}${already > 0 ? ` (${already} already saved)` : ''}.`,
+  ];
   for (const m of matched.slice(0, SHOWN)) {
+    const tag = result.changed.has(m.classId) ? '' : ' (already saved)';
     lines.push(
-      `• ${escapeUserText(m.subjectName)} · ${escapeUserText(m.className)}: ${escapeUserText(m.groupName)}`,
+      `• ${name(m.subjectName)} · ${name(m.className)}: ${name(m.groupName)}${tag}`,
     );
   }
   if (matched.length > SHOWN) lines.push(`…and ${matched.length - SHOWN} more`);
   if (ambiguous.length > 0) {
+    const names = ambiguous
+      .slice(0, AMBIGUOUS_SHOWN)
+      .map((a) => `${name(a.subjectName)} · ${name(a.className)}`);
+    if (ambiguous.length > AMBIGUOUS_SHOWN) names.push('…');
     lines.push(
-      `Several groups for ${plural(ambiguous.length, 'class', 'classes')}; pick them below.`,
+      `Several groups for ${names.join(', ')}; pick one in My groups.`,
     );
   }
   if (unmatched.length > 0) {

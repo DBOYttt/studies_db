@@ -9,6 +9,7 @@ import {
   classMarks,
   clearMyGroups,
   fetchImportCalendar,
+  GROUP_IMPORT_MAX_PAIRS,
   getMyGroups,
   getReminderPrefs,
   importAllowedHosts,
@@ -370,22 +371,30 @@ async function runGroupImport(ctx: StudentContext, url: string) {
       fetchImpl: o.fetchImpl,
     });
     const preview = await planGroupImport(db, ctx.userId, text);
-    const pairs = changedPairs(preview);
+    const pairs = changedPairs(preview).slice(0, GROUP_IMPORT_MAX_PAIRS);
     const { set } = pairs.length
       ? await applyGroupImport(db, ctx.userId, pairs)
       : { set: 0 };
-    summary = groupImportSummary(preview, { set });
+    summary = groupImportSummary(preview, {
+      set,
+      changed: new Set(pairs.map((p) => p.classId)),
+    });
   } catch (err) {
     // Not logged: the error may embed the link.
     return ctx.show(notice(importErrorMessage(err)));
   }
   await ctx.show(notice(summary));
-  const [options, my, rem] = await Promise.all([
-    listMyGroupOptions(ctx.deps.pool),
-    getMyGroups(db, ctx.userId),
-    getReminderPrefs(db, ctx.userId),
-  ]);
-  await ctx.followUp(groupsView(options, null, my, rem));
+  // The summary stays even when the refreshed view cannot be sent.
+  try {
+    const [options, my, rem] = await Promise.all([
+      listMyGroupOptions(ctx.deps.pool),
+      getMyGroups(db, ctx.userId),
+      getReminderPrefs(db, ctx.userId),
+    ]);
+    await ctx.followUp(groupsView(options, null, my, rem));
+  } catch {
+    console.error('group import: could not send the groups view');
+  }
 }
 
 /* ---------- entry quizzes ---------- */

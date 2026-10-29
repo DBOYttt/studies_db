@@ -46,6 +46,7 @@ const preview = (
   skipped: { exam: 0, noKind: 0, noGroup: 0 },
   ...over,
 });
+const all = (n: number) => new Set(Array.from({ length: n }, (_, k) => k + 1));
 const matched = (n: number) =>
   Array.from({ length: n }, (_, k) => ({
     classId: k + 1,
@@ -60,6 +61,7 @@ describe('groupImportSummary', () => {
   it('lists at most 15 groups, then the rest as a count', () => {
     const s = groupImportSummary(preview({ matched: matched(20) }), {
       set: 20,
+      changed: all(20),
     });
     const lines = s.split('\n');
     expect(lines[0]).toBe('Saved 20 groups.');
@@ -67,6 +69,36 @@ describe('groupImportSummary', () => {
     expect(bullets).toHaveLength(15);
     expect(bullets[0]).toBe('• Przedmiot 1 · Laboratorium: Gr. 1');
     expect(lines).toContain('…and 5 more');
+  });
+
+  it('counts and tags the groups that were already saved', () => {
+    const s = groupImportSummary(preview({ matched: matched(3) }), {
+      set: 1,
+      changed: new Set([2]),
+    });
+    expect(s.split('\n')).toEqual([
+      'Saved 1 group (2 already saved).',
+      '• Przedmiot 1 · Laboratorium: Gr. 1 (already saved)',
+      '• Przedmiot 2 · Laboratorium: Gr. 2',
+      '• Przedmiot 3 · Laboratorium: Gr. 3 (already saved)',
+    ]);
+  });
+
+  it('names at most 3 ambiguous classes', () => {
+    const amb = (k: number) => ({
+      classId: 50 + k,
+      subjectName: `S${k}`,
+      className: 'Laboratorium',
+      groupNames: ['Gr. 1', 'Gr. 2'],
+    });
+    const s = groupImportSummary(
+      preview({ ambiguous: [amb(1), amb(2), amb(3), amb(4)] }),
+      { set: 0, changed: new Set() },
+    );
+    expect(s.split('\n')).toEqual([
+      'Saved 0 groups.',
+      'Several groups for S1 · Laboratorium, S2 · Laboratorium, S3 · Laboratorium, …; pick one in My groups.',
+    ]);
   });
 
   it('adds the ambiguous classes and the unmatched entries', () => {
@@ -86,24 +118,26 @@ describe('groupImportSummary', () => {
           { subjectName: 'Y', label: 'CWA 2', reason: 'class' },
         ],
       }),
-      { set: 1 },
+      { set: 1, changed: all(1) },
     );
     expect(s.split('\n')).toEqual([
       'Saved 1 group.',
       '• Przedmiot 1 · Laboratorium: Gr. 1',
-      'Several groups for 1 class; pick them below.',
+      'Several groups for A · B; pick one in My groups.',
       '2 entries not matched.',
     ]);
   });
 
   it('is the no-classes message when nothing matched', () => {
-    expect(groupImportSummary(preview(), { set: 0 })).toBe(NO_CLASSES_MESSAGE);
+    expect(groupImportSummary(preview(), { set: 0, changed: new Set() })).toBe(
+      NO_CLASSES_MESSAGE,
+    );
     expect(
       groupImportSummary(
         preview({
           unmatched: [{ subjectName: 'X', label: 'CWA 1', reason: 'subject' }],
         }),
-        { set: 0 },
+        { set: 0, changed: new Set() },
       ),
     ).toBe(NO_CLASSES_MESSAGE);
   });
@@ -113,7 +147,10 @@ describe('groupImportSummary', () => {
       ...m,
       subjectName: 'S'.repeat(400),
     }));
-    const s = groupImportSummary(preview({ matched: long }), { set: 15 });
+    const s = groupImportSummary(preview({ matched: long }), {
+      set: 15,
+      changed: all(15),
+    });
     expect(s.length).toBeLessThanOrEqual(MAX_TEXT);
   });
 });
@@ -351,20 +388,59 @@ describe('import from UniTime in #panel', () => {
     await handler(f)(interaction(SUBMIT, URL_OK));
     const i = interaction(SUBMIT, URL_OK);
     await handler(f)(i);
-    expect(textOf(i.editReply.mock.calls[0][0])).toContain('Saved 0 groups.');
+    const summary = textOf(i.editReply.mock.calls[0][0]);
+    expect(summary).toContain('Saved 0 groups (1 already saved).');
+    expect(summary).toContain('• Fizyka · Laboratorium: Gr. 2 (already saved)');
   });
 
-  it('refuses a banned user (button and submit)', async () => {
+  it('accepts a webcal:// link and fetches it over https', async () => {
+    const f = calendarFetch();
+    const i = interaction(SUBMIT, 'webcal://plan.agh.edu.pl/calendar?q=SECRET');
+    await handler(f)(i);
+    expect(textOf(i.editReply.mock.calls[0][0])).toContain('Saved 1 group.');
+    const calls = f.mock.calls as unknown as [URL | string][];
+    expect(String(calls[0][0])).toMatch(/^https:\/\/plan\.agh\.edu\.pl\//);
+  });
+
+  it('never logs the link, on success or on a failed fetch', async () => {
+    const spies = (['error', 'log', 'warn', 'info'] as const).map((k) =>
+      vi.spyOn(console, k),
+    );
+    await handler(calendarFetch())(interaction(SUBMIT, URL_OK));
+    const down = vi.fn(async () => {
+      throw new Error(`connect ECONNREFUSED ${URL_OK}`);
+    });
+    const i = interaction(SUBMIT, URL_OK);
+    await handler(down)(i);
+    expect(textOf(i.editReply.mock.calls[0][0])).toBe(
+      'Could not download the timetable from plan.agh.edu.pl',
+    );
+    const logged = JSON.stringify(spies.map((s) => s.mock.calls));
+    expect(logged).not.toContain('SECRET');
+    expect(logged).not.toContain('calendar?q');
+  });
+
+  it('keeps the summary when the groups view cannot be sent', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const i = interaction(SUBMIT, URL_OK);
+    i.followUp = vi.fn(async () => {
+      throw new Error('Unknown Webhook');
+    });
+    await handler(calendarFetch())(i);
+    expect(i.editReply).toHaveBeenCalledTimes(1);
+    expect(textOf(i.editReply.mock.calls[0][0])).toContain('Saved 1 group.');
+    expect(JSON.stringify(err.mock.calls)).not.toContain('SECRET');
+  });
+
+  it('refuses the submit of a banned user and fetches nothing', async () => {
     await db
       .insert(users)
       .values({ discordUserId: 'stud', displayName: 'stud', isBanned: true });
     const f = calendarFetch();
+    // The button opens the modal at once (within Discord's 3 s).
     const b = interaction('v1:stu:groups:import');
     await handler(f)(b);
-    expect(b.showModal).not.toHaveBeenCalled();
-    expect(textOf(b.reply.mock.calls[0][0])).toContain(
-      'Your access to the website is blocked.',
-    );
+    expect(b.calls).toEqual(['showModal']);
     const i = interaction(SUBMIT, URL_OK);
     await handler(f)(i);
     expect(textOf(i.editReply.mock.calls[0][0])).toContain(
