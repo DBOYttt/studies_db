@@ -1,6 +1,8 @@
 # Admin panel, round 2: parity with the Discord admin commands
 
 Date: 2026-10-14. Status: design approved in chat (inventory and order); waiting for the user to review this written spec.
+
+> Superseded by `2026-10-29-admin-panel-round2-design.md` (same intent, updated to the current code).
 Builds on round 1 (`docs/superpowers/specs/2026-10-13-admin-panel-round1-design.md`): `requireAdmin()`,
 `admin_audit`, `/admin` tabs.
 
