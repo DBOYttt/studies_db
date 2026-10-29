@@ -32,7 +32,7 @@ type Pool = Parameters<typeof dueDms>[1];
 export const TICK_MS = 60_000;
 /** bot_settings key of the long-lived "Przypomnienia" thread in #wydarzenia. */
 export const DIGEST_THREAD_SETTING = 'events_digest_thread_id';
-export const DIGEST_THREAD_NAME = '📅 Przypomnienia';
+export const DIGEST_THREAD_NAME = '📅 Reminders';
 /**
  * bot_settings key: the day (`YYYY-MM-DD`, the "tomorrow" of the digest)
  * whose entry quizzes were posted, so they go out once per day.
