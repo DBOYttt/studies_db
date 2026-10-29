@@ -55,6 +55,7 @@ const matched = (n: number) =>
     className: 'Laboratorium',
     groupName: `Gr. ${k + 1}`,
     currentGroupId: null,
+    currentGroupName: null,
   }));
 
 describe('groupImportSummary', () => {

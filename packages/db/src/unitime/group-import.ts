@@ -19,6 +19,8 @@ export interface GroupImportPreview {
     className: string;
     groupName: string;
     currentGroupId: number | null;
+    /** Name of the saved group, null when none is saved or it is gone. */
+    currentGroupName: string | null;
   }[];
   ambiguous: {
     classId: number;
@@ -255,13 +257,18 @@ export async function planGroupImport(
       .filter((g): g is NonNullable<typeof g> => !!g)
       .sort((a, b) => a.number - b.number);
     if (winners.length === 1 && winners[0]) {
+      const currentGroupId = mine[String(classId)] ?? null;
       matched.push({
         classId,
         groupId: winners[0].id,
         subjectName: subject.name,
         className: cls.name,
         groupName: winners[0].name,
-        currentGroupId: mine[String(classId)] ?? null,
+        currentGroupId,
+        currentGroupName:
+          currentGroupId === null
+            ? null
+            : (groupById.get(currentGroupId)?.name ?? null),
         kind: cls.kind,
       });
     } else if (winners.length > 1) {

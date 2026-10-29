@@ -193,6 +193,7 @@ describe('previewGroupImportAction', () => {
         subjectName: 'Chemia ogólna',
         groupName: 'Gr. 2',
         currentGroupId: null,
+        currentGroupName: null,
       }),
     ]);
     const json = JSON.stringify(r);

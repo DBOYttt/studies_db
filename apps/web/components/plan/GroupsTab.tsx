@@ -23,11 +23,7 @@ export async function GroupsTab({ weekHref }: { weekHref: string }) {
     return (
       <>
         <MyGroupsImport hasStored={Object.keys(stored).length > 0} />
-        <GroupImport
-          groupNames={Object.fromEntries(
-            options.flatMap((o) => o.groups.map((g) => [g.id, g.name])),
-          )}
-        />
+        <GroupImport />
         {/* remount when an import fills the saved choice */}
         <MyGroupsForm
           key={JSON.stringify(stored)}
