@@ -779,6 +779,13 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_EVENTS_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_ADMIN_SIMPLE = await createLoginToken(db, adminId);
+    // Admin Users tab (admin-round2.spec.ts): blocked and unblocked there,
+    // so it never signs in (blocking deletes the user's sessions).
+    await upsertUser(db, {
+      discordUserId: 'e2e-blockable',
+      displayName: 'Bartek Blokowany',
+      avatarUrl: null,
+    });
   } finally {
     await closeTestDb(db);
   }

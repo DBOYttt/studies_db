@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUDIT_ACTION_LABELS,
+  AUDIT_ACTIONS,
   AUDIT_PAGE_SIZE,
+  type AuditAction,
   auditActionLabel,
   auditDetails,
   auditHref,
@@ -223,5 +226,42 @@ describe('auditDetails', () => {
     expect(
       auditDetails({ action: 'plan.sync', statement: null, details: null }),
     ).toBe('');
+  });
+});
+
+describe('audit filter options for the web admin actions', () => {
+  const NEW = {
+    'subject.add': 'Subject added',
+    'subject.edit': 'Subject changed',
+    'class.edit': 'Class changed',
+    'lecturer.add': 'Lecturer added',
+    'lecturer.edit': 'Lecturer changed',
+    'lecturer.assign': 'Lecturer assigned',
+    'user.ban': 'Access blocked',
+    'user.unban': 'Access unblocked',
+    'plan.sync': 'Timetable sync requested',
+    'bot.request': 'Bot request queued',
+    'bot.request_cancel': 'Bot request cancelled',
+    'bot.setup': 'Server set up',
+    'bot.setup_dry_run': 'Server setup previewed',
+    'bot.resync': 'Resync',
+  } as const;
+  it('lists each one with its label, after the SQL ones', () => {
+    expect(AUDIT_ACTIONS.slice(0, 2)).toEqual(['sql.execute', 'sql.rejected']);
+    for (const [a, label] of Object.entries(NEW)) {
+      expect(AUDIT_ACTIONS, a).toContain(a);
+      expect(AUDIT_ACTION_LABELS[a as AuditAction], a).toBe(label);
+      expect(auditActionLabel(a)).toBe(label);
+    }
+    expect(AUDIT_ACTIONS).toHaveLength(2 + Object.keys(NEW).length);
+  });
+  it('accepts them as ?action= filters', () => {
+    expect(parseAuditQuery({ action: 'bot.request' })).toEqual({
+      page: 1,
+      action: 'bot.request',
+    });
+    expect(auditHref({ page: 1, action: 'lecturer.assign' })).toBe(
+      '/admin/audit?action=lecturer.assign',
+    );
   });
 });

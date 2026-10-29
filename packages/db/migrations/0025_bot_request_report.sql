@@ -1,0 +1,1 @@
+ALTER TABLE `bot_requests` ADD `report` mediumtext;

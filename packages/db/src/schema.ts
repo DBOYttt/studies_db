@@ -549,6 +549,10 @@ export const botRequests = mysqlTable(
       .default('queued'),
     payload: json('payload'),
     error: varchar('error', { length: 500 }),
+    // Admin requests (setup, setup_dry_run, resync): the bot's text report,
+    // at most 60 000 chars (finishBotRequest truncates). MEDIUMTEXT: 60 000
+    // multibyte chars do not fit TEXT's 65 535 bytes.
+    report: mediumtext('report'),
     createdAt: now(),
     startedAt: datetime('started_at'),
     finishedAt: datetime('finished_at'),

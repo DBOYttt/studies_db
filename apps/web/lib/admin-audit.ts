@@ -6,13 +6,44 @@ import { historyLabel } from './sql-editor';
 
 export const AUDIT_PAGE_SIZE = 50;
 
-/** Audit actions written this round (filter options). */
-export const AUDIT_ACTIONS = ['sql.execute', 'sql.rejected'] as const;
+/** Audit actions of the admin panel (the Action filter's options). */
+export const AUDIT_ACTIONS = [
+  'sql.execute',
+  'sql.rejected',
+  'subject.add',
+  'subject.edit',
+  'class.edit',
+  'lecturer.add',
+  'lecturer.edit',
+  'lecturer.assign',
+  'user.ban',
+  'user.unban',
+  'plan.sync',
+  'bot.request',
+  'bot.request_cancel',
+  'bot.setup',
+  'bot.setup_dry_run',
+  'bot.resync',
+] as const;
 export type AuditAction = (typeof AUDIT_ACTIONS)[number];
 
 export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'sql.execute': 'SQL executed',
   'sql.rejected': 'SQL rejected',
+  'subject.add': 'Subject added',
+  'subject.edit': 'Subject changed',
+  'class.edit': 'Class changed',
+  'lecturer.add': 'Lecturer added',
+  'lecturer.edit': 'Lecturer changed',
+  'lecturer.assign': 'Lecturer assigned',
+  'user.ban': 'Access blocked',
+  'user.unban': 'Access unblocked',
+  'plan.sync': 'Timetable sync requested',
+  'bot.request': 'Bot request queued',
+  'bot.request_cancel': 'Bot request cancelled',
+  'bot.setup': 'Server set up',
+  'bot.setup_dry_run': 'Server setup previewed',
+  'bot.resync': 'Resync',
 };
 
 /** Plain names of every action the web, bot and db write (`admin_audit`). */
@@ -25,19 +56,7 @@ const ACTION_NAMES: Record<string, string> = {
   'class_mark.restore': 'Entry quiz restored',
   'class_mark.skip': 'Entry quiz: not this week',
   'class_mark.unskip': 'Entry quiz: skip undone',
-  'user.ban': 'Access blocked',
-  'user.unban': 'Access unblocked',
   'reminders.update': 'Reminders changed',
-  'bot.setup': 'Server set up',
-  'bot.setup_dry_run': 'Server setup previewed',
-  'bot.resync': 'Resync',
-  'plan.sync': 'Timetable sync requested',
-  'subject.add': 'Subject added',
-  'subject.edit': 'Subject changed',
-  'class.edit': 'Class changed',
-  'lecturer.add': 'Lecturer added',
-  'lecturer.edit': 'Lecturer changed',
-  'lecturer.assign': 'Lecturer assigned',
 };
 
 /** The plain name of an audit action; an unknown one stays its raw key. */

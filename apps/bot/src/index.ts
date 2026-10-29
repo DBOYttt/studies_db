@@ -4,6 +4,11 @@ import {
   resolveStorageDir,
 } from '@studies/db';
 import { Client, Events, GatewayIntentBits, Partials } from 'discord.js';
+import {
+  adminRequestDeps,
+  recoverInterruptedAdminRequests,
+  startAdminRequestPoller,
+} from './admin-requests.js';
 import { catchUp, discordForumSource } from './catchup.js';
 import { createInteractionHandler } from './commands/router.js';
 import { type BotConfig, loadConfig } from './config.js';
@@ -15,6 +20,7 @@ import {
   recoverInterruptedRequests,
   startEventPoller,
 } from './events/worker.js';
+import { withSetupLock } from './ops.js';
 import { discordReminderGuild, startReminderTick } from './reminders.js';
 
 process.on('unhandledRejection', (reason) => {
@@ -53,6 +59,7 @@ client.on(
 );
 
 let eventPoller: ReturnType<typeof startEventPoller> | undefined;
+let adminPoller: ReturnType<typeof startAdminRequestPoller> | undefined;
 let eventPostGuild: ReturnType<typeof discordEventPostGuild> | undefined;
 let reminderTick: ReturnType<typeof startReminderTick> | undefined;
 client.once(Events.ClientReady, async (c) => {
@@ -64,6 +71,12 @@ client.once(Events.ClientReady, async (c) => {
     if (n > 0) console.log(`Przerwane zlecenia: ${n}.`);
   } catch (err) {
     console.error('recoverInterruptedRequests:', err);
+  }
+  try {
+    const n = await recoverInterruptedAdminRequests(db);
+    if (n > 0) console.log(`Przerwane zlecenia admina: ${n}.`);
+  } catch (err) {
+    console.error('recoverInterruptedAdminRequests:', err);
   }
   // Failed or interrupted post requests are never retried on their own.
   try {
@@ -82,21 +95,31 @@ client.once(Events.ClientReady, async (c) => {
     webBaseUrl: config.webBaseUrl,
     storageDir: ingest.storageDir,
   });
+  // Under the /setup lock, taken before the admin poller starts: a queued web
+  // setup or resync must not run alongside it (the poller skips meanwhile).
+  withSetupLock(() =>
+    catchUp(ingest, discordForumSource(client, config.discordGuildId), {
+      ignoreWatermark: false,
+    }),
+  ).then(
+    (r) =>
+      r === 'busy'
+        ? console.error('Catch-up skipped: /setup is running.')
+        : console.log(
+            `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,
+          ),
+    (err) => console.error('Catch-up failed:', err),
+  );
+  // Separate from the event poller: a long /setup must not hold up posts.
+  adminPoller = startAdminRequestPoller(
+    adminRequestDeps({ ingest, client, config, pool }),
+  );
   reminderTick = startReminderTick({
     db,
     pool,
     guild: discordReminderGuild(client),
     webBaseUrl: config.webBaseUrl,
   });
-  catchUp(ingest, discordForumSource(client, config.discordGuildId), {
-    ignoreWatermark: false,
-  }).then(
-    (r) =>
-      console.log(
-        `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,
-      ),
-    (err) => console.error('Catch-up failed:', err),
-  );
 });
 
 const STOP_TIMEOUT_MS = 8_000;
@@ -108,7 +131,11 @@ async function shutdown(code: number): Promise<never> {
     try {
       // Both loops stop between steps; don't let a slow Discord call hold
       // the shutdown past the container's grace period.
-      const stopped = Promise.all([eventPoller?.stop(), reminderTick?.stop()]);
+      const stopped = Promise.all([
+        eventPoller?.stop(),
+        adminPoller?.stop(),
+        reminderTick?.stop(),
+      ]);
       const timedOut = await Promise.race([
         stopped.then(() => false),
         new Promise<boolean>((r) =>
