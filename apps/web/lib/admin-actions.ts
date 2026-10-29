@@ -29,7 +29,9 @@ import {
   parseAssign,
   parseBan,
   parseClassEdit,
+  parseCode,
   parseId,
+  parseKind,
   parseLecturer,
   parseRequestKind,
   parseSubjectAdd,
@@ -60,12 +62,19 @@ async function audit(
   target: string | null,
   details: object = {},
 ): Promise<void> {
-  await writeAudit(getDb(), {
-    userId,
-    action,
-    target,
-    details: { ...details, source: 'web' },
-  });
+  // The change is already committed: a failed audit write is logged, never
+  // reported as a failed action (a retry would apply it twice), as the bot's
+  // auditDiscord does.
+  try {
+    await writeAudit(getDb(), {
+      userId,
+      action,
+      target,
+      details: { ...details, source: 'web' },
+    });
+  } catch (err) {
+    console.error('admin audit write failed', action, target, err);
+  }
 }
 
 function refresh(...paths: string[]) {
@@ -73,6 +82,10 @@ function refresh(...paths: string[]) {
   revalidatePath('/admin/audit');
   for (const p of paths) revalidatePath(p);
 }
+
+/** An untouched stored URL (even one today's rule rejects) is not changed. */
+const urlChanged = (v: string, stored: string | null) =>
+  v !== (stored ?? '') && urlOrNull(v) !== stored;
 
 const subjectPath = (code: string) =>
   `/admin/subjects/${encodeURIComponent(code)}`;
@@ -97,23 +110,25 @@ export async function editSubjectAction(
   form: FormData,
 ): Promise<ActionState> {
   const user = await requireAdmin();
-  const p = parseSubjectEdit(form);
-  if (!p.ok) return fail(p.message);
-  const v = p.value;
+  const c = parseCode(form);
+  if (!c.ok) return fail(c.message);
   const db = getDb();
   const [cur] = await db
     .select()
     .from(subjects)
-    .where(eq(subjects.code, v.code));
+    .where(eq(subjects.code, c.value));
   // Unknown subject: the shared action gives the refusal.
-  if (!cur) return done(await editSubject(db, v.code, {}));
+  if (!cur) return done(await editSubject(db, c.value, {}));
+  const p = parseSubjectEdit(form, cur);
+  if (!p.ok) return fail(p.message);
+  const v = p.value;
   // Only what changed, so the audit row names the edited fields.
   const patch: Parameters<typeof editSubject>[2] = {};
   if (v.name !== cur.name) patch.name = v.name;
   if (v.semester !== cur.semester) patch.semester = v.semester;
   if (v.ects !== cur.ects) patch.ects = v.ects;
   if (v.description !== cur.description) patch.description = v.description;
-  if (urlOrNull(v.platformUrl) !== cur.platformUrl)
+  if (urlChanged(v.platformUrl, cur.platformUrl))
     patch.platformUrl = v.platformUrl;
   const fields = Object.keys(patch);
   if (fields.length === 0) return { ok: true, message: NO_CHANGES };
@@ -130,9 +145,10 @@ export async function editClassAction(
   form: FormData,
 ): Promise<ActionState> {
   const user = await requireAdmin();
-  const p = parseClassEdit(form);
-  if (!p.ok) return fail(p.message);
-  const v = p.value;
+  const c = parseCode(form);
+  if (!c.ok) return fail(c.message);
+  const kind = parseKind(field(form, 'kind'));
+  if (!kind) return fail('Unknown class type.');
   const db = getDb();
   const [cur] = await db
     .select({
@@ -142,10 +158,12 @@ export async function editClassAction(
     })
     .from(classes)
     .innerJoin(subjects, eq(subjects.id, classes.subjectId))
-    .where(and(eq(subjects.code, v.code), eq(classes.kind, v.kind)));
+    .where(and(eq(subjects.code, c.value), eq(classes.kind, kind)));
   // No such subject or class: the shared action gives the refusal.
-  if (!cur)
-    return done(await editClass(db, { subjectCode: v.code, kind: v.kind }));
+  if (!cur) return done(await editClass(db, { subjectCode: c.value, kind }));
+  const p = parseClassEdit(form, cur);
+  if (!p.ok) return fail(p.message);
+  const v = p.value;
   const input: {
     assessment?: typeof v.assessment;
     note?: string;
@@ -154,7 +172,7 @@ export async function editClassAction(
   if (v.assessment !== (cur.assessment ?? 'brak'))
     input.assessment = v.assessment;
   if (textOrNull(v.note) !== cur.note) input.note = v.note;
-  if (urlOrNull(v.platformUrl) !== cur.platformUrl)
+  if (urlChanged(v.platformUrl, cur.platformUrl))
     input.platformUrl = v.platformUrl;
   const fields = Object.keys(input);
   if (fields.length === 0) return { ok: true, message: NO_CHANGES };
@@ -192,12 +210,12 @@ export async function editLecturerAction(
   const user = await requireAdmin();
   const id = parseId(field(form, 'id'));
   if (id === null) return fail('Lecturer not found.');
-  const p = parseLecturer(form);
-  if (!p.ok) return fail(p.message);
-  const v = p.value;
   const db = getDb();
   const cur = await getLecturerAdmin(db, id);
   if (!cur) return fail(`Lecturer with id ${id} not found.`);
+  const p = parseLecturer(form, cur);
+  if (!p.ok) return fail(p.message);
+  const v = p.value;
   const patch: Parameters<typeof editLecturer>[2] = {};
   if (v.name !== cur.name) patch.name = v.name;
   if (textOrNull(v.title) !== cur.title) patch.title = v.title;
@@ -211,6 +229,8 @@ export async function editLecturerAction(
   if (r.ok) {
     await audit(user.id, 'lecturer.edit', String(id), { fields });
     refresh('/admin/lecturers', `/admin/lecturers/${id}`);
+    // Subject pages list their lecturers by name.
+    revalidatePath('/admin/subjects', 'layout');
   }
   return done(r);
 }
@@ -252,7 +272,7 @@ export async function setBanAction(
     .select({ discordUserId: users.discordUserId })
     .from(users)
     .where(eq(users.id, user.id));
-  if (me?.discordUserId === p.value.discordUserId)
+  if (p.value.banned && me?.discordUserId === p.value.discordUserId)
     return fail('You cannot block yourself.');
   const r = await banUser(db, p.value.discordUserId, p.value.banned);
   if (r.ok) {

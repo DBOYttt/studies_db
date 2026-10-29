@@ -67,6 +67,17 @@ function within(
   return v.trim().length > max ? fail(tooLong(label, max)) : null;
 }
 
+/**
+ * The stored values of the row being edited. A submitted field equal to its
+ * stored value is not validated again, as the bot keeps an untouched prefill:
+ * a value stored by another path (a slash command, the SQL console) may break
+ * today's limits and must not block editing the other fields.
+ */
+type Stored<K extends string> = Partial<Record<K, string | null>>;
+
+const unchangedText = (v: string, stored: string | null | undefined) =>
+  stored !== undefined && textOrNull(v) === stored;
+
 function wholeIn(v: string, min: number, max: number): number | null {
   const t = v.trim();
   if (!NUM_RE.test(t)) return null;
@@ -79,16 +90,28 @@ export function parseId(v: string): number | null {
   return ID_RE.test(t) ? Number(t) : null;
 }
 
-function parseName(form: FormData, max: number): Parsed<string> {
+/** Required; `-` is the bot's "clear" and is refused as a name. */
+function parseName(
+  form: FormData,
+  max: number,
+  stored?: string | null,
+): Parsed<string> {
   const name = field(form, 'name').trim();
-  if (!name) return fail(EMPTY_NAME);
+  if (stored !== undefined && name === stored) return { ok: true, value: name };
+  if (!name || name === '-') return fail(EMPTY_NAME);
   if (name.length > max) return fail(tooLong('name', max));
   return { ok: true, value: name };
 }
 
 /** A URL field: '' clears (null); otherwise it must be http(s). */
-function parseUrl(form: FormData, name: string): Parsed<string> {
+function parseUrl(
+  form: FormData,
+  name: string,
+  stored?: string | null,
+): Parsed<string> {
   const v = field(form, name);
+  if (stored !== undefined && v.trim() === (stored ?? ''))
+    return { ok: true, value: v.trim() };
   const bad = within(v, 'URL', FIELD_MAX.platformUrl);
   if (bad) return bad;
   if (urlOrNull(v) === undefined) return fail(INVALID_URL);
@@ -106,16 +129,22 @@ function parseSemesterEcts(
   return { ok: true, value: { semester: s as 1 | 2, ects } };
 }
 
-function parseCode(form: FormData): Parsed<string> {
+/** The `code` field (a subject code), upper-cased. */
+export function parseCode(form: FormData): Parsed<string> {
   const code = field(form, 'code').trim();
   if (!CODE_RE.test(code)) return fail(CODE_TEXT);
   return { ok: true, value: code.toUpperCase() };
 }
 
-function parseDescription(form: FormData): Parsed<string | null> {
+function parseDescription(
+  form: FormData,
+  stored?: string | null,
+): Parsed<string | null> {
   const v = field(form, 'description');
-  const bad = within(v, 'description', FIELD_MAX.description);
-  if (bad) return bad;
+  if (!unchangedText(v, stored)) {
+    const bad = within(v, 'description', FIELD_MAX.description);
+    if (bad) return bad;
+  }
   return { ok: true, value: textOrNull(v) };
 }
 
@@ -150,16 +179,19 @@ export type SubjectEdit = {
   platformUrl: string;
 };
 
-export function parseSubjectEdit(form: FormData): Parsed<SubjectEdit> {
+export function parseSubjectEdit(
+  form: FormData,
+  stored: Stored<'name' | 'description' | 'platformUrl'> = {},
+): Parsed<SubjectEdit> {
   const code = parseCode(form);
   if (!code.ok) return code;
-  const name = parseName(form, FIELD_MAX.subjectName);
+  const name = parseName(form, FIELD_MAX.subjectName, stored.name);
   if (!name.ok) return name;
   const se = parseSemesterEcts(form);
   if (!se.ok) return se;
-  const description = parseDescription(form);
+  const description = parseDescription(form, stored.description);
   if (!description.ok) return description;
-  const url = parseUrl(form, 'platformUrl');
+  const url = parseUrl(form, 'platformUrl', stored.platformUrl);
   if (!url.ok) return url;
   return {
     ok: true,
@@ -189,7 +221,10 @@ export function parseKind(v: string): ClassKind | null {
     : null;
 }
 
-export function parseClassEdit(form: FormData): Parsed<ClassEdit> {
+export function parseClassEdit(
+  form: FormData,
+  stored: Stored<'note' | 'platformUrl'> = {},
+): Parsed<ClassEdit> {
   const code = parseCode(form);
   if (!code.ok) return code;
   const kind = parseKind(field(form, 'kind'));
@@ -202,9 +237,11 @@ export function parseClassEdit(form: FormData): Parsed<ClassEdit> {
   )
     return fail('Unknown assessment.');
   const note = field(form, 'note');
-  const bad = within(note, 'note', FIELD_MAX.classNote);
-  if (bad) return bad;
-  const url = parseUrl(form, 'platformUrl');
+  if (!unchangedText(note, stored.note)) {
+    const bad = within(note, 'note', FIELD_MAX.classNote);
+    if (bad) return bad;
+  }
+  const url = parseUrl(form, 'platformUrl', stored.platformUrl);
   if (!url.ok) return url;
   return {
     ok: true,
@@ -234,8 +271,11 @@ const LECTURER_FIELDS = [
 ] as const;
 
 /** Every field trimmed; '' clears it. */
-export function parseLecturer(form: FormData): Parsed<LecturerInput> {
-  const name = parseName(form, FIELD_MAX.lecturerName);
+export function parseLecturer(
+  form: FormData,
+  stored: Stored<keyof LecturerInput> = {},
+): Parsed<LecturerInput> {
+  const name = parseName(form, FIELD_MAX.lecturerName, stored.name);
   if (!name.ok) return name;
   const out: LecturerInput = {
     name: name.value,
@@ -246,12 +286,19 @@ export function parseLecturer(form: FormData): Parsed<LecturerInput> {
   };
   for (const [key, label, max] of LECTURER_FIELDS) {
     const v = field(form, key);
+    out[key] = v.trim();
+    const same =
+      key === 'email'
+        ? stored.email !== undefined && emailOrNull(v) === stored.email
+        : unchangedText(v, stored[key]);
+    if (same) continue;
     const bad = within(v, label, max);
     if (bad) return bad;
-    out[key] = v.trim();
+    if (key === 'email') {
+      const email = emailOrNull(v);
+      if (email !== null && !EMAIL_RE.test(email)) return fail(INVALID_EMAIL);
+    }
   }
-  const email = emailOrNull(out.email);
-  if (email !== null && !EMAIL_RE.test(email)) return fail(INVALID_EMAIL);
   return { ok: true, value: out };
 }
 

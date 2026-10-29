@@ -29,6 +29,18 @@ import {
 let db: Db;
 vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
+let failAudit = false;
+vi.mock('@studies/db', async (importOriginal) => {
+  const real = await importOriginal<typeof import('@studies/db')>();
+  return {
+    ...real,
+    writeAudit: (...args: Parameters<typeof real.writeAudit>) => {
+      if (failAudit) throw new Error('audit down');
+      return real.writeAudit(...args);
+    },
+  };
+});
+
 let cookieSid: string | undefined;
 vi.mock('next/headers', () => ({
   cookies: async () => ({
@@ -214,6 +226,106 @@ describe('admin actions: subjects', () => {
     );
   });
 
+  it("an untouched stored value breaking today's limits does not block an edit", async () => {
+    await db.insert(subjects).values({
+      name: 'Legacy',
+      code: 'LEG',
+      semester: 2,
+      ects: 3,
+      description: 'd'.repeat(1500),
+      platformUrl: 'ftp://legacy.example',
+    });
+    const r = await A.editSubjectAction(
+      null,
+      fd({
+        code: 'leg',
+        name: 'Legacy',
+        semester: '2',
+        ects: '4',
+        description: 'd'.repeat(1500),
+        platformUrl: 'ftp://legacy.example',
+      }),
+    );
+    expect(r).toEqual({ ok: true, message: 'Updated subject LEG.' });
+    const [s] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'LEG'));
+    expect(s).toMatchObject({
+      ects: 4,
+      description: 'd'.repeat(1500),
+      platformUrl: 'ftp://legacy.example',
+    });
+    expect((await lastAudit()).details).toEqual({
+      fields: ['ects'],
+      source: 'web',
+    });
+    // A changed overlong description is still refused.
+    expect(
+      await A.editSubjectAction(
+        null,
+        fd({
+          code: 'LEG',
+          name: 'Legacy',
+          semester: '2',
+          ects: '4',
+          description: 'e'.repeat(1001),
+          platformUrl: 'ftp://legacy.example',
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      message: 'The description must be at most 1000 characters.',
+    });
+  });
+
+  it('an unchanged form says No changes. and writes no audit row', async () => {
+    const before = (await audits()).length;
+    expect(
+      await A.editSubjectAction(
+        null,
+        fd({
+          code: 'ANA1',
+          name: 'Analiza 2',
+          semester: '1',
+          ects: '6',
+          description: '',
+          platformUrl: '',
+        }),
+      ),
+    ).toEqual({ ok: true, message: 'No changes.' });
+    expect(await audits()).toHaveLength(before);
+  });
+
+  it('refuses - as a name on add', async () => {
+    expect(
+      await A.addSubjectAction(null, subjectForm({ name: '-', code: 'DASH' })),
+    ).toEqual({ ok: false, message: 'The name cannot be empty.' });
+    expect(await A.addLecturerAction(null, fd({ name: ' - ' }))).toEqual({
+      ok: false,
+      message: 'The name cannot be empty.',
+    });
+  });
+
+  it('an audit failure after the change still reports success', async () => {
+    const before = (await audits()).length;
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    failAudit = true;
+    try {
+      expect(
+        await A.addSubjectAction(null, subjectForm({ code: 'AUD' })),
+      ).toMatchObject({ ok: true });
+      expect(err).toHaveBeenCalled();
+    } finally {
+      failAudit = false;
+      err.mockRestore();
+    }
+    expect(
+      await db.select().from(subjects).where(eq(subjects.code, 'AUD')),
+    ).toHaveLength(1);
+    expect(await audits()).toHaveLength(before);
+  });
+
   it('refuses a bad URL and an unknown subject', async () => {
     const before = (await audits()).length;
     const base = {
@@ -307,6 +419,46 @@ describe('admin actions: classes and lecturers', () => {
     expect(
       await A.editLecturerAction(null, fd({ id: 'abc', name: 'X' })),
     ).toEqual({ ok: false, message: 'Lecturer not found.' });
+  });
+
+  it('a duplicate email on edit is refused without an audit row', async () => {
+    const add = await A.addLecturerAction(
+      null,
+      fd({ name: 'Anna Nowak', email: 'anna@example.com' }),
+    );
+    expect(add?.ok).toBe(true);
+    const before = (await audits()).length;
+    expect(
+      await A.editLecturerAction(
+        null,
+        fd({
+          id: String(lecturerId),
+          name: 'Jan Kowalski',
+          email: 'anna@example.com',
+          officeHours: 'Mon 10-12',
+        }),
+      ),
+    ).toEqual({
+      ok: false,
+      message: 'A lecturer with this email address already exists.',
+    });
+    expect(await audits()).toHaveLength(before);
+  });
+
+  it('editing a lecturer revalidates the subject pages', async () => {
+    await A.editLecturerAction(
+      null,
+      fd({ id: String(lecturerId), name: 'Jan K.', officeHours: 'Mon 10-12' }),
+    );
+    expect(revalidated).toContain('/admin/subjects');
+    await A.editLecturerAction(
+      null,
+      fd({
+        id: String(lecturerId),
+        name: 'Jan Kowalski',
+        officeHours: 'Mon 10-12',
+      }),
+    );
   });
 
   it('assigns a lecturer and audits lecturer.assign', async () => {
@@ -410,6 +562,19 @@ describe('admin actions: classes and lecturers', () => {
   });
 });
 
+describe('admin actions: missing class', () => {
+  it('editClass on a class the subject lacks is refused, no audit', async () => {
+    const before = (await audits()).length;
+    expect(
+      await A.editClassAction(
+        null,
+        fd({ code: 'ANA1', kind: 'seminarium', assessment: 'egzamin' }),
+      ),
+    ).toEqual({ ok: false, message: 'Subject ANA1 has no Seminarium class.' });
+    expect(await audits()).toHaveLength(before);
+  });
+});
+
 describe('admin actions: users', () => {
   it('blocks and unblocks another user', async () => {
     const r = await A.setBanAction(
@@ -434,6 +599,16 @@ describe('admin actions: users', () => {
     ).toBe(true);
     a = await lastAudit();
     expect(a).toMatchObject({ action: 'user.unban', target: 'student-1' });
+  });
+
+  it('unblocking yourself is allowed', async () => {
+    expect(
+      await A.setBanAction(null, fd({ discordUserId: 'admin-1', banned: '0' })),
+    ).toEqual({ ok: true, message: 'Unblocked access to the website.' });
+    expect(await lastAudit()).toMatchObject({
+      action: 'user.unban',
+      target: 'admin-1',
+    });
   });
 
   it('refuses blocking yourself, with no audit row', async () => {
