@@ -236,3 +236,108 @@ test('form controls carry the field limits', async ({ page }) => {
     '1000',
   );
 });
+
+test('block and unblock a user, behind a confirm', async ({ page }) => {
+  await page.goto('/admin/users?q=Blokowany');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Users' }),
+  ).toBeVisible();
+  const row = page.getByRole('row').filter({ hasText: 'Bartek Blokowany' });
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText('e2e-blockable');
+  await expect(row).toContainText('Active');
+
+  // The first click only asks; Cancel backs out.
+  await row.getByRole('button', { name: 'Block', exact: true }).click();
+  const ask = row.getByRole('group', { name: /^Block Bartek Blokowany\?/ });
+  await expect(ask).toBeVisible();
+  await ask.getByRole('button', { name: 'Cancel' }).click();
+  await expect(ask).toHaveCount(0);
+  await expect(row).toContainText('Active');
+
+  await row.getByRole('button', { name: 'Block', exact: true }).click();
+  await row.getByRole('button', { name: 'Confirm block' }).click();
+  await expect(row.getByRole('status')).toHaveText(
+    'Blocked access to the website.',
+  );
+  await expect(row).toContainText('Blocked');
+
+  await row.getByRole('button', { name: 'Unblock', exact: true }).click();
+  await row.getByRole('button', { name: 'Confirm unblock' }).click();
+  await expect(row.getByRole('status')).toHaveText(
+    'Unblocked access to the website.',
+  );
+  await expect(row).toContainText('Active');
+
+  // The admin's own row has no block button.
+  await page.goto('/admin/users?q=e2e-admin');
+  const self = page.getByRole('row').filter({ hasText: 'Adam Administrator' });
+  await expect(self).toContainText('This is you');
+  await expect(self.getByRole('button')).toHaveCount(0);
+});
+
+test('queue a setup preview, see it queued, cancel it', async ({ page }) => {
+  await page.goto('/admin/sync');
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Sync' }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: 'Sync timetable' }),
+  ).toBeVisible();
+  const bot = page.getByRole('region', { name: 'Discord server' });
+  await bot.getByRole('button', { name: 'Preview changes' }).click();
+  await expect(bot.getByRole('status').filter({ hasText: /\S/ })).toHaveText(
+    'Request queued. The bot will pick it up within a few seconds.',
+  );
+  const requests = page.getByRole('region', { name: 'Bot requests' });
+  const row = requests
+    .getByRole('row')
+    .filter({ hasText: 'Setup preview' })
+    .first();
+  await expect(row).toContainText('queued');
+  await expect(row).toContainText('Adam Administrator');
+  await expect(row).toContainText(/\d{2}:\d{2}:\d{2} CES?T/);
+  // While it waits, new requests are off.
+  await expect(bot.getByRole('button', { name: 'Run setup' })).toHaveAttribute(
+    'aria-disabled',
+    'true',
+  );
+
+  await row.getByRole('button', { name: 'Cancel' }).click();
+  await expect(row).toContainText('failed');
+  await expect(row).toContainText('Cancelled.');
+  await expect(
+    bot.getByRole('button', { name: 'Run setup' }),
+  ).not.toHaveAttribute('aria-disabled', 'true');
+
+  await page.goto('/admin/audit?action=bot.request');
+  const audit = page.getByRole('table').getByRole('row').filter({
+    hasText: 'Bot request queued',
+  });
+  await expect(audit.first()).toContainText('Adam Administrator');
+  await page.goto('/admin/audit?action=bot.request_cancel');
+  await expect(
+    page
+      .getByRole('table')
+      .getByRole('row')
+      .filter({ hasText: 'Bot request cancelled' })
+      .first(),
+  ).toBeVisible();
+});
+
+test.describe('a student', () => {
+  loginOnce('nonadmin', process.env.E2E_TOKEN_NONADMIN, { mode: 'simple' });
+
+  test('gets 404 on every new admin page', async ({ page }) => {
+    for (const path of [
+      '/admin/subjects',
+      `/admin/subjects/${CODE}`,
+      '/admin/lecturers',
+      '/admin/users',
+      '/admin/sync',
+    ]) {
+      const res = await page.goto(path);
+      expect(res?.status(), path).toBe(404);
+    }
+  });
+});

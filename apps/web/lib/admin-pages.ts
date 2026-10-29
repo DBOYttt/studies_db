@@ -23,3 +23,25 @@ export function parseSubjectParam(raw: string): string | null {
 /** `dr Jan Kowalski`, or the bare name without a title. */
 export const lecturerLabel = (l: { title: string | null; name: string }) =>
   l.title ? `${l.title} ${l.name}` : l.name;
+
+export const USERS_PAGE_SIZE = 50;
+const Q_MAX = 100;
+
+export type UsersQuery = { q: string; page: number };
+
+type SP = Record<string, string | string[] | undefined>;
+
+/** `?q=&page=` of /admin/users; anything invalid falls back to the default. */
+export function parseUsersQuery(sp: SP): UsersQuery {
+  const q = typeof sp.q === 'string' ? sp.q.trim().slice(0, Q_MAX) : '';
+  const p = typeof sp.page === 'string' ? sp.page : '';
+  return { q, page: /^[1-9]\d{0,5}$/.test(p) ? Number(p) : 1 };
+}
+
+export function usersHref(u: UsersQuery): string {
+  const p = new URLSearchParams();
+  if (u.q) p.set('q', u.q);
+  if (u.page > 1) p.set('page', String(u.page));
+  const s = p.toString();
+  return s ? `/admin/users?${s}` : '/admin/users';
+}
