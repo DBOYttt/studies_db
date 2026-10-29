@@ -39,21 +39,6 @@ export async function enqueueBotRequest(
   target: string,
   payload?: unknown,
 ): Promise<{ id: number; created: boolean }> {
-  const existing = async () => {
-    const [row] = await db
-      .select({ id: botRequests.id })
-      .from(botRequests)
-      .where(
-        and(
-          eq(botRequests.kind, kind),
-          eq(botRequests.target, target),
-          eq(botRequests.status, 'queued'),
-        ),
-      )
-      .orderBy(botRequests.id)
-      .limit(1);
-    return row;
-  };
   // MariaDB has no FOR SHARE: the locking read is spelt out.
   const lockedExisting = async () => {
     const [rows] = (await db.execute(sql`
@@ -74,12 +59,9 @@ export async function enqueueBotRequest(
   const [res] = (await db.execute(sql`
     INSERT INTO bot_requests (kind, target, payload)
     VALUES (${kind}, ${target}, ${json})`)) as unknown as [
-    { insertId: number; affectedRows: number },
+    { insertId: number },
   ];
-  if (res.affectedRows === 1) return { id: res.insertId, created: true };
-  const raced = await existing();
-  if (!raced) throw new Error('enqueueBotRequest: queued row vanished');
-  return { id: raced.id, created: false };
+  return { id: res.insertId, created: true };
 }
 
 /** Atomically claims the oldest queued request of `kinds` (SKIP LOCKED). */
