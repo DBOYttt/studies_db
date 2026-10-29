@@ -537,6 +537,7 @@ describe('groupsView', () => {
       ['v1:stu:rem:hour:1:0', 'Reminder 1 h: off'],
       ['v1:stu:groups:clear', 'Clear'],
       ['v1:stu:plan:day', 'Show my timetable'],
+      ['v1:stu:groups:import', 'Import from UniTime'],
     ]);
     expect(allText(v)).toContain('Gr. 2');
   });

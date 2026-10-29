@@ -6,19 +6,16 @@ import {
   GROUP_IMPORT_MAX_PAIRS,
   type GroupImportPreview,
   importAllowedHosts,
+  importErrorMessage,
   NO_CLASSES_MESSAGE,
-  NOT_A_CALENDAR_MESSAGE,
-  NotACalendarError,
   normalizeImportUrl,
   planGroupImport,
   previewHasNothing,
-  SafeSyncError,
 } from '@studies/db';
 import { revalidatePath } from 'next/cache';
 import { getDb } from './db';
 import {
   groupImportLimiter,
-  IMPORT_FAILED,
   NOTHING_TO_IMPORT,
   readIcsFile,
   TOO_MANY_IMPORTS,
@@ -70,11 +67,8 @@ export async function previewGroupImportAction(
       (preview.matched.length === 0 && preview.ambiguous.length === 0);
     return { ok: true, preview, notice: empty ? NO_CLASSES_MESSAGE : null };
   } catch (err) {
-    if (err instanceof NotACalendarError)
-      return { ok: false, error: NOT_A_CALENDAR_MESSAGE };
-    if (err instanceof SafeSyncError) return { ok: false, error: err.message };
     // Not logged: the error may embed the link.
-    return { ok: false, error: IMPORT_FAILED };
+    return { ok: false, error: importErrorMessage(err) };
   }
 }
 

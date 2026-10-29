@@ -228,3 +228,15 @@ export function lecturerModal(l?: LecturerCardData): ModalBuilder {
     ],
   );
 }
+
+/** `stu:groups:importsubmit`: the personal UniTime calendar link. */
+export const groupImportModal = () =>
+  modal(encodeId('stu', 'groups', 'importsubmit'), 'Import from UniTime', [
+    field({
+      id: 'url',
+      label: 'UniTime calendar link',
+      max: 500,
+      required: true,
+      placeholder: 'https://plan.agh.edu.pl/...',
+    }),
+  ]);

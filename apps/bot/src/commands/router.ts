@@ -13,6 +13,7 @@ import {
   getSetting,
   lecturers,
   listSubjects,
+  type RateLimiter,
   subjects,
   upsertUser,
 } from '@studies/db';
@@ -64,6 +65,12 @@ export type RouterDeps = {
   config: BotConfig;
   /** Raw pool for the shared plan queries (`@studies/db/plan`). */
   pool: ReturnType<typeof createDb>['pool'];
+  /** "Import from UniTime" overrides (tests); defaults are the real ones. */
+  groupImport?: {
+    fetchImpl?: typeof fetch;
+    limiter?: RateLimiter;
+    env?: NodeJS.ProcessEnv;
+  };
 };
 
 const ADMIN_COMMANDS = new Set([

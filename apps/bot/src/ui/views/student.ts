@@ -594,9 +594,9 @@ export function groupsView(
     container.addSeparatorComponents(divider());
     // Used so far: container, 2 texts, divider, 2 per subject select, divider;
     // still to come: overflow text, divider, reminders row + 2 buttons,
-    // row + 2 buttons.
+    // row + 3 buttons.
     const used = 1 + 2 + 1 + 2 * subjectPages.length + 1;
-    const slots = MAX_COMPONENTS - used - 1 - 1 - 3 - 3;
+    const slots = MAX_COMPONENTS - used - 1 - 1 - 3 - 4;
     const fitting = Math.max(0, Math.floor(slots / 3));
     const shown = classes.slice(0, fitting);
     for (const o of shown) {
@@ -640,6 +640,7 @@ export function groupsView(
             'Show my timetable',
             ButtonStyle.Primary,
           ),
+          button(encodeId('stu', 'groups', 'import'), 'Import from UniTime'),
         ),
       ),
   );

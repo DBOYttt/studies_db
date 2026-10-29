@@ -4,6 +4,7 @@ import { CLASS_KINDS, type ClassKind } from '../constants.js';
 import { getMyGroups } from '../my-groups.js';
 import { classes, classGroups, subjects, userGroups } from '../schema.js';
 import { classifyEvent } from './classify.js';
+import { SafeSyncError } from './fetch.js';
 import { expandOccurrences, parseIcs } from './ics.js';
 
 export interface GroupImportPreview {
@@ -38,6 +39,31 @@ const UNMATCHED_CAP = 50;
 export const NO_CLASSES_MESSAGE =
   'This calendar has no classes yet. UniTime may not have published your timetable; try again later or pick your groups below.';
 export const NOT_A_CALENDAR_MESSAGE = 'That is not a UniTime calendar (.ics).';
+
+export const TOO_MANY_IMPORTS = 'Too many imports. Try again in a few minutes.';
+export const IMPORT_FAILED = 'Could not read the calendar.';
+/** Imports (previews and uploads) per user per window: 6 per 10 minutes. */
+export const GROUP_IMPORT_LIMIT = 6;
+export const GROUP_IMPORT_WINDOW_MS = 10 * 60_000;
+
+/**
+ * The message a failed import may show: our own host-only messages pass
+ * through, anything else (which may embed the link) becomes a generic one.
+ */
+export function importErrorMessage(err: unknown): string {
+  if (err instanceof NotACalendarError) return NOT_A_CALENDAR_MESSAGE;
+  if (err instanceof SafeSyncError) return err.message;
+  return IMPORT_FAILED;
+}
+
+/** The matched pairs that change My groups (already saved ones are left out). */
+export function changedPairs(
+  p: GroupImportPreview,
+): { classId: number; groupId: number }[] {
+  return p.matched
+    .filter((m) => m.currentGroupId !== m.groupId)
+    .map((m) => ({ classId: m.classId, groupId: m.groupId }));
+}
 
 export function previewHasNothing(p: GroupImportPreview): boolean {
   return (

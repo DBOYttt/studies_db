@@ -4,17 +4,25 @@
  */
 import {
   addMark,
+  applyGroupImport,
+  changedPairs,
   classMarks,
   clearMyGroups,
+  fetchImportCalendar,
   getMyGroups,
   getReminderPrefs,
+  importAllowedHosts,
+  importErrorMessage,
   listEventsInRange,
   listMarks,
   MARK_NOT_FOUND,
+  normalizeImportUrl,
+  planGroupImport,
   removeMark,
   setMyGroup,
   setReminderPrefs,
   skipDate,
+  TOO_MANY_IMPORTS,
 } from '@studies/db';
 import {
   annotateWeek,
@@ -44,6 +52,7 @@ import {
   sendLoginDm,
 } from '../commands/student.js';
 import { toDiscordUser } from '../discord/map.js';
+import { groupImportLimiter, groupImportSummary } from './group-import.js';
 import { renderDayImage, renderWeekImage } from './plan-image.js';
 import { STALE_TEXT } from './respond.js';
 import {
@@ -67,6 +76,10 @@ export type StudentAction =
   | { kind: 'groupsSubject'; index: number }
   | { kind: 'groupsSet'; classId: number; groupId: number | null }
   | { kind: 'groupsClear' }
+  /** The "Import from UniTime" button: opens the link modal. */
+  | { kind: 'groupsImport' }
+  /** The link modal's submit; `url` is a secret (never stored or logged). */
+  | { kind: 'groupsImportSubmit'; url: string }
   | {
       kind: 'remToggle';
       which: 'day' | 'hour';
@@ -210,6 +223,10 @@ export function parseStudentAction(
   if (action === 'groups') {
     if (sub === 'open') return { kind: 'groupsOpen' };
     if (sub === 'clear') return { kind: 'groupsClear' };
+    if (sub === 'import')
+      return args.length === 1 && values.length === 0
+        ? { kind: 'groupsImport' }
+        : null;
     const value = values[0];
     if (value === undefined || !INDEX_RE.test(value)) return null;
     // Subject values are global indexes, so the page arg is not needed.
@@ -226,6 +243,22 @@ export function parseStudentAction(
   return null;
 }
 
+/**
+ * The action a `stu` modal submit stands for (only the import link modal);
+ * null for anything else (stale). `url` is the submitted link field (or
+ * reads it).
+ */
+export function parseStudentModal(
+  action: string,
+  args: string[],
+  url: string | (() => string),
+): StudentAction | null {
+  // The field is read only for a known modal (reading a missing one throws).
+  return action === 'groups' && args.length === 1 && args[0] === 'importsubmit'
+    ? { kind: 'groupsImportSubmit', url: typeof url === 'string' ? url : url() }
+    : null;
+}
+
 export interface StudentContext {
   deps: RouterDeps;
   user: User;
@@ -234,6 +267,8 @@ export interface StudentContext {
   userId: number;
   /** Shows a view as the interaction's (already acknowledged) response. */
   show: (v: View) => Promise<void>;
+  /** Sends a view as a further private message. */
+  followUp: (v: View) => Promise<void>;
 }
 
 /**
@@ -313,6 +348,44 @@ async function showGroups(
     getReminderPrefs(ctx.deps.ingest.db, ctx.userId),
   ]);
   await ctx.show(groupsView(options, pick(options), my, rem));
+}
+
+/**
+ * Imports My groups from a personal UniTime calendar link: rate limit,
+ * link guard, fetch, plan, save the changed groups. Replies with the summary,
+ * then the refreshed groups view. Errors are the web's safe messages; the
+ * link is never logged or echoed.
+ */
+async function runGroupImport(ctx: StudentContext, url: string) {
+  const o = ctx.deps.groupImport ?? {};
+  const limiter = o.limiter ?? groupImportLimiter;
+  if (!limiter.check(`discord:${ctx.userId}`))
+    return ctx.show(notice(TOO_MANY_IMPORTS));
+  const guard = normalizeImportUrl(url, importAllowedHosts(o.env));
+  if (!guard.ok) return ctx.show(notice(guard.error));
+  const { db } = ctx.deps.ingest;
+  let summary: string;
+  try {
+    const text = await fetchImportCalendar(guard.url, {
+      fetchImpl: o.fetchImpl,
+    });
+    const preview = await planGroupImport(db, ctx.userId, text);
+    const pairs = changedPairs(preview);
+    const { set } = pairs.length
+      ? await applyGroupImport(db, ctx.userId, pairs)
+      : { set: 0 };
+    summary = groupImportSummary(preview, { set });
+  } catch (err) {
+    // Not logged: the error may embed the link.
+    return ctx.show(notice(importErrorMessage(err)));
+  }
+  await ctx.show(notice(summary));
+  const [options, my, rem] = await Promise.all([
+    listMyGroupOptions(ctx.deps.pool),
+    getMyGroups(db, ctx.userId),
+    getReminderPrefs(db, ctx.userId),
+  ]);
+  await ctx.followUp(groupsView(options, null, my, rem));
 }
 
 /* ---------- entry quizzes ---------- */
@@ -503,6 +576,11 @@ export async function runStudentAction(
     case 'groupsClear':
       await clearMyGroups(db, ctx.userId);
       return showGroups(ctx, () => null);
+    case 'groupsImport':
+      // Opened as a modal by the router before acknowledging.
+      return;
+    case 'groupsImportSubmit':
+      return runGroupImport(ctx, a.url);
     case 'remToggle': {
       const cur = await getReminderPrefs(db, ctx.userId);
       await setReminderPrefs(

@@ -18,8 +18,13 @@ import {
   show,
   type UiInteraction,
 } from './respond.js';
-import { parseStudentAction, runStudentAction } from './student.js';
+import {
+  parseStudentAction,
+  parseStudentModal,
+  runStudentAction,
+} from './student.js';
 import { adminPanel } from './views/admin.js';
+import { groupImportModal } from './views/modals.js';
 import { notice, REMINDERS_OFF_NOTICE, studentPanel } from './views/student.js';
 
 export { STALE_TEXT, type UiInteraction } from './respond.js';
@@ -88,16 +93,27 @@ export async function handleUi(
   }
   const values = i.isStringSelectMenu() ? i.values : [];
   const action =
-    id?.area === 'stu' && !i.isModalSubmit()
-      ? parseStudentAction(id.action, id.args, values)
-      : null;
+    id?.area !== 'stu'
+      ? null
+      : i.isModalSubmit()
+        ? parseStudentModal(id.action, id.args, () =>
+            i.fields.getTextInputValue('url'),
+          )
+        : parseStudentAction(id.action, id.args, values);
   if (!action) {
     await i.reply(ephemeral(notice(STALE_TEXT)));
     return;
   }
 
-  // The login answer is a message of its own: keep the panel it came from.
-  await ack(i, action.kind === 'login');
+  // A modal must be the first response, so it is not acknowledged.
+  const opensModal = action.kind === 'groupsImport';
+  // The login answer and the import result are messages of their own: keep
+  // the panel they came from.
+  if (!opensModal)
+    await ack(
+      i,
+      action.kind === 'login' || action.kind === 'groupsImportSubmit',
+    );
   const member = i.member;
   const { userId } = await syncAdminFlag(
     deps.ingest.db,
@@ -105,11 +121,26 @@ export async function handleUi(
     memberRoleIds(i),
   );
   if (await isBanned(deps, userId)) {
-    await show(i, notice(BANNED_TEXT));
+    if (opensModal) await i.reply(ephemeral(notice(BANNED_TEXT)));
+    else await show(i, notice(BANNED_TEXT));
+    return;
+  }
+  if (opensModal) {
+    if (i.isModalSubmit()) throw new Error('a modal cannot open a modal');
+    await i.showModal(groupImportModal());
     return;
   }
   await runStudentAction(
-    { deps, user: i.user, member, userId, show: (v) => show(i, v) },
+    {
+      deps,
+      user: i.user,
+      member,
+      userId,
+      show: (v) => show(i, v),
+      followUp: async (v) => {
+        await i.followUp(ephemeral(v));
+      },
+    },
     action,
   );
   await remindersOffNotice(deps, userId, (v) => i.followUp(ephemeral(v)));
