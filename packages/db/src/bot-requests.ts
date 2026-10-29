@@ -167,32 +167,47 @@ export async function enqueueAdminBotRequest(
       sql`SELECT GET_LOCK(${ADMIN_LOCK}, 5) AS got`,
     )) as unknown as [{ got: number | null }[]];
     if (lock?.got !== 1) return { ok: false, message: BOT_BUSY_MESSAGE };
+    let result: { ok: true; id: number } | { ok: false; message: string };
     try {
-      const busy = await tx
-        .select({ id: botRequests.id })
-        .from(botRequests)
-        .where(
-          and(
-            inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]),
-            inArray(botRequests.status, ['queued', 'running']),
-          ),
-        )
-        .limit(1)
-        .for('update');
-      if (busy.length > 0) return { ok: false, message: BOT_BUSY_MESSAGE };
-      const [res] = await tx.insert(botRequests).values({
-        kind,
-        target: 'guild',
-        payload: { requestedBy: userId },
-      });
-      return { ok: true, id: res.insertId };
-    } finally {
-      // Released before COMMIT, but the FOR UPDATE read still holds; and a
-      // waiter that gets the lock first re-reads, at the latest, after our
-      // commit (its FOR UPDATE blocks on our new row's lock).
-      await tx.execute(sql`SELECT RELEASE_LOCK(${ADMIN_LOCK})`);
+      result = await checkAndInsertAdminRequest(tx, kind, userId);
+    } catch (err) {
+      // Best effort: the body's error is the one worth reporting.
+      await tx.execute(sql`SELECT RELEASE_LOCK(${ADMIN_LOCK})`).catch(() => {});
+      throw err;
     }
+    // Released before COMMIT, but the FOR UPDATE read still holds; and a
+    // waiter that gets the lock first re-reads, at the latest, after our
+    // commit (its FOR UPDATE blocks on our new row's lock). If the release
+    // itself fails, its error propagates so the transaction rolls back
+    // instead of reporting success on a connection that may still hold it.
+    await tx.execute(sql`SELECT RELEASE_LOCK(${ADMIN_LOCK})`);
+    return result;
   });
+}
+
+async function checkAndInsertAdminRequest(
+  tx: DbExecutor,
+  kind: AdminRequestKind,
+  userId: number,
+): Promise<{ ok: true; id: number } | { ok: false; message: string }> {
+  const busy = await tx
+    .select({ id: botRequests.id })
+    .from(botRequests)
+    .where(
+      and(
+        inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]),
+        inArray(botRequests.status, ['queued', 'running']),
+      ),
+    )
+    .limit(1)
+    .for('update');
+  if (busy.length > 0) return { ok: false, message: BOT_BUSY_MESSAGE };
+  const [res] = await tx.insert(botRequests).values({
+    kind,
+    target: 'guild',
+    payload: { requestedBy: userId },
+  });
+  return { ok: true, id: res.insertId };
 }
 
 /** Fails a queued admin request with `Cancelled.`; false when it is not queued. */

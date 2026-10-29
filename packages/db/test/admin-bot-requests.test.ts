@@ -102,6 +102,25 @@ describe('admin bot requests', () => {
     }
   });
 
+  it('releases the lock when the body throws', async () => {
+    const url = process.env.TEST_DATABASE_URL ?? '';
+    const a = createDb(url);
+    const b = createDb(url);
+    try {
+      // A kind longer than varchar(40) makes the insert fail after the lock.
+      const tooLong = 'x'.repeat(50) as unknown as 'setup';
+      await expect(
+        enqueueAdminBotRequest(a.db, tooLong, alice),
+      ).rejects.toThrow();
+      const started = Date.now();
+      expect((await enqueueAdminBotRequest(b.db, 'setup', bob)).ok).toBe(true);
+      expect(Date.now() - started).toBeLessThan(2000);
+    } finally {
+      await a.pool.end();
+      await b.pool.end();
+    }
+  });
+
   it('cancels a queued request but not a running one', async () => {
     const r = await enqueueAdminBotRequest(db, 'setup', alice);
     if (!r.ok) throw new Error('enqueue failed');
