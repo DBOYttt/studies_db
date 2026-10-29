@@ -20,6 +20,7 @@ import {
   recoverInterruptedRequests,
   startEventPoller,
 } from './events/worker.js';
+import { withSetupLock } from './ops.js';
 import { discordReminderGuild, startReminderTick } from './reminders.js';
 
 process.on('unhandledRejection', (reason) => {
@@ -94,6 +95,21 @@ client.once(Events.ClientReady, async (c) => {
     webBaseUrl: config.webBaseUrl,
     storageDir: ingest.storageDir,
   });
+  // Under the /setup lock, taken before the admin poller starts: a queued web
+  // setup or resync must not run alongside it (the poller skips meanwhile).
+  withSetupLock(() =>
+    catchUp(ingest, discordForumSource(client, config.discordGuildId), {
+      ignoreWatermark: false,
+    }),
+  ).then(
+    (r) =>
+      r === 'busy'
+        ? console.error('Catch-up skipped: /setup is running.')
+        : console.log(
+            `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,
+          ),
+    (err) => console.error('Catch-up failed:', err),
+  );
   // Separate from the event poller: a long /setup must not hold up posts.
   adminPoller = startAdminRequestPoller(
     adminRequestDeps({ ingest, client, config, pool }),
@@ -104,15 +120,6 @@ client.once(Events.ClientReady, async (c) => {
     guild: discordReminderGuild(client),
     webBaseUrl: config.webBaseUrl,
   });
-  catchUp(ingest, discordForumSource(client, config.discordGuildId), {
-    ignoreWatermark: false,
-  }).then(
-    (r) =>
-      console.log(
-        `Catch-up: ${r.topics} topics, ${r.created} new files, ${r.failed} errors.`,
-      ),
-    (err) => console.error('Catch-up failed:', err),
-  );
 });
 
 const STOP_TIMEOUT_MS = 8_000;

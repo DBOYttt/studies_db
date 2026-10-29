@@ -1,9 +1,11 @@
 // Runs the admin requests queued from the web admin panel (bot_requests kinds
 // `setup`, `setup_dry_run`, `resync`; target `guild`, payload
 // `{ requestedBy: <users.id> }`). A poller of its own, so a long /setup never
-// holds up the event posts. Each run checks that the requester is still an
-// admin and a member of the server, takes the /setup lock, audits with
-// `source: 'web'` and stores the text report on the request.
+// holds up the event posts. Each request is claimed and run inside the /setup
+// lock (a busy lock leaves it queued). The run re-checks the requester against
+// Discord (a forced member fetch: the bot has no GuildMembers intent, so the
+// cache can be stale) and the stored admin role, audits with `source: 'web'`
+// and stores the text report on the request.
 import {
   ADMIN_REQUEST_KINDS,
   type AdminRequestKind,
@@ -12,31 +14,30 @@ import {
   type Db,
   failStaleBotRequests,
   finishBotRequest,
+  getSetting,
   users,
   writeAudit,
 } from '@studies/db';
-import type { Guild } from 'discord.js';
+import { DiscordAPIError, type Guild, RESTJSONErrorCodes } from 'discord.js';
 import { eq } from 'drizzle-orm';
 import type { RouterDeps } from './commands/router.js';
-import {
-  type Audit,
-  BUSY_TEXT,
-  runResync,
-  runSetup,
-  setupBusy,
-  withSetupLock,
-} from './ops.js';
+import { ADMIN_ROLE_SETTING } from './config.js';
+import { type Audit, runResync, runSetup, withSetupLock } from './ops.js';
 
 export const ADMIN_POLL_INTERVAL_MS = 5_000;
 export const NOT_ADMIN_MESSAGE = 'The requester is no longer an admin.';
 export const NOT_MEMBER_MESSAGE =
   'The requester is not a member of the server.';
+const INVALID_MESSAGE = 'Invalid request.';
 
 export type AdminRequestDeps = {
   db: Db;
   fetchGuild(): Promise<Guild>;
-  /** Throws when `discordUserId` is not a member of `guild`. */
-  fetchMember(guild: Guild, discordUserId: string): Promise<unknown>;
+  /**
+   * The member's current role ids, fetched from Discord (not the cache).
+   * Throws Unknown Member / Unknown User when they are not in `guild`.
+   */
+  fetchMemberRoles(guild: Guild, discordUserId: string): Promise<string[]>;
   runSetup(
     guild: Guild,
     callerId: string,
@@ -51,7 +52,13 @@ export function adminRequestDeps(deps: RouterDeps): AdminRequestDeps {
   return {
     db: deps.ingest.db,
     fetchGuild: () => deps.client.guilds.fetch(deps.config.discordGuildId),
-    fetchMember: (guild, id) => guild.members.fetch(id),
+    // force: the cache may hold a member who left or lost the role. The fetch
+    // also refreshes the cache, which snapshotGuild's plain fetch then reads.
+    fetchMemberRoles: async (guild, id) => [
+      ...(
+        await guild.members.fetch({ user: id, force: true })
+      ).roles.cache.keys(),
+    ],
     runSetup: (guild, callerId, dryRun, audit) =>
       runSetup(deps, guild, callerId, dryRun, audit),
     runResync: (audit) => runResync(deps, audit),
@@ -63,6 +70,11 @@ class AdminRequestError extends Error {}
 
 type Log = (msg: string, err?: unknown) => void;
 
+const NOT_MEMBER_CODES: readonly number[] = [
+  RESTJSONErrorCodes.UnknownMember,
+  RESTJSONErrorCodes.UnknownUser,
+];
+
 const isAdminKind = (k: string): k is AdminRequestKind =>
   (ADMIN_REQUEST_KINDS as readonly string[]).includes(k);
 
@@ -72,20 +84,44 @@ async function runRequest(
   log: Log,
 ): Promise<string> {
   const { db } = deps;
-  if (!isAdminKind(req.kind)) throw new AdminRequestError('Invalid request.');
+  const kind = req.kind;
+  if (!isAdminKind(kind)) throw new AdminRequestError(INVALID_MESSAGE);
   const by = (req.payload as { requestedBy?: unknown } | null)?.requestedBy;
-  if (!Number.isInteger(by)) throw new AdminRequestError('Invalid request.');
-  const userId = by as number;
+  if (typeof by !== 'number' || !Number.isInteger(by)) {
+    throw new AdminRequestError(INVALID_MESSAGE);
+  }
+  const userId = by;
   const [user] = await db
-    .select({ discordUserId: users.discordUserId, isAdmin: users.isAdmin })
+    .select({
+      discordUserId: users.discordUserId,
+      isAdmin: users.isAdmin,
+      isBanned: users.isBanned,
+    })
     .from(users)
     .where(eq(users.id, userId));
-  if (!user?.isAdmin) throw new AdminRequestError(NOT_ADMIN_MESSAGE);
+  // A banned admin is refused on every admin path.
+  if (!user?.isAdmin || user.isBanned) {
+    throw new AdminRequestError(NOT_ADMIN_MESSAGE);
+  }
   const guild = await deps.fetchGuild();
+  let roles: string[];
   try {
-    await deps.fetchMember(guild, user.discordUserId);
-  } catch {
-    throw new AdminRequestError(NOT_MEMBER_MESSAGE);
+    roles = await deps.fetchMemberRoles(guild, user.discordUserId);
+  } catch (err) {
+    if (
+      err instanceof DiscordAPIError &&
+      NOT_MEMBER_CODES.includes(Number(err.code))
+    ) {
+      throw new AdminRequestError(NOT_MEMBER_MESSAGE);
+    }
+    throw err;
+  }
+  // users.is_admin may be stale: the stored role is what counts, and the flag
+  // follows it (as syncAdminFlag does).
+  const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
+  if (roleId === null || !roles.includes(roleId)) {
+    await db.update(users).set({ isAdmin: false }).where(eq(users.id, userId));
+    throw new AdminRequestError(NOT_ADMIN_MESSAGE);
   }
   const audit: Audit = async (action, target, details) => {
     try {
@@ -99,19 +135,9 @@ async function runRequest(
       log(`audit write failed (${action}, request ${req.id}):`, err);
     }
   };
-  const kind = req.kind;
-  const result = await withSetupLock(() =>
-    kind === 'resync'
-      ? deps.runResync(audit)
-      : deps.runSetup(
-          guild,
-          user.discordUserId,
-          kind === 'setup_dry_run',
-          audit,
-        ),
-  );
-  if (result === 'busy') throw new AdminRequestError(BUSY_TEXT);
-  return result;
+  return kind === 'resync'
+    ? deps.runResync(audit)
+    : deps.runSetup(guild, user.discordUserId, kind === 'setup_dry_run', audit);
 }
 
 function failureMessage(kind: string, err: unknown): string {
@@ -122,8 +148,60 @@ function failureMessage(kind: string, err: unknown): string {
 }
 
 /**
- * Processes queued admin requests one by one until none are left, a locked
- * run (a slash-command /setup or resync) is in progress, or `isStopped()`.
+ * Stores a successful run, retried once. If both tries fail the row stays
+ * `running` and is failed as interrupted at the next boot: a run that worked
+ * is never reported as a failed one.
+ */
+async function storeDone(
+  db: Db,
+  id: number,
+  report: string,
+  log: Log,
+): Promise<void> {
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      await finishBotRequest(db, id, 'done', undefined, new Date(), report);
+      return;
+    } catch (err) {
+      log(
+        `admin request ${id}: cannot store the result (try ${attempt}):`,
+        err,
+      );
+    }
+  }
+}
+
+/** Claims and runs one request; null when the queue is empty. */
+async function processOne(
+  deps: AdminRequestDeps,
+  log: Log,
+): Promise<BotRequest | null> {
+  const { db } = deps;
+  const req = await claimNextBotRequest(db, [...ADMIN_REQUEST_KINDS]);
+  if (!req) return null;
+  let report: string;
+  try {
+    report = await runRequest(deps, req, log);
+  } catch (err) {
+    log(`admin request ${req.id} (${req.kind}) failed:`, err);
+    await finishBotRequest(
+      db,
+      req.id,
+      'failed',
+      failureMessage(req.kind, err),
+    ).catch((e) =>
+      log(`admin request ${req.id}: cannot store the failure:`, e),
+    );
+    return req;
+  }
+  await storeDone(db, req.id, report, log);
+  return req;
+}
+
+/**
+ * Processes queued admin requests one by one until none are left, the /setup
+ * lock is held elsewhere (a slash command, the boot catch-up; the requests
+ * stay queued), or `isStopped()`. Each claim and run happens inside the lock.
  */
 export async function drainAdminRequests(
   deps: AdminRequestDeps,
@@ -131,28 +209,12 @@ export async function drainAdminRequests(
 ): Promise<number> {
   const log = opts.log ?? console.error;
   const isStopped = opts.isStopped ?? (() => false);
-  const { db } = deps;
   let n = 0;
   for (;;) {
-    // Busy: leave the request queued for a later tick.
-    if (isStopped() || setupBusy()) return n;
-    const req = await claimNextBotRequest(db, [...ADMIN_REQUEST_KINDS]);
-    if (!req) return n;
+    if (isStopped()) return n;
+    const req = await withSetupLock(() => processOne(deps, log));
+    if (req === 'busy' || req === null) return n;
     n++;
-    try {
-      const report = await runRequest(deps, req, log);
-      await finishBotRequest(db, req.id, 'done', undefined, new Date(), report);
-    } catch (err) {
-      log(`admin request ${req.id} (${req.kind}) failed:`, err);
-      await finishBotRequest(
-        db,
-        req.id,
-        'failed',
-        failureMessage(req.kind, err),
-      ).catch((e) =>
-        log(`admin request ${req.id}: cannot store the failure:`, e),
-      );
-    }
   }
 }
 
