@@ -1,6 +1,8 @@
 /**
  * Field limits shared by the slash-command options (`definitions.ts`) and the
- * admin panel modals (`ui/views/modals.ts`), so both accept the same input.
+ * admin panel modals (`ui/views/modals.ts`), so both accept the same input,
+ * and by the web admin forms. Keep it free of imports: client components load
+ * it as `@studies/db/fields`.
  */
 
 /** Max lengths of free-text fields. */
