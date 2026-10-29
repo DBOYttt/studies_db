@@ -1,12 +1,14 @@
 /**
  * Generic DB queue through which the web (and other apps) ask the bot to do
  * Discord work. Kinds: `event_post_upsert`, `event_post_archive`,
- * `event_upload` (later `setup`, `setup_dry_run`, `resync`). Targets are
- * strings like `event:<id>`.
+ * `event_upload`, and the admin kinds `setup`, `setup_dry_run`, `resync`
+ * (target `guild`, payload `{ requestedBy }`, at most one queued or running
+ * at a time). Targets are strings like `event:<id>`.
  */
 import { and, desc, eq, inArray, isNull, lt, or, sql } from 'drizzle-orm';
 import type { Db, DbExecutor } from './client.js';
-import { botRequests } from './schema.js';
+import { botRequests, users } from './schema.js';
+import { withTxRetry } from './tx.js';
 
 export type BotRequestStatus = 'queued' | 'running' | 'done' | 'failed';
 
@@ -23,6 +25,7 @@ export type BotRequest = {
 };
 
 const MAX_ERROR = 500;
+const MAX_REPORT = 60_000;
 export const STALE_BOT_REQUEST_ERROR = 'Interrupted: the bot was restarted.';
 
 /**
@@ -111,6 +114,7 @@ export async function finishBotRequest(
   status: 'done' | 'failed',
   error?: string,
   now: Date = new Date(),
+  report?: string,
 ): Promise<void> {
   await db
     .update(botRequests)
@@ -118,8 +122,136 @@ export async function finishBotRequest(
       status,
       error: error === undefined ? null : error.slice(0, MAX_ERROR),
       finishedAt: now,
+      ...(report === undefined ? {} : { report: truncateReport(report) }),
     })
     .where(eq(botRequests.id, id));
+}
+
+/** At most MAX_REPORT UTF-16 units plus `…`, never splitting a surrogate pair. */
+function truncateReport(report: string): string {
+  if (report.length <= MAX_REPORT) return report;
+  let cut = report.slice(0, MAX_REPORT);
+  const last = cut.charCodeAt(cut.length - 1);
+  if (last >= 0xd800 && last <= 0xdbff) cut = cut.slice(0, -1);
+  return `${cut}…`;
+}
+
+export const ADMIN_REQUEST_KINDS = [
+  'setup',
+  'setup_dry_run',
+  'resync',
+] as const;
+export type AdminRequestKind = (typeof ADMIN_REQUEST_KINDS)[number];
+export const BOT_BUSY_MESSAGE = 'The bot is already working on a request.';
+export const CANCELLED_MESSAGE = 'Cancelled.';
+const ADMIN_LOCK = 'admin_bot_request';
+
+/**
+ * Queues an admin request (target `guild`, payload `{ requestedBy }`) unless
+ * another admin request is queued or running.
+ *
+ * The check is a FOR UPDATE read inside the transaction. When no admin row
+ * exists that read only takes gap locks, which do not conflict with each
+ * other, so two concurrent enqueues would both pass it and then deadlock on
+ * their inserts. The named lock `admin_bot_request` (taken on the same
+ * connection before the read) serialises them instead: the second one waits,
+ * then sees the first one's committed row and is refused.
+ */
+export async function enqueueAdminBotRequest(
+  db: Db,
+  kind: AdminRequestKind,
+  userId: number,
+): Promise<{ ok: true; id: number } | { ok: false; message: string }> {
+  return withTxRetry(db, async (tx) => {
+    const [[lock]] = (await tx.execute(
+      sql`SELECT GET_LOCK(${ADMIN_LOCK}, 5) AS got`,
+    )) as unknown as [{ got: number | null }[]];
+    if (lock?.got !== 1) return { ok: false, message: BOT_BUSY_MESSAGE };
+    try {
+      const busy = await tx
+        .select({ id: botRequests.id })
+        .from(botRequests)
+        .where(
+          and(
+            inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]),
+            inArray(botRequests.status, ['queued', 'running']),
+          ),
+        )
+        .limit(1)
+        .for('update');
+      if (busy.length > 0) return { ok: false, message: BOT_BUSY_MESSAGE };
+      const [res] = await tx.insert(botRequests).values({
+        kind,
+        target: 'guild',
+        payload: { requestedBy: userId },
+      });
+      return { ok: true, id: res.insertId };
+    } finally {
+      // Released before COMMIT, but the FOR UPDATE read still holds; and a
+      // waiter that gets the lock first re-reads, at the latest, after our
+      // commit (its FOR UPDATE blocks on our new row's lock).
+      await tx.execute(sql`SELECT RELEASE_LOCK(${ADMIN_LOCK})`);
+    }
+  });
+}
+
+/** Fails a queued admin request with `Cancelled.`; false when it is not queued. */
+export async function cancelAdminBotRequest(
+  db: DbExecutor,
+  id: number,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const [res] = await db
+    .update(botRequests)
+    .set({ status: 'failed', error: CANCELLED_MESSAGE, finishedAt: now })
+    .where(
+      and(
+        eq(botRequests.id, id),
+        eq(botRequests.status, 'queued'),
+        inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]),
+      ),
+    );
+  return res.affectedRows === 1;
+}
+
+export type AdminBotRequest = BotRequest & {
+  report: string | null;
+  requestedBy: number | null;
+  requesterName: string | null;
+};
+
+/** Admin requests, newest first, with the requester's display name. */
+export async function listAdminBotRequests(
+  db: DbExecutor,
+  limit = 20,
+): Promise<AdminBotRequest[]> {
+  const requestedBy = sql<
+    number | null
+  >`CAST(JSON_UNQUOTE(JSON_EXTRACT(${botRequests.payload}, '$.requestedBy')) AS INTEGER)`;
+  const rows = await db
+    .select({
+      id: botRequests.id,
+      kind: botRequests.kind,
+      target: botRequests.target,
+      status: botRequests.status,
+      payload: botRequests.payload,
+      error: botRequests.error,
+      report: botRequests.report,
+      createdAt: botRequests.createdAt,
+      startedAt: botRequests.startedAt,
+      finishedAt: botRequests.finishedAt,
+      requestedBy,
+      requesterName: users.displayName,
+    })
+    .from(botRequests)
+    .leftJoin(users, eq(users.id, requestedBy))
+    .where(inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]))
+    .orderBy(desc(botRequests.id))
+    .limit(limit);
+  return rows.map((r) => ({
+    ...r,
+    requestedBy: r.requestedBy == null ? null : Number(r.requestedBy),
+  }));
 }
 
 /**
