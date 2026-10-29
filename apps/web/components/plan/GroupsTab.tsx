@@ -3,6 +3,7 @@ import { getDb, getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { listMyGroupOptions } from '@/lib/plan-queries';
 import { requireUser } from '@/lib/session';
+import { GroupImport } from './GroupImport';
 import { MyGroupsForm } from './MyGroupsForm';
 import { MyGroupsImport } from './MyGroupsImport';
 import { RemindersForm } from './RemindersForm';
@@ -22,6 +23,11 @@ export async function GroupsTab({ weekHref }: { weekHref: string }) {
     return (
       <>
         <MyGroupsImport hasStored={Object.keys(stored).length > 0} />
+        <GroupImport
+          groupNames={Object.fromEntries(
+            options.flatMap((o) => o.groups.map((g) => [g.id, g.name])),
+          )}
+        />
         {/* remount when an import fills the saved choice */}
         <MyGroupsForm
           key={JSON.stringify(stored)}

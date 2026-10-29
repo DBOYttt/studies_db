@@ -730,6 +730,45 @@ export default async function globalSetup() {
     });
     process.env.E2E_TOKEN_GROUPS = await createLoginToken(db, groupsUserId);
 
+    // Import from UniTime (group-import.spec.ts): a subject matched by its
+    // UniTime name, with Cwiczenia groups 1-2 (one session), and its own user.
+    const [{ id: chemId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Chemia ogólna',
+        code: 'CHEM',
+        semester: 1,
+        ects: 4,
+        discordChannelId: 'e2e-ch-chem',
+        unitimeName: 'Chemia ogólna (1rok)',
+      })
+      .$returningId();
+    const chemCw = await ensureClass(db, chemId, 'cwiczenia');
+    await ensureGroup(db, chemCw, 1);
+    const chemGr2 = await ensureGroup(db, chemCw, 2);
+    // My groups lists only classes with sessions: one, far from other specs' weeks.
+    await db
+      .insert(classSessions)
+      .values(
+        session(
+          'e2e-chem-cw',
+          chemId,
+          chemCw,
+          chemGr2,
+          null,
+          'Ćwiczenia gr 2',
+          'D-8 318',
+          new Date(Date.UTC(2027, 2, 2, 8, 45)),
+          new Date(Date.UTC(2027, 2, 2, 9, 45)),
+        ),
+      );
+    const importUserId = await upsertUser(db, {
+      discordUserId: 'e2e-import',
+      displayName: 'Iza Importowa',
+      avatarUrl: null,
+    });
+    process.env.E2E_TOKEN_IMPORT = await createLoginToken(db, importUserId);
+
     // Admin panel (admin.spec.ts): a user flagged is_admin.
     const adminId = await upsertUser(db, {
       discordUserId: 'e2e-admin',
