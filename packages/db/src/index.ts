@@ -1,4 +1,6 @@
 export * from './admin-actions.js';
+export * from './admin-fields.js';
+export * from './admin-lists.js';
 export * from './audit.js';
 export * from './auth.js';
 export * from './bot-requests.js';

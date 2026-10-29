@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { DbExecutor } from '../client.js';
 import { planSync } from '../schema.js';
+import { fixSept } from '../text.js';
 import type { SyncStats } from './sync.js';
 
 /** State of the timetable import (single row id = 1). Timestamps are UTC instants. */
@@ -64,4 +65,28 @@ export async function recordPlanSync(
     .insert(planSync)
     .values({ id: ROW_ID, ...set })
     .onDuplicateKeyUpdate({ set });
+}
+
+const fmt = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Warsaw',
+  day: 'numeric',
+  month: 'short',
+  year: 'numeric',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+// `now` is accepted for testability/future relative formatting; timestamps are UTC instants.
+export function planStatusText(s: PlanSyncStatus, _now: Date): string {
+  const lines: string[] = [];
+  if (s.lastOkAt) {
+    const st = s.stats;
+    const counts = st ? ` (+${st.created} ~${st.updated} -${st.deleted})` : '';
+    lines.push(`Last sync: ${fixSept(fmt.format(s.lastOkAt))}${counts}`);
+  } else {
+    lines.push('Never synced.');
+  }
+  if (s.lastError) lines.push(`Error: ${s.lastError}`);
+  return lines.join('\n');
 }
