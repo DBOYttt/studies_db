@@ -26,7 +26,7 @@ const LABEL: Record<UploadItem['status'], string> = {
 };
 
 const btn =
-  'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60';
+  'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent';
 
 /** "Add files" (one control: picking files sends them) plus the status of the event's recent uploads. */
 export function EventUploads({
@@ -46,6 +46,7 @@ export function EventUploads({
   // must not see a stale `busy`.
   const sending = useRef(false);
   const input = useRef<HTMLInputElement>(null);
+  const retrying = useRef(false);
   const url = `/api/wydarzenia/${eventId}/pliki`;
   const active = items.some(
     (i) => i.status === 'queued' || i.status === 'posting',
@@ -67,6 +68,9 @@ export function EventUploads({
   }, [active, url]);
 
   async function retry() {
+    // aria-disabled keeps focus on the button while retrying.
+    if (busy || retrying.current) return;
+    retrying.current = true;
     setError(null);
     setBusy(true);
     try {
@@ -81,6 +85,7 @@ export function EventUploads({
     } catch {
       setError('Could not retry sending.');
     } finally {
+      retrying.current = false;
       setBusy(false);
     }
   }
@@ -165,7 +170,12 @@ export function EventUploads({
         </span>
       )}
       {canRetry && items.some((i) => i.status === 'failed') && (
-        <button type="button" onClick={retry} disabled={busy} className={btn}>
+        <button
+          type="button"
+          onClick={retry}
+          aria-disabled={busy}
+          className={`${btn} ${busy ? 'opacity-60' : ''}`}
+        >
           Try again
         </button>
       )}
