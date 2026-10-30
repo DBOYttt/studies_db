@@ -46,6 +46,7 @@ Still open after G6:
 - The views pool has no queue limit.
 - Search ties are now ordered explicitly (material first, then id); check that this is the order wanted.
 - AutoRefresh's back-off does not reset when the active request changes.
+- Not done from P4/P13: the optional 60 s cache on group options, `syncTimetable`'s per-session UPDATEs (still serial), and the `lastBotRequest` filesort; `reminder_log` has no index on `for_starts_at`, so each prune batch scans the table.
 - No `loading.tsx` on admin pages, entity pages, `/tables/<view>`, `/`, or any simple page (`/s`, `/s/plan`, `/s/search`, `/s/recent`, `/s/reports`); they render as before. `/s/search`, `/s/recent` and `/s/reports` could stream their results under an in-page `<Suspense key=…>` inside `SimpleShell` later.
 
 ## Not verified / needs a live check
