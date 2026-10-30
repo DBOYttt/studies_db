@@ -322,15 +322,19 @@ read; the admin panel shows only host + `/...` + the last 4 characters and the a
    passes it to the worker, which re-validates every stored URL against it on each sync; a feed on another
    host is refused with "host not allowed".
 4. Re-run `pnpm --filter @studies/bot register` (semester choices are 1-7 now).
-5. In `/admin/sync`, add the feed of every semester at once (class link, optional exam link). Saving requests
-   a sync. As soon as a feed is stored the env URLs are ignored, and at the next run where every class feed
-   succeeded the worker deletes sessions with no `feed_semester` (the old env feed's rows) or of a semester
-   without a stored feed. With only some semesters stored, the others' timetables disappear until you add them.
-   Clearing a semester's feed likewise removes its sessions at the next successful sync.
+5. In `/admin/sync`, add each semester's feed (class link, optional exam link); you can add them one at a
+   time. Saving requests a sync. As soon as one feed is stored the env URLs are ignored. At the next run where
+   every stored class feed succeeded, the worker deletes the old env feed's rows (`feed_semester` NULL) only
+   for subjects of a semester that now has a feed, plus the rows of semesters whose feed was cleared. A
+   semester without a feed keeps its last env-imported sessions (frozen, no longer updated) until you add
+   its feed. An env exam row that a semester's class feed also lists is claimed by that semester, so it is
+   not deleted. Clearing a semester's feed removes its sessions at the next successful sync (clearing also
+   requests a sync); when the last feed is cleared, every run first deletes all feed-imported rows, then
+   falls back to the env URLs if they are still set.
 6. Remove `UNITIME_ICAL_URL` and `UNITIME_EXAM_ICAL_URL` from `.env`.
 
-New subjects imported by a feed get that feed's semester. `/setup` creates `Semestr 1` ... `Semestr 7`
-categories in numeric order; a category created in a later run is appended after the existing ones, so drag
+New subjects imported by a feed get that feed's semester. `/setup` creates a `Semestr N` category for each
+semester that has subjects (at most `Semestr 1` ... `Semestr 7`), in numeric order; a category created in a later run is appended after the existing ones, so drag
 it into place in Discord if you care. A category holds at most 50 channels: further subjects of that semester
 get no forum and `/setup` warns.
 
