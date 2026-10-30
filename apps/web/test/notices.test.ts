@@ -63,6 +63,11 @@ describe('withNotice', () => {
       '',
       '/%2F%2Fevil.example',
       '/a\nb',
+      '/.//evil.com',
+      '/..//evil.com',
+      '/%2e//evil.com',
+      '/a/..//evil.com',
+      '/./\\evil.com',
     ]) {
       expect(() => withNotice(p, 'event-deleted'), p).toThrow();
     }

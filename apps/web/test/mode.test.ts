@@ -35,6 +35,33 @@ describe('safeNext', () => {
   ])('rejects %j', (v) => {
     expect(safeNext(v)).toBeNull();
   });
+  // Each normalises to the scheme-relative `//evil.com`.
+  const DOT_SEGMENTS = [
+    '/.//evil.com',
+    '/..//evil.com',
+    '/%2e//evil.com',
+    '/a/..//evil.com',
+    '/./\\evil.com',
+    '/s/..//evil.com',
+    '/s/.%2E/x',
+    '/s/%2e%2e/plan',
+    '/s/plan/.',
+    '/s\\plan',
+  ];
+  it.each(DOT_SEGMENTS)('rejects the dot-segment or backslash path %j', (v) => {
+    expect(safeNext(v)).toBeNull();
+  });
+  it('keeps dots inside names and backslashes in the query', () => {
+    expect(safeNext('/s/subjects/a.b')).toBe('/s/subjects/a.b');
+    expect(safeNext('/s/search?q=..%5C..')).toBe('/s/search?q=..%5C..');
+    expect(safeNext('/search?q=a\\b')).toBe('/search?q=a\\b');
+  });
+  it.each(DOT_SEGMENTS)('modeTarget never passes %j on', (v) => {
+    for (const to of ['simple', 'advanced'] as const) {
+      const out = modeTarget(to, v);
+      expect(out === '/' || out === '/s', `${to}: ${out}`).toBe(true);
+    }
+  });
   it('rejects null/undefined', () => {
     expect(safeNext(null)).toBeNull();
     expect(safeNext(undefined)).toBeNull();

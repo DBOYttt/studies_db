@@ -17,7 +17,9 @@ export function proxy(req: NextRequest) {
   // would hand the action an HTML page, which Next shows as an error. The
   // action's own requireUser() answers with a redirect the client follows.
   // Not a weaker gate: any made-up cookie value already gets this far.
-  if (req.headers.has('next-action')) return NextResponse.next();
+  if (req.method === 'POST' && req.headers.has('next-action')) {
+    return NextResponse.next();
+  }
   const to = fromLoadedPage(req.headers, req.method)
     ? SESSION_ENDED_PATH
     : SIGN_IN_PATH;

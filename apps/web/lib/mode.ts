@@ -36,6 +36,18 @@ function hasControl(s: string): boolean {
   }
 }
 
+/**
+ * `.`/`..` segments or a backslash in the path (also percent-encoded):
+ * `/.//evil.com` or `/a/..//evil.com` normalise to the scheme-relative
+ * `//evil.com`, so any caller that resolves the path would hand out another
+ * origin. No page of the app needs them.
+ */
+function hasDotSegmentOrBackslash(path: string): boolean {
+  const d = decodeURIComponent(path);
+  if (d.includes('\\')) return true;
+  return d.split('/').some((seg) => seg === '.' || seg === '..');
+}
+
 /** Same-origin relative path starting with a single `/`, else null. */
 export function safeNext(next: string | null | undefined): string | null {
   if (!next?.startsWith('/')) return null;
@@ -44,7 +56,13 @@ export function safeNext(next: string | null | undefined): string | null {
   try {
     const d = decodeURIComponent(next);
     if (d.startsWith('//') || d.startsWith('/\\')) return null;
+    if (hasDotSegmentOrBackslash(next.split(/[?#]/, 1)[0])) return null;
   } catch {
+    return null;
+  }
+  // Belt and braces: what a browser would make of it stays on this origin.
+  const u = new URL(next, 'http://x.invalid');
+  if (u.origin !== 'http://x.invalid' || u.pathname.startsWith('//')) {
     return null;
   }
   return next;
@@ -105,7 +123,8 @@ export function modeTarget(to: UiMode, next: string | null): string {
   // Already in the target mode: stay exactly where the user is.
   const safe = safeNext(next);
   if (safe !== null && isSimplePath(safe) === (to === 'simple')) return safe;
-  const { path, params } = parse(next);
+  // A rejected `next` is not mapped either: it falls back to the start page.
+  const { path, params } = parse(safe);
   const seg = path.split('/').filter(Boolean);
   if (to === 'advanced') {
     if (seg[0] !== 's') return '/';

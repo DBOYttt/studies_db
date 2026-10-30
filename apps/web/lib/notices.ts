@@ -47,5 +47,8 @@ export function withNotice(path: string, key: NoticeKey): string {
     throw new Error('Not an internal path');
   }
   u.searchParams.set(NOTICE_PARAM, key);
-  return `${u.pathname}${u.search}${u.hash}`;
+  const out = `${u.pathname}${u.search}${u.hash}`;
+  // The output is checked too: normalising must never yield `//host`.
+  if (safeNext(out) === null) throw new Error('Not an internal path');
+  return out;
 }

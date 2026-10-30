@@ -83,4 +83,20 @@ describe('proxy', () => {
     expect(res.headers.get('location')).toBeNull();
     expect(res.headers.get('x-middleware-next')).toBe('1');
   });
+
+  it('still redirects a non-POST request that only carries the action header', () => {
+    for (const method of ['GET', 'HEAD', 'PUT']) {
+      const res = proxy(
+        new NextRequest('http://localhost:3000/sql', {
+          method,
+          headers: { 'next-action': 'abc' },
+        }),
+      );
+      expect(res.headers.get('x-middleware-next'), method).toBeNull();
+      expect(
+        new URL(res.headers.get('location') as string).pathname,
+        method,
+      ).toBe('/login-info');
+    }
+  });
 });
