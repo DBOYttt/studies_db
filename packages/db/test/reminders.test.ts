@@ -9,6 +9,7 @@ import {
   dueEntryQuizzes,
   getReminderPrefs,
   markSent,
+  pruneReminderLog,
   setReminderPrefs,
 } from '../src/reminders.js';
 import {
@@ -96,6 +97,25 @@ describe('reminders', () => {
 
   const on = (userId = id.u, day = true, hour = true) =>
     setReminderPrefs(db, userId, { dayBefore: day, hourBefore: hour }, 'web');
+
+  describe('pruneReminderLog', () => {
+    it('deletes only rows whose event started over 60 days ago', async () => {
+      const now = W(2026, 10, 30, 12);
+      const old = W(2026, 8, 1, 10);
+      const edge = W(2026, 9, 1, 10); // 59 days before
+      const e = await event(old);
+      const e2 = await event(edge);
+      await markSent(db, [
+        { eventId: e, userId: id.u, kind: 'day', forStartsAt: old },
+        { eventId: e, userId: 0, kind: 'digest', forStartsAt: old },
+        { eventId: e2, userId: id.u, kind: 'day', forStartsAt: edge },
+      ]);
+      expect(await pruneReminderLog(db, now)).toBe(2);
+      const left = await db.select().from(reminderLog);
+      expect(left.map((r) => r.eventId)).toEqual([e2]);
+      expect(await pruneReminderLog(db, now)).toBe(0);
+    });
+  });
 
   describe('prefs', () => {
     it('defaults to off, saves, audits and clears the disabled reason', async () => {

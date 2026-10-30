@@ -1,5 +1,5 @@
 import { getMyGroups, getReminderPrefs } from '@studies/db';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { listMyGroupOptions } from '@/lib/plan-queries';
 import { requireUser } from '@/lib/session';
@@ -16,7 +16,7 @@ export async function GroupsTab({ weekHref }: { weekHref: string }) {
   const user = await requireUser();
   try {
     const [options, stored, reminders] = await Promise.all([
-      listMyGroupOptions(getRoPool()),
+      listMyGroupOptions(getViewsPool()),
       getMyGroups(getDb(), user.id),
       getReminderPrefs(getDb(), user.id),
     ]);

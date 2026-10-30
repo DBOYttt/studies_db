@@ -1,7 +1,7 @@
 import { SqlConsole } from '@/components/SqlConsole';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
 import { listViewColumns } from '@/lib/tables';
@@ -23,7 +23,7 @@ export default async function SqlPage({
   let schema: Record<string, string[]> | undefined;
   let error: string | null = null;
   try {
-    schema = await listViewColumns(getRoPool());
+    schema = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }

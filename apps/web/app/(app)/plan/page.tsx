@@ -7,13 +7,15 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { errBox, GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { toCells } from '@/lib/cells';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   type EntityGridParams,
@@ -49,7 +51,8 @@ export default async function PlanPage({
   const sp = await searchParams;
   const tab = parseEntityTab(sp, TABS);
   // Without the status the screen still works, just without the footer.
-  const status = await getPlanSyncStatus(getDb()).catch(() => null);
+  // Not awaited here: it loads alongside the tab's data.
+  const status = getPlanSyncStatus(getDb()).catch(() => null);
 
   return (
     <>
@@ -84,18 +87,32 @@ export default async function PlanPage({
             );
           })}
         </nav>
-        {status && syncFailed(status) && <SyncWarning status={status} />}
+        <SyncWarningSlot status={status} />
         {tab === 'week' && (
-          <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
+          <Suspense fallback={<PlanWeekSkeleton />}>
+            <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
+          </Suspense>
         )}
         {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
         {tab === 'groups' && <GroupsTab weekHref="/plan" />}
-        {status && (
-          <p className="m-0 text-xs text-muted">{syncLine(status.lastOkAt)}</p>
-        )}
+        <SyncFooter status={status} />
       </div>
     </>
   );
+}
+
+type StatusPromise = Promise<PlanSyncStatus | null>;
+
+async function SyncWarningSlot({ status }: { status: StatusPromise }) {
+  const s = await status;
+  return s && syncFailed(s) ? <SyncWarning status={s} /> : null;
+}
+
+async function SyncFooter({ status }: { status: StatusPromise }) {
+  const s = await status;
+  return s ? (
+    <p className="m-0 text-xs text-muted">{syncLine(s.lastOkAt)}</p>
+  ) : null;
 }
 
 function SyncWarning({ status }: { status: PlanSyncStatus }) {
@@ -123,7 +140,10 @@ const WALL_COLUMNS = new Set(['starts_at', 'ends_at']);
 
 async function ListTab({ grid }: { grid: EntityGridParams }) {
   const [result, links] = await Promise.all([
-    planListPage(getRoPool(), { page: grid.page, perPage: grid.perPage }).then(
+    planListPage(getViewsPool(), {
+      page: grid.page,
+      perPage: grid.perPage,
+    }).then(
       (page) => ({ page, error: null }),
       (err: unknown) => ({ page: null, error: roErrorMessage(err) }),
     ),

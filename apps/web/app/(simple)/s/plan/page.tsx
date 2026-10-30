@@ -3,10 +3,12 @@ import {
   UsersThree,
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
-import { getPlanSyncStatus } from '@studies/db';
+import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
@@ -37,11 +39,10 @@ export default async function SimplePlan({
   const sp = await searchParams;
   const tab = parseEntityTab(sp, TABS);
   const db = getDb();
-  const [cards, status] = await Promise.all([
-    cachedSubjectCards(),
-    // Without the status the screen still works, just without the footer.
-    getPlanSyncStatus(db).catch(() => null),
-  ]);
+  // Without the status the screen still works, just without the footer.
+  // Not awaited here: it loads alongside the tab's data.
+  const status = getPlanSyncStatus(db).catch(() => null);
+  const cards = await cachedSubjectCards();
   return (
     <SimpleShell
       subjects={navSubjects(cards)}
@@ -87,23 +88,38 @@ export default async function SimplePlan({
           );
         })}
       </nav>
-      {status && syncFailed(status) && (
-        <div
-          role="status"
-          className="flex items-center gap-1.5 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
-        >
-          <Warning size={15} aria-hidden />
-          Timetable sync failed; showing the last data.
-        </div>
-      )}
+      <SyncWarning status={status} />
       {tab === 'week' ? (
-        <PlanWeekTab week={sp.week} path="/s/plan" myGroupsFilter simple />
+        <Suspense fallback={<PlanWeekSkeleton />}>
+          <PlanWeekTab week={sp.week} path="/s/plan" myGroupsFilter simple />
+        </Suspense>
       ) : (
         <GroupsTab weekHref="/s/plan" />
       )}
-      {status && (
-        <p className="m-0 text-xs text-muted">{syncLine(status.lastOkAt)}</p>
-      )}
+      <SyncFooter status={status} />
     </SimpleShell>
   );
+}
+
+type StatusPromise = Promise<PlanSyncStatus | null>;
+
+async function SyncWarning({ status }: { status: StatusPromise }) {
+  const s = await status;
+  if (!s || !syncFailed(s)) return null;
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-1.5 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
+    >
+      <Warning size={15} aria-hidden />
+      Timetable sync failed; showing the last data.
+    </div>
+  );
+}
+
+async function SyncFooter({ status }: { status: StatusPromise }) {
+  const s = await status;
+  return s ? (
+    <p className="m-0 text-xs text-muted">{syncLine(s.lastOkAt)}</p>
+  ) : null;
 }

@@ -1,4 +1,4 @@
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { SCHEMA_RELATIONS } from '@/lib/schema-relations';
 import { requireUser } from '@/lib/session';
@@ -13,7 +13,7 @@ export async function GET() {
   try {
     return Response.json(
       {
-        columns: await listViewColumns(getRoPool()),
+        columns: await listViewColumns(getViewsPool()),
         relations: SCHEMA_RELATIONS,
       },
       { headers },

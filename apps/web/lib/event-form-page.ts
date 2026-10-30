@@ -3,7 +3,7 @@ import type { EventKind } from '@studies/db/constants';
 import { EVENT_KINDS } from '@studies/db/constants';
 import { notFound } from 'next/navigation';
 import type { EventFormValues } from '@/components/events/EventForm';
-import { getDb, getRoPool } from './db';
+import { getDb, getViewsPool } from './db';
 import { formWhen } from './event-view';
 import { nowWall } from './plan';
 import {
@@ -59,7 +59,7 @@ export async function loadNewEventForm(
   sp: SP,
 ): Promise<{ initial: EventFormValues; sessions: SessionOption[] }> {
   const initial = newEventDefaults(sp);
-  const pool = getRoPool();
+  const pool = getViewsPool();
   const sessionId = idOf(sp.session);
   const picked =
     sessionId === null ? null : await getSessionOption(pool, sessionId);

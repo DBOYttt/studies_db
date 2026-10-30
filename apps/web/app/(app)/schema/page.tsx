@@ -1,7 +1,7 @@
 import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
 import { listViewColumns } from '@/lib/tables';
@@ -13,7 +13,7 @@ export default async function SchemaPage() {
   let columns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
   let error: string | null = null;
   try {
-    columns = await listViewColumns(getRoPool());
+    columns = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }

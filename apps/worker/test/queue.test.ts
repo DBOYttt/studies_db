@@ -110,6 +110,28 @@ describe('claimJob', () => {
   it('returns null when empty', async () => {
     expect(await claimJob(db, T0)).toBeNull();
   });
+
+  it('claims the job due earliest first, then by id', async () => {
+    const a = await seed();
+    const b = await seed();
+    const c = await seed();
+    await db
+      .update(jobs)
+      .set({ runAfter: plus(-1000) })
+      .where(eq(jobs.materialId, a));
+    await db
+      .update(jobs)
+      .set({ runAfter: plus(-3000) })
+      .where(eq(jobs.materialId, b));
+    await db
+      .update(jobs)
+      .set({ runAfter: plus(-3000) })
+      .where(eq(jobs.materialId, c));
+    const order: (number | undefined)[] = [];
+    for (let i = 0; i < 3; i++)
+      order.push((await claimJob(db, T0))?.materialId);
+    expect(order).toEqual([b, c, a]);
+  });
 });
 
 describe('failJob', () => {

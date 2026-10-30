@@ -14,7 +14,7 @@ import {
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import { eq } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
 import { nextSessions } from '../lib/plan-queries';
 import {
@@ -233,6 +233,23 @@ describe('listSimpleFiles', () => {
       status: 'ready',
     });
     expect(r.rows[0].className).toBeNull();
+  });
+  it('withTotal: false returns the rows and runs no count', async () => {
+    const select = vi.spyOn(db, 'select');
+    try {
+      const r = await listSimpleFiles(db, { limit: 2, withTotal: false });
+      expect(r.total).toBeUndefined();
+      expect(r.rows.map((x) => x.filename)).toEqual([
+        'zebra.pdf',
+        'notatki.pdf',
+      ]);
+      expect(select).toHaveBeenCalledTimes(1);
+      select.mockClear();
+      expect((await listSimpleFiles(db, { limit: 2 })).total).toBe(6);
+      expect(select).toHaveBeenCalledTimes(2);
+    } finally {
+      select.mockRestore();
+    }
   });
   it('paginates but keeps the total', async () => {
     const r = await listSimpleFiles(db, { limit: 2, offset: 2 });

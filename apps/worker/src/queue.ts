@@ -21,7 +21,7 @@ export const STALE_LOCK_MS = 600_000;
 
 const MAX_ERROR_LENGTH = 2000;
 
-/** Atomically claims the oldest due queued job (SKIP LOCKED), or null. */
+/** Atomically claims the earliest due queued job (SKIP LOCKED), or null. */
 export async function claimJob(
   db: Db,
   now: Date = new Date(),
@@ -36,7 +36,8 @@ export async function claimJob(
       })
       .from(jobs)
       .where(and(eq(jobs.status, 'queued'), lte(jobs.runAfter, now)))
-      .orderBy(jobs.id)
+      // Matches idx_jobs_status_run_after, so LIMIT 1 reads and locks one row.
+      .orderBy(jobs.runAfter, jobs.id)
       .limit(1)
       .for('update', { skipLocked: true });
     if (!row) return null;

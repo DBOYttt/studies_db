@@ -6,10 +6,12 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { EntityFilesGrid } from '@/components/EntityFilesGrid';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   parseEntityGrid,
@@ -51,7 +53,7 @@ export default async function LecturerPage({
   const id = parseEntityId((await params).id);
   if (id === null) notFound();
   const sp = await searchParams;
-  const pool = getRoPool();
+  const pool = getViewsPool();
   const base = lecturerHref(id);
 
   let lecturer: Awaited<ReturnType<typeof getLecturer>> = null;
@@ -169,13 +171,15 @@ export default async function LecturerPage({
           />
         )}
         {tab === 'plan' && (
-          <PlanWeekTab
-            week={sp.week}
-            path={base}
-            extra={{ tab: 'plan' }}
-            filter={{ lecturerId: id }}
-            myGroupsFilter={false}
-          />
+          <Suspense fallback={<PlanWeekSkeleton />}>
+            <PlanWeekTab
+              week={sp.week}
+              path={base}
+              extra={{ tab: 'plan' }}
+              filter={{ lecturerId: id }}
+              myGroupsFilter={false}
+            />
+          </Suspense>
         )}
       </div>
     </>
@@ -185,7 +189,7 @@ export default async function LecturerPage({
 async function ClassesTab({ id }: { id: number }) {
   let rows: LecturerAssignment[] = [];
   try {
-    rows = await listLecturerAssignments(getRoPool(), id);
+    rows = await listLecturerAssignments(getViewsPool(), id);
   } catch (err) {
     return (
       <div role="alert" className={errBox}>

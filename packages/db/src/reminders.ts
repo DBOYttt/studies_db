@@ -4,7 +4,7 @@
  * `markSent`. All times are wall-clock Warsaw (UTC fields = local); nothing
  * here converts time zones.
  */
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, lt } from 'drizzle-orm';
 import type mysql from 'mysql2/promise';
 import { writeAudit } from './audit.js';
 import type { Db } from './client.js';
@@ -130,6 +130,32 @@ export async function markSent(db: Db, entries: SentEntry[]): Promise<void> {
         forStartsAt: e.forStartsAt,
       })),
     );
+}
+
+/** How long a send-log row is kept past its event's start. */
+export const REMINDER_LOG_KEEP_MS = 60 * 24 * 3600_000;
+const REMINDER_LOG_PRUNE_BATCH = 5000;
+
+/**
+ * Deletes send-log rows whose event started more than `keepMs` before `now`
+ * (a reminder is never due that long after the start, so the dedup row is
+ * dead weight). Deletes in batches; returns how many rows went.
+ */
+export async function pruneReminderLog(
+  db: Db,
+  now: Date,
+  keepMs = REMINDER_LOG_KEEP_MS,
+): Promise<number> {
+  const cutoff = new Date(now.getTime() - keepMs);
+  let total = 0;
+  for (;;) {
+    const [res] = await db
+      .delete(reminderLog)
+      .where(lt(reminderLog.forStartsAt, cutoff))
+      .limit(REMINDER_LOG_PRUNE_BATCH);
+    total += res.affectedRows;
+    if (res.affectedRows < REMINDER_LOG_PRUNE_BATCH) return total;
+  }
 }
 
 /** When the reminder of this kind becomes due; null when the kind doesn't apply. */

@@ -65,16 +65,26 @@ export async function nextSessions(
   return rows.map(toPlanSession);
 }
 
-/** First and last session start (wall Dates), or null without sessions. */
+/**
+ * First and last session start (wall Dates), or null without sessions.
+ * Unfiltered, each end is one ORDER BY … LIMIT 1 read from
+ * `idx_class_sessions_starts`: MIN/MAX over the view's join would scan
+ * every session (`studies_ro` cannot read the base table).
+ */
 export async function sessionRange(
   pool: mysql.Pool,
   f: PlanFilter = {},
 ): Promise<{ first: Date; last: Date } | null> {
   const { where, params } = filterWhere(f, '');
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
-    `SELECT MIN(starts_at) AS first, MAX(starts_at) AS last
-       FROM v_class_sessions
-      WHERE ${where.length ? where.join(' AND ') : 'TRUE'}`,
+    where.length
+      ? `SELECT MIN(starts_at) AS first, MAX(starts_at) AS last
+           FROM v_class_sessions
+          WHERE ${where.join(' AND ')}`
+      : `SELECT (SELECT starts_at FROM v_class_sessions
+                  ORDER BY starts_at LIMIT 1) AS first,
+                (SELECT starts_at FROM v_class_sessions
+                  ORDER BY starts_at DESC LIMIT 1) AS last`,
     params,
   );
   const r = rows[0];

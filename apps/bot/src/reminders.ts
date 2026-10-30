@@ -64,11 +64,20 @@ export type ReminderMemory = {
   digestThread: string | null;
   /** The digest day whose entry quizzes this process posted. */
   quizDate: string | null;
+  /**
+   * The last check of that digest day that found no quizzes (`at` is epoch
+   * ms of the tick). The digest window is 18:00-18:30 with a tick per minute;
+   * the check is repeated only every QUIZ_RECHECK_MS, so a quiz switched on
+   * during the window is still posted, with at most 6 queries instead of 30.
+   */
+  quizNone: { day: string; at: number } | null;
 };
+export const QUIZ_RECHECK_MS = 5 * 60_000;
 export const createReminderMemory = (): ReminderMemory => ({
   sent: new Set(),
   digestThread: null,
   quizDate: null,
+  quizNone: null,
 });
 const keyOf = (eventId: number, userId: number, kind: string, t: Date) =>
   `${eventId}:${userId}:${kind}:${t.getTime()}`;
@@ -247,8 +256,13 @@ async function postDigest(
   const day = digestDay(now);
   const quizDay = day ? day.toISOString().slice(0, 10) : null;
   let quizzes: DueEntryQuiz[] = [];
-  if (quizDay && memory.quizDate !== quizDay) {
+  const noneRecently =
+    memory.quizNone?.day === quizDay &&
+    now.getTime() - memory.quizNone.at < QUIZ_RECHECK_MS;
+  if (quizDay && memory.quizDate !== quizDay && !noneRecently) {
     const found = await dueEntryQuizzes(pool, now);
+    memory.quizNone =
+      found.length === 0 ? { day: quizDay, at: now.getTime() } : null;
     if (
       found.length > 0 &&
       (await getSetting(db, DIGEST_QUIZ_SETTING)) !== quizDay

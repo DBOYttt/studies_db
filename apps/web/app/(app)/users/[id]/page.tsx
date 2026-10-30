@@ -5,7 +5,7 @@ import {
   EntityTopicsGrid,
 } from '@/components/EntityFilesGrid';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   parseEntityGrid,
@@ -43,7 +43,7 @@ export default async function UserPage({
   const id = parseEntityId((await params).id);
   if (id === null) notFound();
   const sp = await searchParams;
-  const pool = getRoPool();
+  const pool = getViewsPool();
   const base = userHref(id);
 
   let user: Awaited<ReturnType<typeof getUser>> = null;

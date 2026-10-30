@@ -13,6 +13,7 @@ import type mysql from 'mysql2/promise';
 import { type ClassKind, type EventKind, KIND_ORDER } from './constants.js';
 import type { MyGroups } from './my-groups.js';
 import type { PlanBadge } from './plan-annotate.js';
+import { hasSessionSql } from './plan-marks.js';
 
 export * from './plan-annotate.js';
 export * from './plan-marks.js';
@@ -462,8 +463,7 @@ export async function listMyGroupOptions(
        FROM v_classes c
        JOIN v_subjects s ON s.id = c.subject_id
        JOIN v_class_groups g ON g.class_id = c.id
-      WHERE c.id IN (SELECT class_id FROM v_class_sessions
-                      WHERE class_id IS NOT NULL)
+      WHERE ${hasSessionSql('')}
       ORDER BY c.id, g.number`,
   );
   type Row = MyGroupOption & { subjectId: number; order: number };

@@ -230,3 +230,61 @@ test('the first Tab shows "Skip to content" and Enter focuses main', async ({
   await page.keyboard.press('Enter');
   await expect(page.getByRole('main')).toBeFocused();
 });
+
+test('streamed pages finish with their headings and no busy placeholder', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/s');
+  const main = page.getByRole('main');
+  await expect(main.getByRole('heading', { name: 'Start' })).toBeAttached();
+  await expect(
+    main.getByRole('heading', { name: 'Upcoming events' }),
+  ).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+
+  await page.goto('/s/plan');
+  await expect(
+    page.getByRole('heading', { name: 'Timetable', level: 1 }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('region', { name: 'Week timetable' }),
+  ).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+
+  await context.addCookies([
+    { name: 'studiesdb.mode', value: 'advanced', url: 'http://localhost:3100' },
+  ]);
+  await page.goto('/plan');
+  await expect(
+    page.getByRole('heading', { name: 'Timetable', level: 1 }),
+  ).toBeAttached();
+  await expect(
+    page.getByRole('region', { name: 'Week timetable' }),
+  ).toBeVisible();
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+});
+
+test('a stale session cookie still redirects before anything streams', async ({
+  browser,
+}) => {
+  const context = await browser.newContext({ locale: 'pl-PL' });
+  try {
+    await context.addCookies([
+      {
+        name: 'sid',
+        value: 'not-a-real-session',
+        url: 'http://localhost:3100',
+      },
+    ]);
+    const page = await context.newPage();
+    // /plan: an advanced page behind a loading.tsx boundary.
+    for (const path of ['/s', '/s/plan', '/plan']) {
+      const res = await page.request.get(path, { maxRedirects: 0 });
+      expect([303, 307], path).toContain(res.status());
+      expect(res.headers().location, path).toMatch(/^\/login-info/);
+    }
+  } finally {
+    await context.close();
+  }
+});

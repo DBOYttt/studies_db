@@ -92,6 +92,7 @@ describe('admin lists', () => {
     // Each assignment carries its class_lecturers id (the Remove button).
     const ids = (await db.select().from(classLecturers)).map((r) => r.id);
     expect((lab?.lecturers ?? []).map((l) => l.id).sort()).toEqual(ids.sort());
+    expect((await getSubjectAdmin(db, 'aSd'))?.code).toBe('ASD');
     expect(await getSubjectAdmin(db, 'nope')).toBeNull();
   });
 

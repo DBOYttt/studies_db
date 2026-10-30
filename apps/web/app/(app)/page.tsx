@@ -3,7 +3,7 @@ import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import type { Cell } from '@/lib/cells';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { formatDate } from '@/lib/format';
 import { currentMode } from '@/lib/mode';
@@ -23,7 +23,7 @@ export default async function Home() {
   let subjects: SubjectGridRow[] = [];
   let error: string | null = null;
   try {
-    subjects = await querySubjectsGrid(getRoPool());
+    subjects = await querySubjectsGrid(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }

@@ -45,6 +45,7 @@ import {
   SUBJECT_FIELD_LABELS,
   subjectFormValues,
 } from './admin-forms';
+import { invalidateCounts } from './count-cache';
 import { getDb } from './db';
 import { requireAdmin } from './session';
 
@@ -88,6 +89,7 @@ async function audit(
 }
 
 function refresh(...paths: string[]) {
+  invalidateCounts(); // nav/card counts must not lag behind an admin edit
   revalidatePath('/admin');
   revalidatePath('/admin/audit');
   for (const p of paths) revalidatePath(p);

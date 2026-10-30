@@ -18,6 +18,8 @@ let db: Db;
 let s1: number;
 let s2: number;
 let tag1: number;
+let rankTopic: number;
+const rankIds: number[] = [];
 let n = 0;
 
 async function addMaterial(
@@ -126,6 +128,17 @@ beforeAll(async () => {
     .update(topics)
     .set({ deletedAt: new Date() })
     .where(eq(topics.id, tDel));
+  // Ranked set for the limit test: distinct relevance (1..6 occurrences),
+  // long texts so the snippet comes from a slice, and a topic-title hit.
+  rankTopic = await mkTopic(s1, 'Przekladnia zebata', 'th4');
+  for (let k = 1; k <= 6; k++) {
+    rankIds[k - 1] = await addMaterial(
+      rankTopic,
+      u.id,
+      `rank${k}.txt`,
+      `${'wstep '.repeat(200 * k)}${'przekladnia planetarna '.repeat(k)}${'koniec '.repeat(300)}`,
+    );
+  }
 });
 
 afterAll(async () => {
@@ -252,6 +265,62 @@ describe('searchAll', () => {
       'tarcie.txt',
       'tarcie2.txt',
     ]);
+  });
+  it('more hits than the limit: top ids, order and snippets', async () => {
+    // The SQL slices 1000 chars from 300 before the first match; the topic
+    // hit's body is its title.
+    const text = (k: number) =>
+      `${'wstep '.repeat(200 * k)}${'przekladnia planetarna '.repeat(k)}${'koniec '.repeat(300)}`;
+    const slice = (k: number) => {
+      const at = 6 * 200 * k;
+      return text(k).slice(at - 300, at - 300 + 1000);
+    };
+    const material = (k: number) => ({
+      materialId: rankIds[k - 1],
+      topicId: rankTopic,
+      topicTitle: 'Przekladnia zebata',
+      subjectCode: 'MECH',
+      subjectName: 'Przedmiot MECH',
+      filename: `rank${k}.txt`,
+      snippet: buildSnippet(slice(k), 'przekladnia'),
+    });
+    const hits = await searchAll(db, { q: 'przekladnia', limit: 6 });
+    expect(hits.map(({ score: _, ...h }) => h)).toEqual([
+      material(6),
+      material(5),
+      material(4),
+      material(3),
+      material(2),
+      {
+        materialId: null,
+        topicId: rankTopic,
+        topicTitle: 'Przekladnia zebata',
+        subjectCode: 'MECH',
+        subjectName: 'Przedmiot MECH',
+        filename: null,
+        snippet: '«Przekladnia» zebata',
+      },
+    ]);
+    expect(hits[0].snippet).toContain('…wstep wstep');
+    const scores = hits.map((h) => h.score);
+    expect([...scores].sort((a, b) => b - a)).toEqual(scores);
+    expect(new Set(scores).size).toBe(6);
+    // The seventh hit (rank1) is the one the limit cuts off.
+    const all = await searchAll(db, { q: 'przekladnia' });
+    expect(all.map((h) => h.filename)).toEqual([
+      ...hits.map((h) => h.filename),
+      'rank1.txt',
+    ]);
+  });
+  it('equal scores keep one order whatever the limit', async () => {
+    // Every rank file holds "koniec" 300 times: a six-way tie.
+    const all = await searchAll(db, { q: 'koniec' });
+    expect(all.map((h) => h.materialId)).toEqual(rankIds);
+    expect(new Set(all.map((h) => h.score)).size).toBe(1);
+    for (const limit of [1, 2, 4]) {
+      const hits = await searchAll(db, { q: 'koniec', limit });
+      expect(hits).toEqual(all.slice(0, limit));
+    }
   });
   it('snippets from long texts come from a bounded slice', async () => {
     const hits = await searchAll(db, { q: 'unikalnyslowo' });

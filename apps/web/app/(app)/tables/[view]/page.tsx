@@ -15,7 +15,7 @@ import { ResultGrid } from '@/components/ResultGrid';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
 import { ViewSearchForm } from '@/components/ViewSearchForm';
 import { parsePreviewId, previewColumn, toCells } from '@/lib/cells';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getRoPool, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { getMaterialFile, loadLinkContext } from '@/lib/queries';
 import { DEFAULT_PER_PAGE } from '@/lib/result-grid';
@@ -231,7 +231,7 @@ async function StructureTab({ view }: { view: PublicView }) {
   let columns: ViewColumn[] = [];
   let error: string | null = null;
   try {
-    columns = await describeView(getRoPool(), view);
+    columns = await describeView(getViewsPool(), view);
   } catch (err) {
     error = roErrorMessage(err);
   }
@@ -329,7 +329,7 @@ async function SqlTab({
   let schema: Record<string, string[]> | undefined;
   let error: string | null = null;
   try {
-    schema = await listViewColumns(getRoPool());
+    schema = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }
@@ -367,7 +367,7 @@ async function SearchTab({
   let columns: ViewColumn[] = [];
   let error: string | null = null;
   try {
-    columns = await describeView(getRoPool(), view);
+    columns = await describeView(getViewsPool(), view);
   } catch (err) {
     error = roErrorMessage(err);
   }

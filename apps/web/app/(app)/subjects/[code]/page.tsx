@@ -14,7 +14,7 @@ import { MARK_NOTE_MAX } from '@studies/db';
 import { ASSESSMENT_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { type ReactNode, Suspense } from 'react';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
 import { TagSelect } from '@/components/explorer/TagSelect';
 import {
@@ -25,13 +25,14 @@ import {
 import { EntryQuizSection } from '@/components/plan/EntryQuizSection';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import {
   type Crumb,
   ScreenHeader,
   type Tab,
 } from '@/components/shell/ScreenHeader';
 import type { Cell } from '@/lib/cells';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { loadEntryQuiz } from '@/lib/entry-quiz';
 import {
@@ -252,17 +253,19 @@ export default async function SubjectPage({
           <LecturersTab subjectId={subject.id} classList={classList} />
         )}
         {tab === 'plan' && (
-          <PlanWeekTab
-            week={sp.week}
-            path={`/subjects/${encodeURIComponent(code)}`}
-            extra={Object.fromEntries(
-              new URLSearchParams(
-                subjectTabHref(code, sel, filters, 'plan').split('?')[1],
-              ),
-            )}
-            filter={{ subjectId: subject.id }}
-            myGroupsFilter={false}
-          />
+          <Suspense fallback={<PlanWeekSkeleton />}>
+            <PlanWeekTab
+              week={sp.week}
+              path={`/subjects/${encodeURIComponent(code)}`}
+              extra={Object.fromEntries(
+                new URLSearchParams(
+                  subjectTabHref(code, sel, filters, 'plan').split('?')[1],
+                ),
+              )}
+              filter={{ subjectId: subject.id }}
+              myGroupsFilter={false}
+            />
+          </Suspense>
         )}
         {tab === 'sql' && <SqlTab code={code} q={sp.q} editPath={sqlPath} />}
         {tab === 'map' && (
@@ -611,7 +614,7 @@ async function SqlTab({
   let schema: Record<string, string[]> | undefined;
   let error: string | null = null;
   try {
-    schema = await listViewColumns(getRoPool());
+    schema = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }
@@ -636,7 +639,7 @@ async function SchemaTab({ path }: { path: ReturnType<typeof selectionPath> }) {
   let columns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
   let error: string | null = null;
   try {
-    columns = await listViewColumns(getRoPool());
+    columns = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }

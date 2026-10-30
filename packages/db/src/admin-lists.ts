@@ -34,7 +34,9 @@ export async function getSubjectAdmin(db: DbExecutor, code: string) {
   const [s] = await db
     .select()
     .from(subjects)
-    .where(eq(sql`UPPER(${subjects.code})`, code.trim().toUpperCase()));
+    // The column's collation is case-insensitive, so a plain equality
+    // matches 'fiz' to 'FIZ' and can use subjects_code_unique.
+    .where(eq(subjects.code, code.trim()));
   if (!s) return null;
   const cls = await db
     .select()
@@ -140,21 +142,23 @@ export async function listUsersAdmin(
         sql`${users.discordUserId} LIKE ${pattern}`,
       )
     : undefined;
-  const rows = await db
-    .select({
-      id: users.id,
-      discordUserId: users.discordUserId,
-      displayName: users.displayName,
-      avatarUrl: users.avatarUrl,
-      isAdmin: users.isAdmin,
-      isBanned: users.isBanned,
-      createdAt: users.createdAt,
-    })
-    .from(users)
-    .where(where)
-    .orderBy(asc(users.displayName), asc(users.id))
-    .limit(o.limit)
-    .offset(o.offset);
-  const [t] = await db.select({ n: count() }).from(users).where(where);
+  const [rows, [t]] = await Promise.all([
+    db
+      .select({
+        id: users.id,
+        discordUserId: users.discordUserId,
+        displayName: users.displayName,
+        avatarUrl: users.avatarUrl,
+        isAdmin: users.isAdmin,
+        isBanned: users.isBanned,
+        createdAt: users.createdAt,
+      })
+      .from(users)
+      .where(where)
+      .orderBy(asc(users.displayName), asc(users.id))
+      .limit(o.limit)
+      .offset(o.offset),
+    db.select({ n: count() }).from(users).where(where),
+  ]);
   return { rows, total: Number(t?.n ?? 0) };
 }

@@ -226,7 +226,12 @@ describe('DB queries', () => {
   const sess = async (
     start: Date,
     end: Date,
-    o: { subjectId: number; classId?: number; groupId?: number },
+    o: {
+      subjectId: number;
+      classId?: number;
+      groupId?: number;
+      kind?: 'class' | 'exam';
+    },
   ) =>
     (
       await db
@@ -240,6 +245,7 @@ describe('DB queries', () => {
           subjectId: o.subjectId,
           classId: o.classId ?? null,
           groupId: o.groupId ?? null,
+          kind: o.kind ?? 'class',
         })
         .$returningId()
     )[0].id;
@@ -256,15 +262,22 @@ describe('DB queries', () => {
       )[0].id;
     id.fiz = await subj('Fizyka', 'FIZ');
     id.alg = await subj('Algebra', 'ALG');
-    const cls = async (subjectId: number) =>
+    const cls = async (
+      subjectId: number,
+      kind: 'cwiczenia' | 'wyklad' | 'laboratorium' = 'cwiczenia',
+      name = 'Ćwiczenia',
+    ) =>
       (
         await db
           .insert(classes)
-          .values({ subjectId, kind: 'cwiczenia', name: 'Ćwiczenia' })
+          .values({ subjectId, kind, name })
           .$returningId()
       )[0].id;
     id.fizC = await cls(id.fiz);
     id.algC = await cls(id.alg);
+    // A class whose only session is an exam row, and one with no sessions.
+    id.fizW = await cls(id.fiz, 'wyklad', 'Wykład');
+    id.algL = await cls(id.alg, 'laboratorium', 'Laboratorium');
     const grp = async (classId: number, number: number) =>
       (
         await db
@@ -275,6 +288,8 @@ describe('DB queries', () => {
     id.fizC2 = await grp(id.fizC, 2);
     id.fizC1 = await grp(id.fizC, 1);
     id.algC1 = await grp(id.algC, 1);
+    id.fizW1 = await grp(id.fizW, 1);
+    id.algL1 = await grp(id.algL, 1);
     await db.insert(lecturers).values({ name: 'Jan Kowalski' });
     // Inserted out of order; the week is Mon 12.10 .. Sun 18.10.
     id.late = await sess(W(2026, 10, 14, 12), W(2026, 10, 14, 13), {
@@ -294,6 +309,11 @@ describe('DB queries', () => {
       subjectId: id.fiz,
       classId: id.fizC,
       groupId: id.fizC1,
+    });
+    await sess(W(2026, 11, 20, 10), W(2026, 11, 20, 12), {
+      subjectId: id.fiz,
+      classId: id.fizW,
+      kind: 'exam',
     });
   });
   afterAll(async () => {
@@ -321,12 +341,20 @@ describe('DB queries', () => {
   });
 
   it('listMyGroupOptions: classes with sessions and groups, by subject', async () => {
+    // Any session counts, an exam row with a class too (Fizyka Wykład);
+    // Algebra Laboratorium has no sessions and is left out.
     expect(await listMyGroupOptions(pool)).toEqual([
       {
         classId: id.algC,
         subjectName: 'Algebra',
         className: 'Ćwiczenia',
         groups: [{ id: id.algC1, name: 'Gr. 1' }],
+      },
+      {
+        classId: id.fizW,
+        subjectName: 'Fizyka',
+        className: 'Wykład',
+        groups: [{ id: id.fizW1, name: 'Gr. 1' }],
       },
       {
         classId: id.fizC,

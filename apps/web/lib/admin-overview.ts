@@ -3,7 +3,7 @@ import {
   type Db,
   jobs,
   listAdmins,
-  listAudit,
+  listAuditRows,
   materials,
   subjects,
   topics,
@@ -29,9 +29,10 @@ const n = sql<number>`count(*)`;
 
 /** Data of the /admin "Overview" screen (main pool, read only). */
 export async function getAdminOverview(db: Db): Promise<AdminOverview> {
-  const [admins, audit, [s], [t], [f], jobRows] = await Promise.all([
+  const [admins, recent, [s], [t], [f], jobRows] = await Promise.all([
     listAdmins(db),
-    listAudit(db, { limit: 10, offset: 0 }),
+    // Rows only: the overview never shows the total.
+    listAuditRows(db, { limit: 10, offset: 0 }),
     db.select({ n }).from(subjects),
     db.select({ n }).from(topics).where(isNull(topics.deletedAt)),
     db
@@ -48,7 +49,7 @@ export async function getAdminOverview(db: Db): Promise<AdminOverview> {
     Number(jobRows.find((r) => r.status === status)?.n ?? 0);
   return {
     admins,
-    recent: audit.rows,
+    recent,
     counts: {
       subjects: Number(s.n),
       topics: Number(t.n),

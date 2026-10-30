@@ -135,18 +135,33 @@ const toSimpleFile = (r: SimpleRow): SimpleFile => ({
 
 const live = () => [isNull(materials.deletedAt), isNull(topics.deletedAt)];
 
-/** `group` is the group NUMBER (as in the advanced view); applies only together with `subjectId` and `kind`. */
+export interface SimpleFileFilter {
+  subjectId?: number;
+  kind?: ClassKind;
+  group?: number;
+  tagId?: number;
+  limit: number;
+  offset?: number;
+  /** false: skip the COUNT(*) (callers that never show a total). */
+  withTotal?: boolean;
+}
+
+/**
+ * `group` is the group NUMBER (as in the advanced view); applies only
+ * together with `subjectId` and `kind`. Rows and total run in parallel.
+ */
 export async function listSimpleFiles(
   db: Db,
-  f: {
-    subjectId?: number;
-    kind?: ClassKind;
-    group?: number;
-    tagId?: number;
-    limit: number;
-    offset?: number;
-  },
-): Promise<{ rows: SimpleFile[]; total: number }> {
+  f: SimpleFileFilter & { withTotal: false },
+): Promise<{ rows: SimpleFile[]; total?: undefined }>;
+export async function listSimpleFiles(
+  db: Db,
+  f: SimpleFileFilter,
+): Promise<{ rows: SimpleFile[]; total: number }>;
+export async function listSimpleFiles(
+  db: Db,
+  f: SimpleFileFilter,
+): Promise<{ rows: SimpleFile[]; total?: number }> {
   const conds: SQL[] = live() as SQL[];
   if (f.subjectId !== undefined) conds.push(eq(topics.subjectId, f.subjectId));
   if (f.kind) conds.push(eq(classes.kind, f.kind));
@@ -160,19 +175,24 @@ export async function listSimpleFiles(
     );
   }
   const where = and(...conds);
-  const rows = await simpleFileSelect(db)
-    .where(where)
-    .orderBy(desc(materials.createdAt), desc(materials.id))
-    .limit(f.limit)
-    .offset(f.offset ?? 0);
-  const [{ n }] = await db
-    .select({ n: sql<number>`COUNT(*)`.mapWith(Number) })
-    .from(materials)
-    .innerJoin(topics, eq(topics.id, materials.topicId))
-    .leftJoin(classes, eq(classes.id, topics.classId))
-    .leftJoin(classGroups, eq(classGroups.id, topics.groupId))
-    .where(where);
-  return { rows: rows.map(toSimpleFile), total: n };
+  const [rows, total] = await Promise.all([
+    simpleFileSelect(db)
+      .where(where)
+      .orderBy(desc(materials.createdAt), desc(materials.id))
+      .limit(f.limit)
+      .offset(f.offset ?? 0),
+    f.withTotal === false
+      ? undefined
+      : db
+          .select({ n: sql<number>`COUNT(*)`.mapWith(Number) })
+          .from(materials)
+          .innerJoin(topics, eq(topics.id, materials.topicId))
+          .leftJoin(classes, eq(classes.id, topics.classId))
+          .leftJoin(classGroups, eq(classGroups.id, topics.groupId))
+          .where(where)
+          .then(([r]) => r.n),
+  ]);
+  return { rows: rows.map(toSimpleFile), total };
 }
 
 /** A search result file; `snippet` («hit» marked) when its text matched. */

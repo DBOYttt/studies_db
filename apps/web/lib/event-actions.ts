@@ -22,7 +22,7 @@ import { asc, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { invalidateCounts } from './count-cache';
-import { getDb, getRoPool } from './db';
+import { getDb, getViewsPool } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
 import { nowWall } from './plan';
@@ -280,5 +280,5 @@ export async function sessionOptionsAction(
 ): Promise<SessionOption[]> {
   await requireUser();
   if (!isId(classId) || (groupId !== null && !isId(groupId))) return [];
-  return upcomingSessionOptions(getRoPool(), classId, groupId, nowWall());
+  return upcomingSessionOptions(getViewsPool(), classId, groupId, nowWall());
 }

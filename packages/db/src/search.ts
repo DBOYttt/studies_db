@@ -115,34 +115,48 @@ export async function searchAll(
     ? sql`AND EXISTS (SELECT 1 FROM topic_tags tt WHERE tt.topic_id = t.id AND tt.tag_id = ${opts.tagId})`
     : sql``;
 
+  // Rank and LIMIT first; only the kept material hits then read their
+  // MEDIUMTEXT columns for the snippet (topic hits use the title).
+  // Equal scores are ordered material hits first, then by id: without the
+  // MEDIUMTEXT body in the sorted rows the server's own tie order is not
+  // stable, and the outer sort has to repeat the inner one.
   const res = await db.execute(sql`
-    SELECT * FROM (
-      SELECT m.id AS material_id, t.id AS topic_id, t.title AS topic_title,
-             s.code AS subject_code, s.name AS subject_name,
-             m.original_filename AS filename,
-             SUBSTRING(COALESCE(m.extracted_text, m.original_filename),
-               GREATEST(1, LOCATE(${foldStroke(firstWord)}, COALESCE(m.search_text, m.original_filename)) - 300),
-               1000) AS body,
-             MATCH(m.search_name, m.search_text)
-               AGAINST (${fq} IN NATURAL LANGUAGE MODE) AS score
-      FROM materials m
-      JOIN topics t ON t.id = m.topic_id
-      JOIN subjects s ON s.id = t.subject_id
-      WHERE m.deleted_at IS NULL AND t.deleted_at IS NULL
-        AND MATCH(m.search_name, m.search_text)
-            AGAINST (${fq} IN NATURAL LANGUAGE MODE)
-        ${subj} ${tag}
-      UNION ALL
-      SELECT NULL, t.id, t.title, s.code, s.name, NULL, t.title,
-             MATCH(t.title) AGAINST (${q} IN NATURAL LANGUAGE MODE)
-      FROM topics t
-      JOIN subjects s ON s.id = t.subject_id
-      WHERE t.deleted_at IS NULL
-        AND MATCH(t.title) AGAINST (${q} IN NATURAL LANGUAGE MODE)
-        ${subj} ${tag}
-    ) hits
-    ORDER BY score DESC
-    LIMIT ${limit}
+    SELECT h.material_id, h.topic_id, h.topic_title, h.subject_code,
+           h.subject_name, h.filename,
+           CASE WHEN h.material_id IS NULL THEN h.topic_title
+             ELSE SUBSTRING(COALESCE(bm.extracted_text, bm.original_filename),
+               GREATEST(1, LOCATE(${foldStroke(firstWord)}, COALESCE(bm.search_text, bm.original_filename)) - 300),
+               1000)
+           END AS body,
+           h.score
+    FROM (
+      SELECT * FROM (
+        SELECT m.id AS material_id, t.id AS topic_id, t.title AS topic_title,
+               s.code AS subject_code, s.name AS subject_name,
+               m.original_filename AS filename,
+               MATCH(m.search_name, m.search_text)
+                 AGAINST (${fq} IN NATURAL LANGUAGE MODE) AS score
+        FROM materials m
+        JOIN topics t ON t.id = m.topic_id
+        JOIN subjects s ON s.id = t.subject_id
+        WHERE m.deleted_at IS NULL AND t.deleted_at IS NULL
+          AND MATCH(m.search_name, m.search_text)
+              AGAINST (${fq} IN NATURAL LANGUAGE MODE)
+          ${subj} ${tag}
+        UNION ALL
+        SELECT NULL, t.id, t.title, s.code, s.name, NULL,
+               MATCH(t.title) AGAINST (${q} IN NATURAL LANGUAGE MODE)
+        FROM topics t
+        JOIN subjects s ON s.id = t.subject_id
+        WHERE t.deleted_at IS NULL
+          AND MATCH(t.title) AGAINST (${q} IN NATURAL LANGUAGE MODE)
+          ${subj} ${tag}
+      ) hits
+      ORDER BY score DESC, material_id IS NULL, material_id, topic_id
+      LIMIT ${limit}
+    ) h
+    LEFT JOIN materials bm ON bm.id = h.material_id
+    ORDER BY h.score DESC, h.material_id IS NULL, h.material_id, h.topic_id
   `);
   const rows = res[0] as unknown as Row[];
   return rows.map((r) => ({

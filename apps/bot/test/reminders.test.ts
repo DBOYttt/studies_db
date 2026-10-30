@@ -205,6 +205,23 @@ describe('runReminderTick', () => {
     expect(g.digests[1].content).not.toContain('Kolos');
   });
 
+  it('does not re-query entry quizzes after a none check within 5 minutes, but does later and on a new day', async () => {
+    const g = fakeGuild();
+    const memory = createReminderMemory();
+    const spy = vi.spyOn(await import('@studies/db'), 'dueEntryQuizzes');
+    const tick = (...t: [number, number, number, number, number]) =>
+      runReminderTick({ ...deps(g.guild), memory }, W(...t));
+    await tick(2026, 10, 19, 18, 1);
+    await tick(2026, 10, 19, 18, 2);
+    await tick(2026, 10, 19, 18, 5);
+    expect(spy).toHaveBeenCalledTimes(1);
+    await tick(2026, 10, 19, 18, 7);
+    expect(spy).toHaveBeenCalledTimes(2);
+    await tick(2026, 10, 20, 18, 1);
+    expect(spy).toHaveBeenCalledTimes(3);
+    spy.mockRestore();
+  });
+
   it('stops between sends when asked', async () => {
     await event(W(2026, 10, 20, 10));
     const g = fakeGuild();
