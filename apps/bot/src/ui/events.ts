@@ -283,7 +283,11 @@ export async function cardView(
 
 const modalSubjects = (db: RouterDeps['ingest']['db']) =>
   db
-    .select({ code: subjects.code, name: subjects.name })
+    .select({
+      code: subjects.code,
+      name: subjects.name,
+      semester: subjects.semester,
+    })
     .from(subjects)
     .orderBy(subjects.semester, subjects.code);
 

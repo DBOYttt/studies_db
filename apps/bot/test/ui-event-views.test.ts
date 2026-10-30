@@ -141,7 +141,11 @@ describe('eventCard', () => {
 
 describe('eventModal', () => {
   const subs = (n: number) =>
-    Array.from({ length: n }, (_, i) => ({ code: `S${i}`, name: `P${i}` }));
+    Array.from({ length: n }, (_, i) => ({
+      code: `S${i}`,
+      name: `P${i}`,
+      semester: 1,
+    }));
   const json = (m: ReturnType<typeof eventModal>) => m.toJSON() as Json;
 
   it('has five components with the planned ids', () => {

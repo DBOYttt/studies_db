@@ -32,6 +32,15 @@ export const view = (...components: ViewComponent[]): View => ({
 export const clip = (s: string, n = MAX_ID) =>
   s.length <= n ? s : `${s.slice(0, n - 1)}…`;
 
+/** `S<n> · <code> <name>` past 25 subjects (the semester orients), else `<code> <name>`. */
+export const subjectOptionLabel = (
+  s: { code: string; name: string; semester: number },
+  total: number,
+): string =>
+  clip(
+    total > 25 ? `S${s.semester} · ${s.code} ${s.name}` : `${s.code} ${s.name}`,
+  );
+
 export const chunk = <T>(xs: T[], n: number): T[][] =>
   Array.from({ length: Math.ceil(xs.length / n) }, (_, i) =>
     xs.slice(i * n, i * n + n),

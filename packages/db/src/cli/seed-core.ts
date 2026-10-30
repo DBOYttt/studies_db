@@ -785,6 +785,64 @@ const SUBJECTS: SubjectSpec[] = [
     ],
     topics: [],
   },
+  {
+    code: 'SYK',
+    name: 'Systemy kontroli wersji',
+    semester: 3,
+    ects: 3,
+    description: 'Git, gałęzie, przeglądy kodu i praca zespołowa.',
+    tags: [],
+    classes: [
+      {
+        kind: 'laboratorium',
+        groups: [1],
+        lecturer: 'zielinski',
+        assessment: 'zaliczenie',
+        slots: [
+          { day: 2, start: '14:00', minutes: 90, room: 'C-2 020', group: 1 },
+        ],
+      },
+    ],
+    topics: [],
+  },
+  {
+    code: 'UM',
+    name: 'Uczenie maszynowe',
+    semester: 5,
+    ects: 5,
+    description: 'Regresja, klasyfikacja, sieci neuronowe, walidacja modeli.',
+    tags: [],
+    classes: [
+      {
+        kind: 'wyklad',
+        groups: [],
+        lecturer: 'kowalski',
+        assessment: 'egzamin',
+        slots: [{ day: 3, start: '12:00', minutes: 90, room: 'A-1 104' }],
+      },
+    ],
+    topics: [],
+  },
+  {
+    code: 'PD',
+    name: 'Seminarium dyplomowe',
+    semester: 7,
+    ects: 2,
+    description: 'Prezentacje postępów prac inżynierskich.',
+    tags: [],
+    classes: [
+      {
+        kind: 'seminarium',
+        groups: [1],
+        lecturer: 'nowak',
+        assessment: 'zaliczenie',
+        slots: [
+          { day: 5, start: '14:00', minutes: 90, room: 'B-1 201', group: 1 },
+        ],
+      },
+    ],
+    topics: [],
+  },
 ];
 
 // ---------------------------------------------------------------- seeding

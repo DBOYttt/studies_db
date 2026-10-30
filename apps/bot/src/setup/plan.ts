@@ -7,6 +7,7 @@ import {
   classifyTags,
   EVENT_KINDS,
   groupName,
+  isSemester,
   stripMarks,
 } from '@studies/db';
 import { instantDate } from '../dates.js';
@@ -66,6 +67,7 @@ export function desiredTags(s: SubjectSpec): string[] {
 
 const categoryName = (s: SubjectSpec) => `Semestr ${s.semester}`;
 const MAX_CODE = 20;
+const MAX_CATEGORY_CHANNELS = 50;
 const SEMESTER_RE = /^Semestr (\d+)$/;
 
 /** `asd-algorytmy-i-struktury` → ASD / "Algorytmy i struktury"; null if no code. */
@@ -555,12 +557,32 @@ export function planSetup(
   actions.push(...planPanels(ordered, g, adminRoleId));
   actions.push(...planEventsForum(ordered, g, opts));
 
+  // Discord allows 50 channels per category: count what is there, then plan.
+  const inCategory = new Map<string, number>();
+  for (const f of g.forums) {
+    const name = g.categories.find((c) => c.id === f.parentId)?.name;
+    if (name) inCategory.set(name, (inCategory.get(name) ?? 0) + 1);
+  }
+  const warnedFull = new Set<string>();
+
   for (const s of ordered) {
     const wanted = desiredTags(s);
     const topic = render(s);
 
     if (s.channelId === null) {
       const category = categoryName(s);
+      if ((inCategory.get(category) ?? 0) >= MAX_CATEGORY_CHANNELS) {
+        if (!warnedFull.has(category)) {
+          warnedFull.add(category);
+          actions.push({
+            type: 'warn',
+            code: null,
+            message: `${category} has more than ${MAX_CATEGORY_CHANNELS} subjects; Discord allows ${MAX_CATEGORY_CHANNELS} channels per category, so the rest get no forum`,
+          });
+        }
+        continue;
+      }
+      inCategory.set(category, (inCategory.get(category) ?? 0) + 1);
       if (!categories.has(category)) {
         actions.push({ type: 'createCategory', name: category });
         categories.add(category);
@@ -668,7 +690,7 @@ export function planSetup(
       forumName: f.name,
       code: parsed.code,
       name: parsed.name,
-      semester: m ? Number(m[1]) : 1,
+      semester: m && isSemester(Number(m[1])) ? Number(m[1]) : 1,
       tags: f.tags,
       classKinds: classKindsOf(f.tags),
     });

@@ -413,6 +413,7 @@ describe('seed --reset', () => {
     const subs = await db.select().from(subjects);
     const asd = subs.find((s) => s.code === 'ASD');
     expect(asd?.discordChannelId).toBe(ASD_FORUM);
+    expect(new Set(subs.map((s) => s.semester)).size).toBeGreaterThanOrEqual(4);
     expect(subs.some((s) => s.code === 'OLD')).toBe(false);
     expect(
       subs.filter((s) => s.code !== 'ASD').every((s) => !s.discordChannelId),

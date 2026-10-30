@@ -268,13 +268,24 @@ describe('subjects', () => {
     expect(await auditRows()).toHaveLength(0);
   });
 
-  it('rejects semester 3', async () => {
+  it.each(['8', '0', '2.5'])('rejects semester %s', async (semester) => {
     const i = interaction('v1:adm:subj:save:ASD', {
       kind: 'modal',
-      fields: subjectFields({ semester: '3' }),
+      fields: subjectFields({ semester }),
     });
     await handler()(i);
-    expect(textOf(i.reply.mock.calls[0][0])).toBe('Semester must be 1 or 2.');
+    expect(textOf(i.reply.mock.calls[0][0])).toBe(
+      'Semester must be a whole number from 1 to 7.',
+    );
+  });
+
+  it('accepts semester 7', async () => {
+    const i = interaction('v1:adm:subj:save:ASD', {
+      kind: 'modal',
+      fields: subjectFields({ semester: '7' }),
+    });
+    await handler()(i);
+    expect(await subject()).toMatchObject({ semester: 7 });
   });
 
   it('saves an edit, audits subject.edit once and re-renders the card', async () => {

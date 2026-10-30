@@ -90,7 +90,7 @@ import { notice, type View } from './views/parts.js';
 
 export const NO_PERMISSION = 'You do not have permission.';
 export const WORKING = 'Working…';
-export const SEMESTER_TEXT = 'Semester must be 1 or 2.';
+export const SEMESTER_TEXT = 'Semester must be a whole number from 1 to 7.';
 export const ECTS_TEXT = 'ECTS must be a number from 0 to 30.';
 export const CODE_TEXT =
   'The code may contain only letters, digits, dots, hyphens and underscores (up to 20 characters).';

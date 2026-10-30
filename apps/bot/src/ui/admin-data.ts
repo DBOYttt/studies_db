@@ -44,7 +44,11 @@ export async function loadStatus(db: Db): Promise<StatusData> {
 
 export const subjectOptions = (db: Db): Promise<SubjectOption[]> =>
   db
-    .select({ code: subjects.code, name: subjects.name })
+    .select({
+      code: subjects.code,
+      name: subjects.name,
+      semester: subjects.semester,
+    })
     .from(subjects)
     .orderBy(asc(subjects.semester), asc(subjects.code));
 

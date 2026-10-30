@@ -323,6 +323,41 @@ describe('planSetup', () => {
     ).toEqual(['Semestr 1', 'AA', 'ZZ', 'Semestr 3', 'ASD']);
   });
 
+  it('orders categories numerically, 10 after 7', () => {
+    const mk = (id: number, semester: number) => ({
+      ...ASD,
+      id,
+      code: `C${id}`,
+      semester,
+    });
+    const actions = planSetup(
+      [mk(1, 10), mk(2, 7), mk(3, 2)],
+      withRole({ categories: [] }),
+      ROLE,
+      render,
+    );
+    expect(
+      actions.flatMap((a) => (a.type === 'createCategory' ? [a.name] : [])),
+    ).toEqual(['Semestr 2', 'Semestr 7', 'Semestr 10']);
+  });
+
+  it('plans 50 forums and one warning for 51 subjects in a semester', () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      ...ASD,
+      id: 100 + i,
+      code: `M${String(i).padStart(2, '0')}`,
+      semester: 4,
+    }));
+    const actions = planSetup(many, withRole({ categories: [] }), ROLE, render);
+    expect(actions.filter((a) => a.type === 'createForum')).toHaveLength(50);
+    const warns = actions.filter(
+      (a) =>
+        a.type === 'warn' &&
+        a.message.startsWith('Semestr 4 has more than 50 subjects;'),
+    );
+    expect(warns).toHaveLength(1);
+  });
+
   it('is a no-op once everything exists', () => {
     const linked = { ...ASD, channelId: 'f-asd' };
     const g = withRole({
