@@ -92,26 +92,69 @@ describe('lecturers', () => {
       classKind: 'laboratorium' as const,
     };
     expect(await assignLecturer(db, a)).toBe(
-      'Assigned the lecturer to ALG / Laboratorium.',
+      'Assigned dr Jan Kowalski to ALG / Laboratorium. Created the Laboratorium class.',
     );
     expect(await assignLecturer(db, a)).toBe(
-      'Assigned the lecturer to ALG / Laboratorium.',
+      'Assigned dr Jan Kowalski to ALG / Laboratorium.',
     );
     expect(await db.select().from(classLecturers)).toHaveLength(1);
     expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
-      'Assigned the lecturer to ALG / Laboratorium, Gr. 3.',
+      'Assigned dr Jan Kowalski to ALG / Laboratorium, Gr. 3. Created group 3.',
     );
     expect(await assignLecturer(db, { ...a, groupNumber: 3 })).toBe(
-      'Assigned the lecturer to ALG / Laboratorium, Gr. 3.',
+      'Assigned dr Jan Kowalski to ALG / Laboratorium, Gr. 3.',
     );
     expect(await db.select().from(classLecturers)).toHaveLength(2);
     expect(await db.select().from(classGroups)).toHaveLength(1);
+    expect(
+      await assignLecturer(db, { ...a, classKind: 'projekt', groupNumber: 1 }),
+    ).toBe(
+      'Assigned dr Jan Kowalski to ALG / Projekt, Gr. 1. Created the Projekt class. Created group 1.',
+    );
     expect(await assignLecturer(db, { ...a, subjectCode: 'zzz' })).toBe(
       'Subject zzz not found.',
     );
     expect(await assignLecturer(db, { ...a, lecturerId: 9999 })).toBe(
       'Lecturer with id 9999 not found.',
     );
+  });
+
+  it('unassigns by assignment id, naming what was removed', async () => {
+    await addSubject(db, base);
+    const r = await A.addLecturer(db, { name: 'Jan Kowalski', title: 'dr' });
+    const a = {
+      subjectCode: 'alg',
+      lecturerId: r.id ?? 0,
+      classKind: 'laboratorium' as const,
+    };
+    await A.assignLecturer(db, a);
+    await A.assignLecturer(db, { ...a, groupNumber: 2 });
+    const rows = await db.select().from(classLecturers);
+    const all = rows.find((x) => x.groupId === null);
+    const grp = rows.find((x) => x.groupId !== null);
+    const u = await A.unassignLecturer(db, grp?.id ?? 0);
+    expect(u).toMatchObject({
+      ok: true,
+      message: 'Removed dr Jan Kowalski from ALG / Laboratorium, Gr. 2.',
+      assignment: {
+        subjectCode: 'ALG',
+        lecturerId: a.lecturerId,
+        lecturerName: 'dr Jan Kowalski',
+        classKind: 'laboratorium',
+        groupNumber: 2,
+      },
+    });
+    expect(await db.select().from(classLecturers)).toEqual([all]);
+    // The group and class stay: only the assignment goes.
+    expect(await db.select().from(classGroups)).toHaveLength(1);
+    expect((await A.unassignLecturer(db, all?.id ?? 0)).message).toBe(
+      'Removed dr Jan Kowalski from ALG / Laboratorium.',
+    );
+    expect(await db.select().from(classLecturers)).toHaveLength(0);
+    expect(await A.unassignLecturer(db, all?.id ?? 0)).toEqual({
+      ok: false,
+      message: 'Assignment not found.',
+    });
   });
 });
 

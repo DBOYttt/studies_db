@@ -128,7 +128,7 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   await assign.getByLabel('Class type').selectOption({ label: 'Wykład' });
   await assign.getByRole('button', { name: 'Assign' }).click();
   await expect(assign.getByRole('status')).toHaveText(
-    `Assigned the lecturer to ${CODE} / Wykład.`,
+    `Assigned ${LECTURER_LABEL} to ${CODE} / Wykład. Created the Wykład class.`,
   );
 
   const card = page.getByRole('region', { name: 'Wykład', exact: true });
@@ -146,11 +146,26 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   await assignHere.getByLabel('Group').fill('2');
   await assignHere.getByRole('button', { name: 'Assign' }).click();
   await expect(assignHere.getByRole('status')).toHaveText(
-    `Assigned the lecturer to ${CODE} / Wykład, Gr. 2.`,
+    `Assigned ${LECTURER_LABEL} to ${CODE} / Wykład, Gr. 2. Created group 2.`,
   );
-  await expect(card.getByRole('list', { name: 'Lecturers' })).toContainText(
-    'Gr. 2',
-  );
+  const lecturerList = card.getByRole('list', { name: 'Lecturers' });
+  await expect(lecturerList).toContainText('Gr. 2');
+
+  // Undo it: Remove asks first, then only the group assignment goes.
+  await lecturerList
+    .getByRole('button', {
+      name: `Remove ${LECTURER_LABEL} from Wykład, Gr. 2`,
+    })
+    .click();
+  await lecturerList
+    .getByRole('group', {
+      name: `Remove ${LECTURER_LABEL} from Wykład, Gr. 2?`,
+    })
+    .getByRole('button', { name: 'Confirm remove' })
+    .click();
+  await expect(lecturerList.getByRole('listitem')).toHaveCount(1);
+  await expect(lecturerList).toContainText('all groups');
+  await expect(lecturerList).not.toContainText('Gr. 2');
 
   await settings.getByLabel('Assessment').selectOption({ label: 'Exam' });
   await settings.getByLabel('Note').fill('Pisemny, 90 minut');
@@ -213,6 +228,7 @@ test('the audit log has a row for each change, from the website', async ({
     [bySubject('Subject added'), 1],
     [bySubject('Subject changed'), 1],
     [bySubject('Lecturer assigned'), 2],
+    [bySubject('Lecturer unassigned'), 1],
     [bySubject('Class changed'), 1],
     [byLecturer('Lecturer added'), 1],
     [byLecturer('Lecturer changed'), 1],

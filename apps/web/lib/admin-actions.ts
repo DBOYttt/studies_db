@@ -17,6 +17,7 @@ import {
   requestPlanSync,
   subjects,
   textOrNull,
+  unassignLecturer,
   urlOrNull,
   users,
   writeAudit,
@@ -283,6 +284,28 @@ export async function assignLecturerAction(
       groupNumber: v.group,
     });
     refresh(subjectPath(v.code), `/admin/lecturers/${v.lecturerId}`);
+  }
+  return done(r);
+}
+
+/** Removes one assignment (`id` = class_lecturers.id); class and group stay. */
+export async function unassignLecturerAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const user = await requireAdmin();
+  const id = parseId(field(form, 'id'));
+  if (id === null) return fail('Assignment not found.');
+  const r = await unassignLecturer(getDb(), id);
+  if (r.ok && r.assignment) {
+    const a = r.assignment;
+    await audit(user.id, 'lecturer.unassign', a.subjectCode, {
+      lecturerId: a.lecturerId,
+      lecturerName: a.lecturerName,
+      classKind: a.classKind,
+      ...(a.groupNumber === null ? {} : { groupNumber: a.groupNumber }),
+    });
+    refresh(subjectPath(a.subjectCode), `/admin/lecturers/${a.lecturerId}`);
   }
   return done(r);
 }

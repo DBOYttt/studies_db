@@ -38,6 +38,26 @@ test('SQL write console: preview, execute, audit log', async ({ page }) => {
   await expect(page.getByText(statement).first()).toBeVisible();
 });
 
+test('SQL write console: a cascading DELETE needs the typed table name', async ({
+  page,
+}) => {
+  await page.goto('/admin/sql');
+  const editor = page.getByRole('textbox', { name: 'SQL statement (write)' });
+  await editor.click();
+  await page.keyboard.type("DELETE FROM subjects WHERE code = 'NO-SUCH'");
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const preview = page.getByRole('region', { name: 'Change preview' });
+  await expect(
+    preview.getByText(
+      'Rows in other tables that reference these rows are deleted too.',
+    ),
+  ).toBeVisible();
+  const run = page.getByRole('button', { name: 'Run', exact: true });
+  await expect(run).toBeDisabled();
+  await preview.getByRole('textbox', { name: /To confirm/ }).fill('subjects');
+  await expect(run).toBeEnabled();
+});
+
 test('audit log reads as a log: user, plain action, named target, details', async ({
   page,
 }) => {

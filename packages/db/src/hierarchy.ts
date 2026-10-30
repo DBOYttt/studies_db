@@ -52,12 +52,13 @@ export function classifyTags(tagNames: string[]): {
   return { classKind, groupNumber };
 }
 
-export async function ensureClass(
+/** The class row of `subjectId`/`kind`; `created` when this call inserted it. */
+export async function ensureClassRow(
   db: DbExecutor,
   subjectId: number,
   kind: ClassKind,
-): Promise<number> {
-  await db
+): Promise<{ id: number; created: boolean }> {
+  const [ins] = await db
     .insert(classes)
     .ignore()
     .values({ subjectId, kind, name: CLASS_NAMES[kind] });
@@ -69,16 +70,28 @@ export async function ensureClass(
     throw new Error(
       `ensureClass: no ${kind} class for subject ${subjectId} (does the subject exist?)`,
     );
-  return row.id;
+  return { id: row.id, created: ins.affectedRows > 0 };
 }
 
-export async function ensureGroup(
+export async function ensureClass(
+  db: DbExecutor,
+  subjectId: number,
+  kind: ClassKind,
+): Promise<number> {
+  return (await ensureClassRow(db, subjectId, kind)).id;
+}
+
+/** The group row `number` of `classId`; `created` when this call inserted it. */
+export async function ensureGroupRow(
   db: DbExecutor,
   classId: number,
   number: number,
   name: string = groupName(number),
-): Promise<number> {
-  await db.insert(classGroups).ignore().values({ classId, number, name });
+): Promise<{ id: number; created: boolean }> {
+  const [ins] = await db
+    .insert(classGroups)
+    .ignore()
+    .values({ classId, number, name });
   const [row] = await db
     .select({ id: classGroups.id })
     .from(classGroups)
@@ -89,7 +102,16 @@ export async function ensureGroup(
     throw new Error(
       `ensureGroup: no group ${number} for class ${classId} (does the class exist?)`,
     );
-  return row.id;
+  return { id: row.id, created: ins.affectedRows > 0 };
+}
+
+export async function ensureGroup(
+  db: DbExecutor,
+  classId: number,
+  number: number,
+  name: string = groupName(number),
+): Promise<number> {
+  return (await ensureGroupRow(db, classId, number, name)).id;
 }
 
 export async function assignTopicHierarchy(

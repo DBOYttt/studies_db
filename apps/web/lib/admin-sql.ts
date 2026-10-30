@@ -29,6 +29,42 @@ export const PREVIEW_ROWS = 50;
 export const SELECT_ROWS = 500;
 export const TOKEN_TTL_MS = 300_000;
 export const CONFIRM_THRESHOLD = 100;
+
+/**
+ * Tables that other tables reference with `ON DELETE CASCADE`: a DELETE on
+ * one of them also deletes rows elsewhere that the preview does not count
+ * (a subject takes its classes, groups, sessions and events with it).
+ * test/admin-sql.test.ts derives this set from the drizzle schema, so a
+ * schema change fails it until the list is updated.
+ */
+export const CASCADE_PARENTS: ReadonlySet<string> = new Set([
+  'class_groups',
+  'class_marks',
+  'classes',
+  'event_series',
+  'events',
+  'lecturers',
+  'materials',
+  'subjects',
+  'tags',
+  'topics',
+  'users',
+]);
+
+/**
+ * Whether a write may cascade, so it needs the typed confirmation whatever
+ * its row count: a DELETE, or a REPLACE (which deletes the row it replaces),
+ * on a cascade parent. Fails closed when the analyser cannot name the
+ * target table (aliases, multi-table forms, `db.table`).
+ */
+export function cascadeConfirm(
+  kind: StatementKind,
+  table: string | null,
+): boolean {
+  if (kind !== 'delete' && kind !== 'replace') return false;
+  return table === null || CASCADE_PARENTS.has(table.toLowerCase());
+}
+
 /** MAX_STATEMENT_TIME of `studies_rw`, in seconds. */
 const STATEMENT_TIMEOUT_SEC = 5;
 

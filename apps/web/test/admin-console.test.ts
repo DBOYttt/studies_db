@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
+  CASCADE_NOTE,
   canExecute,
   confirmMessage,
   confirmWord,
+  needsConfirm,
   rowCount,
   rowsWillChange,
   type WritePreview,
@@ -16,6 +18,7 @@ const preview: WritePreview = {
   affected: 1,
   columns: [],
   rows: [],
+  cascade: false,
 };
 const base = {
   preview,
@@ -56,6 +59,33 @@ describe('canExecute', () => {
     const unknown = { ...big, preview: { ...big.preview, table: null } };
     expect(canExecute({ ...unknown, confirm: 'YES' })).toBe(true);
     expect(canExecute({ ...unknown, confirm: 'tak' })).toBe(false);
+  });
+});
+
+describe('cascading deletes', () => {
+  const del = {
+    ...base,
+    preview: {
+      ...preview,
+      sql: 'DELETE FROM class_groups WHERE id = 1',
+      query: '',
+      kind: 'delete' as const,
+      table: 'class_groups',
+      cascade: true,
+    },
+  };
+  del.query = del.preview.sql;
+  it('need the typed confirmation whatever the row count', () => {
+    expect(needsConfirm(del.preview, 100)).toBe(true);
+    expect(needsConfirm(preview, 100)).toBe(false);
+    expect(needsConfirm({ ...preview, affected: 101 }, 100)).toBe(true);
+    expect(canExecute(del)).toBe(false);
+    expect(canExecute({ ...del, confirm: 'class_groups' })).toBe(true);
+  });
+  it('have a note', () => {
+    expect(CASCADE_NOTE).toBe(
+      'Rows in other tables that reference these rows are deleted too.',
+    );
   });
 });
 

@@ -9,12 +9,14 @@ import { getSubjectAdmin, listLecturersAdmin } from '@studies/db';
 import { CLASS_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ActionButton } from '@/components/admin/ActionButton';
 import { AssignLecturerForm } from '@/components/admin/AssignLecturerForm';
 import { ClassForm } from '@/components/admin/ClassForm';
 import { box, boxHead, link } from '@/components/admin/form-styles';
 import { SubjectForm } from '@/components/admin/SubjectForm';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
+import { unassignLecturerAction } from '@/lib/admin-actions';
 import { lecturerLabel, parseSubjectParam } from '@/lib/admin-pages';
 import { getDb } from '@/lib/db';
 import { requireAdmin } from '@/lib/session';
@@ -23,7 +25,8 @@ export const dynamic = 'force-dynamic';
 
 /**
  * /admin/subjects/[code]: the subject's edit form, then one card per class
- * (settings, lecturers, assign) and "Assign a lecturer" for any class type.
+ * (settings, lecturers with Remove, assign) and "Assign a lecturer" for any
+ * class type.
  * The code resolves case-insensitively after trim; anything else is 404.
  */
 export default async function AdminSubjectPage({
@@ -130,7 +133,8 @@ export default async function AdminSubjectPage({
               ) : (
                 <>
                   <p className="m-0 border-b border-line px-3 py-2 text-muted">
-                    A class type the subject does not have yet is created.
+                    A class type or group the subject does not have yet is
+                    created.
                   </p>
                   <AssignLecturerForm
                     code={subject.code}
@@ -181,59 +185,81 @@ export default async function AdminSubjectPage({
                           : c.groups.map((g) => g.name).join(', ')}
                       </span>
                     </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2">
-                      <div className="min-w-0 border-line md:border-r">
-                        <ClassForm
-                          code={subject.code}
-                          kind={c.kind}
-                          assessment={c.assessment}
-                          note={c.assessmentNote}
-                          platformUrl={c.platformUrl}
-                        />
-                      </div>
-                      <div className="min-w-0 border-t border-line md:border-t-0">
-                        <h4
-                          id={`${headId}-lecturers`}
-                          className="m-0 px-3 pt-3 text-[13px] font-semibold"
-                        >
-                          Lecturers
-                        </h4>
-                        {c.lecturers.length === 0 ? (
-                          <p className="m-0 px-3 pt-1 text-muted">
-                            None assigned.
-                          </p>
-                        ) : (
-                          <ul
-                            aria-labelledby={`${headId}-lecturers`}
-                            className="px-3 pt-1"
-                          >
-                            {c.lecturers.map((l) => (
-                              <li
-                                key={`${l.lecturerId}-${l.groupName ?? ''}`}
-                                className="flex items-baseline justify-between gap-2 border-b border-line py-1 last:border-b-0"
-                              >
-                                <Link
-                                  href={`/admin/lecturers/${l.lecturerId}`}
-                                  className={`${link} min-w-0 truncate`}
-                                  lang="pl"
-                                >
-                                  {lecturerLabel(l)}
-                                </Link>
-                                <span className="shrink-0 text-xs text-muted">
-                                  {l.groupName ?? 'all groups'}
-                                </span>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {options.length > 0 && (
-                          <AssignLecturerForm
+                    {/* Two columns only when the card itself is wide enough (at lg the
+                        classes column is narrow). */}
+                    <div className="@container">
+                      <div className="grid grid-cols-1 @2xl:grid-cols-2">
+                        <div className="min-w-0 border-line @2xl:border-r">
+                          <ClassForm
                             code={subject.code}
                             kind={c.kind}
-                            lecturers={options}
-                            label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
+                            assessment={c.assessment}
+                            note={c.assessmentNote}
+                            platformUrl={c.platformUrl}
                           />
-                        )}
+                        </div>
+                        <div className="min-w-0 border-t border-line @2xl:border-t-0">
+                          <h4
+                            id={`${headId}-lecturers`}
+                            className="m-0 px-3 pt-3 text-[13px] font-semibold"
+                          >
+                            Lecturers
+                          </h4>
+                          {c.lecturers.length === 0 ? (
+                            <p className="m-0 px-3 pt-1 text-muted">
+                              None assigned.
+                            </p>
+                          ) : (
+                            <ul
+                              aria-labelledby={`${headId}-lecturers`}
+                              className="px-3 pt-1"
+                            >
+                              {c.lecturers.map((l) => {
+                                const who = lecturerLabel(l);
+                                const where = l.groupName
+                                  ? `${CLASS_NAMES[c.kind]}, ${l.groupName}`
+                                  : CLASS_NAMES[c.kind];
+                                return (
+                                  <li
+                                    key={l.id}
+                                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line py-1 last:border-b-0"
+                                  >
+                                    <Link
+                                      href={`/admin/lecturers/${l.lecturerId}`}
+                                      className={`${link} min-w-0 flex-1 truncate`}
+                                      lang="pl"
+                                    >
+                                      {who}
+                                    </Link>
+                                    <span className="shrink-0 text-xs text-muted">
+                                      {l.groupName ?? 'all groups'}
+                                    </span>
+                                    <ActionButton
+                                      action={unassignLecturerAction}
+                                      fields={{ id: String(l.id) }}
+                                      label="Remove"
+                                      ariaLabel={`Remove ${who} from ${where}`}
+                                      pendingLabel="Removing…"
+                                      confirm={{
+                                        question: `Remove ${who} from ${where}?`,
+                                        confirmLabel: 'Confirm remove',
+                                      }}
+                                      className="flex flex-col items-end"
+                                    />
+                                  </li>
+                                );
+                              })}
+                            </ul>
+                          )}
+                          {options.length > 0 && (
+                            <AssignLecturerForm
+                              code={subject.code}
+                              kind={c.kind}
+                              lecturers={options}
+                              label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
+                            />
+                          )}
+                        </div>
                       </div>
                     </div>
                   </section>

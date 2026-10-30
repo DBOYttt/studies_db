@@ -13,6 +13,7 @@ import { confirmMessage, confirmWord, rowCount } from './admin-console';
 import {
   adminSqlErrorMessage,
   CONFIRM_THRESHOLD,
+  cascadeConfirm,
   classifyStatement,
   type PermissionDetails,
   PREVIEW_ROWS,
@@ -315,6 +316,7 @@ async function preview(
     affected,
     columns,
     rows,
+    cascade: cascadeConfirm(kind, table),
     token: signPreview({ userId: user.id, sql, affected, at: now }),
   });
 }
@@ -336,7 +338,12 @@ async function execute(
   );
   if (!token.ok) return fail(400, token.reason);
   const confirmed = body.confirm === confirmWord(table);
-  if (token.affected > CONFIRM_THRESHOLD && !confirmed) {
+  // A cascading DELETE/REPLACE is confirmed whatever its row count: the
+  // count does not include the rows it takes from other tables.
+  if (
+    (token.affected > CONFIRM_THRESHOLD || cascadeConfirm(kind, table)) &&
+    !confirmed
+  ) {
     return fail(400, confirmMessage(table, token.affected));
   }
   // Spent before BEGIN, whatever the outcome: a retry needs a new preview.

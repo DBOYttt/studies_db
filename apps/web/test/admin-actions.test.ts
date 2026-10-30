@@ -129,6 +129,7 @@ describe('admin actions: gate', () => {
       A.addLecturerAction,
       A.editLecturerAction,
       A.assignLecturerAction,
+      A.unassignLecturerAction,
       A.setBanAction,
       A.requestPlanSyncAction,
       A.requestBotAction,
@@ -545,6 +546,56 @@ describe('admin actions: classes and lecturers', () => {
         fd({ code: 'ANA1', lecturerId: String(lecturerId), kind: 'zzz' }),
       ),
     ).toEqual({ ok: false, message: 'Unknown class type.' });
+  });
+
+  it('unassigns a lecturer and audits lecturer.unassign', async () => {
+    const [row] = await db.select().from(classLecturers);
+    const [l] = await db
+      .select()
+      .from(lecturers)
+      .where(eq(lecturers.id, lecturerId));
+    const name = l.title ? `${l.title} ${l.name}` : l.name;
+    cookieSid = student.sid;
+    await expect(
+      A.unassignLecturerAction(null, fd({ id: String(row.id) })),
+    ).rejects.toThrow('notFound');
+    cookieSid = admin.sid;
+    const before = (await audits()).length;
+    const r = await A.unassignLecturerAction(null, fd({ id: String(row.id) }));
+    expect(r).toEqual({
+      ok: true,
+      message: `Removed ${name} from ANA1 / Laboratorium, Gr. 2.`,
+    });
+    expect(await db.select().from(classLecturers)).toHaveLength(0);
+    const a = await lastAudit();
+    expect(a).toMatchObject({ action: 'lecturer.unassign', target: 'ANA1' });
+    expect(a.details).toEqual({
+      lecturerId,
+      lecturerName: name,
+      classKind: 'laboratorium',
+      groupNumber: 2,
+      source: 'web',
+    });
+    expect(revalidated).toContain('/admin/subjects/ANA1');
+    expect(revalidated).toContain(`/admin/lecturers/${lecturerId}`);
+    expect(
+      await A.unassignLecturerAction(null, fd({ id: String(row.id) })),
+    ).toEqual({ ok: false, message: 'Assignment not found.' });
+    expect(await A.unassignLecturerAction(null, fd({ id: 'x' }))).toEqual({
+      ok: false,
+      message: 'Assignment not found.',
+    });
+    expect(await audits()).toHaveLength(before + 1);
+    // Put it back for the tests below.
+    await A.assignLecturerAction(
+      null,
+      fd({
+        code: 'ANA1',
+        lecturerId: String(lecturerId),
+        kind: 'laboratorium',
+        group: '2',
+      }),
+    );
   });
 
   it('edits a class and audits class.edit', async () => {
