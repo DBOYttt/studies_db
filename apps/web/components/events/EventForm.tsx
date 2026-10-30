@@ -201,13 +201,16 @@ export function EventForm({
     if (pending) return;
     setRestoring(true);
     start(async () => {
-      // No redirect from here: typed values stay, the form says it.
-      const r = await restoreEventAction(eventId ?? 0, base, 'edit');
-      if (r.ok) {
-        setRestored(true);
-        router.refresh();
-      } else setError(r.message);
-      setRestoring(false);
+      try {
+        // No redirect from here: typed values stay, the form says it.
+        const r = await restoreEventAction(eventId ?? 0, base, 'edit');
+        if (r.ok) {
+          setRestored(true);
+          router.refresh();
+        } else setError(r.message);
+      } finally {
+        setRestoring(false);
+      }
     });
   };
 

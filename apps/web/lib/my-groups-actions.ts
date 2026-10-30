@@ -36,8 +36,8 @@ export async function saveMyGroupAction(
 }
 
 /**
- * Save: writes every class the form shows (`null` = "All groups"), so the
- * page's choice is what stays even if another tab changed it meanwhile.
+ * Save: writes the classes the form changed (`null` = "All groups"), so
+ * they stay as shown even if another tab changed them meanwhile.
  * Keys must be canonical class ids; anything malformed writes nothing.
  */
 export async function saveMyGroupsAction(

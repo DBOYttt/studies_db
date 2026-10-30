@@ -8,6 +8,7 @@ import {
   useRef,
 } from 'react';
 import type { ActionState } from '@/lib/admin-forms';
+import { useCardStatus } from './CardStatus';
 import { primaryBtn } from './form-styles';
 
 type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
@@ -47,6 +48,8 @@ export function ActionForm({
   children: ReactNode;
 }) {
   const [state, formAction, pending] = useActionState(action, null);
+  // Inside a `CardStatus`, a new submit clears the card's last message.
+  const card = useCardStatus();
   const formRef = useRef<HTMLFormElement>(null);
   // Read synchronously: a second click in the same tick must not see a
   // stale `pending`.
@@ -83,6 +86,7 @@ export function ActionForm({
         busy.current = true;
         const data = new FormData(e.currentTarget);
         submitted.current = data;
+        card?.(null);
         startTransition(() => formAction(data));
       }}
     >

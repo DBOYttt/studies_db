@@ -62,8 +62,10 @@ export function ActionButton({
   const card = useCardStatus();
   const report = cardStatus ? card : null;
   // Reported from the call itself: the row (and this button) may unmount in
-  // the same commit that delivers the result.
+  // the same commit that delivers the result. Any button in a card clears
+  // the card's last message when it starts.
   const act = async (prev: ActionState, form: FormData) => {
+    card?.(null);
     const r = await action(prev, form);
     report?.(r);
     return r;

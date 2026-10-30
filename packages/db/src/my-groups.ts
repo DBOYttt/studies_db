@@ -49,10 +49,10 @@ export async function setMyGroup(
 }
 
 /**
- * Writes the whole choice a form shows (class id -> group id, null = "All
- * groups"), so the form's Save makes the page's state the stored one even
- * when another tab changed it meanwhile (last Save wins). Classes left out
- * are not touched. All or nothing: one group outside its class refuses it.
+ * Writes the classes a form changed (class id -> group id, null = "All
+ * groups"), so the form's Save makes them stored even when another tab
+ * changed them meanwhile (last Save of a class wins). Classes left out are
+ * not touched. All or nothing: one group outside its class refuses it.
  */
 export async function saveMyGroups(
   db: Db,
@@ -76,22 +76,25 @@ export async function saveMyGroups(
     (e): e is { classId: number; groupId: number } => e.groupId !== null,
   );
   const drops = entries.filter((e) => e.groupId === null).map((e) => e.classId);
-  if (picks.length > 0) {
-    const found = await db
-      .select({ id: classGroups.id, classId: classGroups.classId })
-      .from(classGroups)
-      .where(
-        inArray(
-          classGroups.id,
-          picks.map((p) => p.groupId),
-        ),
-      );
-    const classOf = new Map(found.map((g) => [g.id, g.classId]));
-    if (picks.some((p) => classOf.get(p.groupId) !== p.classId)) {
-      return { ok: false };
+  // Checked inside the transaction under a shared lock, so a group deleted
+  // meanwhile (the sync, an admin) refuses the save instead of an FK error.
+  return db.transaction(async (tx) => {
+    if (picks.length > 0) {
+      // MariaDB has no FOR SHARE; LOCK IN SHARE MODE is its equivalent.
+      const [found] = (await tx.execute(sql`
+        SELECT id, class_id AS classId FROM class_groups
+         WHERE ${inArray(
+           classGroups.id,
+           picks.map((p) => p.groupId),
+         )}
+         LOCK IN SHARE MODE`)) as unknown as [
+        { id: number; classId: number }[],
+      ];
+      const classOf = new Map(found.map((g) => [g.id, g.classId]));
+      if (picks.some((p) => classOf.get(p.groupId) !== p.classId)) {
+        return { ok: false };
+      }
     }
-  }
-  await db.transaction(async (tx) => {
     if (drops.length > 0) {
       await tx
         .delete(userGroups)
@@ -110,8 +113,8 @@ export async function saveMyGroups(
           set: { groupId: sql`VALUES(${userGroups.groupId})` },
         });
     }
+    return { ok: true };
   });
-  return { ok: true };
 }
 
 export async function clearMyGroups(db: Db, userId: number): Promise<void> {

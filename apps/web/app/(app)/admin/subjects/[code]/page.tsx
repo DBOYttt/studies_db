@@ -11,7 +11,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/admin/ActionButton';
 import { AssignLecturerForm } from '@/components/admin/AssignLecturerForm';
-import { CardStatus } from '@/components/admin/CardStatus';
+import { CardStatus, CardStatusArea } from '@/components/admin/CardStatus';
 import { ClassForm } from '@/components/admin/ClassForm';
 import { box, boxHead, link } from '@/components/admin/form-styles';
 import { SubjectForm } from '@/components/admin/SubjectForm';
@@ -200,7 +200,7 @@ export default async function AdminSubjectPage({
                           />
                         </div>
                         <div className="min-w-0 border-t border-line @2xl:border-t-0">
-                          {/* Remove's message outlives the row it removes. */}
+                          {/* Remove's message outlives the row it removes; Assign clears it. */}
                           <CardStatus>
                             <h4
                               id={`${headId}-lecturers`}
@@ -255,15 +255,16 @@ export default async function AdminSubjectPage({
                                 })}
                               </ul>
                             )}
+                            <CardStatusArea />
+                            {options.length > 0 && (
+                              <AssignLecturerForm
+                                code={subject.code}
+                                kind={c.kind}
+                                lecturers={options}
+                                label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
+                              />
+                            )}
                           </CardStatus>
-                          {options.length > 0 && (
-                            <AssignLecturerForm
-                              code={subject.code}
-                              kind={c.kind}
-                              lecturers={options}
-                              label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
-                            />
-                          )}
                         </div>
                       </div>
                     </div>

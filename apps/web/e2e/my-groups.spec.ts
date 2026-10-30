@@ -199,3 +199,71 @@ test('the last Save wins when two tabs edit My groups', async ({
   await cleared;
   await tab2.close();
 });
+
+// Review fix: Save writes only the classes this tab changed, so a stale tab
+// never reverts groups picked elsewhere (another tab, the Discord panel).
+test('a stale tab saves only what it changed', async ({ page, context }) => {
+  const stale = await context.newPage();
+  const editsA = await context.newPage();
+  await stale.goto(GROUPS);
+  await editsA.goto(GROUPS);
+  await page.goto(GROUPS);
+  const form = page.getByRole('form', { name: 'My groups' });
+  const a = /Plan testowy.*Ćwiczenia/;
+  // Class B: any other class with groups.
+  const selects = form.locator('select');
+  const aId = await form.getByLabel(a).getAttribute('id');
+  let bId = '';
+  for (const id of await selects.evaluateAll((els) => els.map((e) => e.id)))
+    if (id !== aId) {
+      bId = id;
+      break;
+    }
+  expect(bId).not.toBe('');
+  const b = (p: typeof page) => p.locator(`#${bId}`);
+  const bOption = await b(page).locator('option').nth(1).textContent();
+
+  // Elsewhere: A = Gr. 2 and a group in B.
+  let posted = page.waitForResponse((r) => r.request().method() === 'POST');
+  await form.getByLabel(a).selectOption({ label: 'Gr. 2' });
+  await posted;
+  posted = page.waitForResponse((r) => r.request().method() === 'POST');
+  await b(page).selectOption({ index: 1 });
+  await posted;
+
+  // A stale tab with no edits: Save changes nothing.
+  await stale.getByRole('button', { name: 'Save' }).click();
+  await expect(stale).toHaveURL(/\/s\/plan$/);
+  await expect(
+    stale.getByRole('status').filter({ hasText: /^Groups saved\.$/ }),
+  ).toBeVisible();
+  await stale.goto(GROUPS);
+  await expect(stale.getByLabel(a).locator('option:checked')).toHaveText(
+    'Gr. 2',
+  );
+  await expect(b(stale).locator('option:checked')).toHaveText(
+    bOption as string,
+  );
+
+  // A stale tab that edits A only: A changes, B stays.
+  posted = editsA.waitForResponse((r) => r.request().method() === 'POST');
+  await editsA.getByLabel(a).selectOption({ label: 'Gr. 1' });
+  await posted;
+  await editsA.getByRole('button', { name: 'Save' }).click();
+  await expect(editsA).toHaveURL(/\/s\/plan$/);
+  await editsA.goto(GROUPS);
+  await expect(editsA.getByLabel(a).locator('option:checked')).toHaveText(
+    'Gr. 1',
+  );
+  await expect(b(editsA).locator('option:checked')).toHaveText(
+    bOption as string,
+  );
+
+  const cleared = editsA.waitForResponse(
+    (r) => r.request().method() === 'POST',
+  );
+  await editsA.getByRole('button', { name: 'Clear' }).click();
+  await cleared;
+  await stale.close();
+  await editsA.close();
+});

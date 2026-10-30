@@ -24,10 +24,12 @@ const selectCls =
  * "My groups": one select per class with groups (All = no choice).
  * Each pick shows at once and is saved to the account in the background (a
  * rejected save reverts that one choice), saying so in the polite status line
- * next to Save ("Group saved."). Save waits for those, then writes every
- * class as this page shows it, so the last Save wins even when another tab
- * changed the groups meanwhile, and opens the week view with "Groups saved."
- * (`savedHref`). Clear forgets all choices.
+ * next to Save ("Group saved."). Save waits for those, then writes the
+ * classes changed in this tab as it shows them (Clear changes all), so the
+ * last Save of a class wins even when another tab changed it meanwhile, and
+ * classes this tab never touched keep what was picked elsewhere (another
+ * tab, the Discord panel, an import). It then opens the week view with
+ * "Groups saved." (`savedHref`). Clear forgets all choices.
  */
 export function MyGroupsForm({
   options,
@@ -46,6 +48,8 @@ export function MyGroupsForm({
   const [saving, setSaving] = useState(false);
   // A double click must not run Save twice (state lags one render).
   const busy = useRef(false);
+  // Classes changed in this tab: the only ones Save writes.
+  const touched = useRef(new Set<string>());
   const pending = useRef(new Set<Promise<unknown>>());
   // Latest save per class: a superseded save never reverts the newer choice.
   const seq = useRef(new Map<string, number>());
@@ -71,6 +75,7 @@ export function MyGroupsForm({
 
   const set = (classId: number, value: string) => {
     const key = String(classId);
+    touched.current.add(key);
     const groupId = value ? Number(value) : null;
     const before = chosen[key];
     const mine = (seq.current.get(key) ?? 0) + 1;
@@ -105,18 +110,21 @@ export function MyGroupsForm({
     setSaving(true);
     setFailed(false);
     await Promise.allSettled([...pending.current]);
-    // Every shown class, "All groups" as null: the page's choice is what stays.
+    // The classes changed here, "All groups" as null; untouched ones are
+    // left to whatever was picked elsewhere.
     const choice = Object.fromEntries(
-      options.map((o) => [
-        String(o.classId),
-        latest.current[String(o.classId)] ?? null,
-      ]),
+      options
+        .map((o) => String(o.classId))
+        .filter((k) => touched.current.has(k))
+        .map((k) => [k, latest.current[k] ?? null]),
     );
-    let ok = false;
-    try {
-      ok = (await saveMyGroupsAction(choice)).ok;
-    } catch {
-      ok = false;
+    let ok = true;
+    if (Object.keys(choice).length > 0) {
+      try {
+        ok = (await saveMyGroupsAction(choice)).ok;
+      } catch {
+        ok = false;
+      }
     }
     if (ok) {
       router.push(savedHref);
@@ -128,6 +136,7 @@ export function MyGroupsForm({
   };
 
   const onClear = () => {
+    for (const o of options) touched.current.add(String(o.classId));
     const before = chosen;
     setFailed(false);
     setStatus('');
