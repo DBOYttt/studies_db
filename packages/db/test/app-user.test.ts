@@ -122,6 +122,26 @@ describe('studies_app grants', () => {
     });
   });
 
+  it('does not treat _ in the database name as a wildcard', async () => {
+    // studies_test → studiesXtest would match an unescaped `studies_test`.*
+    const lookalike = dbName.replace('_', 'X');
+    expect(lookalike).not.toBe(dbName);
+    await admin.query(`DROP DATABASE IF EXISTS ${mysql.escapeId(lookalike)}`);
+    await admin.query(`CREATE DATABASE ${mysql.escapeId(lookalike)}`);
+    try {
+      await admin.query(
+        `CREATE TABLE ${mysql.escapeId(lookalike)}.t (id INT PRIMARY KEY)`,
+      );
+      await asApp(async (c) => {
+        await expect(
+          c.query(`SELECT * FROM ${mysql.escapeId(lookalike)}.t`),
+        ).rejects.toMatchObject({ errno: 1142 });
+      });
+    } finally {
+      await admin.query(`DROP DATABASE IF EXISTS ${mysql.escapeId(lookalike)}`);
+    }
+  });
+
   it('resets grants added by hand and follows a new password', async () => {
     await admin.query(`GRANT FILE ON *.* TO ${mysql.escape(USER)}@'%'`);
     await admin.query(

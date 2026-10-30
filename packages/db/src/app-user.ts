@@ -25,7 +25,9 @@ export async function ensureAppUser(
   await adminConn.query(`ALTER USER ${user} IDENTIFIED BY ?`, [password]);
   // Reset to a known state so manually added grants don't survive.
   await adminConn.query(`REVOKE ALL PRIVILEGES, GRANT OPTION FROM ${user}`);
+  // `_` and `%` are wildcards in a database-level grant; match the name exactly.
+  const exact = database.replace(/[\\_%]/g, '\\$&');
   await adminConn.query(
-    `GRANT SELECT, INSERT, UPDATE, DELETE ON ${mysql.escapeId(database)}.* TO ${user}`,
+    `GRANT SELECT, INSERT, UPDATE, DELETE ON ${mysql.escapeId(exact)}.* TO ${user}`,
   );
 }
