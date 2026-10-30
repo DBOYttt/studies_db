@@ -83,12 +83,12 @@ export function NavPanel({
             <I size={16} />
           </Link>
         ))}
-        {adminEntry && (
-          <>
-            <span aria-hidden className="mx-1 my-[5px] w-px bg-line" />
-            {adminEntry}
-          </>
-        )}
+        {/* Siblings, not a fragment: inside a fragment adminEntry would be an
+            array child and need a key (React key warning). */}
+        {adminEntry ? (
+          <span aria-hidden className="mx-1 my-[5px] w-px bg-line" />
+        ) : null}
+        {adminEntry}
         <form action="/auth/logout" method="post" className="ml-auto">
           <button
             type="submit"

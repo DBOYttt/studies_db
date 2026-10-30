@@ -66,7 +66,7 @@ export default async function SimpleSubject({
   const subject = await loadSubject(code);
   if (!subject) notFound();
   const [cards, classes, tags, lecturerRows, upcoming] = await Promise.all([
-    cachedSubjectCards(await currentSemester({})),
+    cachedSubjectCards(await currentSemester(sp)),
     listSubjectClasses(db, subject.id),
     listSubjectTags(db, subject.id),
     listSubjectLecturers(db, subject.id),

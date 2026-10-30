@@ -32,8 +32,9 @@ export function semesterFromRequest(
 export type SemesterOption = { label: string; href: string; current: boolean };
 
 /**
- * Switcher entries: `All` then the present semesters ascending; `[]` when
- * fewer than two distinct semesters exist (nothing to switch between).
+ * Switcher entries: `All` then the present semesters (plus the active one)
+ * ascending; `[]` when no semester is active and fewer than two distinct
+ * semesters exist (nothing to switch between).
  * Each href is the `/semester` route with `path` (path + query) as `next`.
  */
 export function semesterOptions(
@@ -41,8 +42,11 @@ export function semesterOptions(
   current: Semester | null,
   path: string,
 ): SemesterOption[] {
-  const sems = [...new Set(present)].sort((a, b) => a - b);
-  if (sems.length < 2) return [];
+  // An active semester is always listed (and keeps the switcher visible),
+  // so the filter it applies can be seen and undone.
+  const all = current === null ? present : [...present, current];
+  const sems = [...new Set(all)].sort((a, b) => a - b);
+  if (current === null && sems.length < 2) return [];
   const next = encodeURIComponent(path);
   return [
     {

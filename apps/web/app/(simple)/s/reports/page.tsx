@@ -34,10 +34,11 @@ export default async function SimpleReports({
   searchParams: Promise<SP>;
 }) {
   const user = await requireUser();
-  const r = parseReportIndex((await searchParams).r);
+  const sp = await searchParams;
+  const r = parseReportIndex(sp.r);
   const query = EXAMPLE_QUERIES[r];
   const [cards, result] = await Promise.all([
-    cachedSubjectCards(await currentSemester({})),
+    cachedSubjectCards(await currentSemester(sp)),
     runReadonlyQuery(getRoPool(), query.sql, { maxRows: MAX_ROWS }).catch(
       (err: unknown) => ({ ok: false as const, error: roErrorMessage(err) }),
     ),

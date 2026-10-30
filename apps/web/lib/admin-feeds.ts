@@ -68,27 +68,28 @@ export async function saveFeedAction(
   const examUrl = field(form, 'exam_url').trim();
   const removeExam = form.get('remove_exam') !== null;
   const db = getDb();
-  const r = await setFeed(db, {
-    semester,
-    classUrl: classUrl === '' ? undefined : classUrl,
-    examUrl: removeExam ? null : examUrl === '' ? undefined : examUrl,
-    userId: user.id,
-  });
+  let r: Awaited<ReturnType<typeof setFeed>>;
+  try {
+    r = await setFeed(db, {
+      semester,
+      classUrl: classUrl === '' ? undefined : classUrl,
+      examUrl: removeExam ? null : examUrl === '' ? undefined : examUrl,
+      userId: user.id,
+    });
+  } catch (err) {
+    // A driver error carries the query parameters, i.e. the link: log the
+    // error code only.
+    console.error('feed save failed', semester, errorCode(err));
+    return { ok: false, message: 'Could not save the feed. Try again.' };
+  }
   if (!r.ok) return { ok: false, message: r.error, field: r.field };
   await audit(user.id, 'plan.feed_set', semester, {
     classHost: r.classHost,
     examHost: r.examHost,
   });
-  let syncFailed = false;
-  try {
-    await requestPlanSync(db);
-  } catch (err) {
-    // The feed is saved: report success, never a retryable error.
-    syncFailed = true;
-    console.error('plan sync request failed after feed save', err);
-  }
+  const syncOk = await requestSync('save');
   refresh();
-  if (syncFailed)
+  if (!syncOk)
     return {
       ok: true,
       message: 'Feed saved. The sync request failed; use Sync timetable.',
@@ -97,6 +98,23 @@ export async function saveFeedAction(
     ok: true,
     message: `Semester ${semester} feed saved. A timetable sync is requested.`,
   };
+}
+
+function errorCode(err: unknown): string {
+  const e = err as { code?: unknown; cause?: { code?: unknown } } | null;
+  const code = e?.cause?.code ?? e?.code;
+  return typeof code === 'string' ? code : 'unknown';
+}
+
+/** Requests a sync; false when that fails (the change itself stands). */
+async function requestSync(after: 'save' | 'clear'): Promise<boolean> {
+  try {
+    await requestPlanSync(getDb());
+    return true;
+  } catch (err) {
+    console.error(`plan sync request failed after feed ${after}`, err);
+    return false;
+  }
 }
 
 export async function clearFeedAction(
@@ -110,6 +128,15 @@ export async function clearFeedAction(
   if (!removed)
     return { ok: false, message: `Semester ${semester} has no feed.` };
   await audit(user.id, 'plan.feed_clear', semester, {});
+  const syncOk = await requestSync('clear');
   refresh();
-  return { ok: true, message: `Semester ${semester} feed cleared.` };
+  if (!syncOk)
+    return {
+      ok: true,
+      message: 'Feed cleared. The sync request failed; use Sync timetable.',
+    };
+  return {
+    ok: true,
+    message: `Semester ${semester} feed cleared. A timetable sync is requested.`,
+  };
 }

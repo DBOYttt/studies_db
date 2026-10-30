@@ -3,10 +3,12 @@ import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 let db: Db;
+let viewsPool: unknown = null;
 vi.mock('@/lib/db', () => ({
   getDb: () => db,
   getViewsPool: () => {
-    throw new Error('no RO pool in this test');
+    if (!viewsPool) throw new Error('no RO pool in this test');
+    return viewsPool;
   },
 }));
 
@@ -59,5 +61,27 @@ describe('count caches', () => {
   it('view counts are null without an RO pool, and null is not cached', async () => {
     C.invalidateCounts();
     expect(await C.cachedViewCounts()).toBeNull();
+  });
+
+  it('present semesters are cached until invalidated; a failure is not kept', async () => {
+    C.invalidateCounts();
+    expect(await C.cachedPresentSemesters()).toEqual([]);
+    let calls = 0;
+    viewsPool = {
+      query: async () => {
+        calls++;
+        return [[{ semester: 1 }, { semester: 3 }]];
+      },
+    };
+    try {
+      expect(await C.cachedPresentSemesters()).toEqual([1, 3]);
+      expect(await C.cachedPresentSemesters()).toEqual([1, 3]);
+      expect(calls).toBe(1);
+      C.invalidateCounts();
+      await C.cachedPresentSemesters();
+      expect(calls).toBe(2);
+    } finally {
+      viewsPool = null;
+    }
   });
 });

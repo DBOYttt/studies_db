@@ -5,6 +5,7 @@ import {
   type Db,
   getPlanSyncStatus,
   listFeeds,
+  planSync,
   setFeed,
   upsertUser,
   users,
@@ -210,6 +211,73 @@ describe('admin feeds actions', () => {
       action: 'plan.feed_clear',
       target: 'semester:3',
     });
+  });
+});
+
+describe('admin feeds actions: clear requests a sync, save errors stay secret', () => {
+  it('clearFeedAction requests a timetable sync', async () => {
+    await F.saveFeedAction(
+      null as never,
+      fd({ semester: '3', class_url: CLASS }),
+    );
+    await db.update(planSync).set({ requestedAt: null });
+    const r = await F.clearFeedAction(null as never, fd({ semester: '3' }));
+    expect(r).toEqual({
+      ok: true,
+      message: 'Semester 3 feed cleared. A timetable sync is requested.',
+    });
+    expect((await getPlanSyncStatus(db)).requestedAt).not.toBeNull();
+  });
+
+  it('a failed sync request after the clear is still ok', async () => {
+    await F.saveFeedAction(
+      null as never,
+      fd({ semester: '3', class_url: CLASS }),
+    );
+    // The audit insert is the first db.insert; fail the plan_sync one.
+    const real = db.insert.bind(db);
+    let n = 0;
+    const spy = vi.spyOn(db, 'insert').mockImplementation(((t: never) => {
+      n++;
+      if (n >= 2) throw new Error('down');
+      return real(t);
+    }) as never);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const r = await F.clearFeedAction(null as never, fd({ semester: '3' }));
+    spy.mockRestore();
+    err.mockRestore();
+    expect(r).toEqual({
+      ok: true,
+      message: 'Feed cleared. The sync request failed; use Sync timetable.',
+    });
+    expect(await listFeeds(db)).toHaveLength(0);
+  });
+
+  it('a DB error while saving never logs or returns the link', async () => {
+    const leak = new Error(`Failed query: insert ... params: 3,${CLASS}`);
+    (leak as Error & { cause?: unknown }).cause = {
+      code: 'ER_LOCK_WAIT_TIMEOUT',
+    };
+    const spy = vi.spyOn(db, 'transaction').mockRejectedValue(leak as never);
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    let r: Awaited<ReturnType<typeof F.saveFeedAction>>;
+    try {
+      r = await F.saveFeedAction(
+        null as never,
+        fd({ semester: '3', class_url: CLASS }),
+      );
+    } finally {
+      spy.mockRestore();
+    }
+    const logged = JSON.stringify(err.mock.calls);
+    err.mockRestore();
+    expect(r).toEqual({
+      ok: false,
+      message: 'Could not save the feed. Try again.',
+    });
+    expect(logged).not.toContain('secret');
+    expect(logged).not.toContain('plan.agh.edu.pl');
+    expect(logged).toContain('ER_LOCK_WAIT_TIMEOUT');
   });
 });
 

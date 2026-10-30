@@ -31,7 +31,7 @@ export default async function SimpleNewEvent({
   const sp = await searchParams;
   const db = getDb();
   const [cards, options, form] = await Promise.all([
-    cachedSubjectCards(await currentSemester({})),
+    cachedSubjectCards(await currentSemester(sp)),
     listEventSubjectOptions(db),
     loadNewEventForm(sp),
   ]);

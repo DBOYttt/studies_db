@@ -10,10 +10,13 @@ import { ConsoleFooter } from '@/components/shell/ConsoleFooter';
 import { ModeSwitch } from '@/components/shell/ModeSwitch';
 import { NavPanel } from '@/components/shell/NavPanel';
 import { ShellFrame } from '@/components/shell/ShellFrame';
-import { cachedNavSubjects, cachedViewCounts } from '@/lib/count-cache';
-import { getViewsPool } from '@/lib/db';
+import {
+  cachedNavSubjects,
+  cachedPresentSemesters,
+  cachedViewCounts,
+} from '@/lib/count-cache';
 import type { NavView } from '@/lib/nav-tree';
-import { currentSemester, listPresentSemesters } from '@/lib/semester';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
 export default async function AppLayout({ children }: { children: ReactNode }) {
@@ -25,7 +28,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const [subjects, counts, present] = await Promise.all([
     cachedNavSubjects(semester),
     cachedViewCounts(),
-    listPresentSemesters(getViewsPool()).catch(() => []),
+    cachedPresentSemesters(),
   ]);
   const views: NavView[] = PUBLIC_VIEWS.map((v) => ({
     name: v,
@@ -39,7 +42,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <NavPanel
             subjects={subjects}
             views={views}
-            adminEntry={user.isAdmin ? <AdminNavLink /> : null}
+            adminEntry={user.isAdmin ? <AdminNavLink key="admin" /> : null}
           />
         }
         footer={<ConsoleFooter />}

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { SemesterProvider } from '@/components/SemesterSwitcher';
-import { getViewsPool } from '@/lib/db';
-import { currentSemester, listPresentSemesters } from '@/lib/semester';
+import { cachedPresentSemesters } from '@/lib/count-cache';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
 /**
@@ -18,7 +18,7 @@ export default async function SimpleLayout({
   // Layouts get no searchParams: follows the cookie only (see the app layout).
   const [current, present] = await Promise.all([
     currentSemester({}),
-    listPresentSemesters(getViewsPool()).catch(() => []),
+    cachedPresentSemesters(),
   ]);
   return (
     <SemesterProvider present={present} current={current}>

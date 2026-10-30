@@ -216,8 +216,10 @@ export default async function AdminSyncPage() {
           </div>
           <p className="m-0 border-b border-line px-3 py-2 text-muted">
             One UniTime iCal link per semester. Links are secret: only the host
-            is shown. Clearing a semester removes its imported sessions at the
-            next successful sync.
+            and the last 4 characters are shown. A semester&apos;s feed replaces
+            the sessions the env feed imported for that semester; semesters
+            without a feed keep theirs. Clearing a semester removes its imported
+            sessions at the next successful sync.
           </p>
           <FeedsCard
             rows={feedRows.map((r) => ({

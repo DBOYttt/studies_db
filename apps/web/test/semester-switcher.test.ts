@@ -5,7 +5,25 @@ describe('semesterOptions', () => {
   it('is empty with fewer than two distinct semesters', () => {
     expect(semesterOptions([], null, '/s')).toEqual([]);
     expect(semesterOptions([1], null, '/s')).toEqual([]);
-    expect(semesterOptions([2, 2], 2, '/s')).toEqual([]);
+    expect(semesterOptions([2, 2], null, '/s')).toEqual([]);
+  });
+
+  it('stays visible while a semester is active, even with one present', () => {
+    const o = semesterOptions([2, 2], 2, '/s');
+    expect(o.map((x) => [x.label, x.current])).toEqual([
+      ['All', false],
+      ['2', true],
+    ]);
+  });
+
+  it('lists an active semester that has no subjects', () => {
+    const o = semesterOptions([1, 3], 4, '/s');
+    expect(o.map((x) => x.label)).toEqual(['All', '1', '3', '4']);
+    expect(o.find((x) => x.current)?.label).toBe('4');
+    expect(semesterOptions([], 5, '/s').map((x) => x.label)).toEqual([
+      'All',
+      '5',
+    ]);
   });
 
   it('lists All first, then semesters ascending, marking the current one', () => {
