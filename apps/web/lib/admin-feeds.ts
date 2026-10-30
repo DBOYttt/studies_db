@@ -91,7 +91,7 @@ export async function saveFeedAction(
   if (syncFailed)
     return {
       ok: true,
-      message: 'Feed saved. The sync request failed; use Sync now.',
+      message: 'Feed saved. The sync request failed; use Sync timetable.',
     };
   return {
     ok: true,

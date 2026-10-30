@@ -7,7 +7,7 @@ import {
   listFeeds,
   type PlanSyncStatus,
   recordPlanSync,
-  removeUnscopedSessions,
+  removeUnownedSessions,
   SafeSyncError,
   type SyncStats,
   syncTimetable,
@@ -169,7 +169,10 @@ async function runStoredFeeds(
 
   if (allOk) {
     try {
-      const n = await removeUnscopedSessions(deps.db);
+      const n = await removeUnownedSessions(
+        deps.db,
+        feeds.map((f) => f.semester),
+      );
       if (n > 0) console.log(`Plan: usunięto ${n} sesji bez semestru`);
     } catch (err) {
       fail('Cleanup', err);

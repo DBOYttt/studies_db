@@ -1,4 +1,4 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
 import type { Semester } from '../admin-fields.js';
 import type { Db, DbExecutor } from '../client.js';
 import type { SessionKind, SessionSource } from '../constants.js';
@@ -399,12 +399,23 @@ export async function syncTimetable(
 }
 
 /**
- * Deletes the sessions no semester feed owns (feed_semester IS NULL), left by
- * the retired env feed. Returns how many were removed.
+ * Deletes the sessions no stored semester feed owns: feed_semester IS NULL
+ * (the retired env feed) or a semester not in `keep` (its feed was cleared).
+ * Returns how many were removed.
  */
-export async function removeUnscopedSessions(db: Db): Promise<number> {
+export async function removeUnownedSessions(
+  db: Db,
+  keep: readonly number[],
+): Promise<number> {
   const [res] = await db
     .delete(classSessions)
-    .where(isNull(classSessions.feedSemester));
+    .where(
+      keep.length === 0
+        ? isNull(classSessions.feedSemester)
+        : or(
+            isNull(classSessions.feedSemester),
+            notInArray(classSessions.feedSemester, [...keep]),
+          ),
+    );
   return res.affectedRows;
 }

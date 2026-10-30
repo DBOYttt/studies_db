@@ -630,4 +630,26 @@ describe('runPlanSyncOnce with semester feeds', () => {
     expect(s.lastError).not.toContain('secret');
     expect(s.stats?.feeds?.[0]).toMatchObject({ semester: 3, ok: true });
   });
+
+  it('removes sessions of a cleared semester after a fully successful run only', async () => {
+    await db.delete(classSessions);
+    await setFeeds([
+      { semester: 3, classUrl: C3 },
+      { semester: 5, classUrl: C5 },
+    ]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
+    const sems = async () =>
+      new Set(
+        (await db.select().from(classSessions)).map((r) => r.feedSemester),
+      );
+    expect(await sems()).toEqual(new Set([3, 5]));
+
+    // The admin clears semester 5; feed 3 fails, so nothing is removed.
+    await setFeeds([{ semester: 3, classUrl: C3 }]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([], [C3]) });
+    expect(await sems()).toEqual(new Set([3, 5]));
+
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
+    expect(await sems()).toEqual(new Set([3]));
+  });
 });

@@ -196,7 +196,7 @@ describe('admin feeds actions', () => {
     s2.mockRestore();
     expect(r).toEqual({
       ok: true,
-      message: 'Feed saved. The sync request failed; use Sync now.',
+      message: 'Feed saved. The sync request failed; use Sync timetable.',
     });
     await F.clearFeedAction(null as never, fd({ semester: '6' }));
   });

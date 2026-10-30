@@ -19,7 +19,7 @@ import {
   recordPlanSync,
   requestPlanSync,
 } from '../src/unitime/status.js';
-import { removeUnscopedSessions, syncTimetable } from '../src/unitime/sync.js';
+import { removeUnownedSessions, syncTimetable } from '../src/unitime/sync.js';
 
 const FIXTURE = readFileSync(
   new URL('./fixtures/unitime.ics', import.meta.url),
@@ -720,13 +720,26 @@ describe('feed semesters', () => {
     expect([...(await feedOf()).keys()].sort()).toEqual(['q3', 'q5']);
   });
 
-  it('removeUnscopedSessions deletes only NULL rows', async () => {
+  it('removeUnownedSessions deletes NULL rows and semesters outside keep', async () => {
+    await resetTestDb();
+    await syncTimetable(db, calendar(ev('n1', '20261006')));
+    await syncTimetable(db, calendar(ev('n3', '20261007')), {
+      feedSemester: 3,
+    });
+    await syncTimetable(db, calendar(ev('n5', '20261008')), {
+      feedSemester: 5,
+    });
+    expect(await removeUnownedSessions(db, [3])).toBe(2);
+    expect([...(await feedOf()).keys()]).toEqual(['n3']);
+  });
+
+  it('removeUnownedSessions with an empty keep deletes only NULL rows', async () => {
     await resetTestDb();
     await syncTimetable(db, calendar(ev('n1', '20261006')));
     await syncTimetable(db, calendar(ev('n2', '20261007')), {
       feedSemester: 4,
     });
-    expect(await removeUnscopedSessions(db)).toBe(1);
+    expect(await removeUnownedSessions(db, [])).toBe(1);
     expect([...(await feedOf()).keys()]).toEqual(['n2']);
   });
 
