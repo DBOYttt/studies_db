@@ -353,7 +353,7 @@ describe('planSetup', () => {
     const warns = actions.filter(
       (a) =>
         a.type === 'warn' &&
-        a.message.startsWith('Semestr 4 has more than 50 subjects;'),
+        a.message.startsWith('Semestr 4 has no room for more channels'),
     );
     expect(warns).toHaveLength(1);
   });
@@ -445,6 +445,53 @@ describe('planSetup: Discord → DB', () => {
     const g = withRole({ forums: [unlinkedForum({ parentId: 'c3' })] });
     const [a] = planSetup([], g, ROLE, render);
     expect(a).toMatchObject({ type: 'importForum', semester: 3 });
+  });
+
+  it('warns and imports as semester 1 under an out-of-range Semestr N', () => {
+    const g = withRole({
+      categories: [{ id: 'c9', name: 'Semestr 9' }],
+      forums: [unlinkedForum({ parentId: 'c9' })],
+    });
+    const actions = planSetup([], g, ROLE, render).filter(
+      (x) => x.type === 'warn' || x.type === 'importForum',
+    );
+    expect(actions[0]).toMatchObject({
+      type: 'warn',
+      message: expect.stringMatching(
+        /^#.+ is under 'Semestr 9'; imported as semester 1 — fix it with \/subject edit\.$/,
+      ),
+    });
+    expect(actions[1]).toMatchObject({ type: 'importForum', semester: 1 });
+  });
+
+  it('counts every channel in the category and lists up to 10 skipped codes', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      ...ASD,
+      id: 200 + i,
+      code: `K${String(i).padStart(2, '0')}`,
+      semester: 4,
+    }));
+    const g = withRole({
+      categories: [{ id: 'c4', name: 'Semestr 4' }],
+      categoryChannelCounts: { c4: 45 },
+    });
+    const actions = planSetup(many, g, ROLE, render);
+    expect(actions.filter((x) => x.type === 'createForum')).toHaveLength(5);
+    const warn = actions.find((x) => x.type === 'warn');
+    expect(warn).toMatchObject({
+      message:
+        'Semestr 4 has no room for more channels (Discord allows 50 per category); not created: K05, K06, K07, K08, K09, K10, K11, K12, K13',
+    });
+    const more = planSetup(
+      [
+        ...many,
+        ...many.map((m) => ({ ...m, id: m.id + 50, code: `L${m.code}` })),
+      ],
+      g,
+      ROLE,
+      render,
+    ).find((x) => x.type === 'warn');
+    expect(more?.type === 'warn' && more.message.endsWith(', …')).toBe(true);
   });
 
   it('skips with a warning when the code clashes with the DB or another forum', () => {

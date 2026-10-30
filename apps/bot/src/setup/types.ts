@@ -115,6 +115,8 @@ export type GuildSnapshot = {
   callerRoleIds: string[];
   /** Forums the bot cannot read (permissions or a failed fetch); not in `forums`. */
   unreadableForums: { id: string; name: string }[];
+  /** Channels of every type per category id (the 50-per-category limit counts them all). */
+  categoryChannelCounts?: Record<string, number>;
   textChannels: {
     id: string;
     name: string;

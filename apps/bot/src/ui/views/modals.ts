@@ -99,7 +99,7 @@ export function subjectModal(
     field({
       id: 'semester',
       label: `Semester (${SEMESTERS.join(' or ')})`,
-      max: String(Math.max(...SEMESTERS)).length,
+      max: 2,
       value: s ? String(s.semester) : null,
       required: true,
     }),

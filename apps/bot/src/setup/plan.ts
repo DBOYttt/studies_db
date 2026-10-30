@@ -557,13 +557,14 @@ export function planSetup(
   actions.push(...planPanels(ordered, g, adminRoleId));
   actions.push(...planEventsForum(ordered, g, opts));
 
-  // Discord allows 50 channels per category: count what is there, then plan.
+  // Discord allows 50 channels per category (of any type): count what is
+  // there, then plan.
   const inCategory = new Map<string, number>();
-  for (const f of g.forums) {
-    const name = g.categories.find((c) => c.id === f.parentId)?.name;
-    if (name) inCategory.set(name, (inCategory.get(name) ?? 0) + 1);
+  for (const c of g.categories) {
+    const known = g.forums.filter((f) => f.parentId === c.id).length;
+    inCategory.set(c.name, g.categoryChannelCounts?.[c.id] ?? known);
   }
-  const warnedFull = new Set<string>();
+  const skipped = new Map<string, string[]>();
 
   for (const s of ordered) {
     const wanted = desiredTags(s);
@@ -572,14 +573,7 @@ export function planSetup(
     if (s.channelId === null) {
       const category = categoryName(s);
       if ((inCategory.get(category) ?? 0) >= MAX_CATEGORY_CHANNELS) {
-        if (!warnedFull.has(category)) {
-          warnedFull.add(category);
-          actions.push({
-            type: 'warn',
-            code: null,
-            message: `${category} has more than ${MAX_CATEGORY_CHANNELS} subjects; Discord allows ${MAX_CATEGORY_CHANNELS} channels per category, so the rest get no forum`,
-          });
-        }
+        skipped.set(category, [...(skipped.get(category) ?? []), s.code]);
         continue;
       }
       inCategory.set(category, (inCategory.get(category) ?? 0) + 1);
@@ -653,6 +647,15 @@ export function planSetup(
     if (opts) actions.push(...planPosts(s, forum, opts.webBaseUrl));
   }
 
+  for (const [category, codes] of skipped) {
+    const shown = codes.slice(0, 10).join(', ');
+    actions.push({
+      type: 'warn',
+      code: null,
+      message: `${category} has no room for more channels (Discord allows ${MAX_CATEGORY_CHANNELS} per category); not created: ${shown}${codes.length > 10 ? ', …' : ''}`,
+    });
+  }
+
   // Discord → DB: forums no subject points to become subjects.
   const linked = new Set(subjects.map((s) => s.channelId));
   const codes = new Set(subjects.map((s) => s.code.toUpperCase()));
@@ -683,7 +686,15 @@ export function planSetup(
       continue;
     }
     codes.add(parsed.code);
-    const m = SEMESTER_RE.exec(categoryById.get(f.parentId ?? '') ?? '');
+    const catName = categoryById.get(f.parentId ?? '') ?? '';
+    const m = SEMESTER_RE.exec(catName);
+    if (m && !isSemester(Number(m[1]))) {
+      actions.push({
+        type: 'warn',
+        code: parsed.code,
+        message: `#${f.name} is under '${catName}'; imported as semester 1 — fix it with /subject edit.`,
+      });
+    }
     actions.push({
       type: 'importForum',
       channelId: f.id,

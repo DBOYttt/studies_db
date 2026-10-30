@@ -462,13 +462,22 @@ describe('plan image', () => {
 });
 
 describe('groupsView', () => {
+  const ids = new Map<string, number>();
+  const idOf = (name: string) => {
+    if (!ids.has(name)) ids.set(name, ids.size + 1);
+    return ids.get(name) as number;
+  };
   const opt = (
     classId: number,
     subjectName: string,
     className: string,
     groups: number,
+    subjectId = idOf(subjectName),
+    semester = 1,
   ): MyGroupOption => ({
     classId,
+    subjectId,
+    semester,
     subjectName,
     className,
     groups: Array.from({ length: groups }, (_, i) => ({
@@ -481,7 +490,7 @@ describe('groupsView', () => {
     const options = [opt(1, 'Analiza', 'Laboratorium', 3)];
     const v = groupsView(
       options,
-      'Analiza',
+      idOf('Analiza'),
       {},
       {
         dayBefore: true,
@@ -510,7 +519,7 @@ describe('groupsView', () => {
       opt(3, 'Bez grup', 'Laboratorium', 0),
       opt(4, 'Fizyka', 'Laboratorium', 2),
     ];
-    const v = groupsView(options, 'Analiza', { '1': 102 });
+    const v = groupsView(options, idOf('Analiza'), { '1': 102 });
     expectValid(v);
     const [subj, ...classSelects] = selects(v);
     expect(subj.custom_id).toBe('v1:stu:groups:subj');
@@ -552,7 +561,7 @@ describe('groupsView', () => {
     const options = Array.from({ length: 30 }, (_, i) =>
       opt(i + 1, `Przedmiot ${String(i).padStart(2, '0')}`, 'Laboratorium', 2),
     );
-    const v = groupsView(options, 'Przedmiot 27', {});
+    const v = groupsView(options, idOf('Przedmiot 27'), {});
     expectValid(v);
     const subj = selects(v).filter((s) =>
       s.custom_id.startsWith('v1:stu:groups:subj'),
@@ -562,14 +571,31 @@ describe('groupsView', () => {
     expect(new Set(values).size).toBe(30);
     expect(
       subj.flatMap((s) => s.options).find((o: Json) => o.default)?.label,
-    ).toBe('Przedmiot 27');
+    ).toBe('S1 · Przedmiot 27');
+  });
+
+  it('keeps same-named subjects of different semesters apart', () => {
+    const options = [
+      opt(1, 'Język angielski', 'Ćwiczenia', 2, 101, 1),
+      opt(2, 'Język angielski', 'Ćwiczenia', 2, 103, 3),
+    ];
+    const v = groupsView(options, 103, {});
+    expectValid(v);
+    const [subj, ...classSelects] = selects(v);
+    expect(subj.options).toHaveLength(2);
+    expect(subj.options.filter((o: Json) => o.default)).toEqual([
+      expect.objectContaining({ value: '1' }),
+    ]);
+    expect(classSelects.map((c) => c.custom_id)).toEqual([
+      'v1:stu:groups:set:2',
+    ]);
   });
 
   it('pages 30 classes of one subject within the limits', () => {
     const options = Array.from({ length: 30 }, (_, i) =>
       opt(i + 1, 'Analiza', `Laboratorium ${i}`, 30),
     );
-    const v = groupsView(options, 'Analiza', {});
+    const v = groupsView(options, idOf('Analiza'), {});
     expectValid(v);
     expect(allText(v)).toMatch(/…and \d+ more\. Open the website/);
   });
@@ -642,6 +668,7 @@ describe('entry quiz views', () => {
     const subjects = Array.from({ length: 30 }, (_, i) => ({
       id: 1000 + i,
       name: `Przedmiot ${i} ${'x'.repeat(120)}`,
+      semester: 2,
     }));
     const v = quizSubjectsView(subjects);
     expectValid(v);
@@ -659,7 +686,7 @@ describe('entry quiz views', () => {
         name: `Gr. ${g + 1}`,
       })),
     }));
-    const v = quizClassesView({ id: 7, name: 'Fizyka' }, classes, [
+    const v = quizClassesView({ id: 7, name: 'Fizyka', semester: 1 }, classes, [
       { classId: 10, groupId: 101 },
     ]);
     expectValid(v);
@@ -699,7 +726,11 @@ describe('entry quiz views', () => {
         name: `Gr. ${g + 1}`,
       })),
     }));
-    const v = quizClassesView({ id: 999_999_999, name: 'Fizyka' }, classes, []);
+    const v = quizClassesView(
+      { id: 999_999_999, name: 'Fizyka', semester: 1 },
+      classes,
+      [],
+    );
     expectValid(v);
     expect(selects(v)).toHaveLength(3);
     expect(customIds(v)).toContain('v1:stu:quiz:pick:999999999:2');

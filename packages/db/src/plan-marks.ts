@@ -62,6 +62,7 @@ export type MarkableClass = {
   className: string;
   subjectId: number;
   subjectName: string;
+  semester: number;
   groups: { id: number; name: string }[];
 };
 
@@ -75,7 +76,7 @@ export async function listMarkableClasses(
 ): Promise<MarkableClass[]> {
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT c.id AS class_id, c.kind, c.name AS class_name,
-            s.id AS subject_id, s.name AS subject_name,
+            s.id AS subject_id, s.name AS subject_name, s.semester,
             g.id AS group_id, g.name AS group_name
        FROM v_classes c
        JOIN v_subjects s ON s.id = c.subject_id
@@ -94,6 +95,7 @@ export async function listMarkableClasses(
         className: String(r.class_name),
         subjectId: Number(r.subject_id),
         subjectName: String(r.subject_name),
+        semester: Number(r.semester),
         groups: [],
         order: KIND_ORDER.indexOf(r.kind as ClassKind),
       };

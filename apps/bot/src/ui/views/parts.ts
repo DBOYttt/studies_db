@@ -36,10 +36,11 @@ export const clip = (s: string, n = MAX_ID) =>
 export const subjectOptionLabel = (
   s: { code: string; name: string; semester: number },
   total: number,
-): string =>
-  clip(
-    total > 25 ? `S${s.semester} · ${s.code} ${s.name}` : `${s.code} ${s.name}`,
-  );
+  nameOnly = false,
+): string => {
+  const base = nameOnly ? s.name : `${s.code} ${s.name}`;
+  return clip(total > 25 ? `S${s.semester} · ${base}` : base);
+};
 
 export const chunk = <T>(xs: T[], n: number): T[][] =>
   Array.from({ length: Math.ceil(xs.length / n) }, (_, i) =>

@@ -462,7 +462,9 @@ export async function listWeekSessionRows(
 
 export interface MyGroupOption {
   classId: number;
+  subjectId: number;
   subjectName: string;
+  semester: number;
   className: string;
   groups: { id: number; name: string }[];
 }
@@ -479,7 +481,7 @@ export async function listMyGroupOptions(
   const bySemester = semester == null ? '' : ' AND s.semester = ?';
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT c.id AS class_id, c.kind, c.name AS class_name,
-            s.id AS subject_id, s.name AS subject_name,
+            s.id AS subject_id, s.name AS subject_name, s.semester,
             g.id AS group_id, g.name AS group_name
        FROM v_classes c
        JOIN v_subjects s ON s.id = c.subject_id
@@ -488,7 +490,7 @@ export async function listMyGroupOptions(
       ORDER BY c.id, g.number`,
     semester == null ? [] : [semester],
   );
-  type Row = MyGroupOption & { subjectId: number; order: number };
+  type Row = MyGroupOption & { order: number };
   const byClass = new Map<number, Row>();
   for (const r of rows) {
     const classId = Number(r.class_id);
@@ -496,10 +498,11 @@ export async function listMyGroupOptions(
     if (!o) {
       o = {
         classId,
+        subjectId: Number(r.subject_id),
         subjectName: String(r.subject_name),
+        semester: Number(r.semester),
         className: String(r.class_name),
         groups: [],
-        subjectId: Number(r.subject_id),
         order: KIND_ORDER.indexOf(r.kind as ClassKind),
       };
       byClass.set(classId, o);
@@ -514,5 +517,5 @@ export async function listMyGroupOptions(
         a.order - b.order ||
         a.classId - b.classId,
     )
-    .map(({ subjectId: _s, order: _o, ...rest }) => rest);
+    .map(({ order: _o, ...rest }) => rest);
 }

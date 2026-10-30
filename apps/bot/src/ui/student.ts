@@ -344,7 +344,7 @@ async function showGroups(
   ctx: StudentContext,
   pick: (
     options: Awaited<ReturnType<typeof listMyGroupOptions>>,
-  ) => string | null,
+  ) => number | null,
 ): Promise<void> {
   const [options, my, rem] = await Promise.all([
     listMyGroupOptions(ctx.deps.pool),
@@ -481,10 +481,14 @@ async function runQuizAction(
   switch (a.kind) {
     case 'quizOpen': {
       const classes = await listMarkableClasses(ctx.deps.pool);
-      const subjects: { id: number; name: string }[] = [];
+      const subjects: { id: number; name: string; semester: number }[] = [];
       for (const c of classes) {
         if (!subjects.some((x) => x.id === c.subjectId)) {
-          subjects.push({ id: c.subjectId, name: c.subjectName });
+          subjects.push({
+            id: c.subjectId,
+            name: c.subjectName,
+            semester: c.semester,
+          });
         }
       }
       return ctx.show(quizSubjectsView(subjects));
@@ -502,7 +506,7 @@ async function runQuizAction(
       const name = classes[0].subjectName;
       return ctx.show(
         quizClassesView(
-          { id: a.subjectId, name },
+          { id: a.subjectId, name, semester: classes[0].semester },
           classes,
           marks.filter((m) => m.kind === 'wejsciowka'),
         ),
@@ -585,14 +589,14 @@ export async function runStudentAction(
       return showGroups(ctx, () => null);
     case 'groupsSubject':
       // An index past the list (options changed since) selects nothing.
-      return showGroups(ctx, (o) => groupSubjects(o)[a.index] ?? null);
+      return showGroups(ctx, (o) => groupSubjects(o)[a.index]?.id ?? null);
     case 'groupsSet':
       // A group not of this class is refused by setMyGroup; the re-render
       // then shows what is actually saved.
       await setMyGroup(db, ctx.userId, a.classId, a.groupId);
       return showGroups(
         ctx,
-        (o) => o.find((x) => x.classId === a.classId)?.subjectName ?? null,
+        (o) => o.find((x) => x.classId === a.classId)?.subjectId ?? null,
       );
     case 'groupsClear':
       await clearMyGroups(db, ctx.userId);
@@ -614,7 +618,7 @@ export async function runStudentAction(
         'discord',
       );
       return showGroups(ctx, (o) =>
-        a.subject === null ? null : (groupSubjects(o)[a.subject] ?? null),
+        a.subject === null ? null : (groupSubjects(o)[a.subject]?.id ?? null),
       );
     }
     case 'login': {

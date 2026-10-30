@@ -184,6 +184,7 @@ describe('panel entry-quiz reads', () => {
         className: 'wyklad',
         subjectId: id.a,
         subjectName: 'Analiza',
+        semester: 1,
         groups: [],
       },
       {
@@ -191,6 +192,7 @@ describe('panel entry-quiz reads', () => {
         className: 'laboratorium',
         subjectId: id.a,
         subjectName: 'Analiza',
+        semester: 1,
         groups: [
           { id: id.g1, name: 'Gr. 1' },
           { id: id.g2, name: 'Gr. 2' },
@@ -201,6 +203,7 @@ describe('panel entry-quiz reads', () => {
         className: 'laboratorium',
         subjectId: id.z,
         subjectName: 'Zarządzanie',
+        semester: 1,
         groups: [],
       },
     ]);

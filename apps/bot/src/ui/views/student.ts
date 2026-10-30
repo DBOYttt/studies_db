@@ -38,6 +38,7 @@ import {
   divider,
   linkButton,
   row,
+  subjectOptionLabel,
   text,
   type View,
   view,
@@ -487,11 +488,13 @@ export function planWeek(
  * options' order. Subject select values are indexes into this list, so the
  * router decodes a choice with the same function over the same options.
  */
-export function groupSubjects(options: MyGroupOption[]): string[] {
-  const out: string[] = [];
+export function groupSubjects(
+  options: MyGroupOption[],
+): { id: number; name: string; semester: number }[] {
+  const out: { id: number; name: string; semester: number }[] = [];
   for (const o of options) {
-    if (o.groups.length > 0 && !out.includes(o.subjectName)) {
-      out.push(o.subjectName);
+    if (o.groups.length > 0 && !out.some((s) => s.id === o.subjectId)) {
+      out.push({ id: o.subjectId, name: o.subjectName, semester: o.semester });
     }
   }
   return out;
@@ -525,7 +528,7 @@ function classSelect(o: MyGroupOption, chosen: number | undefined) {
  */
 export function groupsView(
   options: MyGroupOption[],
-  selectedSubject: string | null,
+  selectedSubject: number | null,
   my: MyGroups,
   rem: RemindersState = { dayBefore: false, hourBefore: false },
 ): View {
@@ -553,7 +556,9 @@ export function groupsView(
   // The toggles carry the state they set (1 on / 0 off) and the selected
   // subject's index so it stays open.
   const subjIdx =
-    selectedSubject === null ? -1 : subjects.indexOf(selectedSubject);
+    selectedSubject === null
+      ? -1
+      : subjects.findIndex((s) => s.id === selectedSubject);
   const subjArgs = subjIdx >= 0 ? [subjIdx] : [];
   const container = new ContainerBuilder()
     .addTextDisplayComponents(text('## My groups'), text(summaryText))
@@ -575,11 +580,13 @@ export function groupsView(
               : 'Choose a subject',
           )
           .addOptions(
-            page.map((name, i) =>
+            page.map((s, i) =>
               new StringSelectMenuOptionBuilder()
-                .setLabel(clip(name))
+                .setLabel(
+                  subjectOptionLabel({ ...s, code: '' }, subjects.length, true),
+                )
                 .setValue(String(p * MAX_OPTIONS + i))
-                .setDefault(name === selectedSubject),
+                .setDefault(s.id === selectedSubject),
             ),
           ),
       ),
@@ -589,7 +596,7 @@ export function groupsView(
   const classes =
     selectedSubject === null
       ? []
-      : withGroups.filter((o) => o.subjectName === selectedSubject);
+      : withGroups.filter((o) => o.subjectId === selectedSubject);
   if (classes.length) {
     container.addSeparatorComponents(divider());
     // Used so far: container, 2 texts, divider, 2 per subject select, divider;
@@ -656,7 +663,7 @@ export const QUIZ_SKIP_DATES = 5;
 /** Skipped dates listed by name; the rest are counted. */
 const QUIZ_SKIPS_SHOWN = 10;
 
-export type QuizSubject = { id: number; name: string };
+export type QuizSubject = { id: number; name: string; semester: number };
 export type QuizClass = {
   classId: number;
   className: string;
@@ -713,7 +720,9 @@ export function quizSubjectsView(subjects: QuizSubject[]): View {
           .addOptions(
             page.map((x) =>
               new StringSelectMenuOptionBuilder()
-                .setLabel(clip(x.name))
+                .setLabel(
+                  subjectOptionLabel({ ...x, code: '' }, subjects.length, true),
+                )
                 .setValue(String(x.id)),
             ),
           ),

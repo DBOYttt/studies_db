@@ -362,19 +362,25 @@ describe('DB queries', () => {
     expect(await listMyGroupOptions(pool)).toEqual([
       {
         classId: id.algC,
+        subjectId: id.alg,
         subjectName: 'Algebra',
+        semester: 1,
         className: 'Ćwiczenia',
         groups: [{ id: id.algC1, name: 'Gr. 1' }],
       },
       {
         classId: id.fizW,
+        subjectId: id.fiz,
         subjectName: 'Fizyka',
+        semester: 1,
         className: 'Wykład',
         groups: [{ id: id.fizW1, name: 'Gr. 1' }],
       },
       {
         classId: id.fizC,
+        subjectId: id.fiz,
         subjectName: 'Fizyka',
+        semester: 1,
         className: 'Ćwiczenia',
         groups: [
           { id: id.fizC1, name: 'Gr. 1' },

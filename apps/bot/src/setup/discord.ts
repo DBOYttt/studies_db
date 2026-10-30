@@ -60,6 +60,11 @@ export async function snapshotGuild(
     callerId,
     callerRoleIds: [...member.roles.cache.keys()],
     unreadableForums,
+    categoryChannelCounts: channels.reduce<Record<string, number>>((m, c) => {
+      if (c.type !== ChannelType.GuildCategory && c.parentId)
+        m[c.parentId] = (m[c.parentId] ?? 0) + 1;
+      return m;
+    }, {}),
     textChannels: channels
       .filter((c) => c.type === ChannelType.GuildText)
       .map((c) => ({
