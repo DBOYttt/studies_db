@@ -332,6 +332,40 @@ test('queue a setup preview, see it queued, cancel it', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('a request report opens on its own page', async ({ page }) => {
+  const id = process.env.E2E_ADMIN_REQUEST_ID;
+  const report = 'E2E resync report\n<b>not markup</b>\n';
+  await page.goto('/admin/sync');
+  const row = page
+    .getByRole('region', { name: 'Bot requests' })
+    .getByRole('row')
+    .filter({ hasText: `#${id}` });
+  await expect(row).toContainText('done');
+  await row
+    .getByRole('link', { name: `Report (${report.length} chars)` })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/admin/sync/requests/${id}$`));
+  await expect(
+    page.getByRole('heading', { level: 1, name: /Fetch from Discord/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: `Request #${id}` }),
+  ).toBeVisible();
+  // Rendered as text: the tag is shown, not parsed.
+  const pre = page.getByRole('region', { name: 'Report' }).locator('pre');
+  await expect(pre).toContainText('E2E resync report');
+  await expect(pre).toContainText('<b>not markup</b>');
+  await expect(pre.locator('b')).toHaveCount(0);
+
+  for (const path of [
+    '/admin/sync/requests/999999',
+    '/admin/sync/requests/x',
+  ]) {
+    const res = await page.goto(path);
+    expect(res?.status(), path).toBe(404);
+  }
+});
+
 test.describe('a student', () => {
   loginOnce('nonadmin', process.env.E2E_TOKEN_NONADMIN, { mode: 'simple' });
 
@@ -342,6 +376,7 @@ test.describe('a student', () => {
       '/admin/lecturers',
       '/admin/users',
       '/admin/sync',
+      `/admin/sync/requests/${process.env.E2E_ADMIN_REQUEST_ID}`,
     ]) {
       const res = await page.goto(path);
       expect(res?.status(), path).toBe(404);
