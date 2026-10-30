@@ -159,7 +159,7 @@ const sameNumber = (v: string, stored: number | undefined) =>
  * The semester and ECTS. On edit, a value equal to the stored one is accepted
  * even when today's range refuses it (one written through the SQL console),
  * so it does not block editing the other fields; the action then leaves it
- * as it is. Any other value is in range, so a changed semester is 1 or 2.
+ * as it is. Any other value is in range, so a changed semester is in SEMESTERS.
  */
 function parseSemesterEcts(
   form: FormData,
@@ -227,7 +227,7 @@ export function parseSubjectAdd(form: FormData): Parsed<SubjectInput> {
 export type SubjectEdit = {
   code: string;
   name: string;
-  /** 1 or 2, unless it is the stored value (see `parseSemesterEcts`). */
+  /** In SEMESTERS, unless it is the stored value (see `parseSemesterEcts`). */
   semester: number;
   ects: number;
   description: string | null;

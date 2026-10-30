@@ -41,6 +41,11 @@ export function validateFeedUrl(
       error: 'The link must not contain a username or password.',
     };
   }
+  // The URL parser drops a default port (:443), so look at the raw authority.
+  const authority = text.replace(/^[a-z]+:\/\//i, '').split(/[/?#]/)[0] ?? '';
+  if (u.port !== '' || /:\d*$/.test(authority)) {
+    return { ok: false, error: 'The link must not contain a port number.' };
+  }
   const host = u.hostname.toLowerCase();
   if (!allowedHosts.includes(host)) {
     return {
@@ -53,11 +58,11 @@ export function validateFeedUrl(
 
 /** Shows a feed link without its secret: host plus the last 4 characters. */
 export function maskFeedUrl(url: string): string {
-  let host = '';
+  let host: string;
   try {
     host = new URL(url).hostname;
   } catch {
-    host = '';
+    return '(invalid link)';
   }
   return `${host}/…${url.slice(-4)}`;
 }
@@ -94,61 +99,63 @@ export async function setFeed(
     examUrl?: string | null;
     userId: number;
   },
+  allowedHosts: readonly string[] = feedAllowedHosts(),
 ): Promise<
   | { ok: true; classHost: string; examHost: string | null }
   | { ok: false; field: 'class_url' | 'exam_url'; error: string }
 > {
-  const hosts = feedAllowedHosts();
-  const [stored] = await db
-    .select()
-    .from(unitimeFeeds)
-    .where(eq(unitimeFeeds.semester, input.semester));
+  return db.transaction(async (tx) => {
+    const [stored] = await tx
+      .select()
+      .from(unitimeFeeds)
+      .where(eq(unitimeFeeds.semester, input.semester));
 
-  let classUrl: string;
-  if (input.classUrl !== undefined) {
-    const v = validateFeedUrl(input.classUrl, hosts);
-    if (!v.ok) return { ok: false, field: 'class_url', error: v.error };
-    classUrl = v.url;
-  } else if (stored) {
-    classUrl = stored.classUrl;
-  } else {
+    let classUrl: string;
+    if (input.classUrl !== undefined) {
+      const v = validateFeedUrl(input.classUrl, allowedHosts);
+      if (!v.ok) return { ok: false, field: 'class_url', error: v.error };
+      classUrl = v.url;
+    } else if (stored) {
+      classUrl = stored.classUrl;
+    } else {
+      return {
+        ok: false,
+        field: 'class_url',
+        error: 'Paste the class timetable link.',
+      };
+    }
+
+    let examUrl: string | null;
+    if (input.examUrl === undefined) {
+      examUrl = stored?.examUrl ?? null;
+    } else if (input.examUrl === null) {
+      examUrl = null;
+    } else {
+      const v = validateFeedUrl(input.examUrl, allowedHosts);
+      if (!v.ok) return { ok: false, field: 'exam_url', error: v.error };
+      examUrl = v.url;
+    }
+
+    const now = new Date();
+    await tx
+      .insert(unitimeFeeds)
+      .values({
+        semester: input.semester,
+        classUrl,
+        examUrl,
+        updatedAt: now,
+        updatedBy: input.userId,
+      })
+      .onDuplicateKeyUpdate({
+        set: { classUrl, examUrl, updatedAt: now, updatedBy: input.userId },
+      });
+
     return {
-      ok: false,
-      field: 'class_url',
-      error: 'Paste the class timetable link.',
+      ok: true,
+      classHost: new URL(classUrl).hostname.toLowerCase(),
+      examHost: examUrl ? new URL(examUrl).hostname.toLowerCase() : null,
     };
-  }
-
-  let examUrl: string | null;
-  if (input.examUrl === undefined) {
-    examUrl = stored?.examUrl ?? null;
-  } else if (input.examUrl === null) {
-    examUrl = null;
-  } else {
-    const v = validateFeedUrl(input.examUrl, hosts);
-    if (!v.ok) return { ok: false, field: 'exam_url', error: v.error };
-    examUrl = v.url;
-  }
-
-  const now = new Date();
-  await db
-    .insert(unitimeFeeds)
-    .values({
-      semester: input.semester,
-      classUrl,
-      examUrl,
-      updatedAt: now,
-      updatedBy: input.userId,
-    })
-    .onDuplicateKeyUpdate({
-      set: { classUrl, examUrl, updatedAt: now, updatedBy: input.userId },
-    });
-
-  return {
-    ok: true,
-    classHost: new URL(classUrl).hostname.toLowerCase(),
-    examHost: examUrl ? new URL(examUrl).hostname.toLowerCase() : null,
-  };
+  });
 }
 
 export async function clearFeed(
