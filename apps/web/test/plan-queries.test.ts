@@ -3,6 +3,7 @@ import {
   classGroups,
   classSessions,
   type Db,
+  events,
   lecturers,
   listMarkableClasses,
   listUpcomingEvents,
@@ -383,5 +384,104 @@ describe('planListPage', () => {
       subjectId: id.alg,
     });
     expect(sub.rows.map((r) => r[0])).toEqual([id.last]);
+  });
+});
+
+describe('semester filter', () => {
+  const sem: Record<string, number> = {};
+  beforeAll(async () => {
+    const mk = async (code: string, semester: number) =>
+      (
+        await db
+          .insert(subjects)
+          .values({ name: `Sem ${code}`, code, semester, ects: 3 })
+          .$returningId()
+      )[0].id;
+    sem.s3 = await mk('SM3', 3);
+    sem.s5 = await mk('SM5', 5);
+    for (const [k, subjectId] of [
+      ['a3', sem.s3],
+      ['a5', sem.s5],
+    ] as const) {
+      const c = (
+        await db
+          .insert(classes)
+          .values({ subjectId, kind: 'cwiczenia', name: 'Ćwiczenia' })
+          .$returningId()
+      )[0].id;
+      const g = (
+        await db
+          .insert(classGroups)
+          .values({ classId: c, number: 1, name: 'Gr. 1' })
+          .$returningId()
+      )[0].id;
+      sem[`${k}c`] = c;
+      sem[`${k}g`] = g;
+      await mkSession(k, W(2031, 3, 3, 10), W(2031, 3, 3, 11), {
+        subjectId,
+        classId: c,
+        groupId: g,
+      });
+    }
+    const ev = async (title: string, subjectId: number | null) =>
+      (
+        await db
+          .insert(events)
+          .values({
+            kind: 'inne',
+            title,
+            startsAt: W(2031, 3, 3, 12),
+            subjectId,
+          })
+          .$returningId()
+      )[0].id;
+    sem.e3 = await ev('E3', sem.s3);
+    sem.e5 = await ev('E5', sem.s5);
+    sem.eNone = await ev('ENone', null);
+  });
+
+  const W10 = { year: 2031, week: 10 };
+
+  it('week sessions: only the semester', async () => {
+    const all = await listWeekSessions(ro, W10);
+    expect(all.rows.map((r) => r.id).sort()).toEqual([id.a3, id.a5].sort());
+    const f = await listWeekSessions(ro, W10, { semester: 3 });
+    expect(f.rows.map((r) => r.id)).toEqual([id.a3]);
+    expect(f.sql).toContain('s.semester = 3');
+  });
+
+  it('session range and list use the subquery form', async () => {
+    const r = await sessionRange(ro, { semester: 5 });
+    expect(r).toEqual({ first: W(2031, 3, 3, 10), last: W(2031, 3, 3, 10) });
+    expect(await sessionRange(ro, { semester: 6 })).toBeNull();
+    const p = await planListPage(ro, { page: 1, perPage: 25, semester: 3 });
+    expect(p.rows.map((x) => x[0])).toEqual([id.a3]);
+  });
+
+  it('upcoming events keep subject-less ones and drop other semesters', async () => {
+    const now = W(2031, 3, 1);
+    const f = await listUpcomingEvents(ro, now, 50, 0, 3);
+    expect(f.map((e) => e.id).sort()).toEqual([sem.e3, sem.eNone].sort());
+    const all = await listUpcomingEvents(ro, now, 50);
+    expect(all.map((e) => e.id)).toContain(sem.e5);
+  });
+
+  it('loadPlanWeek filters sessions and events', async () => {
+    const w = await loadPlanWeek(ro, '2031-W10', W(2031, 3, 1), {
+      semester: 5,
+    });
+    expect(w.classRows.map((r) => r.id)).toEqual([id.a5]);
+    expect(w.events.map((e) => e.id).sort()).toEqual(
+      [sem.e5, sem.eNone].sort(),
+    );
+  });
+
+  it('group options: only the semester', async () => {
+    const all = await listMyGroupOptions(ro);
+    expect(all.map((o) => o.classId)).toEqual(
+      expect.arrayContaining([sem.a3c, sem.a5c]),
+    );
+    const f = await listMyGroupOptions(ro, 3);
+    expect(f.map((o) => o.classId)).toEqual([sem.a3c]);
   });
 });

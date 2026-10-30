@@ -1,4 +1,4 @@
-import { type Db, events } from '@studies/db';
+import { type Db, events, subjects } from '@studies/db';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -89,5 +89,35 @@ describe('upcomingEventsPage', () => {
     const p3 = await upcomingEventsPage(ro, now, 3);
     expect(p3.events).toEqual([]);
     expect(p3.hasNext).toBe(false);
+  });
+
+  it('keeps subject-less events and only subjects of the semester', async () => {
+    const mk = async (code: string, semester: number) =>
+      (
+        await db
+          .insert(subjects)
+          .values({ name: code, code, semester, ects: 1 })
+          .$returningId()
+      )[0].id;
+    const s3 = await mk('IX3', 3);
+    const s5 = await mk('IX5', 5);
+    const day = W(2032, 1, 5, 10);
+    const ev = async (title: string, subjectId: number | null) =>
+      (
+        await db
+          .insert(events)
+          .values({ kind: 'inne', title, startsAt: day, subjectId })
+          .$returningId()
+      )[0].id;
+    const e3 = await ev('S3', s3);
+    const e5 = await ev('S5', s5);
+    const eN = await ev('None', null);
+    const far = W(2031, 12, 31, 12);
+    const all = (await upcomingEventsPage(ro, far, 1)).events.map((e) => e.id);
+    expect(all).toEqual(expect.arrayContaining([e3, e5, eN]));
+    const f = (await upcomingEventsPage(ro, far, 1, 3)).events.map((e) => e.id);
+    expect(f).toContain(e3);
+    expect(f).toContain(eN);
+    expect(f).not.toContain(e5);
   });
 });

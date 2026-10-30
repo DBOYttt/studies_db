@@ -20,6 +20,8 @@ export type NavClass = {
 };
 export type NavSubject = {
   code: string;
+  /** Set by `getNavSubjects`; lets the cache filter by semester. */
+  semester?: number;
   name: string;
   fileCount: number;
   href: string;

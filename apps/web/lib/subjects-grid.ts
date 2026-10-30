@@ -8,13 +8,21 @@ const kindOrder = CLASS_KINDS.map((k) => `'${k}'`).join(', ');
  * read-only pool, so the SQL text and the rows always agree. Correlated
  * subqueries (no join fan-out); classes in CLASS_KINDS order.
  */
-export const SUBJECTS_SQL = `SELECT s.code, s.name, s.semester, s.ects,
+const SUBJECTS_SELECT = `SELECT s.code, s.name, s.semester, s.ects,
   (SELECT GROUP_CONCAT(c.name ORDER BY FIELD(c.kind, ${kindOrder}), c.id SEPARATOR ', ')
      FROM \`v_classes\` c WHERE c.subject_id = s.id) AS classes,
   (SELECT COUNT(*) FROM \`v_files\` f WHERE f.subject_code = s.code) AS files,
   (SELECT MAX(f.created_at) FROM \`v_files\` f WHERE f.subject_code = s.code) AS latest
-FROM \`v_subjects\` s
-ORDER BY s.semester, s.name`;
+FROM \`v_subjects\` s`;
+const SUBJECTS_ORDER = `ORDER BY s.semester, s.name`;
+
+export const SUBJECTS_SQL = `${SUBJECTS_SELECT}
+${SUBJECTS_ORDER}`;
+
+/** SUBJECTS_SQL for one semester; the semester is a bound `?`. */
+export const SUBJECTS_SEMESTER_SQL = `${SUBJECTS_SELECT}
+WHERE s.semester = ?
+${SUBJECTS_ORDER}`;
 
 export const SUBJECTS_COLUMNS = [
   'code',
@@ -39,8 +47,14 @@ export type SubjectGridRow = {
 /** Runs SUBJECTS_SQL on the RO pool (throws on connection/query errors). */
 export async function querySubjectsGrid(
   pool: mysql.Pool,
+  semester?: number | null,
 ): Promise<SubjectGridRow[]> {
-  const [rows] = await pool.query<mysql.RowDataPacket[]>(SUBJECTS_SQL);
+  const [rows] =
+    semester == null
+      ? await pool.query<mysql.RowDataPacket[]>(SUBJECTS_SQL)
+      : await pool.query<mysql.RowDataPacket[]>(SUBJECTS_SEMESTER_SQL, [
+          semester,
+        ]);
   return rows.map((r) => ({
     code: String(r.code),
     name: String(r.name),

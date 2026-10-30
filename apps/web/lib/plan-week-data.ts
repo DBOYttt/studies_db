@@ -40,7 +40,12 @@ function loadWeek(
 ): Promise<PlanWeekRows> {
   return Promise.all([
     listWeekSessions(pool, week, filter),
-    listEventsInRange(pool, weekStart(week), weekStart(shiftWeek(week, 1))),
+    listEventsInRange(
+      pool,
+      weekStart(week),
+      weekStart(shiftWeek(week, 1)),
+      filter.semester,
+    ),
   ]).then(([{ rows }, events]) => ({ week, classRows: rows, events }));
 }
 

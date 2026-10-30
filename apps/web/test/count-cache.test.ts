@@ -46,6 +46,16 @@ describe('count caches', () => {
     expect((await C.cachedNavSubjects()).map((s) => s.code)).toContain('GAM');
   });
 
+  it('a chosen semester filters the cached lists', async () => {
+    C.invalidateCounts();
+    expect((await C.cachedSubjectCards(2)).map((s) => s.semester)).toEqual([2]);
+    expect((await C.cachedNavSubjects(1)).map((s) => s.code)).not.toContain(
+      'GAM',
+    );
+    expect((await C.cachedNavSubjects(2)).map((s) => s.code)).toContain('GAM');
+    expect((await C.cachedSubjectCards(null)).length).toBeGreaterThan(2);
+  });
+
   it('view counts are null without an RO pool, and null is not cached', async () => {
     C.invalidateCounts();
     expect(await C.cachedViewCounts()).toBeNull();

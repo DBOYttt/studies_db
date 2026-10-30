@@ -205,6 +205,15 @@ describe('listSubjectCards', () => {
     expect(alg?.fileCount).toBe(2);
     expect(alg?.lastUpload).toEqual(T(2));
   });
+  it('filters by semester', async () => {
+    expect((await listSubjectCards(db, 1)).map((c) => c.code)).toEqual([
+      'ALG',
+      'PUS',
+    ]);
+    expect((await listSubjectCards(db, 2)).map((c) => c.code)).toEqual(['FIZ']);
+    expect(await listSubjectCards(db, 5)).toEqual([]);
+    expect((await listSubjectCards(db, null)).length).toBe(3);
+  });
   it('handles a subject with no files, classes or tags', async () => {
     const pus = (await listSubjectCards(db)).find((c) => c.code === 'PUS');
     expect(pus).toMatchObject({ kinds: [], fileCount: 0, lastUpload: null });
@@ -313,6 +322,14 @@ describe('searchSimpleFiles', () => {
     expect(await names('dynam')).toEqual(['100%_done.pdf']);
     expect(await names('algebra')).toEqual(['macierze.pdf', 'inne.pdf']);
     expect(await names('usuniety')).toEqual([]);
+  });
+  it('keeps to one semester when asked', async () => {
+    const inSem = async (q: string, sem: number) =>
+      (await searchSimpleFiles(db, q, 100, sem)).files.map((x) => x.filename);
+    expect(await inSem('algebra', 1)).toEqual(['macierze.pdf', 'inne.pdf']);
+    expect(await inSem('algebra', 2)).toEqual([]);
+    expect(await inSem('entropia', 1)).toEqual([]);
+    expect(await inSem('entropia', 2)).toEqual(['notatki.pdf']);
   });
   it('adds full-text content hits after LIKE hits, without duplicates', async () => {
     expect(await names('entropia')).toEqual(['notatki.pdf']);

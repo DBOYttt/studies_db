@@ -41,12 +41,14 @@ export async function upcomingEventsPage(
   pool: mysql.Pool,
   nowWall: Date,
   page: number,
+  semester?: number | null,
 ): Promise<EventsPage> {
   const rows = await listUpcomingEvents(
     pool,
     nowWall,
     EVENTS_PER_PAGE + 1,
     (page - 1) * EVENTS_PER_PAGE,
+    semester,
   );
   return {
     events: rows.slice(0, EVENTS_PER_PAGE),

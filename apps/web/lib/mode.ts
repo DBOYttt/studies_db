@@ -103,6 +103,9 @@ function pick(params: URLSearchParams, keys: string[]): string {
     const v = params.get(k);
     if (v) out.set(k, v);
   }
+  // The semester choice travels with every mapped page.
+  const sem = params.get('sem');
+  if (sem !== null && /^([1-7]|all)$/.test(sem)) out.set('sem', sem);
   const s = out.toString();
   return s ? `?${s}` : '';
 }

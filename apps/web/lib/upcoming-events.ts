@@ -22,9 +22,10 @@ export async function upcomingForUser(
   limit = 5,
   /** My groups already being loaded for this request (`loadMyGroups`). */
   mine?: Promise<MyGroups>,
+  semester?: number | null,
 ): Promise<PlanSession[]> {
   const [events, groups] = await Promise.all([
-    listUpcomingEvents(pool, nowWall, SCAN),
+    listUpcomingEvents(pool, nowWall, SCAN, 0, semester),
     mine ?? loadMyGroups(db, pool, userId),
   ]);
   return pickUpcoming(events, groups, limit);

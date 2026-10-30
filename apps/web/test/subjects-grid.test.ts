@@ -95,6 +95,18 @@ describe('querySubjectsGrid', () => {
     expect(rows.find((r) => r.code === 'ALG')?.classes).toBeNull();
   });
 
+  it('filters by semester with a bound parameter', async () => {
+    expect((await querySubjectsGrid(pool, 1)).map((r) => r.code)).toEqual([
+      'ALG',
+      'BIO',
+    ]);
+    const two = await querySubjectsGrid(pool, 2);
+    expect(two.map((r) => r.code)).toEqual(['FIZ']);
+    expect(two[0].files).toBe(2);
+    expect(await querySubjectsGrid(pool, 6)).toEqual([]);
+    expect((await querySubjectsGrid(pool, null)).length).toBe(3);
+  });
+
   it('counts live files only (no join fan-out)', async () => {
     const rows = await querySubjectsGrid(pool);
     const fiz = rows.find((r) => r.code === 'FIZ');

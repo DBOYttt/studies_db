@@ -47,9 +47,20 @@ g.__studiesCounts ??= {
 };
 const caches = g.__studiesCounts;
 
-export const cachedNavSubjects = () => caches.nav.get();
+/** Cached for all semesters; a chosen semester filters the cached list. */
+export const cachedNavSubjects = async (
+  semester?: number | null,
+): Promise<NavSubject[]> => {
+  const all = await caches.nav.get();
+  return semester == null ? all : all.filter((s) => s.semester === semester);
+};
 export const cachedViewCounts = () => caches.views.get();
-export const cachedSubjectCards = () => caches.cards.get();
+export const cachedSubjectCards = async (
+  semester?: number | null,
+): Promise<SubjectCard[]> => {
+  const all = await caches.cards.get();
+  return semester == null ? all : all.filter((s) => s.semester === semester);
+};
 
 /** Drops every cached count; call after a write made through the web. */
 export function invalidateCounts(): void {
