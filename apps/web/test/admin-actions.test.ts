@@ -68,6 +68,9 @@ vi.mock('react', async (importOriginal) => ({
 }));
 
 const A = await import('../lib/admin-actions');
+const { CONFLICT_MESSAGE: A_CONFLICT } = await import(
+  '../lib/admin-form-values'
+);
 
 async function login(discordUserId: string) {
   const id = await upsertUser(db, {
@@ -767,5 +770,237 @@ describe('admin actions: sync', () => {
       action: 'bot.request_cancel',
       target: `bot_request:${id}`,
     });
+  });
+});
+
+describe('admin actions: concurrent edits (orig_* fields)', () => {
+  /** The form as admin A rendered it: every value plus its orig_ copy. */
+  const rendered = (values: Record<string, string>) => {
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(values)) {
+      out[k] = v;
+      out[`orig_${k}`] = v;
+    }
+    return out;
+  };
+  const conc = {
+    name: 'Analiza',
+    semester: '1',
+    ects: '5',
+    description: '',
+    platformUrl: '',
+  };
+  const concRow = async () =>
+    (await db.select().from(subjects).where(eq(subjects.code, 'CONC')))[0];
+
+  beforeAll(async () => {
+    await db.insert(subjects).values({
+      name: 'Analiza',
+      code: 'CONC',
+      semester: 1,
+      ects: 5,
+    });
+  });
+
+  it("an edit of one field keeps another admin's change to another field", async () => {
+    const form = rendered(conc);
+    // Admin B renames it meanwhile.
+    await db
+      .update(subjects)
+      .set({ name: 'Analiza matematyczna' })
+      .where(eq(subjects.code, 'CONC'));
+    const r = await A.editSubjectAction(
+      null,
+      fd({ ...form, code: 'CONC', ects: '6' }),
+    );
+    expect(r).toEqual({ ok: true, message: 'Updated subject CONC.' });
+    expect(await concRow()).toMatchObject({
+      name: 'Analiza matematyczna',
+      ects: 6,
+    });
+    expect((await lastAudit()).details).toEqual({
+      fields: ['ects'],
+      source: 'web',
+    });
+  });
+
+  it('a field both admins changed is refused, nothing is written', async () => {
+    const form = rendered({ ...conc, name: 'Analiza matematyczna', ects: '6' });
+    await db
+      .update(subjects)
+      .set({ name: 'Analiza B' })
+      .where(eq(subjects.code, 'CONC'));
+    const before = (await audits()).length;
+    const r = await A.editSubjectAction(
+      null,
+      fd({ ...form, code: 'CONC', name: 'Analiza A', ects: '7' }),
+    );
+    expect(r).toEqual({ ok: false, message: A_CONFLICT(['name']) });
+    expect(await concRow()).toMatchObject({ name: 'Analiza B', ects: 6 });
+    expect(await audits()).toHaveLength(before);
+  });
+
+  it('a direct POST without orig_* diffs against the stored row', async () => {
+    const r = await A.editSubjectAction(
+      null,
+      fd({
+        code: 'CONC',
+        name: 'Analiza C',
+        semester: '1',
+        ects: '6',
+        description: '',
+        platformUrl: '',
+      }),
+    );
+    expect(r).toEqual({ ok: true, message: 'Updated subject CONC.' });
+    expect((await concRow()).name).toBe('Analiza C');
+    expect((await lastAudit()).details).toEqual({
+      fields: ['name'],
+      source: 'web',
+    });
+  });
+
+  it('an untouched stale URL is not reverted (normalised compare)', async () => {
+    await db
+      .update(subjects)
+      .set({ platformUrl: 'https://a.example' })
+      .where(eq(subjects.code, 'CONC'));
+    const form = rendered({
+      name: 'Analiza C',
+      semester: '1',
+      ects: '6',
+      description: '',
+      platformUrl: 'https://a.example',
+    });
+    await db
+      .update(subjects)
+      .set({ platformUrl: 'https://b.example' })
+      .where(eq(subjects.code, 'CONC'));
+    // A only adds a trailing space to the URL: not a change.
+    const r = await A.editSubjectAction(
+      null,
+      fd({ ...form, code: 'CONC', platformUrl: 'https://a.example ' }),
+    );
+    expect(r).toEqual({ ok: true, message: 'No changes.', unchanged: true });
+    expect((await concRow()).platformUrl).toBe('https://b.example');
+  });
+
+  it('an out-of-range stored semester/ECTS does not block an edit and is kept', async () => {
+    await db.insert(subjects).values({
+      name: 'Stary',
+      code: 'OOR',
+      semester: 3,
+      ects: 40,
+    });
+    const r = await A.editSubjectAction(
+      null,
+      fd({
+        ...rendered({
+          name: 'Stary',
+          semester: '3',
+          ects: '40',
+          description: '',
+          platformUrl: '',
+        }),
+        code: 'OOR',
+        name: 'Nowy',
+      }),
+    );
+    expect(r).toEqual({ ok: true, message: 'Updated subject OOR.' });
+    const [s] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'OOR'));
+    expect(s).toMatchObject({ name: 'Nowy', semester: 3, ects: 40 });
+    // Changing it to another out-of-range value is still refused.
+    expect(
+      await A.editSubjectAction(
+        null,
+        fd({
+          code: 'OOR',
+          name: 'Nowy',
+          semester: '4',
+          ects: '40',
+          description: '',
+          platformUrl: '',
+        }),
+      ),
+    ).toEqual({ ok: false, message: 'Semester must be 1 or 2.' });
+  });
+
+  it("a class edit keeps another admin's note; a shared change is refused", async () => {
+    const [s] = await db
+      .select()
+      .from(subjects)
+      .where(eq(subjects.code, 'CONC'));
+    await ensureClass(db, s.id, 'wyklad');
+    await db
+      .update(classes)
+      .set({ assessmentNote: 'Stara' })
+      .where(eq(classes.subjectId, s.id));
+    const form = rendered({ assessment: '', note: 'Stara', platformUrl: '' });
+    await db
+      .update(classes)
+      .set({ assessmentNote: 'Nowa B' })
+      .where(eq(classes.subjectId, s.id));
+    const r = await A.editClassAction(
+      null,
+      fd({ ...form, code: 'CONC', kind: 'wyklad', assessment: 'egzamin' }),
+    );
+    expect(r?.ok).toBe(true);
+    const row = async () =>
+      (await db.select().from(classes).where(eq(classes.subjectId, s.id)))[0];
+    expect(await row()).toMatchObject({
+      assessment: 'egzamin',
+      assessmentNote: 'Nowa B',
+    });
+    expect((await lastAudit()).details).toEqual({
+      kind: 'wyklad',
+      fields: ['assessment'],
+      source: 'web',
+    });
+    expect(
+      await A.editClassAction(
+        null,
+        fd({ ...form, code: 'CONC', kind: 'wyklad', note: 'Nowa A' }),
+      ),
+    ).toEqual({ ok: false, message: A_CONFLICT(['note']) });
+    expect((await row()).assessmentNote).toBe('Nowa B');
+  });
+
+  it("a lecturer edit keeps another admin's room; a shared change is refused", async () => {
+    const [ins] = await db
+      .insert(lecturers)
+      .values({ name: 'Ewa Nowak', room: 'A1' });
+    const id = ins.insertId;
+    const form = rendered({
+      name: 'Ewa Nowak',
+      title: '',
+      email: '',
+      officeHours: '',
+      room: 'A1',
+    });
+    await db.update(lecturers).set({ room: 'B2' }).where(eq(lecturers.id, id));
+    const r = await A.editLecturerAction(
+      null,
+      fd({ ...form, id: String(id), title: 'dr' }),
+    );
+    expect(r?.ok).toBe(true);
+    const row = async () =>
+      (await db.select().from(lecturers).where(eq(lecturers.id, id)))[0];
+    expect(await row()).toMatchObject({ title: 'dr', room: 'B2' });
+    expect((await lastAudit()).details).toEqual({
+      fields: ['title'],
+      source: 'web',
+    });
+    const before = (await audits()).length;
+    expect(
+      await A.editLecturerAction(
+        null,
+        fd({ ...form, id: String(id), title: 'prof.', room: 'C3' }),
+      ),
+    ).toEqual({ ok: false, message: A_CONFLICT(['title', 'room']) });
+    expect(await row()).toMatchObject({ title: 'dr', room: 'B2' });
+    expect(await audits()).toHaveLength(before);
   });
 });
