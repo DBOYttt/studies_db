@@ -87,6 +87,12 @@ export function planStatusText(s: PlanSyncStatus, _now: Date): string {
   } else {
     lines.push('Never synced.');
   }
+  for (const f of s.stats?.feeds ?? [])
+    lines.push(
+      f.ok
+        ? `Semester ${f.semester}: +${f.created} ~${f.updated} -${f.deleted}`
+        : `Semester ${f.semester}: failed`,
+    );
   if (s.lastError) lines.push(`Error: ${s.lastError}`);
   return lines.join('\n');
 }
