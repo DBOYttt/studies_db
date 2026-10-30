@@ -90,6 +90,11 @@ export async function claimNextBotRequest(
   });
 }
 
+/**
+ * Stores the outcome of a request the caller claimed. Only a row still
+ * `running` is updated: one already failed meanwhile (cancelled as stuck,
+ * or failed as interrupted) keeps that outcome.
+ */
 export async function finishBotRequest(
   db: DbExecutor,
   id: number,
@@ -106,7 +111,7 @@ export async function finishBotRequest(
       finishedAt: now,
       ...(report === undefined ? {} : { report: truncateReport(report) }),
     })
-    .where(eq(botRequests.id, id));
+    .where(and(eq(botRequests.id, id), eq(botRequests.status, 'running')));
 }
 
 /** At most MAX_REPORT UTF-16 units plus `…`, never splitting a surrogate pair. */
@@ -126,7 +131,19 @@ export const ADMIN_REQUEST_KINDS = [
 export type AdminRequestKind = (typeof ADMIN_REQUEST_KINDS)[number];
 export const BOT_BUSY_MESSAGE = 'The bot is already working on a request.';
 export const CANCELLED_MESSAGE = 'Cancelled.';
-const ADMIN_LOCK = 'admin_bot_request';
+/**
+ * GET_LOCK names are server-wide, so the name carries the database: the dev,
+ * e2e and QA databases on one server do not serialise on each other.
+ */
+const ADMIN_LOCK = sql`CONCAT(DATABASE(), ':admin_bot_request')`;
+/** A `running` admin request started this long ago is stuck: it may be cancelled. */
+export const STUCK_AFTER_MS = 15 * 60_000;
+
+/** A request failed by a cancel (shown as `cancelled`, not as an error). */
+export const isCancelled = (r: {
+  status: string;
+  error: string | null;
+}): boolean => r.status === 'failed' && r.error === CANCELLED_MESSAGE;
 
 /**
  * Queues an admin request (target `guild`, payload `{ requestedBy }`) unless
@@ -137,7 +154,8 @@ const ADMIN_LOCK = 'admin_bot_request';
  * other, so two concurrent enqueues would both pass it and then deadlock on
  * their inserts. The named lock `admin_bot_request` (taken on the same
  * connection before the read) serialises them instead: the second one waits,
- * then sees the first one's committed row and is refused.
+ * then sees the first one's committed row and is refused. The lock name is
+ * `<database>:admin_bot_request` (see ADMIN_LOCK).
  */
 export async function enqueueAdminBotRequest(
   db: Db,
@@ -192,63 +210,111 @@ async function checkAndInsertAdminRequest(
   return { ok: true, id: res.insertId };
 }
 
-/** Fails a queued admin request with `Cancelled.`; false when it is not queued. */
+/**
+ * Fails an admin request with `Cancelled.` when it is queued, or `running`
+ * but started more than STUCK_AFTER_MS before `now` (stuck: the bot's late
+ * finish then leaves the cancellation alone). False otherwise.
+ */
 export async function cancelAdminBotRequest(
   db: DbExecutor,
   id: number,
   now: Date = new Date(),
 ): Promise<boolean> {
+  const stuckBefore = new Date(now.getTime() - STUCK_AFTER_MS);
   const [res] = await db
     .update(botRequests)
     .set({ status: 'failed', error: CANCELLED_MESSAGE, finishedAt: now })
     .where(
       and(
         eq(botRequests.id, id),
-        eq(botRequests.status, 'queued'),
         inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]),
+        or(
+          eq(botRequests.status, 'queued'),
+          and(
+            eq(botRequests.status, 'running'),
+            lt(botRequests.startedAt, stuckBefore),
+          ),
+        ),
       ),
     );
   return res.affectedRows === 1;
 }
 
-export type AdminBotRequest = BotRequest & {
-  report: string | null;
+export type AdminBotRequestRow = BotRequest & {
+  /** Length of the stored report in characters, 0 when there is none. */
+  reportChars: number;
   requestedBy: number | null;
   requesterName: string | null;
 };
 
-/** Admin requests, newest first, with the requester's display name. */
+export type AdminBotRequest = Omit<AdminBotRequestRow, 'reportChars'> & {
+  report: string | null;
+};
+
+const requestedBySql = sql<
+  number | null
+>`CAST(JSON_UNQUOTE(JSON_EXTRACT(${botRequests.payload}, '$.requestedBy')) AS INTEGER)`;
+
+const adminRequestColumns = {
+  id: botRequests.id,
+  kind: botRequests.kind,
+  target: botRequests.target,
+  status: botRequests.status,
+  payload: botRequests.payload,
+  error: botRequests.error,
+  createdAt: botRequests.createdAt,
+  startedAt: botRequests.startedAt,
+  finishedAt: botRequests.finishedAt,
+  requestedBy: requestedBySql,
+  requesterName: users.displayName,
+};
+
+const toRequester = (v: unknown): number | null =>
+  v == null ? null : Number(v);
+
+/**
+ * Admin requests, newest first, with the requester's display name. The
+ * reports are not loaded (up to 60 000 chars each, and the Sync page
+ * refreshes every few seconds): only their length, `reportChars`.
+ */
 export async function listAdminBotRequests(
   db: DbExecutor,
   limit = 20,
-): Promise<AdminBotRequest[]> {
-  const requestedBy = sql<
-    number | null
-  >`CAST(JSON_UNQUOTE(JSON_EXTRACT(${botRequests.payload}, '$.requestedBy')) AS INTEGER)`;
+): Promise<AdminBotRequestRow[]> {
   const rows = await db
     .select({
-      id: botRequests.id,
-      kind: botRequests.kind,
-      target: botRequests.target,
-      status: botRequests.status,
-      payload: botRequests.payload,
-      error: botRequests.error,
-      report: botRequests.report,
-      createdAt: botRequests.createdAt,
-      startedAt: botRequests.startedAt,
-      finishedAt: botRequests.finishedAt,
-      requestedBy,
-      requesterName: users.displayName,
+      ...adminRequestColumns,
+      reportChars: sql<number>`COALESCE(CHAR_LENGTH(${botRequests.report}), 0)`,
     })
     .from(botRequests)
-    .leftJoin(users, eq(users.id, requestedBy))
+    .leftJoin(users, eq(users.id, requestedBySql))
     .where(inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]))
     .orderBy(desc(botRequests.id))
     .limit(limit);
   return rows.map((r) => ({
     ...r,
-    requestedBy: r.requestedBy == null ? null : Number(r.requestedBy),
+    reportChars: Number(r.reportChars),
+    requestedBy: toRequester(r.requestedBy),
   }));
+}
+
+/** One admin request with its report; null when unknown or not an admin kind. */
+export async function getAdminBotRequest(
+  db: DbExecutor,
+  id: number,
+): Promise<AdminBotRequest | null> {
+  const [row] = await db
+    .select({ ...adminRequestColumns, report: botRequests.report })
+    .from(botRequests)
+    .leftJoin(users, eq(users.id, requestedBySql))
+    .where(
+      and(
+        eq(botRequests.id, id),
+        inArray(botRequests.kind, [...ADMIN_REQUEST_KINDS]),
+      ),
+    )
+    .limit(1);
+  return row ? { ...row, requestedBy: toRequester(row.requestedBy) } : null;
 }
 
 /**

@@ -310,7 +310,8 @@ test('queue a setup preview, see it queued, cancel it', async ({ page }) => {
   );
 
   await row.getByRole('button', { name: 'Cancel' }).click();
-  await expect(row).toContainText('failed');
+  await expect(row).toContainText('cancelled');
+  await expect(row).not.toContainText('failed');
   await expect(row).toContainText('Cancelled.');
   await expect(
     bot.getByRole('button', { name: 'Run setup' }),

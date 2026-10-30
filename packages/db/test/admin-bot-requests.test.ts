@@ -8,7 +8,10 @@ import {
   enqueueAdminBotRequest,
   enqueueBotRequest,
   finishBotRequest,
+  getAdminBotRequest,
+  isCancelled,
   listAdminBotRequests,
+  STUCK_AFTER_MS,
 } from '../src/bot-requests.js';
 import { createDb, type Db } from '../src/client.js';
 import { botRequests, users } from '../src/schema.js';
@@ -34,6 +37,12 @@ afterAll(async () => {
 beforeEach(async () => {
   await db.delete(botRequests);
 });
+
+/** Claims request `id` (the only queued one of its kind) so it can be finished. */
+async function claim(id: number, kind: string) {
+  const c = await claimNextBotRequest(db, [kind]);
+  if (c?.id !== id) throw new Error(`claimed ${c?.id}, expected ${id}`);
+}
 
 async function adminRows() {
   const rows = await db.select().from(botRequests);
@@ -152,6 +161,7 @@ describe('admin bot requests', () => {
   it('stores a long report truncated to 60 000 chars plus an ellipsis', async () => {
     const r = await enqueueAdminBotRequest(db, 'setup', alice);
     if (!r.ok) throw new Error('enqueue failed');
+    await claim(r.id, 'setup');
     await finishBotRequest(
       db,
       r.id,
@@ -172,6 +182,7 @@ describe('admin bot requests', () => {
   it('stores a long multibyte report (more than 64 KiB in utf8mb4)', async () => {
     const r = await enqueueAdminBotRequest(db, 'setup', alice);
     if (!r.ok) throw new Error('enqueue failed');
+    await claim(r.id, 'setup');
     await finishBotRequest(
       db,
       r.id,
@@ -191,6 +202,7 @@ describe('admin bot requests', () => {
   it('does not split a surrogate pair when truncating', async () => {
     const r = await enqueueAdminBotRequest(db, 'setup', alice);
     if (!r.ok) throw new Error('enqueue failed');
+    await claim(r.id, 'setup');
     await finishBotRequest(
       db,
       r.id,
@@ -209,8 +221,10 @@ describe('admin bot requests', () => {
   it('keeps a short report as is, and no report stays null', async () => {
     const r = await enqueueAdminBotRequest(db, 'setup', alice);
     if (!r.ok) throw new Error('enqueue failed');
+    await claim(r.id, 'setup');
     await finishBotRequest(db, r.id, 'done', undefined, new Date(), 'ok\n');
     const e = await enqueueBotRequest(db, 'event_post_upsert', 'event:1');
+    await claim(e.id, 'event_post_upsert');
     await finishBotRequest(db, e.id, 'failed', 'boom');
     const rows = await db.select().from(botRequests);
     expect(rows.find((x) => x.id === r.id)?.report).toBe('ok\n');
@@ -223,6 +237,7 @@ describe('admin bot requests', () => {
   it('lists admin requests newest first with the requester name', async () => {
     const r1 = await enqueueAdminBotRequest(db, 'setup', alice);
     if (!r1.ok) throw new Error('enqueue failed');
+    await claim(r1.id, 'setup');
     await finishBotRequest(db, r1.id, 'done', undefined, new Date(), 'rep');
     await enqueueBotRequest(db, 'event_post_upsert', 'event:1');
     const r2 = await enqueueAdminBotRequest(db, 'resync', bob);
@@ -235,15 +250,17 @@ describe('admin bot requests', () => {
       status: 'queued',
       requestedBy: bob,
       requesterName: 'Bob',
-      report: null,
+      reportChars: 0,
     });
+    expect(list[0]).not.toHaveProperty('report');
     expect(list[1]).toMatchObject({
       kind: 'setup',
       status: 'done',
       requestedBy: alice,
       requesterName: 'Alice',
-      report: 'rep',
+      reportChars: 3,
     });
+    expect(list[1]).not.toHaveProperty('report');
     expect(list[1].createdAt).toBeInstanceOf(Date);
     expect(await listAdminBotRequests(db, 1)).toHaveLength(1);
   });
@@ -262,4 +279,102 @@ describe('admin bot requests', () => {
       requesterName: null,
     });
   });
+  it('counts report characters, not bytes', async () => {
+    const r = await enqueueAdminBotRequest(db, 'setup', alice);
+    if (!r.ok) throw new Error('enqueue failed');
+    await claim(r.id, 'setup');
+    await finishBotRequest(db, r.id, 'done', undefined, new Date(), 'łó😀');
+    const [row] = await listAdminBotRequests(db);
+    expect(row.reportChars).toBe(3); // code points, not UTF-8 bytes
+  });
+
+  it('getAdminBotRequest returns one admin request with its report', async () => {
+    const r = await enqueueAdminBotRequest(db, 'setup_dry_run', alice);
+    if (!r.ok) throw new Error('enqueue failed');
+    await claim(r.id, 'setup_dry_run');
+    await finishBotRequest(db, r.id, 'done', undefined, new Date(), 'plan\n');
+    const got = await getAdminBotRequest(db, r.id);
+    expect(got).toMatchObject({
+      id: r.id,
+      kind: 'setup_dry_run',
+      status: 'done',
+      report: 'plan\n',
+      requestedBy: alice,
+      requesterName: 'Alice',
+    });
+    expect(got?.createdAt).toBeInstanceOf(Date);
+    expect(await getAdminBotRequest(db, r.id + 1000)).toBeNull();
+    const e = await enqueueBotRequest(db, 'event_post_upsert', 'event:1');
+    expect(await getAdminBotRequest(db, e.id)).toBeNull();
+  });
+
+  it('cancels a running request only once it is stuck', async () => {
+    expect(STUCK_AFTER_MS).toBe(15 * 60_000);
+    const now = new Date();
+    const r = await enqueueAdminBotRequest(db, 'setup', alice);
+    if (!r.ok) throw new Error('enqueue failed');
+    await claimNextBotRequest(db, ['setup'], new Date(now.getTime() - 60_000));
+    expect(await cancelAdminBotRequest(db, r.id, now)).toBe(false);
+    await db
+      .update(botRequests)
+      .set({ startedAt: new Date(now.getTime() - 16 * 60_000) })
+      .where(eq(botRequests.id, r.id));
+    expect(await cancelAdminBotRequest(db, r.id, now)).toBe(true);
+    const [row] = await db
+      .select()
+      .from(botRequests)
+      .where(eq(botRequests.id, r.id));
+    expect(row).toMatchObject({ status: 'failed', error: 'Cancelled.' });
+    expect(isCancelled(row)).toBe(true);
+    // The stuck run finishing later does not overwrite the cancellation.
+    await finishBotRequest(db, r.id, 'done', undefined, now, 'late');
+    const [after] = await db
+      .select()
+      .from(botRequests)
+      .where(eq(botRequests.id, r.id));
+    expect(after).toMatchObject({
+      status: 'failed',
+      error: 'Cancelled.',
+      report: null,
+    });
+    // ...and the queue is free again.
+    expect((await enqueueAdminBotRequest(db, 'resync', bob)).ok).toBe(true);
+  });
+
+  it('isCancelled is a failed request with the cancel message', () => {
+    expect(isCancelled({ status: 'failed', error: 'Cancelled.' })).toBe(true);
+    expect(isCancelled({ status: 'failed', error: 'boom' })).toBe(false);
+    expect(isCancelled({ status: 'done', error: 'Cancelled.' })).toBe(false);
+  });
+
+  it('the named lock is per database', async () => {
+    const url = process.env.TEST_DATABASE_URL ?? '';
+    const other = createDb(url);
+    const conn = await other.pool.getConnection();
+    try {
+      // The old server-wide name no longer blocks.
+      await conn.query("SELECT GET_LOCK('admin_bot_request', 0)");
+      let started = Date.now();
+      expect((await enqueueAdminBotRequest(db, 'setup', alice)).ok).toBe(true);
+      expect(Date.now() - started).toBeLessThan(2000);
+      await conn.query("SELECT RELEASE_LOCK('admin_bot_request')");
+      await db.delete(botRequests);
+
+      const [[held]] = (await conn.query(
+        "SELECT GET_LOCK(CONCAT(DATABASE(), ':admin_bot_request'), 0) AS got",
+      )) as unknown as [{ got: number }[]];
+      expect(held.got).toBe(1);
+      started = Date.now();
+      expect(await enqueueAdminBotRequest(db, 'setup', alice)).toEqual({
+        ok: false,
+        message: BOT_BUSY_MESSAGE,
+      });
+      expect(Date.now() - started).toBeGreaterThanOrEqual(4000);
+      expect(await adminRows()).toHaveLength(0);
+    } finally {
+      await conn.query('SELECT RELEASE_ALL_LOCKS()');
+      conn.release();
+      await other.pool.end();
+    }
+  }, 15_000);
 });

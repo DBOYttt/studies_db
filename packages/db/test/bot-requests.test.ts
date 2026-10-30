@@ -127,6 +127,21 @@ describe('bot request queue', () => {
     ).toMatchObject({ id: b.id, status: 'done', error: null });
   });
 
+  it('finishBotRequest leaves a row that is no longer running alone', async () => {
+    const a = await enqueueBotRequest(db, 'event_post_upsert', 'event:9');
+    await claimNextBotRequest(db, ['event_post_upsert']);
+    await finishBotRequest(db, a.id, 'failed', 'first');
+    await finishBotRequest(db, a.id, 'done');
+    expect(
+      await lastBotRequest(db, 'event_post_upsert', 'event:9'),
+    ).toMatchObject({ id: a.id, status: 'failed', error: 'first' });
+    const q = await enqueueBotRequest(db, 'event_post_upsert', 'event:10');
+    await finishBotRequest(db, q.id, 'done');
+    expect(
+      await lastBotRequest(db, 'event_post_upsert', 'event:10'),
+    ).toMatchObject({ id: q.id, status: 'queued' });
+  });
+
   it('a stale running request is failed', async () => {
     const old = await enqueueBotRequest(db, 'event_post_upsert', 'event:1');
     const fresh = await enqueueBotRequest(db, 'event_post_upsert', 'event:2');

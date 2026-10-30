@@ -734,4 +734,38 @@ describe('admin actions: sync', () => {
     );
     expect(await audits()).toHaveLength(before);
   });
+
+  it('cancels a stuck running request, not a recently started one', async () => {
+    await db.delete(botRequests);
+    const [res] = await db.insert(botRequests).values({
+      kind: 'resync',
+      target: 'guild',
+      status: 'running',
+      payload: { requestedBy: admin.id },
+      startedAt: new Date(Date.now() - 60_000),
+    });
+    const id = res.insertId;
+    expect(
+      await A.cancelBotRequestAction(null, fd({ id: String(id) })),
+    ).toEqual({
+      ok: false,
+      message: 'Only a request that is waiting or stuck can be cancelled.',
+    });
+    await db
+      .update(botRequests)
+      .set({ startedAt: new Date(Date.now() - 16 * 60_000) })
+      .where(eq(botRequests.id, id));
+    expect(
+      await A.cancelBotRequestAction(null, fd({ id: String(id) })),
+    ).toEqual({ ok: true, message: CANCELLED_MESSAGE });
+    const [after] = await db
+      .select()
+      .from(botRequests)
+      .where(eq(botRequests.id, id));
+    expect(after).toMatchObject({ status: 'failed', error: CANCELLED_MESSAGE });
+    expect(await lastAudit()).toMatchObject({
+      action: 'bot.request_cancel',
+      target: `bot_request:${id}`,
+    });
+  });
 });

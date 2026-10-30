@@ -1,15 +1,22 @@
 import { describe, expect, it } from 'vitest';
 import {
+  activeRequestText,
+  canCancelRequest,
   hasActiveRequest,
   isStaleRequest,
   REQUEST_KIND_LABELS,
+  reportLabel,
+  requestHref,
+  requestStatusLabel,
   STALE_AFTER_MS,
   STALE_TEXT,
+  STUCK_TEXT,
   staleNotice,
 } from '@/lib/admin-sync';
 
 const now = new Date('2026-10-29T12:00:00Z');
 const ago = (ms: number) => new Date(now.getTime() - ms);
+const MIN = 60_000;
 
 describe('admin request helpers', () => {
   it('names the three kinds', () => {
@@ -34,13 +41,44 @@ describe('admin request helpers', () => {
       isStaleRequest({ status: 'done', createdAt: ago(600_000) }, now),
     ).toBe(false);
   });
-  it('the notice is the exact copy, only when a queued one is stale', () => {
+  it('a running request is stale once started more than 15 min ago', () => {
+    const running = (startedMs: number) => ({
+      status: 'running',
+      createdAt: ago(startedMs + MIN),
+      startedAt: ago(startedMs),
+    });
+    expect(isStaleRequest(running(15 * MIN), now)).toBe(false);
+    expect(isStaleRequest(running(15 * MIN + 1), now)).toBe(true);
+    expect(isStaleRequest(running(MIN), now)).toBe(false);
+  });
+  it('the notice is the exact copy, only when one is stale', () => {
     expect(STALE_TEXT).toBe('The bot is not responding. Is it running?');
+    expect(STUCK_TEXT).toBe(
+      'The bot has been working on this request for more than 15 minutes. It may be stuck: cancel it or restart the bot.',
+    );
     expect(
       staleNotice([{ status: 'queued', createdAt: ago(61_000) }], now),
     ).toBe(STALE_TEXT);
     expect(
       staleNotice([{ status: 'queued', createdAt: ago(5_000) }], now),
+    ).toBeNull();
+    expect(
+      staleNotice(
+        [
+          {
+            status: 'running',
+            createdAt: ago(20 * MIN),
+            startedAt: ago(16 * MIN),
+          },
+        ],
+        now,
+      ),
+    ).toBe(STUCK_TEXT);
+    expect(
+      staleNotice(
+        [{ status: 'running', createdAt: ago(2 * MIN), startedAt: ago(MIN) }],
+        now,
+      ),
     ).toBeNull();
     expect(staleNotice([], now)).toBeNull();
   });
@@ -50,5 +88,52 @@ describe('admin request helpers', () => {
     expect(hasActiveRequest([{ status: 'done' }, { status: 'failed' }])).toBe(
       false,
     );
+  });
+  it('the panel header says queued or in progress', () => {
+    expect(activeRequestText([{ status: 'queued' }])).toBe(
+      'A request is queued',
+    );
+    expect(activeRequestText([{ status: 'running' }, { status: 'done' }])).toBe(
+      'A request is in progress',
+    );
+    expect(activeRequestText([{ status: 'done' }])).toBeNull();
+  });
+  it('a cancelled request shows as cancelled', () => {
+    expect(requestStatusLabel({ status: 'failed', error: 'Cancelled.' })).toBe(
+      'cancelled',
+    );
+    expect(requestStatusLabel({ status: 'failed', error: 'boom' })).toBe(
+      'failed',
+    );
+    expect(requestStatusLabel({ status: 'done', error: null })).toBe('done');
+  });
+  it('cancel is offered for queued and stuck running requests', () => {
+    expect(canCancelRequest({ status: 'queued', createdAt: ago(0) }, now)).toBe(
+      true,
+    );
+    expect(
+      canCancelRequest(
+        {
+          status: 'running',
+          createdAt: ago(20 * MIN),
+          startedAt: ago(16 * MIN),
+        },
+        now,
+      ),
+    ).toBe(true);
+    expect(
+      canCancelRequest(
+        { status: 'running', createdAt: ago(2 * MIN), startedAt: ago(MIN) },
+        now,
+      ),
+    ).toBe(false);
+    expect(canCancelRequest({ status: 'done', createdAt: ago(0) }, now)).toBe(
+      false,
+    );
+  });
+  it('labels and links the report', () => {
+    expect(reportLabel(12)).toBe('Report (12 chars)');
+    expect(reportLabel(60_001)).toBe('Report (60,001 chars)');
+    expect(requestHref(42)).toBe('/admin/sync/requests/42');
   });
 });

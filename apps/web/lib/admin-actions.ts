@@ -332,7 +332,7 @@ export async function cancelBotRequestAction(
   if (id === null) return fail('Request not found.');
   const cancelled = await cancelAdminBotRequest(getDb(), id);
   if (!cancelled)
-    return fail('Only a request that is still waiting can be cancelled.');
+    return fail('Only a request that is waiting or stuck can be cancelled.');
   await audit(user.id, 'bot.request_cancel', `bot_request:${id}`);
   refresh('/admin/sync');
   return { ok: true, message: CANCELLED_MESSAGE };
