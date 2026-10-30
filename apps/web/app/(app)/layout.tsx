@@ -45,12 +45,12 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
               alt=""
               width={22}
               height={22}
-              className="size-[22px] rounded-full"
+              className="size-[22px] rounded-full max-sm:hidden"
             />
           ) : (
             <span
               aria-hidden
-              className="grid size-[22px] place-items-center rounded-full bg-discord text-[11px] font-semibold text-white"
+              className="grid size-[22px] place-items-center rounded-full bg-discord text-[11px] font-semibold text-white max-sm:hidden"
             >
               {([...user.displayName.trim()][0] ?? '?').toLocaleUpperCase('pl')}
             </span>
@@ -64,7 +64,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
           <form action="/auth/logout" method="post">
             <button
               type="submit"
-              className="flex items-center gap-1 text-accent-ink hover:text-accent-ink-hover hover:underline"
+              className="flex items-center gap-1 text-accent-ink hover:text-accent-ink-hover hover:underline max-sm:min-h-11 max-sm:min-w-11 max-sm:justify-center"
             >
               <SignOut aria-hidden />
               <span className="max-md:sr-only">Sign out</span>

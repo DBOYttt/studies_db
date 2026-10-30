@@ -8,7 +8,7 @@ import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
 import { explorerHref } from '@/lib/explorer';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
-import { searchCountText } from '@/lib/search-count';
+import { searchCounts, searchCountText } from '@/lib/search-count';
 import { requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Search' };
@@ -46,7 +46,7 @@ export default async function SearchPage({
   ]);
   // searchAll caps at SEARCH_LIMIT (its maximum): a full page means "maybe more".
   const capped = hits.length >= SEARCH_LIMIT;
-  const fileHits = hits.filter((h) => h.materialId !== null).length;
+  const counts = searchCounts(hits);
 
   return (
     <>
@@ -105,7 +105,7 @@ export default async function SearchPage({
             <div className="flex justify-end rounded-b-md border-t border-line bg-bar px-3 py-2.5">
               <button
                 type="submit"
-                className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover"
+                className="rounded bg-accent-fill px-[18px] py-1.5 font-semibold text-on-accent hover:bg-accent-fill-hover max-sm:min-h-11"
               >
                 Go
               </button>
@@ -123,8 +123,8 @@ export default async function SearchPage({
               <span>
                 Search results for “<b>{q}</b>”:{' '}
                 {searchCountText(
-                  fileHits,
-                  hits.length - fileHits,
+                  counts.files,
+                  counts.topics,
                   capped ? SEARCH_LIMIT : undefined,
                 )}
               </span>

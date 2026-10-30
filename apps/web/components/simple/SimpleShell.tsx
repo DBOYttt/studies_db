@@ -163,7 +163,7 @@ export function SimpleShell({
             aria-label="Open navigation panel"
             aria-expanded={open}
             aria-controls="simple-nav"
-            className="grid size-8 shrink-0 place-items-center rounded-md text-accent-ink hover:bg-line md:hidden"
+            className="grid size-8 shrink-0 place-items-center rounded-md text-accent-ink hover:bg-line max-sm:size-11 md:hidden"
           >
             <List size={20} />
           </button>
@@ -177,12 +177,12 @@ export function SimpleShell({
                 alt=""
                 width={24}
                 height={24}
-                className="ml-1 size-6 rounded-full"
+                className="ml-1 size-6 rounded-full max-sm:hidden"
               />
             ) : (
               <span
                 aria-hidden
-                className="ml-1 grid size-6 place-items-center rounded-full bg-discord text-[11px] font-semibold text-white"
+                className="ml-1 grid size-6 place-items-center rounded-full bg-discord text-[11px] font-semibold text-white max-sm:hidden"
               >
                 {initial}
               </span>
@@ -196,7 +196,7 @@ export function SimpleShell({
             <form action="/auth/logout" method="post" className="flex">
               <button
                 type="submit"
-                className="flex items-center gap-1 rounded px-0.5 text-accent-ink hover:text-accent-ink-hover hover:underline"
+                className="flex items-center gap-1 rounded px-0.5 text-accent-ink hover:text-accent-ink-hover hover:underline max-sm:min-h-11 max-sm:min-w-11 max-sm:justify-center"
               >
                 <SignOut size={15} aria-hidden />
                 <span className="max-lg:sr-only">Sign out</span>

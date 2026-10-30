@@ -4,7 +4,7 @@ import { EventRow } from '@/components/events/EventRow';
 import { type EventsPage, eventsIndexHref } from '@/lib/events-index';
 
 const navBtn =
-  'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover';
+  'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover max-sm:min-h-11';
 
 /**
  * The events index body: every upcoming event (all groups) from now, with

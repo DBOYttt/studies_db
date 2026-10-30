@@ -73,7 +73,7 @@ const DAY_MIN = 128;
 const PANEL_ID = 'session-panel';
 
 const navBtn =
-  'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover';
+  'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover max-sm:min-h-11';
 
 type Session = PlanSession & { links: SessionLinks };
 
@@ -251,7 +251,7 @@ export function WeekView({
           {newEventHref && (
             <Link
               href={newEventHref}
-              className="ml-1 inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px"
+              className="ml-1 inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px max-sm:min-h-11"
             >
               <Plus size={13} weight="bold" aria-hidden />
               Add event

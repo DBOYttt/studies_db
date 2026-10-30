@@ -136,18 +136,20 @@ test('search highlights hits with <mark>', async ({ page }) => {
   await expect(marks.first()).toHaveCSS('padding-right', '0px');
 });
 
-test('search shows the text snippet and counts files and topics', async ({
+test('search shows the text snippet and counts the files it lists', async ({
   page,
 }) => {
   await page.goto('/s/search?q=wspolczynnik');
   const main = page.getByRole('main');
-  await expect(main.getByText('1 file, 0 topics')).toBeVisible();
+  // Files only (the list shows no topics), counted like Advanced counts.
+  await expect(main.getByText('1 file', { exact: true })).toBeVisible();
   // The text hit ("Współczynnik", diacritics folded) is shown and marked.
   await expect(main.locator('li mark').first()).toHaveText('Współczynnik');
   await expect(main.getByText(/tarcia: tarcie statyczne/)).toBeVisible();
-  // A topic hit is counted and points to Advanced, which lists it.
+  // A topic hit is not counted here; a separate link points to Advanced,
+  // which lists and counts it.
   await page.goto('/s/search?q=tarcie');
-  await expect(main.getByText(/\d+ files?, 1 topic\b/)).toBeVisible();
+  await expect(main.getByText(/^\d+ files?$/)).toBeVisible();
   await expect(
     main.getByRole('link', { name: 'Show topics in Advanced' }),
   ).toHaveAttribute(

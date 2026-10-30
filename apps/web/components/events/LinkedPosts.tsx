@@ -12,7 +12,7 @@ import type { LinkedTopic } from '@/lib/event-queries';
 import { STATUS } from '@/lib/status-text';
 
 const btn =
-  'inline-flex h-7 items-center gap-1 rounded border border-line-strong bg-panel px-2 text-accent-ink hover:border-accent disabled:opacity-60';
+  'inline-flex h-7 items-center gap-1 rounded border border-line-strong bg-panel px-2 text-accent-ink hover:border-accent disabled:opacity-60 max-sm:h-11';
 
 const topicLabel = (t: LinkedTopic) =>
   t.subjectCode ? `${t.title} (${t.subjectCode})` : t.title;
@@ -109,7 +109,7 @@ export function LinkedPosts({
           value={q}
           onChange={(e) => setQ(e.target.value)}
           placeholder="Search posts by title"
-          className="h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent sm:w-72"
+          className="h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent max-sm:h-11 sm:w-72"
         />
         <button type="submit" disabled={pending} className={btn}>
           <MagnifyingGlass size={14} aria-hidden />

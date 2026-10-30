@@ -205,6 +205,23 @@ body {
   }
 }
 
+/*
+ * Date and time pickers: in dark mode the native calendar/clock icon (and
+ * its popup) would stay dark grey on the dark field. A dark color-scheme on
+ * these inputs only draws them light, without touching other controls.
+ */
+@media (prefers-color-scheme: dark) {
+  input:is(
+    [type="date"],
+    [type="time"],
+    [type="datetime-local"],
+    [type="month"],
+    [type="week"]
+  ) {
+    color-scheme: dark;
+  }
+}
+
 /* No inline padding: a hit inside a word must not split it ("kolokwium-sql"). */
 mark {
   background: var(--mark);

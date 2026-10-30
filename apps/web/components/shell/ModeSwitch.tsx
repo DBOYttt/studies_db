@@ -47,7 +47,7 @@ function Segments({ mode }: { mode: UiMode }) {
   const search = useSearchParams().toString();
   const next = encodeURIComponent(search ? `${pathname}?${search}` : pathname);
   const base =
-    'flex items-center gap-1 rounded px-2 py-0.5 text-[12px] font-medium max-md:px-1.5 max-md:text-[11px]';
+    'flex items-center gap-1 rounded px-2 py-0.5 text-[12px] font-medium max-md:px-1.5 max-md:text-[11px] max-sm:min-h-11';
   const item = (
     to: UiMode,
     label: string,
@@ -77,7 +77,7 @@ function Segments({ mode }: { mode: UiMode }) {
   return (
     <nav
       aria-label="View mode"
-      className="flex items-center gap-0.5 rounded-md border border-line p-0.5"
+      className="flex items-center gap-0.5 rounded-md border border-line p-0.5 max-sm:p-0"
     >
       {item(
         'simple',

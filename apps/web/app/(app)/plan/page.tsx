@@ -81,7 +81,7 @@ export default async function PlanPage({
                   key={key}
                   href={href}
                   aria-current={active ? 'page' : undefined}
-                  className={`flex items-center gap-1.5 px-3 py-[5px] ${
+                  className={`flex items-center gap-1.5 px-3 py-[5px] max-sm:min-h-11 ${
                     i > 0 ? 'border-l border-line-strong' : ''
                   } ${
                     active

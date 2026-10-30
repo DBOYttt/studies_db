@@ -11,7 +11,7 @@ import { useId, useRef, useState, useTransition } from 'react';
 import { deleteEventAction, restoreEventAction } from '@/lib/event-actions';
 
 const btn =
-  'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60';
+  'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60 max-sm:h-11';
 
 /**
  * Edit / Delete (two steps) for a live event, Restore for a deleted one.
@@ -88,7 +88,7 @@ export function EventButtons({
         }
       }}
     >
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 max-sm:gap-3">
         <Link href={editHref} className={btn}>
           <PencilSimple size={15} aria-hidden />
           Edit

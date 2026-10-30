@@ -16,11 +16,22 @@ const MAX_WIDTH = 1600;
 const FALLBACK_WIDTH = 720;
 const PADDING = 16; // p-2 on both sides of the scroll box
 
-export default function PdfViewer({ src }: { src: string }) {
+/**
+ * `onRendered` fires on the first rendered page and `onError` when the
+ * document fails to load; FilePreview shows the fallback (with its timeout).
+ */
+export default function PdfViewer({
+  src,
+  onRendered,
+  onError,
+}: {
+  src: string;
+  onRendered?: () => void;
+  onError?: () => void;
+}) {
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [zoom, setZoom] = useState(1);
-  const [error, setError] = useState(false);
   const [containerWidth, setContainerWidth] = useState(0);
   const boxRef = useRef<HTMLDivElement>(null);
 
@@ -41,15 +52,8 @@ export default function PdfViewer({ src }: { src: string }) {
     MAX_WIDTH,
   );
 
-  if (error) {
-    return (
-      <p className="text-sm text-red-600 dark:text-red-400">
-        Could not load the PDF preview.
-      </p>
-    );
-  }
   const btn =
-    'inline-flex h-7 items-center gap-1 rounded border border-[var(--border)] px-2 disabled:opacity-40';
+    'inline-flex h-7 items-center justify-center gap-1 rounded border border-[var(--border)] px-2 disabled:opacity-40 max-sm:h-11 max-sm:min-w-11';
   return (
     <div className="space-y-2">
       {/* One row at every width: pages on the left, zoom on the right. */}
@@ -119,10 +123,15 @@ export default function PdfViewer({ src }: { src: string }) {
           file={src}
           loading="Loading PDF…"
           onLoadSuccess={(d) => setPages(d.numPages)}
-          onLoadError={() => setError(true)}
+          onLoadError={() => onError?.()}
           className="flex justify-center-safe"
         >
-          <Page pageNumber={page} width={width} />
+          <Page
+            pageNumber={page}
+            width={width}
+            onRenderSuccess={() => onRendered?.()}
+            onRenderError={() => onError?.()}
+          />
         </Document>
       </div>
     </div>
