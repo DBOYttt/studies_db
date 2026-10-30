@@ -102,8 +102,8 @@ export async function finishBotRequest(
   error?: string,
   now: Date = new Date(),
   report?: string,
-): Promise<void> {
-  await db
+): Promise<number> {
+  const [res] = await db
     .update(botRequests)
     .set({
       status,
@@ -112,6 +112,8 @@ export async function finishBotRequest(
       ...(report === undefined ? {} : { report: truncateReport(report) }),
     })
     .where(and(eq(botRequests.id, id), eq(botRequests.status, 'running')));
+  // 0 when the row was no longer `running` (cancelled meanwhile).
+  return res.affectedRows;
 }
 
 /** At most MAX_REPORT UTF-16 units plus `…`, never splitting a surrogate pair. */

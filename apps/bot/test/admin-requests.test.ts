@@ -16,10 +16,13 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type AdminRequestDeps,
   drainAdminRequests,
+  NO_ROLE_MESSAGE,
+  NOT_MEMBER_MESSAGE,
   recoverInterruptedAdminRequests,
 } from '../src/admin-requests.js';
 import { withSetupLock } from '../src/ops.js';
 
+const ADMIN_DISCORD_ID = '123456789012345678';
 let db: Db;
 let adminId: number;
 beforeEach(async () => {
@@ -27,7 +30,11 @@ beforeEach(async () => {
   db = await resetTestDb();
   [{ id: adminId }] = await db
     .insert(users)
-    .values({ discordUserId: 'd-admin', displayName: 'Admin', isAdmin: true })
+    .values({
+      discordUserId: ADMIN_DISCORD_ID,
+      displayName: 'Admin',
+      isAdmin: true,
+    })
     .$returningId();
   await setSetting(db, 'admin_role_id', 'r-admin');
   log.mockClear();
@@ -36,7 +43,10 @@ afterAll(async () => {
   await closeTestDb(db);
 });
 
-const fakeGuild = { id: 'g' };
+const fakeGuild = {
+  id: 'g',
+  roles: { fetch: vi.fn(async (id: string) => ({ id })) },
+};
 
 function fakeDeps(over: Partial<AdminRequestDeps> = {}) {
   const deps: AdminRequestDeps = {
@@ -97,13 +107,13 @@ describe('drainAdminRequests', () => {
       else {
         expect(deps.runSetup).toHaveBeenCalledWith(
           fakeGuild,
-          'd-admin',
+          ADMIN_DISCORD_ID,
           kind === 'setup_dry_run',
           expect.any(Function),
         );
         expect(deps.fetchMemberRoles).toHaveBeenCalledWith(
           fakeGuild,
-          'd-admin',
+          ADMIN_DISCORD_ID,
         );
       }
     },
@@ -315,6 +325,159 @@ describe('drainAdminRequests', () => {
     const { id } = await enqueueBotRequest(db, 'event_post_upsert', 'event:1');
     expect(await drainAdminRequests(fakeDeps(), { log })).toBe(0);
     expect((await request(id)).status).toBe('queued');
+  });
+});
+
+describe('finish retry and recovery', () => {
+  it('retries the finish write after 1 s and 5 s', async () => {
+    const id = await enqueue('resync');
+    const sleep = vi.fn(async (_ms: number) => {});
+    let n = 0;
+    let armed = false;
+    const deps = fakeDeps({
+      sleep,
+      runResync: vi.fn(async () => {
+        armed = true;
+        return 'ok';
+      }),
+    });
+    const origUpdate = db.update.bind(db);
+    vi.spyOn(db, 'update').mockImplementation(((t: unknown) => {
+      if (t === botRequests && armed && ++n <= 2) throw new Error('db down');
+      return origUpdate(t as never);
+    }) as never);
+    await drainAdminRequests(deps, { log });
+    vi.restoreAllMocks();
+    expect((await request(id)).status).toBe('done');
+    expect(sleep.mock.calls.map((c) => c[0])).toEqual([1000, 5000]);
+  });
+
+  it('gives up after 3 attempts without logging the report', async () => {
+    const id = await enqueue('resync');
+    const sleep = vi.fn(async (_ms: number) => {});
+    const deps = fakeDeps({
+      sleep,
+      runResync: vi.fn(async () => 'SECRET-REPORT'),
+    });
+    const origUpdate = db.update.bind(db);
+    vi.spyOn(db, 'update').mockImplementation(((t: unknown) => {
+      if (t === botRequests) throw new Error('db down');
+      return origUpdate(t as never);
+    }) as never);
+    await drainAdminRequests(deps, { log });
+    vi.restoreAllMocks();
+    expect(sleep).toHaveBeenCalledTimes(2);
+    expect((await request(id)).status).toBe('running');
+    const lines = log.mock.calls.map((c) => String(c[0]));
+    expect(lines).toContain(`admin request ${id}: could not store the result`);
+    expect(JSON.stringify(log.mock.calls)).not.toContain('SECRET-REPORT');
+  });
+
+  it('a result for a cancelled request is dropped and logged', async () => {
+    const id = await enqueue('resync');
+    const deps = fakeDeps({
+      runResync: vi.fn(async () => {
+        await db
+          .update(botRequests)
+          .set({ status: 'failed', error: 'Cancelled.' })
+          .where(eq(botRequests.id, id));
+        return 'late report';
+      }),
+    });
+    await drainAdminRequests(deps, { log });
+    const r = await request(id);
+    expect(r.error).toBe('Cancelled.');
+    expect(r.report).toBeNull();
+    expect(log).toHaveBeenCalledWith(
+      `admin request ${id} finished after it was cancelled; result dropped`,
+    );
+  });
+
+  it('a row left running with the lock free is failed on the next tick', async () => {
+    const id = await enqueue('setup');
+    await db
+      .update(botRequests)
+      .set({ status: 'running', startedAt: new Date(Date.now() - 60_000) });
+    expect(await drainAdminRequests(fakeDeps(), { log })).toBe(0);
+    const r = await request(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe(STALE_BOT_REQUEST_ERROR);
+  });
+
+  it('with the lock held a running row is not touched', async () => {
+    const id = await enqueue('setup');
+    await db
+      .update(botRequests)
+      .set({ status: 'running', startedAt: new Date(Date.now() - 60_000) });
+    let release!: () => void;
+    const held = withSetupLock(
+      () =>
+        new Promise<void>((r) => {
+          release = r;
+        }),
+    );
+    await drainAdminRequests(fakeDeps(), { log });
+    expect((await request(id)).status).toBe('running');
+    release();
+    await held;
+  });
+});
+
+describe('requester checks before REST calls', () => {
+  it.each([
+    'seed-admin',
+    '1234',
+    '1234567890123456789012',
+    '12345678901234567x',
+  ])('a non-snowflake id %s is refused with no REST call', async (did) => {
+    await db
+      .update(users)
+      .set({ discordUserId: did })
+      .where(eq(users.id, adminId));
+    const id = await enqueue('setup');
+    const deps = fakeDeps();
+    await drainAdminRequests(deps, { log });
+    const r = await request(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe(NOT_MEMBER_MESSAGE);
+    expect(deps.fetchGuild).not.toHaveBeenCalled();
+    expect(deps.fetchMemberRoles).not.toHaveBeenCalled();
+  });
+
+  it('a role that no longer exists: Run /setup first, flag untouched', async () => {
+    const id = await enqueue('setup');
+    const deps = fakeDeps({
+      fetchGuild: vi.fn(
+        async () =>
+          ({ id: 'g', roles: { fetch: vi.fn(async () => null) } }) as never,
+      ),
+    });
+    await drainAdminRequests(deps, { log });
+    const r = await request(id);
+    expect(r.status).toBe('failed');
+    expect(r.error).toBe(NO_ROLE_MESSAGE);
+    expect(deps.fetchMemberRoles).not.toHaveBeenCalled();
+    const [u] = await db.select().from(users).where(eq(users.id, adminId));
+    expect(u.isAdmin).toBe(true);
+  });
+
+  it('a role fetch error is a failed run as before', async () => {
+    const id = await enqueue('setup');
+    const deps = fakeDeps({
+      fetchGuild: vi.fn(
+        async () =>
+          ({
+            id: 'g',
+            roles: {
+              fetch: vi.fn(async () => {
+                throw new Error('Service Unavailable');
+              }),
+            },
+          }) as never,
+      ),
+    });
+    await drainAdminRequests(deps, { log });
+    expect((await request(id)).error).toBe('Setup failed: Service Unavailable');
   });
 });
 
