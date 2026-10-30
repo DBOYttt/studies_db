@@ -58,4 +58,29 @@ describe('proxy', () => {
     expect(authed.headers.get('location')).toBeNull();
     expect(authed.headers.get('x-middleware-next')).toBe('1');
   });
+
+  it('says the session ended when a loaded page asks without a cookie', () => {
+    const loc = (init: ConstructorParameters<typeof NextRequest>[1]) => {
+      const res = proxy(new NextRequest('http://localhost:3000/s/plan', init));
+      const u = new URL(res.headers.get('location') as string);
+      return `${u.pathname}${u.search}`;
+    };
+    // An RSC navigation or any POST come from a page that was loaded while
+    // signed in.
+    expect(loc({ headers: { rsc: '1' } })).toBe('/login-info?expired=1');
+    expect(loc({ method: 'POST' })).toBe('/login-info?expired=1');
+    // A plain page load may be a first visit.
+    expect(loc({})).toBe('/login-info');
+  });
+
+  it('lets a Server Action without a cookie reach its own requireUser()', () => {
+    const res = proxy(
+      new NextRequest('http://localhost:3000/s/wydarzenia/nowe', {
+        method: 'POST',
+        headers: { 'next-action': 'abc' },
+      }),
+    );
+    expect(res.headers.get('location')).toBeNull();
+    expect(res.headers.get('x-middleware-next')).toBe('1');
+  });
 });

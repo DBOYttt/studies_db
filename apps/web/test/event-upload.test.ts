@@ -27,6 +27,7 @@ vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
 let cookieSid: string | undefined;
 vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
   cookies: async () => ({
     get: (n: string) =>
       n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
@@ -398,6 +399,13 @@ describe('POST /api/wydarzenia/[id]/pliki', () => {
     const before = stored().length;
     for (const id of [gone, 99999, 'abc', '0', '1e3']) {
       expect((await post(one(), id)).status).toBe(404);
+    }
+    // A stale tab's upload says why it went nowhere; a deleted and an unknown
+    // id answer alike, so nothing is revealed.
+    for (const id of [gone, 99999]) {
+      expect((await (await post(one(), id)).json()).error).toBe(
+        'This event was deleted.',
+      );
     }
     expect(stored().length).toBe(before);
   });

@@ -25,14 +25,18 @@ let db: Db;
 vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
 let cookieSid: string | undefined;
+let reqHeaders = new Headers();
 vi.mock('next/headers', () => ({
+  headers: async () => reqHeaders,
   cookies: async () => ({
     get: (n: string) =>
       n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
   }),
 }));
 
-const { requireAdmin, sessionCookieOptions } = await import('../lib/session');
+const { requireAdmin, requireUser, sessionCookieOptions } = await import(
+  '../lib/session'
+);
 const { GET, POST: CALLBACK } = await import('../app/auth/callback/route');
 const { POST } = await import('../app/auth/logout/route');
 
@@ -263,6 +267,43 @@ describe('POST /auth/logout from another origin', () => {
     );
     expect(ok.status).toBe(303);
     expect(await getSessionUser(db, sid)).toBeNull();
+  });
+});
+
+describe('requireUser', () => {
+  const redirectOf = async () => {
+    try {
+      await requireUser();
+    } catch (e) {
+      return String((e as { digest?: string }).digest).split(';')[2];
+    }
+    return 'no redirect';
+  };
+
+  it('says the session ended when the cookie no longer matches a session', async () => {
+    cookieSid = 'gone-session-token';
+    try {
+      expect(await redirectOf()).toBe('/login-info?expired=1');
+    } finally {
+      cookieSid = undefined;
+    }
+  });
+
+  it('sends a visitor without a cookie to the plain sign-in page', async () => {
+    cookieSid = undefined;
+    expect(await redirectOf()).toBe('/login-info');
+  });
+
+  it('says the session ended to a Server Action or RSC request without a cookie', async () => {
+    cookieSid = undefined;
+    try {
+      reqHeaders = new Headers({ 'next-action': 'abc' });
+      expect(await redirectOf()).toBe('/login-info?expired=1');
+      reqHeaders = new Headers({ rsc: '1' });
+      expect(await redirectOf()).toBe('/login-info?expired=1');
+    } finally {
+      reqHeaders = new Headers();
+    }
   });
 });
 

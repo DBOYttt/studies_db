@@ -21,6 +21,7 @@ vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
 let cookieSid: string | undefined;
 vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
   cookies: async () => ({
     get: (n: string) =>
       n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
@@ -216,6 +217,34 @@ describe('event actions', () => {
     await expect(
       A.deleteEventAction(ev.id, 'simple', 'one', version + 1),
     ).rejects.toThrow('redirect:/s/plan');
+  });
+
+  it('a delete of an already deleted event lands on the timetable with a notice', async () => {
+    cookieSid = alice.sid;
+    await expect(
+      A.createEventAction(form({ title: 'Dwuklik' })),
+    ).rejects.toThrow('redirect');
+    const ev = (await eventRows()).find((e) => e.title === 'Dwuklik');
+    if (!ev) throw new Error('no event');
+    const toPlan = /^redirect:\/s\/plan\?notice=event-deleted$/;
+    await expect(
+      A.deleteEventAction(ev.id, 'simple', 'one', ev.version),
+    ).rejects.toThrow(toPlan);
+    const audits = async () =>
+      (await db.select().from(adminAudit)).filter(
+        (a) => a.action === 'event.delete' && a.target === String(ev.id),
+      );
+    expect(await audits()).toHaveLength(1);
+    // The second click of a double click, or a stale tab (its version is old).
+    await expect(
+      A.deleteEventAction(ev.id, 'simple', 'one', ev.version),
+    ).rejects.toThrow(toPlan);
+    await expect(A.deleteEventAction(ev.id, 'advanced')).rejects.toThrow(
+      /^redirect:\/plan\?notice=event-deleted$/,
+    );
+    // An id that never existed reads the same, so nothing is revealed.
+    await expect(A.deleteEventAction(999_999)).rejects.toThrow(toPlan);
+    expect(await audits()).toHaveLength(1);
   });
 
   it('searches posts by title within the subject, at most 20', async () => {

@@ -1,8 +1,13 @@
 import { getSessionUser, SESSION_TTL_MS } from '@studies/db';
-import { cookies } from 'next/headers';
+import { cookies, headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { getDb } from './db';
+import {
+  fromLoadedPage,
+  SESSION_ENDED_PATH,
+  SIGN_IN_PATH,
+} from './session-ended';
 
 export const SESSION_COOKIE = 'sid';
 
@@ -39,8 +44,18 @@ export const currentUser = cache(async (): Promise<SessionUser | null> => {
  */
 export async function requireUser(): Promise<SessionUser> {
   const user = await currentUser();
-  if (!user) redirect('/login-info');
+  if (!user) redirect(await signInPath());
   return user;
+}
+
+/**
+ * `/login-info?expired=1` ("Your session has ended") when a cookie was sent
+ * but matches no session, or when the request came from an open page (a
+ * Server Action or RSC fetch); the plain `/login-info` otherwise.
+ */
+async function signInPath(): Promise<string> {
+  if ((await cookies()).get(SESSION_COOKIE)?.value) return SESSION_ENDED_PATH;
+  return fromLoadedPage(await headers()) ? SESSION_ENDED_PATH : SIGN_IN_PATH;
 }
 
 /**

@@ -2,8 +2,45 @@
 
 import { Code, ListBullets } from '@phosphor-icons/react';
 import { usePathname, useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useLayoutEffect, useRef } from 'react';
 import type { UiMode } from '@/lib/mode';
+
+/**
+ * The link's `next` is the URL at hydration (Next reads `window.location`),
+ * which can differ from the URL the server rendered: a Back to a pushState
+ * entry of the same document before the JS has run changes the URL under
+ * the old HTML (chaos F3). React keeps a server attribute that differs at
+ * hydration, so the href is written once more after hydration; the warning is
+ * expected here and silenced for this element only.
+ */
+function ModeLink({
+  href,
+  title,
+  cls,
+  children,
+}: {
+  href: string;
+  title?: string;
+  cls: string;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLAnchorElement>(null);
+  useLayoutEffect(() => {
+    const a = ref.current;
+    if (a && a.getAttribute('href') !== href) a.setAttribute('href', href);
+  }, [href]);
+  return (
+    <a
+      ref={ref}
+      href={href}
+      title={title}
+      className={cls}
+      suppressHydrationWarning
+    >
+      {children}
+    </a>
+  );
+}
 
 function Segments({ mode }: { mode: UiMode }) {
   const pathname = usePathname();
@@ -31,10 +68,10 @@ function Segments({ mode }: { mode: UiMode }) {
         </span>
       );
     return (
-      <a href={`/mode?to=${to}&next=${next}`} title={title} className={cls}>
+      <ModeLink href={`/mode?to=${to}&next=${next}`} title={title} cls={cls}>
         {icon}
         {label}
-      </a>
+      </ModeLink>
     );
   };
   return (

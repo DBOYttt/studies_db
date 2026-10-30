@@ -25,6 +25,7 @@ import { invalidateCounts } from './count-cache';
 import { getDb, getViewsPool } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
+import { withNotice } from './notices';
 import { nowWall } from './plan';
 import { requireAdmin, requireUser } from './session';
 import { type SessionOption, upcomingSessionOptions } from './session-options';
@@ -198,9 +199,20 @@ export async function deleteEventAction(
         ? version
         : undefined,
   });
-  if (!r.ok) return r;
+  const plan = withNotice(
+    planHref(base === 'advanced' ? 'advanced' : 'simple'),
+    'event-deleted',
+  );
+  if (!r.ok) {
+    // Already gone (the second click of a double click, a stale tab): the
+    // user wanted it deleted, so this is not an error. A row that never
+    // existed reads the same, so the answer reveals nothing.
+    const ev = await getEvent(getDb(), id);
+    if (!ev || ev.deletedAt !== null) redirect(plan);
+    return r;
+  }
   refresh(id);
-  redirect(planHref(base === 'advanced' ? 'advanced' : 'simple'));
+  redirect(plan);
 }
 
 /** Admin only (404 for everyone else). */

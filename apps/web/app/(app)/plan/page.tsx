@@ -8,6 +8,7 @@ import {
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Notice } from '@/components/Notice';
 import { errBox, GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
@@ -23,6 +24,7 @@ import {
   parseEntityGrid,
   parseEntityTab,
 } from '@/lib/entity-page';
+import { noticeFromSearchParams } from '@/lib/notices';
 import { planListPage } from '@/lib/plan-queries';
 import { syncFailed, syncLine, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
@@ -62,6 +64,7 @@ export default async function PlanPage({
       />
       <h1 className="sr-only">Timetable</h1>
       <div className="flex flex-col gap-3.5">
+        <Notice text={noticeFromSearchParams(sp)} />
         <nav
           aria-label="Timetable view"
           className="flex self-start overflow-hidden rounded-md border border-line-strong"

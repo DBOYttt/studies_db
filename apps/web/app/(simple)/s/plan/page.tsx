@@ -6,6 +6,7 @@ import {
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Notice } from '@/components/Notice';
 import { GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { PlanWeekSkeleton } from '@/components/Skeleton';
@@ -14,6 +15,7 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
+import { noticeFromSearchParams } from '@/lib/notices';
 import { syncFailed, syncLine } from '@/lib/plan-view';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
@@ -63,6 +65,7 @@ export default async function SimplePlan({
           only your own classes.
         </p>
       </div>
+      <Notice text={noticeFromSearchParams(sp)} />
       <nav
         aria-label="Timetable view"
         className="flex w-fit overflow-hidden rounded-md border border-line-strong"
