@@ -1,6 +1,9 @@
 node_modules/
 storage/
 .env
+.env.*
+!.env.example
+!.env.prod.example
 .next/
 .next-*/
 dist/

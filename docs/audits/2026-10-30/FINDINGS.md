@@ -25,6 +25,20 @@ Sources (all read-only, no DB tests run by the reviewers):
 | G7 | **Student UX: today and confirmations** | U3 (today/next class on Start, scroll to today, List from now), U4 (events index page, "see all"), U5 (save confirmations), U6 (friendly 404 / races), U7, U8, U12 (tap targets), U13, U14, U15 (a11y), QA lows | Largest visible effect; mostly UI work, so the taste skills apply. |
 | G8 | **Bot and docs leftovers** | B4 (digest thread parent check), B5 (rename the Polish digest thread), C10 (docs drift: spec mediumtext, `UNITIME_IMPORT_HOSTS` in prod docs, 3 MB limit in CLAUDE.md), C11 (tests for C1, C2, C5–C8), security F2 (series count as one event in the hourly limit), W5 | Small; can ride along with other groups. |
 
+## Fixed
+
+**G5 (production runtime hardening)**, branch `fix/g5-runtime-hardening`: ec1b2e6 and 8b1e691 (Task 1, app user `studies_app`), 458c1db (Task 2, soffice profile and preview cap), 37c00d9 and 717f3c3 (Task 3, `openInStorage`, no symlinks), 2a3d204 (Task 4, compose: env per service, non-root bot, read-only, networks, pins, ignore files), and this commit (headers, backup permissions, pinned MCP servers, upgrade docs, cloudflared hardening). Upgrade notes: `docs/deploy.md`, "Upgrading to the G5 hardening".
+
+Still open after G5:
+- The web image build was never run end to end (VM too small); test it on the server.
+- TOCTOU windows remain where `soffice`, `pdftotext` and the setup re-reads open files by path.
+- "Preview too large." is treated as a normal failure and retried.
+- Parked by ruling: per-column worker grants (one `studies_app` for all services), root login from any host
+  (`MARIADB_ROOT_HOST=%`), separate uids per service, a conversion container without network or DB
+  credentials, outbound network for mariadb on `backend`, backup encryption, and worker/migrate images that
+  still copy the whole repo with dev dependencies.
+- `DATABASE_URL` and `DB_APP_PASSWORD` must be kept in sync by hand.
+
 ## Not verified / needs a live check
 - **Preview "Loading…" hang:** reported by 4 personas. Re-checked on a quiet sandbox, where the PDF loaded in about 3 s, so it was dev-server load. A preview timeout fallback (curator E5) is still worth adding under G7.
 - **R2's linked-content path:** inferred, not reproduced.

@@ -4,14 +4,14 @@
 // them up as materials), the rows are marked done and the temp files removed.
 // A failure stores a SAFE Polish message on the rows (never a path or a stack
 // trace) and keeps the temp file for a retry until it is a day old.
-import { createReadStream } from 'node:fs';
-import { lstat, readdir, stat, unlink } from 'node:fs/promises';
+import { readdir, stat, unlink } from 'node:fs/promises';
 import { Readable } from 'node:stream';
 import {
   type Db,
   type EventDetails,
   getEvent,
   getUploadsByIds,
+  openInStorage,
   resolveInStorage,
   topics,
   users,
@@ -41,7 +41,11 @@ export const INTERRUPTED = 'Interrupted: the bot was restarted.';
 /** A failure whose message is safe to show on the event page. */
 export class UploadError extends Error {}
 
-export type UploadFile = { path: string; name: string };
+/**
+ * A file to send: its content streams from a handle opened by openInStorage
+ * (never re-opened by path, so a symlink swapped in later is not followed).
+ */
+export type UploadFile = { name: string; data: Readable };
 
 /** An attachment of the message the bot sent (same order as the files). */
 export type SentFile = {
@@ -73,6 +77,27 @@ export function uploadAbs(storageDir: string, rel: string): string {
     throw new UploadError(FILE_MISSING);
   }
   return resolveInStorage(storageDir, rel);
+}
+
+/**
+ * Opens the temp file of an upload row for reading: `uploads/<name>` only,
+ * a regular file really inside storage (no symlink, also not through a
+ * symlinked uploads/). Throws UploadError(FILE_MISSING) otherwise.
+ */
+export async function openUpload(storageDir: string, rel: string) {
+  uploadAbs(storageDir, rel);
+  try {
+    return await openInStorage(storageDir, rel);
+  } catch {
+    throw new UploadError(FILE_MISSING);
+  }
+}
+
+/** Size of the temp file of an upload row (opened safely, then closed). */
+async function uploadSize(storageDir: string, rel: string): Promise<number> {
+  const { handle, size } = await openUpload(storageDir, rel);
+  await handle.close();
+  return size;
 }
 
 /** Greedy packing: at most `maxFiles` files and `maxBytes` bytes per group. */
@@ -142,7 +167,6 @@ const removeRow = (storageDir: string, rel: string) => {
 type Ready = {
   id: number;
   userId: number;
-  path: string;
   rel: string;
   name: string;
   size: number;
@@ -175,7 +199,7 @@ async function uploaderOf(db: Db, userId: number) {
 async function ingestSent(
   db: Db,
   storageDir: string,
-  path: string,
+  rel: string,
   name: string,
   a: SentFile,
   post: { threadId: string; topicId: number },
@@ -185,8 +209,12 @@ async function ingestSent(
     {
       db,
       storageDir,
-      fetchBody: async () =>
-        Readable.toWeb(createReadStream(path)) as ReadableStream<Uint8Array>,
+      fetchBody: async () => {
+        const { handle } = await openUpload(storageDir, rel);
+        return Readable.toWeb(
+          handle.createReadStream(),
+        ) as ReadableStream<Uint8Array>;
+      },
     },
     {
       attachmentId: a.id,
@@ -244,17 +272,14 @@ export async function postEventUploads(
   const ready: Ready[] = [];
   for (const r of rows) {
     try {
-      const path = uploadAbs(storageDir, r.storagePath);
-      // lstat: a symlink is not a regular file, never followed.
-      const st = await lstat(path);
-      if (!st.isFile()) throw new UploadError(FILE_MISSING);
+      // A symlink, a symlinked uploads/ or a non-regular file is refused.
+      const size = await uploadSize(storageDir, r.storagePath);
       ready.push({
         id: r.id,
         userId: r.userId,
-        path,
         rel: r.storagePath,
         name: r.originalFilename,
-        size: st.size,
+        size,
         sent: r.sentAttachmentId
           ? {
               id: r.sentAttachmentId,
@@ -262,7 +287,7 @@ export async function postEventUploads(
               url: r.sentUrl ?? '',
               name: r.originalFilename,
               contentType: r.sentContentType,
-              size: st.size,
+              size,
               postedAt: r.sentAt ?? new Date(),
             }
           : undefined,
@@ -292,7 +317,7 @@ export async function postEventUploads(
   for (const [userId, files] of byUser) {
     const { uploader, content } = await uploaderOf(db, userId);
     const ingestOne = async (x: Ready, a: SentFile) => {
-      if (await ingestSent(db, storageDir, x.path, x.name, a, post, uploader)) {
+      if (await ingestSent(db, storageDir, x.rel, x.name, a, post, uploader)) {
         await setRows(db, [x.id], 'done');
         await removeRow(storageDir, x.rel);
       } else {
@@ -303,19 +328,45 @@ export async function postEventUploads(
     for (const x of files.filter((f) => f.sent)) {
       await ingestOne(x, x.sent as SentFile);
     }
-    for (const chunk of packFiles(files.filter((f) => !f.sent))) {
-      const chunkIds = chunk.map((x) => x.id);
+    for (const packed of packFiles(files.filter((f) => !f.sent))) {
+      // Opened again right before the send (the file may have changed since
+      // the check above); the content goes to Discord from these handles.
+      const chunk: Ready[] = [];
+      const streams: Readable[] = [];
       let sent: SentFile[];
       try {
-        sent = await guild.sendFiles(
-          post.threadId,
-          content,
-          chunk.map((x) => ({ path: x.path, name: x.name })),
-        );
-      } catch (err) {
-        console.error(`event ${eventId}: cannot send files:`, err);
-        await fail(chunkIds, isTooBig(err) ? TOO_BIG : SEND_FAILED);
-        continue;
+        for (const x of packed) {
+          let data: Readable;
+          try {
+            data = (
+              await openUpload(storageDir, x.rel)
+            ).handle.createReadStream();
+          } catch {
+            await fail([x.id], FILE_MISSING);
+            continue;
+          }
+          streams.push(data);
+          chunk.push(x);
+        }
+        if (chunk.length === 0) continue;
+        try {
+          sent = await guild.sendFiles(
+            post.threadId,
+            content,
+            chunk.map((x, i) => ({ name: x.name, data: streams[i] })),
+          );
+        } catch (err) {
+          console.error(`event ${eventId}: cannot send files:`, err);
+          await fail(
+            chunk.map((x) => x.id),
+            isTooBig(err) ? TOO_BIG : SEND_FAILED,
+          );
+          continue;
+        }
+      } finally {
+        // Closes every handle (also when fail() throws, or for a stream the
+        // send never read).
+        for (const st of streams) st.destroy();
       }
       // Remember the Discord ids first: a crash or an ingest failure must not
       // make a retry post the file again.
@@ -420,9 +471,12 @@ async function reingestSent(db: Db, storageDir: string): Promise<void> {
     .orderBy(webUploads.id);
   for (const r of sent) {
     try {
-      const path = uploadAbs(storageDir, r.storagePath);
-      const st = await lstat(path);
-      if (!st.isFile()) continue;
+      let size: number;
+      try {
+        size = await uploadSize(storageDir, r.storagePath);
+      } catch {
+        continue;
+      }
       const e = await getEvent(db, r.eventId);
       const topicId = e ? (e.series ? e.series.topicId : e.topicId) : null;
       if (topicId === null) continue;
@@ -432,7 +486,7 @@ async function reingestSent(db: Db, storageDir: string): Promise<void> {
       const ok = await ingestSent(
         db,
         storageDir,
-        path,
+        r.storagePath,
         r.originalFilename,
         {
           id: r.sentAttachmentId as string,
@@ -440,7 +494,7 @@ async function reingestSent(db: Db, storageDir: string): Promise<void> {
           url: r.sentUrl ?? '',
           name: r.originalFilename,
           contentType: r.sentContentType,
-          size: st.size,
+          size,
           postedAt: r.sentAt ?? new Date(),
         },
         { threadId: t.discordThreadId, topicId: t.id },

@@ -8,5 +8,7 @@ export default defineConfig(({ mode }) => ({
   test: {
     env: loadEnv(mode, repoRoot, ''),
     fileParallelism: false,
+    // Some tests run real soffice; a cold start can exceed the 5 s default.
+    testTimeout: 60_000,
   },
 }));

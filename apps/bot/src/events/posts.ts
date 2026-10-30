@@ -360,7 +360,7 @@ export function discordEventPostGuild(
       if (t.archived) await t.setArchived(false, AUDIT_REASON);
       const msg = await t.send({
         content,
-        files: files.map((f) => ({ attachment: f.path, name: f.name })),
+        files: files.map((f) => ({ attachment: f.data, name: f.name })),
         allowedMentions: { parse: [] },
       });
       return [...msg.attachments.values()].map((a) => ({

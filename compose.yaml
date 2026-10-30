@@ -1,20 +1,40 @@
 # Production-style stack.
 #   podman compose --profile app up -d --build                 # local full stack
 #   podman compose --profile app --profile prod up -d --build  # + cloudflared tunnel
-# Dev: publish the DB on 127.0.0.1:3307 with the override file:
+# Dev: publish the DB on 127.0.0.1:3307 with the override file (needs a full
+# .env: compose interpolates every service, even for `up mariadb`):
 #   podman compose -f compose.yaml -f compose.dev.yaml up -d mariadb
 # (or keep using `pnpm db:up`, which runs its own container).
+#
+# No service loads .env as a whole: each one gets an explicit `environment:`
+# list with only the variables it reads (compose still interpolates ${...} from
+# .env). If you add a setting, list it under the services that read it.
+# Images are pinned by their multi-arch index digest (tag in the comment);
+# bump a digest on purpose (`podman manifest inspect <image>:<tag>`).
 name: studies_db
+
+# `edge` holds only cloudflared and web, so the tunnel can't reach the DB.
+# `backend` holds the DB and the services; it stays non-internal because the
+# bot (Discord) and the worker (UniTime feed) need egress.
+networks:
+  edge:
+  backend:
+
+x-hardening: &hardening
+  read_only: true
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
 
 services:
   mariadb:
-    image: docker.io/library/mariadb:11
+    # mariadb:11
+    image: docker.io/library/mariadb@sha256:c4124d1afa875e47f2892edf26b482fa54f796e2f342d3717a04ca091a22a9bd
     container_name: studies-mariadb
     restart: unless-stopped
     environment:
       MARIADB_ROOT_PASSWORD: ${MARIADB_ROOT_PASSWORD:?set MARIADB_ROOT_PASSWORD in .env}
       MARIADB_DATABASE: studies
-      # run mariadb-upgrade automatically when the 11.x image is bumped
+      # run mariadb-upgrade automatically when the pinned 11.x digest is bumped
       MARIADB_AUTO_UPGRADE: "1"
     command: >-
       --character-set-server=utf8mb4
@@ -23,6 +43,7 @@ services:
       --default-time-zone=+00:00
     volumes:
       - mariadb-data:/var/lib/mysql
+    networks: [backend]
     healthcheck:
       test: ["CMD", "healthcheck.sh", "--connect", "--innodb_initialized"]
       interval: 10s
@@ -35,26 +56,31 @@ services:
     build:
       context: .
       dockerfile: packages/db/Containerfile
-    env_file: .env
+    # Only what migrate reads. DB_APP_PASSWORD creates studies_app, the user
+    # web, bot and worker connect as (DATABASE_URL).
     environment:
       DATABASE_ADMIN_URL: mysql://root:${MARIADB_ROOT_PASSWORD}@mariadb:3306/studies
+      DB_RO_PASSWORD: ${DB_RO_PASSWORD:?set DB_RO_PASSWORD in .env}
+      DB_RW_PASSWORD: ${DB_RW_PASSWORD:-}
+      DB_APP_PASSWORD: ${DB_APP_PASSWORD:-}
       STORAGE_DIR: /data/storage
     volumes:
       - storage:/data/storage
-    # Runs as root. First make the upload dir the web container (user `node`,
-    # uid 1000) can write: owned by uid 1000, mode 0750 (the bot runs as root
-    # and reads/deletes the files). Then the previews dir the worker (also
-    # user `node`) writes: owned by uid 1000, existing previews included.
-    # Then migrate as before.
+    networks: [backend]
+    # Runs as root and hands the storage dirs to uid 1000 (user `node`), which
+    # web, bot and worker all run as:
+    #   uploads/  web writes, bot reads and deletes (mode 0750);
+    #   originals/, tmp/  the bot writes (tmp/ holds downloads before the rename);
+    #   previews/  the worker writes.
+    # `chown -R -P` never follows symlinks. Then migrate as before.
     command:
       - sh
       - -c
       - >-
-        mkdir -p /data/storage/uploads
-        && chown 1000:1000 /data/storage/uploads
+        mkdir -p /data/storage/uploads /data/storage/originals /data/storage/tmp /data/storage/previews
+        && chown -R -P 1000:1000 /data/storage/originals /data/storage/uploads /data/storage/tmp
         && chmod 0750 /data/storage/uploads
-        && mkdir -p /data/storage/previews
-        && chown -R 1000:1000 /data/storage/previews
+        && chown -R -P 1000:1000 /data/storage/previews
         && chmod 0755 /data/storage/previews
         && exec node --import tsx src/cli/migrate.ts
     depends_on:
@@ -67,11 +93,26 @@ services:
     build:
       context: .
       dockerfile: apps/bot/Containerfile
-    env_file: .env
+    <<: *hardening
+    tmpfs:
+      - /tmp:size=512m
+    # Only what the bot reads. The Discord values are not `:?` so `compose
+    # config` works without them; the bot refuses to start if one is empty.
+    # No feed URLs: the My groups import allows the hosts in
+    # UNITIME_IMPORT_HOSTS, so operators must list the feed hosts there.
     environment:
+      DISCORD_TOKEN: ${DISCORD_TOKEN:-}
+      DISCORD_CLIENT_ID: ${DISCORD_CLIENT_ID:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      ADMIN_ROLE_NAME: ${ADMIN_ROLE_NAME:-}
+      WEB_BASE_URL: ${WEB_BASE_URL:-}
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       STORAGE_DIR: /data/storage
+      UNITIME_IMPORT_HOSTS: ${UNITIME_IMPORT_HOSTS:-}
     volumes:
       - storage:/data/storage
+    networks: [backend]
+    mem_limit: 1g
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -82,8 +123,12 @@ services:
     build:
       context: .
       dockerfile: apps/worker/Containerfile
-    # Only what the worker reads (no env_file): it opens files named by DB rows,
-    # so keep Discord/RW/RO/tunnel secrets out of its environment.
+    <<: *hardening
+    # soffice/pdftotext get a fresh profile and HOME under the OS temp dir.
+    tmpfs:
+      - /tmp:size=1g  # two concurrent soffice runs may each stage a 200 MiB preview
+    # Only what the worker reads: it opens files named by DB rows, so keep
+    # Discord/RW/RO/tunnel secrets out of its environment.
     environment:
       DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
       STORAGE_DIR: /data/storage
@@ -94,10 +139,12 @@ services:
       PDFTOTEXT_BIN: ${PDFTOTEXT_BIN:-}
     volumes:
       - storage:/data/storage
-    # soffice/pdftotext read untrusted documents: cap memory and processes
+    networks: [backend]
+    # soffice/pdftotext read untrusted documents: cap memory, CPU and processes
     # (a zip bomb or fork storm stops here). The image runs as user `node`.
     # Conversions still have network access; see docs/deploy.md.
     mem_limit: ${WORKER_MEM_LIMIT:-2g}
+    cpus: "1.5"
     pids_limit: 512
     depends_on:
       migrate:
@@ -109,13 +156,38 @@ services:
     build:
       context: .
       dockerfile: apps/web/Containerfile
-    env_file: .env
+    <<: *hardening
+    # Next writes its fetch/image cache under .next/cache next to server.js.
+    tmpfs:
+      - /tmp:size=512m
+      - /app/apps/web/.next/cache:size=512m
+    # Only what the web app reads. No feed URLs: the My groups import allows
+    # the hosts in UNITIME_IMPORT_HOSTS, so operators must list the feed hosts
+    # there (default plan.agh.edu.pl).
     environment:
+      DATABASE_URL: ${DATABASE_URL:?set DATABASE_URL in .env}
+      DATABASE_RO_URL: ${DATABASE_RO_URL:?set DATABASE_RO_URL in .env}
+      DATABASE_RW_URL: ${DATABASE_RW_URL:-}
+      DISCORD_GUILD_ID: ${DISCORD_GUILD_ID:-}
+      WEB_BASE_URL: ${WEB_BASE_URL:?set WEB_BASE_URL in .env}
       STORAGE_DIR: /data/storage
+      UNITIME_IMPORT_HOSTS: ${UNITIME_IMPORT_HOSTS:-}
     volumes:
       - storage:/data/storage
+    networks: [edge, backend]
     expose:
       - "3000"
+    mem_limit: 1g
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "fetch('http://127.0.0.1:3000/login-info').then(r=>process.exit(r.ok?0:1),()=>process.exit(1))"
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
     depends_on:
       migrate:
         condition: service_completed_successfully
@@ -123,12 +195,18 @@ services:
 
   cloudflared:
     profiles: ["prod"]
-    image: docker.io/cloudflare/cloudflared:latest
+    # cloudflare/cloudflared:latest (2026.10.6)
+    image: docker.io/cloudflare/cloudflared@sha256:004d843fa5fdc3103983fd580ee19fab4a8fa98add31f87249c1659e848c98e0
     command: tunnel --no-autoupdate run
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
+    networks: [edge]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
-      - web
+      web:
+        condition: service_healthy
     restart: unless-stopped
 
 volumes:

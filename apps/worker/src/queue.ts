@@ -3,6 +3,7 @@ import {
   type JobType,
   jobs,
   materials,
+  StorageAccessError,
   StoragePathError,
 } from '@studies/db';
 import { and, eq, inArray, lt, lte, notInArray, sql } from 'drizzle-orm';
@@ -118,7 +119,8 @@ export async function enqueueJob(
 }
 
 /** Errors that retrying cannot fix: the job fails on the first attempt. */
-const isPermanent = (err: unknown) => err instanceof StoragePathError;
+const isPermanent = (err: unknown) =>
+  err instanceof StoragePathError || err instanceof StorageAccessError;
 
 export async function failJob(
   db: Db,

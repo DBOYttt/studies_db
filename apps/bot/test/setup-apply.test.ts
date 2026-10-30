@@ -1,4 +1,4 @@
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 import {
@@ -968,6 +968,38 @@ describe('applySetup: posts', () => {
     );
     expect(r.failures).toHaveLength(1);
     expect(r.failures[0]).toContain('x.txt');
+    expect(g.calls.some((c) => c[0] === 'createThread')).toBe(false);
+  });
+
+  it('never posts a stored file that is a symlink to outside storage', async () => {
+    const outside = `${storageDir}-secret.txt`;
+    writeFileSync(outside, 'secret');
+    const id = await mat('ok.pdf');
+    symlinkSync(outside, join(storageDir, 'link.pdf'));
+    const g = fakeGuild();
+    const r = await applySetup(
+      db,
+      g,
+      [
+        post(topicId, [
+          {
+            content: 'hdr',
+            files: [
+              {
+                materialId: id,
+                name: 'link.pdf',
+                storagePath: 'link.pdf',
+                sizeBytes: 1,
+              },
+            ],
+          },
+        ]),
+      ],
+      snapshot,
+      storageDir,
+    );
+    expect(r.failures).toHaveLength(1);
+    expect(r.failures[0]).toContain('link.pdf');
     expect(g.calls.some((c) => c[0] === 'createThread')).toBe(false);
   });
 

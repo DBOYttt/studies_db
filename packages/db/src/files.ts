@@ -1,3 +1,5 @@
+import { constants } from 'node:fs';
+import { type FileHandle, open, realpath } from 'node:fs/promises';
 import { isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { foldStroke } from './text.js';
@@ -124,6 +126,66 @@ export function resolveInStorage(root: string, rel: string): string {
   const abs = resolve(base, rel);
   if (!abs.startsWith(base + sep)) throw new StoragePathError();
   return abs;
+}
+
+/**
+ * A stored file that may not be read: outside STORAGE_DIR (also through a
+ * symlinked directory), a symlink itself, not a regular file, or missing.
+ * Callers answer it as "not found". The message never echoes the path.
+ */
+export class StorageAccessError extends Error {
+  constructor() {
+    super('File not available');
+    this.name = 'StorageAccessError';
+  }
+}
+
+// O_NOFOLLOW: a symlink as the last component fails the open (ELOOP).
+// O_NONBLOCK: opening a FIFO must not wait for a writer; it is refused by
+// the fstat check below, and has no effect on reads of a regular file.
+const OPEN_FLAGS =
+  constants.O_RDONLY |
+  (constants.O_NOFOLLOW ?? 0) |
+  (constants.O_NONBLOCK ?? 0);
+
+/**
+ * Opens a storage-relative path for reading, refusing anything that is not a
+ * regular file really inside the storage root: the path is resolved with
+ * resolveInStorage, its realpath must stay under the root's realpath (so a
+ * symlinked directory such as `uploads -> /etc` is refused), the open does not
+ * follow a symlink, and fstat must report a regular file. The caller owns the
+ * handle (close it, or stream with `handle.createReadStream()`, which closes
+ * it at the end). Throws StorageAccessError otherwise.
+ */
+export async function openInStorage(
+  root: string,
+  rel: string,
+): Promise<{ handle: FileHandle; size: number }> {
+  let abs: string;
+  let realRoot: string;
+  let realAbs: string;
+  try {
+    abs = resolveInStorage(root, rel);
+    realRoot = await realpath(resolve(root));
+    realAbs = await realpath(abs);
+  } catch {
+    throw new StorageAccessError();
+  }
+  if (!realAbs.startsWith(realRoot + sep)) throw new StorageAccessError();
+  let handle: FileHandle;
+  try {
+    handle = await open(abs, OPEN_FLAGS);
+  } catch {
+    throw new StorageAccessError();
+  }
+  try {
+    const st = await handle.stat();
+    if (!st.isFile()) throw new StorageAccessError();
+    return { handle, size: st.size };
+  } catch {
+    await handle.close().catch(() => {});
+    throw new StorageAccessError();
+  }
 }
 
 /** Absolute paths pass through; relative ones resolve against the monorepo root. */

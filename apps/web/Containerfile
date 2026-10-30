@@ -1,12 +1,13 @@
 # Build from the repo root: podman build -f apps/web/Containerfile .
-FROM docker.io/library/node:22-bookworm-slim AS build
+# node:22-bookworm-slim, pinned by its multi-arch index digest (bump on purpose).
+FROM docker.io/library/node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS build
 RUN corepack enable
 WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile --filter @studies/web...
 RUN pnpm --filter @studies/web build
 
-FROM docker.io/library/node:22-bookworm-slim
+FROM docker.io/library/node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
 ENV NODE_ENV=production PORT=3000 HOSTNAME=0.0.0.0
 WORKDIR /app
 COPY --from=build /app/apps/web/.next/standalone ./

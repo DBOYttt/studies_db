@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -383,6 +383,32 @@ describe('file route', () => {
     expect((await call(id, 'original')).status).toBe(404);
     const esc = await seed({ storagePath: '../../etc/passwd' });
     expect((await call(esc, 'original')).status).toBe(404);
+  });
+
+  it('404 for a preview that is a symlink (to a file outside storage)', async () => {
+    const outside = await mkdtemp(join(tmpdir(), 'web-outside-'));
+    try {
+      await writeFile(join(outside, 'secret.pdf'), '%PDF-secret');
+      await symlink(
+        join(outside, 'secret.pdf'),
+        join(storage, 'previews', 'link.pdf'),
+      );
+      const id = await seed({ previewPath: 'previews/link.pdf' });
+      expect((await call(id, 'preview')).status).toBe(404);
+      await symlink('/etc/hosts', join(storage, 'originals', 'hosts'));
+      const orig = await seed({ storagePath: 'originals/hosts' });
+      expect((await call(orig, 'original')).status).toBe(404);
+    } finally {
+      await rm(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('404 through a symlinked directory or for a non-regular file', async () => {
+    await symlink('/etc', join(storage, 'etc'));
+    const viaDir = await seed({ storagePath: 'etc/hosts' });
+    expect((await call(viaDir, 'original')).status).toBe(404);
+    const dir = await seed({ storagePath: 'previews' });
+    expect((await call(dir, 'original')).status).toBe(404);
   });
 
   it('redirects to /login-info without a session cookie', async () => {

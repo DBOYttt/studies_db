@@ -1,5 +1,13 @@
 import { createHash } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  symlink,
+  unlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -328,6 +336,80 @@ describe('storage containment', () => {
     const j = await jobOf(materialId);
     expect(j.status).toBe('failed');
     expect(j.lastError).toBe('Invalid file path');
+  });
+
+  // A symlink planted inside STORAGE_DIR must not be followed out of it.
+  it('fails an extract_text job whose original is a symlink, without reading it', async () => {
+    const secret = join(dirname(storageDir), `secret-link-${seq}.txt`);
+    await writeFile(secret, 'SECRET=hunter2\n');
+    try {
+      const { materialId } = await ingest(
+        'x',
+        'notes.txt',
+        'text/plain',
+        Buffer.from('ok'),
+      );
+      const m0 = await material(materialId);
+      await unlink(join(storageDir, m0.storagePath));
+      await symlink(secret, join(storageDir, m0.storagePath));
+      expect(await processOne(deps())).toBe(true);
+      const m = await material(materialId);
+      expect(m.extractedText).toBeNull();
+      expect(m.status).toBe('failed');
+      const j = await jobOf(materialId);
+      expect(j.status).toBe('failed');
+      expect(j.attempts).toBe(1);
+      expect(j.lastError).toBe('File not available');
+    } finally {
+      await rm(secret, { force: true });
+    }
+  });
+
+  it('fails a convert job whose original is a symlink, without running soffice', async () => {
+    const { materialId } = await ingest(
+      'sample.docx',
+      'sample.docx',
+      'application/octet-stream',
+    );
+    const m0 = await material(materialId);
+    await unlink(join(storageDir, m0.storagePath));
+    await symlink(
+      join(fixtures, 'sample.docx'),
+      join(storageDir, m0.storagePath),
+    );
+    expect(await processOne(deps())).toBe(true);
+    expect(await sofficeCalls()).toBe(0);
+    const m = await material(materialId);
+    expect(m.previewPath).toBeNull();
+    expect(m.status).toBe('failed');
+    const j = await jobOf(materialId);
+    expect(j.status).toBe('failed');
+    expect(j.attempts).toBe(1);
+    expect(j.lastError).toBe('File not available');
+  });
+
+  it('fails an extract_text job whose pdf preview is a symlink', async () => {
+    const { materialId } = await ingest(
+      'x',
+      'notes.txt',
+      'text/plain',
+      Buffer.from('ok'),
+    );
+    await mkdir(join(storageDir, 'previews'), { recursive: true });
+    await symlink(
+      join(fixtures, 'sample.pdf'),
+      join(storageDir, 'previews', 'link.pdf'),
+    );
+    await db
+      .update(materials)
+      .set({ previewKind: 'pdf', previewPath: 'previews/link.pdf' })
+      .where(eq(materials.id, materialId));
+    await processOne(deps());
+    expect((await material(materialId)).extractedText).toBeNull();
+    const j = await jobOf(materialId);
+    expect(j.status).toBe('failed');
+    expect(j.attempts).toBe(1);
+    expect(j.lastError).toBe('File not available');
   });
 
   it('refuses convert when sha256 is malformed', async () => {
