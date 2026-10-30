@@ -32,7 +32,7 @@ import {
   connectionErrorMessage,
   MAX_SQL_LENGTH,
   runReadonlyQuery,
-  toJsonValue,
+  toConsoleValue,
 } from './sql-console';
 import { BUSY_ERROR, CONNECT_ERROR } from './sql-messages';
 
@@ -198,7 +198,7 @@ function shownRows(
 ): Shown {
   return {
     columns: (fields ?? []).map((f) => f.name),
-    rows: rows.slice(0, PREVIEW_ROWS).map((r) => r.map(toJsonValue)),
+    rows: rows.slice(0, PREVIEW_ROWS).map((r) => r.map(toConsoleValue)),
   };
 }
 

@@ -75,6 +75,21 @@ export function toJsonValue(v: unknown): unknown {
   return v;
 }
 
+/** Hides password hashes that SHOW GRANTS / SHOW CREATE USER print. */
+export function redactCredentials(v: unknown): unknown {
+  if (typeof v !== 'string') return v;
+  return v
+    .replace(
+      /(IDENTIFIED\s+(?:BY\s+PASSWORD|VIA\s+\w+\s+(?:USING|AS)))\s+'[^']*'/gi,
+      "$1 '<hidden>'",
+    )
+    .replace(/(PASSWORD\s*\(\s*)'[^']*'/gi, "$1'<hidden>'");
+}
+
+/** toJsonValue + redactCredentials: the form every console cell takes. */
+export const toConsoleValue = (v: unknown): unknown =>
+  redactCredentials(toJsonValue(v));
+
 function approxBytes(v: unknown): number {
   if (typeof v === 'string') return v.length;
   if (Buffer.isBuffer(v)) return v.length;
@@ -172,7 +187,7 @@ export async function runReadonlyQuery(
         success();
         return;
       }
-      const out = row.map(toJsonValue);
+      const out = row.map(toConsoleValue);
       for (const v of out) bytes += approxBytes(v);
       rows.push(out);
     });
