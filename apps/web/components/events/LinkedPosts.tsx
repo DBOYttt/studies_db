@@ -94,6 +94,7 @@ export function LinkedPosts({
         </ul>
       )}
       <form
+        method="post"
         className="flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();

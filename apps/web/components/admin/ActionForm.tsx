@@ -59,6 +59,7 @@ export function ActionForm({
 
   return (
     <form
+      method="post"
       ref={formRef}
       aria-label={label}
       className={className ?? 'flex flex-col gap-3 px-3 py-3'}

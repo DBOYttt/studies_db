@@ -9,6 +9,7 @@ import {
   applyGroupImportAction,
   previewGroupImportAction,
 } from '@/lib/group-import-actions';
+import { useHydrated } from '@/lib/use-hydrated';
 
 // Same limit and copy as the server (IMPORT_MAX_BYTES): checked here first,
 // so a large file is never sent.
@@ -40,6 +41,7 @@ type Result = { preview: GroupImportPreview; notice: string | null };
  */
 export function GroupImport() {
   const router = useRouter();
+  const hydrated = useHydrated();
   const [result, setResult] = useState<Result | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState('');
@@ -133,6 +135,7 @@ export function GroupImport() {
         copy the link.
       </p>
       <form
+        method="post"
         ref={formRef}
         onSubmit={onPreview}
         className="flex flex-col gap-2 border-b border-line px-3 py-2.5 sm:flex-row sm:items-end sm:gap-3"
@@ -171,6 +174,9 @@ export function GroupImport() {
         </label>
         <button
           type="submit"
+          // A real `disabled` until hydration: Enter in the link field must
+          // not submit natively and put the link into the URL.
+          disabled={!hydrated}
           aria-disabled={busy !== null}
           className={`${btn} self-start sm:self-auto`}
         >

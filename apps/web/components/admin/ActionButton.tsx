@@ -87,6 +87,7 @@ export function ActionButton({
 
   return (
     <form
+      method="post"
       className={className ?? 'flex flex-col items-start'}
       onSubmit={(e) => {
         e.preventDefault();
