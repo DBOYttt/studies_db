@@ -28,7 +28,9 @@ test('drill down class > group > file, map and schema follow the selection', asy
   );
 
   const main = page.getByRole('main');
-  await main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }).click();
+  await main
+    .getByRole('link', { name: 'lab-sprawozdanie.pdf', exact: true })
+    .click();
   await expect(page).toHaveURL(/class=laboratorium&group=3.*file=\d+/);
   const panel = page.getByRole('complementary', { name: 'File preview' });
   await expect(panel.locator('canvas').first()).toBeVisible({
@@ -110,7 +112,7 @@ test('mobile: drawer navigation and full-screen preview sheet', async ({
 
   await page
     .getByRole('main')
-    .getByRole('link', { name: 'lab-sprawozdanie.pdf' })
+    .getByRole('link', { name: 'lab-sprawozdanie.pdf', exact: true })
     .click();
   const panel = page.getByRole('complementary', { name: 'File preview' });
   await expect(panel).toBeVisible();
@@ -127,7 +129,7 @@ test('table browser preview is a full-screen sheet on mobile', async ({
   await page.goto('/tables/v_files?sort=filename&dir=asc&f_filename=lab-');
   await page
     .getByRole('main')
-    .getByRole('link', { name: 'lab-sprawozdanie.pdf' })
+    .getByRole('link', { name: 'lab-sprawozdanie.pdf', exact: true })
     .first()
     .click();
   const panel = page.getByRole('complementary', { name: 'File preview' });

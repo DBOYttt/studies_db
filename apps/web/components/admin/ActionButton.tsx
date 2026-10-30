@@ -22,7 +22,8 @@ const dangerBtn =
 /**
  * One button that runs an admin Server Action with fixed hidden `fields`.
  * With `confirm` the first click only asks (the events' inline confirm
- * pattern): a second, explicit button runs it, and Cancel backs out.
+ * pattern): a second, explicit button runs it, and Cancel or Escape backs
+ * out.
  * `disabled` keeps the button focusable but `aria-disabled`, and a submit
  * then does nothing; `disabledText` says why. The result goes to a polite
  * `role="status"` or a `role="alert"`. Callers key it on what the button
@@ -137,6 +138,13 @@ export function ActionButton({
       ) : confirm ? (
         <fieldset
           aria-label={confirm.question}
+          // Escape backs out like Cancel (focus goes back to the trigger).
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setAsking(false);
+            }
+          }}
           className="m-0 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-err-line bg-err-bg px-3 py-2"
         >
           <span className="w-full font-semibold text-err-fg sm:w-auto">

@@ -2,9 +2,11 @@ import { GeistMono } from 'geist/font/mono';
 import { GeistSans } from 'geist/font/sans';
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
+import { ROOT_TITLE } from '@/lib/page-meta';
 import './globals.css';
 
-export const metadata: Metadata = { title: 'Studies DB | TP 4.0' };
+/** Every page sets its own title: `<Page> · Studies DB` (lib/page-meta.ts). */
+export const metadata: Metadata = { title: ROOT_TITLE };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (

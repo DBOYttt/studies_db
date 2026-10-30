@@ -7,8 +7,11 @@ import {
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { currentMode } from '@/lib/mode';
+import { NOT_FOUND_TITLE } from '@/lib/page-meta';
 
-export const metadata: Metadata = { title: 'Page not found | Studies DB' };
+export const metadata: Metadata = {
+  title: { absolute: NOT_FOUND_TITLE },
+};
 
 /**
  * The one 404 page, for unknown addresses and for every notFound() (a

@@ -722,6 +722,22 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_HEADERS = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_PLAN_LAYOUT = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_DEAD_ENDS = await createLoginToken(db, userId);
+    // Accessibility (a11y.spec.ts): page titles never name a deleted event
+    // to a student.
+    const [{ id: hiddenEventId }] = await db
+      .insert(events)
+      .values({
+        kind: 'inne',
+        title: 'Ukryte wydarzenie',
+        subjectId,
+        startsAt: new Date(Date.UTC(2027, 0, 27, 10)),
+        createdBy: userId,
+        updatedBy: userId,
+        deletedAt: new Date(),
+      })
+      .$returningId();
+    process.env.E2E_HIDDEN_EVENT_ID = String(hiddenEventId);
+    process.env.E2E_TOKEN_A11Y = await createLoginToken(db, userId);
 
     // Moje grupy stored per user (my-groups.spec.ts): its own user, so the
     // saved choice cannot leak into the other specs.

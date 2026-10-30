@@ -25,6 +25,7 @@ import { invalidateCounts } from './count-cache';
 import { getDb, getViewsPool } from './db';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
+import { withEventField } from './field-errors';
 import { withNotice } from './notices';
 import { nowWall } from './plan';
 import { requireAdmin, requireUser } from './session';
@@ -110,8 +111,20 @@ const isResult = (x: EventInput | ActionResult): x is ActionResult => 'ok' in x;
 const scopeOf = (v: unknown): 'one' | 'following' =>
   v === 'following' ? 'following' : 'one';
 
-/** Adds an event (or a series) and opens its page; returns only a refusal. */
-export async function createEventAction(form: FormData): Promise<ActionResult> {
+/** A refusal of the event form, with the input it is about (if any). */
+export type EventFormResult = ActionResult & { field?: string };
+
+/**
+ * Adds an event (or a series) and opens its page; returns only a refusal,
+ * naming the input it is about when it is about one.
+ */
+export async function createEventAction(
+  form: FormData,
+): Promise<EventFormResult> {
+  return withEventField(await createEvent(form));
+}
+
+async function createEvent(form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const input = readForm(form);
   if (isResult(input)) return input;
@@ -150,7 +163,11 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
 export async function updateEventAction(
   id: number,
   form: FormData,
-): Promise<ActionResult> {
+): Promise<EventFormResult> {
+  return withEventField(await updateEvent(id, form));
+}
+
+async function updateEvent(id: number, form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const input = readForm(form);

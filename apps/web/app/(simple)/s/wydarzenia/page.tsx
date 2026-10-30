@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { EventsIndex } from '@/components/events/EventsIndex';
 import { Notice } from '@/components/Notice';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
@@ -9,6 +10,8 @@ import { noticeFromSearchParams } from '@/lib/notices';
 import { nowWall } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
+
+export const metadata: Metadata = { title: 'Events' };
 
 export const dynamic = 'force-dynamic';
 

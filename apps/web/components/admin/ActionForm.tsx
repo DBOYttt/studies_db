@@ -5,13 +5,19 @@ import {
   startTransition,
   useActionState,
   useEffect,
+  useId,
   useRef,
 } from 'react';
+import type { FormError } from '@/components/Field';
 import type { ActionState } from '@/lib/admin-forms';
+import { visibleControl } from '@/lib/field-errors';
 import { useCardStatus } from './CardStatus';
 import { primaryBtn } from './form-styles';
 
 type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
+
+/** What a render-function child gets: the error shown and the field id prefix. */
+export type FormFields = { error: FormError; id: string };
 
 /**
  * The admin forms' wrapper around `useActionState`: the result goes to a
@@ -22,6 +28,9 @@ type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
  * `resetOnSuccess` an applied change (not an `unchanged` one) clears the
  * form for the next entry. `onSaved` gets the submitted data of an applied
  * change (an edit form advances its orig snapshot with it).
+ * A refusal naming a shown input (`ActionState.field`) is not the general
+ * alert: a render-function child gets it (`FormFields`) to show it under
+ * that input (`Field`, `fieldAria`), and the input is focused.
  */
 export function ActionForm({
   action,
@@ -45,12 +54,22 @@ export function ActionForm({
   /** The form's accessible name (makes it a `form` landmark). */
   label?: string;
   className?: string;
-  children: ReactNode;
+  children: ReactNode | ((f: FormFields) => ReactNode);
 }) {
-  const [state, formAction, pending] = useActionState(action, null);
+  const id = useId();
+  const formRef = useRef<HTMLFormElement>(null);
+  // A field the form does not show (e.g. the hidden code of an edit form)
+  // keeps the message general.
+  const act = async (prev: ActionState, data: FormData) => {
+    const r = await action(prev, data);
+    if (r && !r.ok && r.field && !visibleControl(formRef.current, r.field)) {
+      return { ok: false, message: r.message };
+    }
+    return r;
+  };
+  const [state, formAction, pending] = useActionState(act, null);
   // Inside a `CardStatus`, a new submit clears the card's last message.
   const card = useCardStatus();
-  const formRef = useRef<HTMLFormElement>(null);
   // Read synchronously: a second click in the same tick must not see a
   // stale `pending`.
   const busy = useRef(false);
@@ -69,6 +88,9 @@ export function ActionForm({
     handled.current = state;
     const data = submitted.current;
     submitted.current = null;
+    if (state && !state.ok && state.field) {
+      visibleControl(formRef.current, state.field)?.focus();
+    }
     if (!state?.ok || state.unchanged) return;
     if (data) onSaved?.(data);
     if (resetOnSuccess) formRef.current?.reset();
@@ -90,7 +112,15 @@ export function ActionForm({
         startTransition(() => formAction(data));
       }}
     >
-      {children}
+      {typeof children === 'function'
+        ? children({
+            error:
+              state && !state.ok && !pending
+                ? { message: state.message, field: state.field }
+                : null,
+            id,
+          })
+        : children}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <button
           type="submit"
@@ -105,7 +135,7 @@ export function ActionForm({
             : null}
         </div>
       </div>
-      {state && !state.ok && !pending && (
+      {state && !state.ok && !pending && !state.field && (
         <p
           role="alert"
           className="m-0 rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg"

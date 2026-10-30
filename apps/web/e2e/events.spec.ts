@@ -127,17 +127,19 @@ test('required fields are marked and the all-day hint describes the times', asyn
 test('an invalid form shows the English message', async ({ page }) => {
   await page.goto('/s/wydarzenia/nowe');
   await page.getByLabel('Title', { exact: true }).fill('Coś');
-  await page.getByLabel('Date').fill('2001-01-01');
+  const date = page.getByLabel('Date');
+  await date.fill('2001-01-01');
   const submit = page.getByRole('button', { name: 'Add event' });
   await submit.click();
   await expect(
     page.getByText('The date cannot be more than a month in the past.'),
   ).toBeVisible();
-  // The refusal describes the submit button, which keeps focus.
-  await expect(submit).toHaveAccessibleDescription(
+  // A refusal about a field describes that field, which gets focus.
+  await expect(date).toHaveAccessibleDescription(
     'The date cannot be more than a month in the past.',
   );
-  await expect(submit).toBeFocused();
+  await expect(date).toHaveAttribute('aria-invalid', 'true');
+  await expect(date).toBeFocused();
 });
 
 test('a refused save keeps the typed values', async ({ page }) => {

@@ -1,5 +1,4 @@
 import {
-  getEvent,
   lastBotRequest,
   listEventUploads,
   retryableUploadIds,
@@ -9,6 +8,7 @@ import { notFound } from 'next/navigation';
 import type { EventPageData } from '@/components/events/EventDetails';
 import { getDb } from './db';
 import { eventFileRows, eventHistory, listTopicsByIds } from './event-queries';
+import { loadEvent } from './page-loaders';
 import type { SessionUser } from './session';
 import { uploadFileExists } from './storage';
 
@@ -27,7 +27,7 @@ export async function loadEventPage(
   user: SessionUser,
 ): Promise<EventPageData> {
   const db = getDb();
-  const ev = await getEvent(db, id);
+  const ev = await loadEvent(id);
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) notFound();
   const postTopicId = ev.series ? ev.series.topicId : ev.topicId;
   const reqTarget = ev.series ? `series:${ev.series.id}` : `event:${id}`;

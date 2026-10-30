@@ -5,8 +5,9 @@ import {
   PencilSimpleLine,
   UserPlus,
 } from '@phosphor-icons/react/dist/ssr';
-import { getSubjectAdmin, listLecturersAdmin } from '@studies/db';
+import { listLecturersAdmin } from '@studies/db';
 import { CLASS_NAMES } from '@studies/db/constants';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/admin/ActionButton';
@@ -20,7 +21,17 @@ import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { unassignLecturerAction } from '@/lib/admin-actions';
 import { lecturerLabel, parseSubjectParam } from '@/lib/admin-pages';
 import { getDb } from '@/lib/db';
+import { loadSubjectAdmin } from '@/lib/page-loaders';
+import { adminSubjectMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}): Promise<Metadata> {
+  return adminSubjectMetadata((await params).code);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -40,7 +51,7 @@ export default async function AdminSubjectPage({
   if (code === null) notFound();
   const db = getDb();
   const [subject, lecturers] = await Promise.all([
-    getSubjectAdmin(db, code),
+    loadSubjectAdmin(code),
     listLecturersAdmin(db),
   ]);
   if (!subject) notFound();

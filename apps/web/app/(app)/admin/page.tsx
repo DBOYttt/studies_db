@@ -1,4 +1,5 @@
 import { ArrowRight, ShieldCheck } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AuditTable } from '@/components/admin/AuditTable';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
@@ -6,8 +7,13 @@ import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { loadAuditTargets } from '@/lib/admin-audit-targets';
 import { getAdminOverview } from '@/lib/admin-overview';
 import { getDb } from '@/lib/db';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
 import { userHref } from '@/lib/view-links';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

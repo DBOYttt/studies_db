@@ -1,5 +1,8 @@
+import type { Metadata } from 'next';
 import { Notice } from '@/components/Notice';
 import { SESSION_ENDED } from '@/lib/notices';
+
+export const metadata: Metadata = { title: 'Sign in' };
 
 export default async function LoginInfo({
   searchParams,

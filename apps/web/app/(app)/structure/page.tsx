@@ -5,6 +5,7 @@ import {
   Rows,
 } from '@phosphor-icons/react/dist/ssr';
 import { PUBLIC_VIEWS } from '@studies/db/constants';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -13,6 +14,8 @@ import { roErrorMessage } from '@/lib/db-errors';
 import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
 import { countViewRows, listViewColumns } from '@/lib/tables';
+
+export const metadata: Metadata = { title: 'Structure' };
 
 export const dynamic = 'force-dynamic';
 

@@ -28,6 +28,7 @@ import {
   checkedInOrder,
   DEFAULT_PER_PAGE,
   defaultResultKey,
+  fileActionLabels,
   filterRowIndexes,
   footerText,
   materialIdOf,
@@ -687,6 +688,8 @@ export function ResultGrid({
             {shown.map((ri, n) => {
               const r = rows[ri];
               const id = fileIdOf(r);
+              const names =
+                id === null ? null : fileActionLabels(columns, r, id);
               const isSel = id !== null && selectedId === id;
               const isChecked = checked.has(ri);
               const bg = isSel
@@ -714,12 +717,13 @@ export function ResultGrid({
                     <td
                       className={`${cellPad} whitespace-nowrap border-b border-line font-sans`}
                     >
-                      {id !== null && (
+                      {id !== null && names && (
                         <span className="inline-flex gap-2.5">
                           {onPreview ? (
                             <button
                               type="button"
                               onClick={() => onPreview(id)}
+                              aria-label={names.preview}
                               className={linkCls}
                             >
                               <Eye aria-hidden="true" />
@@ -730,6 +734,7 @@ export function ResultGrid({
                               <Link
                                 href={previewHref(id) ?? '#'}
                                 scroll={false}
+                                aria-label={names.preview}
                                 className={linkCls}
                               >
                                 <Eye aria-hidden="true" />
@@ -737,7 +742,11 @@ export function ResultGrid({
                               </Link>
                             )
                           )}
-                          <a href={`/files/${id}/original`} className={linkCls}>
+                          <a
+                            href={`/files/${id}/original`}
+                            aria-label={names.download}
+                            className={linkCls}
+                          >
                             <DownloadSimple aria-hidden="true" />
                             Download
                           </a>

@@ -1,12 +1,18 @@
 import { Books, Plus } from '@phosphor-icons/react/dist/ssr';
 import { listSubjectsAdmin } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { box, boxHead, link, td, th } from '@/components/admin/form-styles';
 import { SubjectForm } from '@/components/admin/SubjectForm';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('Subjects · Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

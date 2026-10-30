@@ -12,6 +12,9 @@
  *   (light 7.37 / 10.07, dark 5.16 / 6.71).
  * --accent-ink / --accent-ink-hover: accent used as text (links, tree, tabs),
  *   >= 4.5:1 on --bg, --bar, --surface and --selected in both modes.
+ * --muted / --faint: secondary text, >= 4.5:1 on --panel, --zebra, --bar and
+ *   --surface in both modes; light --faint is 5.95 on --panel, 5.70 on
+ *   --zebra, 5.42 on --surface and 4.74 on --selected.
  * --edge: idle diagram edges, zinc-500 in both modes (>= 3:1, WCAG 1.4.11).
  * Radii: controls 4px (rounded), panels 6px (rounded-md), tabs 6px 6px 0 0,
  *   chips full.
@@ -20,7 +23,7 @@
   --bg: #ffffff;
   --fg: #18181b;
   --muted: #52525b;
-  --faint: #71717a;
+  --faint: #63636b;
   --subtle: #a1a1aa;
   --border: #e4e4e7;
   --border-strong: #d4d4d8;

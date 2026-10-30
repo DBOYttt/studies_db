@@ -1,5 +1,6 @@
 import { FileText } from '@phosphor-icons/react/dist/ssr';
 import { type AdminRequestKind, getAdminBotRequest } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import type { ReactNode } from 'react';
@@ -14,7 +15,16 @@ import {
 } from '@/lib/admin-sync';
 import { getDb } from '@/lib/db';
 import { parseEntityId } from '@/lib/entity-page';
+import { idMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return idMetadata('Request', (await params).id, true);
+}
 
 export const dynamic = 'force-dynamic';
 

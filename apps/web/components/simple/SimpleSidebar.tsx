@@ -150,7 +150,9 @@ export function SimpleSidebar({
                 className="shrink-0 text-accent-ink"
                 aria-hidden
               />
-              <span className="min-w-0 flex-1 leading-snug">{s.name}</span>
+              <span lang="pl" className="min-w-0 flex-1 leading-snug">
+                {s.name}
+              </span>
               <span className="text-xs font-normal text-faint tabular-nums">
                 <span className="sr-only">files: </span>
                 {s.count}

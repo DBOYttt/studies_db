@@ -66,7 +66,7 @@ test.describe('signed in', () => {
       .getByRole('link', { name: 'Kolokwium 1 — tarcie' })
       .first()
       .click();
-    await main.getByRole('link', { name: 'sample.pdf' }).click();
+    await main.getByRole('link', { name: 'sample.pdf', exact: true }).click();
     const panel = page.getByRole('complementary', { name: 'File preview' });
     await expect(panel.locator('canvas').first()).toBeVisible({
       timeout: 30_000,

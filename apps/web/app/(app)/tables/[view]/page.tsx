@@ -7,6 +7,7 @@ import {
   Table,
   TerminalWindow,
 } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
@@ -17,6 +18,7 @@ import { ViewSearchForm } from '@/components/ViewSearchForm';
 import { parsePreviewId, previewColumn, toCells } from '@/lib/cells';
 import { getDb, getRoPool, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
+import { viewMetadata } from '@/lib/page-meta';
 import { getMaterialFile, loadLinkContext } from '@/lib/queries';
 import { DEFAULT_PER_PAGE } from '@/lib/result-grid';
 import { requireUser } from '@/lib/session';
@@ -31,6 +33,14 @@ import {
   type ViewColumn,
   viewQueryString,
 } from '@/lib/tables';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ view: string }>;
+}): Promise<Metadata> {
+  return viewMetadata((await params).view);
+}
 
 export const dynamic = 'force-dynamic';
 

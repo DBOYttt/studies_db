@@ -4,6 +4,7 @@ import {
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
 import { Notice } from '@/components/Notice';
@@ -19,6 +20,8 @@ import { noticeFromSearchParams } from '@/lib/notices';
 import { syncFailed, syncLine } from '@/lib/plan-view';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
+
+export const metadata: Metadata = { title: 'Timetable' };
 
 export const dynamic = 'force-dynamic';
 

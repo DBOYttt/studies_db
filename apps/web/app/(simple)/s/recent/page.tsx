@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
@@ -10,6 +11,8 @@ import { requireUser } from '@/lib/session';
 import { parsePageParam } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
+
+export const metadata: Metadata = { title: 'Recently added' };
 
 export const dynamic = 'force-dynamic';
 

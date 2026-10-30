@@ -1,4 +1,5 @@
 import { CalendarBlank } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import { EventDetails } from '@/components/events/EventDetails';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -7,8 +8,17 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { eventMetadata } from '@/lib/page-meta';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview } from '@/lib/simple-page';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return eventMetadata((await params).id);
+}
 
 export const dynamic = 'force-dynamic';
 

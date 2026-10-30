@@ -1,4 +1,5 @@
 import { CalendarBlank } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import { EventsIndex } from '@/components/events/EventsIndex';
 import { Notice } from '@/components/Notice';
 import { dbTabs } from '@/components/shell/db-tabs';
@@ -8,6 +9,8 @@ import { parseEventsPage, upcomingEventsPage } from '@/lib/events-index';
 import { noticeFromSearchParams } from '@/lib/notices';
 import { nowWall } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
+
+export const metadata: Metadata = { title: 'Events' };
 
 export const dynamic = 'force-dynamic';
 

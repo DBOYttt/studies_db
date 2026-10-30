@@ -1,5 +1,6 @@
 import { ArrowLeft } from '@phosphor-icons/react/dist/ssr';
 import { getAudit } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { AuditActionLabel } from '@/components/admin/AuditTable';
@@ -10,8 +11,17 @@ import { formatAuditTime } from '@/lib/admin-audit';
 import { loadAuditTargets } from '@/lib/admin-audit-targets';
 import { getDb } from '@/lib/db';
 import { parseEntityId } from '@/lib/entity-page';
+import { idMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
 import { userHref } from '@/lib/view-links';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return idMetadata('Audit entry', (await params).id, true);
+}
 
 export const dynamic = 'force-dynamic';
 

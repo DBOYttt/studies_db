@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
@@ -9,6 +10,8 @@ import { requireUser } from '@/lib/session';
 import { advancedSearchHref, parseSearchQuery } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { searchSimpleFiles } from '@/lib/simple-queries';
+
+export const metadata: Metadata = { title: 'Search' };
 
 export const dynamic = 'force-dynamic';
 

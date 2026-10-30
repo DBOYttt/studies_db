@@ -1,12 +1,18 @@
 import { ChalkboardTeacher, Plus } from '@phosphor-icons/react/dist/ssr';
 import { listLecturersAdmin } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { box, boxHead, link, td, th } from '@/components/admin/form-styles';
 import { LecturerForm } from '@/components/admin/LecturerForm';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('Lecturers · Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

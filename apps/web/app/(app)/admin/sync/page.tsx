@@ -12,6 +12,7 @@ import {
   listAdminBotRequests,
   planStatusText,
 } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ActionButton } from '@/components/admin/ActionButton';
 import { AutoRefresh } from '@/components/admin/AutoRefresh';
@@ -35,7 +36,12 @@ import {
   staleNotice,
 } from '@/lib/admin-sync';
 import { getDb } from '@/lib/db';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('Sync · Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

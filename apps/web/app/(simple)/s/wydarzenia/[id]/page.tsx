@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { EventDetails } from '@/components/events/EventDetails';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
@@ -6,8 +7,17 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { eventMetadata } from '@/lib/page-meta';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview, navSubjects } from '@/lib/simple-page';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return eventMetadata((await params).id);
+}
 
 export const dynamic = 'force-dynamic';
 

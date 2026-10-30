@@ -134,19 +134,21 @@ describe('event actions', () => {
     expect(await eventRows()).toHaveLength(0);
   });
 
-  it('returns the English message for invalid input', async () => {
+  it('returns the English message and its field for invalid input', async () => {
     cookieSid = alice.sid;
     expect(await A.createEventAction(form({ title: '  ' }))).toEqual({
       ok: false,
       message: 'The title must be 1 to 100 characters.',
+      field: 'title',
     });
     expect(await A.createEventAction(form({ date: '' }))).toEqual({
       ok: false,
       message: 'Enter the event date.',
+      field: 'date',
     });
     expect(
       await A.createEventAction(form({ start: '', end: '11:00' })),
-    ).toEqual({ ok: false, message: 'Enter the start time.' });
+    ).toEqual({ ok: false, message: 'Enter the start time.', field: 'start' });
     expect(await eventRows()).toHaveLength(0);
   });
 
@@ -289,6 +291,7 @@ describe('event actions', () => {
     expect(unknown).toEqual({
       ok: false,
       message: 'Unknown repeat rule.',
+      field: 'repeat',
     });
     expect(await eventRows()).toHaveLength(before);
 

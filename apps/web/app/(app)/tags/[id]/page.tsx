@@ -1,4 +1,5 @@
 import { ChatsCircle, Files, Tag } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import {
@@ -16,8 +17,17 @@ import {
 } from '@/lib/entity-page';
 import { getTag, tagFiles, tagTopics } from '@/lib/entity-queries';
 import { explorerHref } from '@/lib/explorer';
+import { idMetadata } from '@/lib/page-meta';
 import { requireUser } from '@/lib/session';
 import { tagHref } from '@/lib/view-links';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return idMetadata('Tag', (await params).id);
+}
 
 export const dynamic = 'force-dynamic';
 

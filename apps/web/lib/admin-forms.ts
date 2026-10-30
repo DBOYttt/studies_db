@@ -45,14 +45,21 @@ export type ActionState = {
   ok: boolean;
   message: string;
   unchanged?: true;
+  /**
+   * The input (`name`) a refusal is about: the form shows the message next
+   * to it and focuses it. Without it (or when that input is hidden) the
+   * message is the form's general alert.
+   */
+  field?: string;
 } | null;
 
-export type Parsed<T> = { ok: true; value: T } | { ok: false; message: string };
+/** A refusal; `field` names the input it is about (see `ActionState`). */
+export type Refusal = { ok: false; message: string; field?: string };
 
-const fail = (message: string): { ok: false; message: string } => ({
-  ok: false,
-  message,
-});
+export type Parsed<T> = { ok: true; value: T } | Refusal;
+
+const fail = (message: string, field?: string): Refusal =>
+  field === undefined ? { ok: false, message } : { ok: false, message, field };
 
 export const SEMESTER_TEXT = 'Semester must be 1 or 2.';
 export const ECTS_TEXT = `ECTS must be a whole number from ${ECTS_MIN} to ${ECTS_MAX}.`;
@@ -87,8 +94,9 @@ function within(
   v: string,
   label: string,
   max: number,
-): { ok: false; message: string } | null {
-  return v.trim().length > max ? fail(tooLong(label, max)) : null;
+  name: string,
+): Refusal | null {
+  return v.trim().length > max ? fail(tooLong(label, max), name) : null;
 }
 
 /**
@@ -122,8 +130,8 @@ function parseName(
 ): Parsed<string> {
   const name = field(form, 'name').trim();
   if (stored !== undefined && name === stored) return { ok: true, value: name };
-  if (!name || name === '-') return fail(EMPTY_NAME);
-  if (name.length > max) return fail(tooLong('name', max));
+  if (!name || name === '-') return fail(EMPTY_NAME, 'name');
+  if (name.length > max) return fail(tooLong('name', max), 'name');
   return { ok: true, value: name };
 }
 
@@ -136,9 +144,9 @@ function parseUrl(
   const v = field(form, name);
   if (stored !== undefined && v.trim() === (stored ?? ''))
     return { ok: true, value: v.trim() };
-  const bad = within(v, 'URL', FIELD_MAX.platformUrl);
+  const bad = within(v, 'URL', FIELD_MAX.platformUrl, name);
   if (bad) return bad;
-  if (urlOrNull(v) === undefined) return fail(INVALID_URL);
+  if (urlOrNull(v) === undefined) return fail(INVALID_URL, name);
   return { ok: true, value: v.trim() };
 }
 
@@ -164,19 +172,19 @@ function parseSemesterEcts(
     s === null ||
     (s !== stored.semester && !(SEMESTERS as readonly number[]).includes(s))
   )
-    return fail(SEMESTER_TEXT);
+    return fail(SEMESTER_TEXT, 'semester');
   const ev = field(form, 'ects');
   const ects = sameNumber(ev, stored.ects)
     ? (stored.ects as number)
     : wholeIn(ev, ECTS_MIN, ECTS_MAX);
-  if (ects === null) return fail(ECTS_TEXT);
+  if (ects === null) return fail(ECTS_TEXT, 'ects');
   return { ok: true, value: { semester: s, ects } };
 }
 
 /** The `code` field (a subject code), upper-cased. */
 export function parseCode(form: FormData): Parsed<string> {
   const code = field(form, 'code').trim();
-  if (!CODE_RE.test(code)) return fail(CODE_TEXT);
+  if (!CODE_RE.test(code)) return fail(CODE_TEXT, 'code');
   return { ok: true, value: code.toUpperCase() };
 }
 
@@ -186,7 +194,7 @@ function parseDescription(
 ): Parsed<string | null> {
   const v = field(form, 'description');
   if (!unchangedText(v, stored)) {
-    const bad = within(v, 'description', FIELD_MAX.description);
+    const bad = within(v, 'description', FIELD_MAX.description, 'description');
     if (bad) return bad;
   }
   return { ok: true, value: textOrNull(v) };
@@ -278,17 +286,17 @@ export function parseClassEdit(
   const code = parseCode(form);
   if (!code.ok) return code;
   const kind = parseKind(field(form, 'kind'));
-  if (!kind) return fail('Unknown class type.');
+  if (!kind) return fail('Unknown class type.', 'kind');
   const a = field(form, 'assessment').trim();
   if (
     a !== '' &&
     a !== 'brak' &&
     !(ASSESSMENTS as readonly string[]).includes(a)
   )
-    return fail('Unknown assessment.');
+    return fail('Unknown assessment.', 'assessment');
   const note = field(form, 'note');
   if (!unchangedText(note, stored.note)) {
-    const bad = within(note, 'note', FIELD_MAX.classNote);
+    const bad = within(note, 'note', FIELD_MAX.classNote, 'note');
     if (bad) return bad;
   }
   const url = parseUrl(form, 'platformUrl', stored.platformUrl);
@@ -342,11 +350,12 @@ export function parseLecturer(
         ? stored.email !== undefined && emailOrNull(v) === stored.email
         : unchangedText(v, stored[key]);
     if (same) continue;
-    const bad = within(v, label, max);
+    const bad = within(v, label, max, key);
     if (bad) return bad;
     if (key === 'email') {
       const email = emailOrNull(v);
-      if (email !== null && !EMAIL_RE.test(email)) return fail(INVALID_EMAIL);
+      if (email !== null && !EMAIL_RE.test(email))
+        return fail(INVALID_EMAIL, 'email');
     }
   }
   return { ok: true, value: out };
@@ -363,14 +372,14 @@ export function parseAssign(form: FormData): Parsed<AssignInput> {
   const code = parseCode(form);
   if (!code.ok) return code;
   const lecturerId = parseId(field(form, 'lecturerId'));
-  if (lecturerId === null) return fail('Choose a lecturer.');
+  if (lecturerId === null) return fail('Choose a lecturer.', 'lecturerId');
   const kind = parseKind(field(form, 'kind'));
-  if (!kind) return fail('Unknown class type.');
+  if (!kind) return fail('Unknown class type.', 'kind');
   const g = field(form, 'group').trim();
   if (g === '')
     return { ok: true, value: { code: code.value, lecturerId, kind } };
   const group = wholeIn(g, GROUP_MIN, GROUP_MAX);
-  if (group === null) return fail(GROUP_TEXT);
+  if (group === null) return fail(GROUP_TEXT, 'group');
   return { ok: true, value: { code: code.value, lecturerId, kind, group } };
 }
 
@@ -409,7 +418,7 @@ export type ResolvedEdit<K extends string> =
       /** The fields the admin changed; only these may go into the patch. */
       touched: ReadonlySet<K>;
     }
-  | { ok: false; message: string };
+  | Refusal;
 
 /**
  * Compares an edit form with the values it was rendered from (the hidden

@@ -1,8 +1,8 @@
 /** Shared classes of the admin forms (same look as the plan forms). */
 export const input =
-  'h-8 w-full rounded border border-line-strong bg-panel px-2 font-normal text-fg focus:border-accent';
+  'h-8 w-full rounded border border-line-strong bg-panel px-2 font-normal text-fg focus:border-accent aria-invalid:border-err-fg';
 export const textarea =
-  'min-h-[72px] w-full rounded border border-line-strong bg-panel px-2 py-1.5 font-normal text-fg focus:border-accent';
+  'min-h-[72px] w-full rounded border border-line-strong bg-panel px-2 py-1.5 font-normal text-fg focus:border-accent aria-invalid:border-err-fg';
 export const label = 'flex min-w-0 flex-col gap-1 text-[13px] font-semibold';
 export const hint = 'text-xs font-normal text-muted';
 export const primaryBtn =

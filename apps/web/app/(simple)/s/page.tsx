@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
@@ -15,6 +16,8 @@ import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
 import { type TodayClasses, todayForUser } from '@/lib/today';
 import { upcomingForUser } from '@/lib/upcoming-events';
+
+export const metadata: Metadata = { title: 'Start' };
 
 export const dynamic = 'force-dynamic';
 

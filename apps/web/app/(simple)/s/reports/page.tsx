@@ -1,4 +1,5 @@
 import { DownloadSimple, TerminalWindow } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import { ReportCards } from '@/components/simple/ReportCards';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
@@ -16,6 +17,8 @@ import {
 } from '@/lib/simple';
 import { navSubjects } from '@/lib/simple-page';
 import { runReadonlyQuery } from '@/lib/sql-console';
+
+export const metadata: Metadata = { title: 'Ready-made reports' };
 
 export const dynamic = 'force-dynamic';
 

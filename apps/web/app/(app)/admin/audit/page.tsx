@@ -1,4 +1,5 @@
 import { listAdmins, listAudit } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { AuditTable } from '@/components/admin/AuditTable';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
@@ -13,7 +14,12 @@ import {
 import { loadAuditTargets } from '@/lib/admin-audit-targets';
 import { getDb } from '@/lib/db';
 import { plural } from '@/lib/format';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('Audit log · Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

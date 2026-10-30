@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { EventForm } from '@/components/events/EventForm';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
@@ -6,8 +7,17 @@ import { getDb } from '@/lib/db';
 import { loadEventForm } from '@/lib/event-form-page';
 import { parseEventId } from '@/lib/event-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
+import { eventMetadata } from '@/lib/page-meta';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return eventMetadata((await params).id, true);
+}
 
 export const dynamic = 'force-dynamic';
 

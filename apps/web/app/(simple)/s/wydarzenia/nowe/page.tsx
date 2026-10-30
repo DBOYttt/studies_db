@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { EventForm } from '@/components/events/EventForm';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
@@ -11,6 +12,14 @@ import { navSubjects } from '@/lib/simple-page';
 export const dynamic = 'force-dynamic';
 
 type SP = Record<string, string | string[] | undefined>;
+
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<SP>;
+}): Promise<Metadata> {
+  return { title: newEventHeading(await searchParams) };
+}
 
 export default async function SimpleNewEvent({
   searchParams,

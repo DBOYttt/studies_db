@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { redirect } from 'next/navigation';
 import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
@@ -14,6 +15,8 @@ import {
   SUBJECTS_SQL,
   type SubjectGridRow,
 } from '@/lib/subjects-grid';
+
+export const metadata: Metadata = { title: 'Subjects' };
 
 export const dynamic = 'force-dynamic';
 

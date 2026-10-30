@@ -5,6 +5,7 @@ import {
   checkedInOrder,
   compareCells,
   defaultResultKey,
+  fileActionLabels,
   filterRowIndexes,
   footerText,
   formatSeconds,
@@ -202,5 +203,35 @@ describe('defaultResultKey', () => {
         JSON.stringify(over),
       ).not.toBe(k);
     }
+  });
+});
+
+describe('fileActionLabels', () => {
+  const cols = ['material_id', 'topic_title', 'filename', 'size'];
+  it('names the file of the row', () => {
+    const row: Cell[] = [
+      { text: '7', preview: 7 },
+      'Lab 1',
+      { text: 'lab1.pdf' },
+      10,
+    ];
+    expect(fileActionLabels(cols, row, 7)).toEqual({
+      preview: 'Preview file lab1.pdf',
+      download: 'Download file lab1.pdf',
+    });
+  });
+  it('reads original_filename (v_materials)', () => {
+    expect(
+      fileActionLabels(['id', 'original_filename'], ['3', 'notatki.docx'], 3)
+        .download,
+    ).toBe('Download file notatki.docx');
+  });
+  it('falls back to the material id without a name column or value', () => {
+    expect(fileActionLabels(['material_id'], ['5'], 5).preview).toBe(
+      'Preview file #5',
+    );
+    expect(fileActionLabels(cols, ['5', 'x', null, 1], 5).download).toBe(
+      'Download file #5',
+    );
   });
 });

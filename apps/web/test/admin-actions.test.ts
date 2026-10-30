@@ -177,18 +177,28 @@ describe('admin actions: subjects', () => {
 
   it('refuses invalid input with a specific message and no audit', async () => {
     const before = (await audits()).length;
-    const cases: [Record<string, string>, string][] = [
-      [{ ects: '31' }, 'ECTS must be a whole number from 0 to 30.'],
-      [{ ects: '2.5' }, 'ECTS must be a whole number from 0 to 30.'],
-      [{ semester: '3' }, 'Semester must be 1 or 2.'],
-      [{ name: 'x'.repeat(201) }, 'The name must be at most 200 characters.'],
-      [{ name: '  ' }, 'The name cannot be empty.'],
-      [{ code: 'A B' }, expect.stringContaining('The code may contain only')],
+    const cases: [Record<string, string>, string, string][] = [
+      [{ ects: '31' }, 'ECTS must be a whole number from 0 to 30.', 'ects'],
+      [{ ects: '2.5' }, 'ECTS must be a whole number from 0 to 30.', 'ects'],
+      [{ semester: '3' }, 'Semester must be 1 or 2.', 'semester'],
+      [
+        { name: 'x'.repeat(201) },
+        'The name must be at most 200 characters.',
+        'name',
+      ],
+      [{ name: '  ' }, 'The name cannot be empty.', 'name'],
+      [
+        { code: 'A B' },
+        expect.stringContaining('The code may contain only'),
+        'code',
+      ],
     ];
-    for (const [o, message] of cases)
+    // Each refusal names the input it is about.
+    for (const [o, message, field] of cases)
       expect(await A.addSubjectAction(null, subjectForm(o))).toEqual({
         ok: false,
         message,
+        field,
       });
     expect(await db.select().from(subjects)).toHaveLength(1);
     expect(await audits()).toHaveLength(before);
@@ -286,6 +296,7 @@ describe('admin actions: subjects', () => {
     ).toEqual({
       ok: false,
       message: 'The description must be at most 1000 characters.',
+      field: 'description',
     });
   });
 
@@ -351,10 +362,15 @@ describe('admin actions: subjects', () => {
   it('refuses - as a name on add', async () => {
     expect(
       await A.addSubjectAction(null, subjectForm({ name: '-', code: 'DASH' })),
-    ).toEqual({ ok: false, message: 'The name cannot be empty.' });
+    ).toEqual({
+      ok: false,
+      message: 'The name cannot be empty.',
+      field: 'name',
+    });
     expect(await A.addLecturerAction(null, fd({ name: ' - ' }))).toEqual({
       ok: false,
       message: 'The name cannot be empty.',
+      field: 'name',
     });
   });
 
@@ -388,7 +404,7 @@ describe('admin actions: subjects', () => {
     };
     expect(
       await A.editSubjectAction(null, fd({ ...base, platformUrl: 'ftp://x' })),
-    ).toEqual({ ok: false, message: 'Invalid URL.' });
+    ).toEqual({ ok: false, message: 'Invalid URL.', field: 'platformUrl' });
     expect(
       await A.editSubjectAction(
         null,
@@ -436,10 +452,11 @@ describe('admin actions: classes and lecturers', () => {
     ).toEqual({
       ok: false,
       message: 'The room must be at most 100 characters.',
+      field: 'room',
     });
     expect(
       await A.addLecturerAction(null, fd({ name: 'X', email: 'nope' })),
-    ).toEqual({ ok: false, message: 'Invalid email address.' });
+    ).toEqual({ ok: false, message: 'Invalid email address.', field: 'email' });
     expect(await audits()).toHaveLength(before);
   });
 
@@ -545,13 +562,14 @@ describe('admin actions: classes and lecturers', () => {
     ).toEqual({
       ok: false,
       message: 'Group must be a whole number from 1 to 99.',
+      field: 'group',
     });
     expect(
       await A.assignLecturerAction(
         null,
         fd({ code: 'ANA1', lecturerId: String(lecturerId), kind: 'zzz' }),
       ),
-    ).toEqual({ ok: false, message: 'Unknown class type.' });
+    ).toEqual({ ok: false, message: 'Unknown class type.', field: 'kind' });
   });
 
   it('unassigns a lecturer and audits lecturer.unassign', async () => {
@@ -659,7 +677,11 @@ describe('admin actions: classes and lecturers', () => {
         null,
         fd({ code: 'ANA1', kind: 'wyklad', assessment: 'bogus' }),
       ),
-    ).toEqual({ ok: false, message: 'Unknown assessment.' });
+    ).toEqual({
+      ok: false,
+      message: 'Unknown assessment.',
+      field: 'assessment',
+    });
   });
 });
 
@@ -982,7 +1004,11 @@ describe('admin actions: concurrent edits (orig_* fields)', () => {
           platformUrl: '',
         }),
       ),
-    ).toEqual({ ok: false, message: 'Semester must be 1 or 2.' });
+    ).toEqual({
+      ok: false,
+      message: 'Semester must be 1 or 2.',
+      field: 'semester',
+    });
   });
 
   it("a class edit keeps another admin's note; a shared change is refused", async () => {

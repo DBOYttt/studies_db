@@ -1,5 +1,6 @@
 import { CheckCircle, WarningCircle } from '@phosphor-icons/react/dist/ssr';
 import { searchAll } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Highlight } from '@/components/Highlight';
 import { dbTabs } from '@/components/shell/db-tabs';
@@ -9,6 +10,8 @@ import { explorerHref } from '@/lib/explorer';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
 import { searchCountText } from '@/lib/search-count';
 import { requireUser } from '@/lib/session';
+
+export const metadata: Metadata = { title: 'Search' };
 
 export const dynamic = 'force-dynamic';
 

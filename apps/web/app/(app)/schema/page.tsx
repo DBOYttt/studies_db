@@ -1,3 +1,4 @@
+import type { Metadata } from 'next';
 import { DesignerDiagram } from '@/components/DesignerDiagram';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -5,6 +6,8 @@ import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { requireUser } from '@/lib/session';
 import { listViewColumns } from '@/lib/tables';
+
+export const metadata: Metadata = { title: 'Designer' };
 
 export const dynamic = 'force-dynamic';
 
