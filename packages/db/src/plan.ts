@@ -361,7 +361,7 @@ export interface PlanFilter {
   subjectId?: number;
   lecturerId?: number;
   /** Only sessions of subjects in this semester (1-7). */
-  semester?: number;
+  semester?: number | null;
 }
 
 /** Wall Date → DATETIME literal (UTC fields are the wall clock). */
@@ -380,7 +380,7 @@ export function filterWhere(
 ) {
   const where: string[] = [];
   const params: (string | number)[] = [];
-  if (f.semester !== undefined) {
+  if (f.semester != null) {
     where.push(
       subjectAlias
         ? `${subjectAlias}.semester = ?`

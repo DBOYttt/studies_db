@@ -217,11 +217,20 @@ describe('weekSessionsQuery', () => {
     expect(f.sql).toContain('cs.subject_id = ?');
   });
 
+  it('treats a null semester as all', () => {
+    const w = { year: 2026, week: 42 };
+    expect(weekSessionsQuery(w, { semester: null })).toEqual(
+      weekSessionsQuery(w, {}),
+    );
+  });
+
   it('binds the semester on the joined subject', () => {
     const q = weekSessionsQuery({ year: 2026, week: 42 }, { semester: 3 });
     expect(q.params).toEqual(['2026-10-12 00:00:00', '2026-10-19 00:00:00', 3]);
     expect(q.sql).toContain('s.semester = ?');
-    expect(q.sql).not.toContain('3');
+    expect(q.sql).toContain('s.semester = ?');
+    const none = weekSessionsQuery({ year: 2026, week: 42 }, {});
+    expect(none.sql).not.toContain('semester');
   });
 });
 

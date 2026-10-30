@@ -9,6 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import { modeTarget } from '../lib/mode';
 import {
   parseSemesterValue,
+  semesterCookieOptions,
   semesterFromRequest,
   withoutSem,
 } from '../lib/semester';
@@ -103,11 +104,28 @@ describe('GET /semester', () => {
     const c = res.cookies.get('studiesdb.semester');
     expect(c?.value).toBe('3');
     expect(c?.httpOnly).toBeFalsy();
+    expect(c).toMatchObject({
+      path: '/',
+      maxAge: 60 * 60 * 24 * 365,
+      sameSite: 'lax',
+    });
   });
 
   it('refuses an unsafe next', async () => {
     const res = await call('to=2&next=//evil.com');
     expect(res.headers.get('location')).toBe('/s');
+    for (const bad of ['/\\evil', 'https://evil.com/x']) {
+      const r = await call(`to=2&next=${encodeURIComponent(bad)}`);
+      expect(r.headers.get('location')).toBe('/s');
+    }
+  });
+
+  it('marks the cookie secure in production only', () => {
+    vi.stubEnv('NODE_ENV', 'production');
+    expect(semesterCookieOptions().secure).toBe(true);
+    vi.stubEnv('NODE_ENV', 'test');
+    expect(semesterCookieOptions().secure).toBe(false);
+    vi.unstubAllEnvs();
   });
 
   it('all deletes the cookie; anything else leaves it', async () => {

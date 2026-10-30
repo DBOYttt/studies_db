@@ -26,7 +26,10 @@ export interface PlanWeekRows {
   week: IsoWeek;
   /** The week's class sessions under the filter. */
   classRows: PlanSession[];
-  /** All the week's events (the filter applies after the annotation). */
+  /**
+   * The week's events, already limited to the chosen semester (subject-less
+   * ones stay); the subject/lecturer filter applies after the annotation.
+   */
   events: PlanSession[];
 }
 
