@@ -311,6 +311,8 @@ export const adminAudit = mysqlTable(
     index('idx_admin_audit_created_at').on(t.createdAt),
     // Event history: target IN (…) AND action LIKE 'event.%' ORDER BY id DESC.
     index('idx_admin_audit_target').on(t.target, t.action, t.id),
+    // Audit log "Action" filter: action = ? ORDER BY id DESC, and its count.
+    index('idx_admin_audit_action').on(t.action, t.id),
   ],
 );
 
@@ -562,6 +564,8 @@ export const botRequests = mysqlTable(
     // lastBotRequest and the enqueue locking read look up one (kind, target);
     // the locking read then locks only that key range.
     index('idx_bot_requests_kind_target').on(t.kind, t.target, t.status, t.id),
+    // claimNextBotRequest: status = 'queued' AND kind = ? ORDER BY id, per kind.
+    index('idx_bot_requests_status_kind_id').on(t.status, t.kind, t.id),
   ],
 );
 

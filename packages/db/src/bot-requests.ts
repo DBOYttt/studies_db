@@ -64,7 +64,13 @@ export async function enqueueBotRequest(
   return { id: res.insertId, created: true };
 }
 
-/** Atomically claims the oldest queued request of `kinds` (SKIP LOCKED). */
+/**
+ * Atomically claims the oldest queued request of `kinds` (SKIP LOCKED).
+ * One query per kind: `status = ? AND kind = ? ORDER BY id` is a range on
+ * idx_bot_requests_status_kind_id that stops after one row, while
+ * `kind IN (…)` makes the optimizer scan the primary key and lock from the
+ * oldest row on. Each query locks at most one row until the commit.
+ */
 export async function claimNextBotRequest(
   db: Db,
   kinds: string[],
@@ -72,15 +78,19 @@ export async function claimNextBotRequest(
 ): Promise<BotRequest | null> {
   if (kinds.length === 0) return null;
   return db.transaction(async (tx) => {
-    const [row] = await tx
-      .select()
-      .from(botRequests)
-      .where(
-        and(eq(botRequests.status, 'queued'), inArray(botRequests.kind, kinds)),
-      )
-      .orderBy(botRequests.id)
-      .limit(1)
-      .for('update', { skipLocked: true });
+    let row: BotRequest | undefined;
+    for (const kind of new Set(kinds)) {
+      const [head] = await tx
+        .select()
+        .from(botRequests)
+        .where(
+          and(eq(botRequests.status, 'queued'), eq(botRequests.kind, kind)),
+        )
+        .orderBy(botRequests.id)
+        .limit(1)
+        .for('update', { skipLocked: true });
+      if (head && (!row || head.id < row.id)) row = head;
+    }
     if (!row) return null;
     await tx
       .update(botRequests)

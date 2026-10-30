@@ -39,6 +39,18 @@ describe('performance indexes', () => {
     );
   });
 
+  it('bot_requests (status, kind, id) for the queue claim', async () => {
+    expect(
+      await indexColumns('bot_requests', 'idx_bot_requests_status_kind_id'),
+    ).toEqual(['status', 'kind', 'id']);
+  });
+
+  it('admin_audit (action, id) for the audit log filter', async () => {
+    expect(await indexColumns('admin_audit', 'idx_admin_audit_action')).toEqual(
+      ['action', 'id'],
+    );
+  });
+
   it('materials (deleted_at, created_at, id) for recent lists', async () => {
     expect(await indexColumns('materials', 'idx_materials_recent')).toEqual([
       'deleted_at',
