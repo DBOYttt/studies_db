@@ -18,6 +18,17 @@ import {
   CLASS_KINDS,
   type ClassKind,
 } from '@studies/db/constants';
+import { CONFLICT_MESSAGE, origName } from './admin-form-values';
+
+export {
+  CLASS_FIELD_LABELS,
+  CONFLICT_MESSAGE,
+  classFormValues,
+  LECTURER_FIELD_LABELS,
+  lecturerFormValues,
+  SUBJECT_FIELD_LABELS,
+  subjectFormValues,
+} from './admin-form-values';
 
 /**
  * Pure parsers from the admin forms' `FormData` to the shared action inputs
@@ -131,15 +142,35 @@ function parseUrl(
   return { ok: true, value: v.trim() };
 }
 
+/** A submitted whole number equal to the stored one, even out of range. */
+const sameNumber = (v: string, stored: number | undefined) =>
+  stored !== undefined && v.trim() === String(stored);
+
+/**
+ * The semester and ECTS. On edit, a value equal to the stored one is accepted
+ * even when today's range refuses it (one written through the SQL console),
+ * so it does not block editing the other fields; the action then leaves it
+ * as it is. Any other value is in range, so a changed semester is 1 or 2.
+ */
 function parseSemesterEcts(
   form: FormData,
-): Parsed<{ semester: 1 | 2; ects: number }> {
-  const s = wholeIn(field(form, 'semester'), 0, 9);
-  if (s === null || !(SEMESTERS as readonly number[]).includes(s))
+  stored: { semester?: number; ects?: number } = {},
+): Parsed<{ semester: number; ects: number }> {
+  const sv = field(form, 'semester');
+  const s = sameNumber(sv, stored.semester)
+    ? (stored.semester as number)
+    : wholeIn(sv, 0, 9);
+  if (
+    s === null ||
+    (s !== stored.semester && !(SEMESTERS as readonly number[]).includes(s))
+  )
     return fail(SEMESTER_TEXT);
-  const ects = wholeIn(field(form, 'ects'), ECTS_MIN, ECTS_MAX);
+  const ev = field(form, 'ects');
+  const ects = sameNumber(ev, stored.ects)
+    ? (stored.ects as number)
+    : wholeIn(ev, ECTS_MIN, ECTS_MAX);
   if (ects === null) return fail(ECTS_TEXT);
-  return { ok: true, value: { semester: s as 1 | 2, ects } };
+  return { ok: true, value: { semester: s, ects } };
 }
 
 /** The `code` field (a subject code), upper-cased. */
@@ -176,7 +207,9 @@ export function parseSubjectAdd(form: FormData): Parsed<SubjectInput> {
       channelId: null,
       name: name.value,
       code: code.value,
-      ...se.value,
+      // No stored value on add: the semester passed the range check.
+      semester: se.value.semester as 1 | 2,
+      ects: se.value.ects,
       ...(description.value === null ? {} : { description: description.value }),
     },
   };
@@ -185,7 +218,8 @@ export function parseSubjectAdd(form: FormData): Parsed<SubjectInput> {
 export type SubjectEdit = {
   code: string;
   name: string;
-  semester: 1 | 2;
+  /** 1 or 2, unless it is the stored value (see `parseSemesterEcts`). */
+  semester: number;
   ects: number;
   description: string | null;
   /** '' clears it. */
@@ -194,13 +228,16 @@ export type SubjectEdit = {
 
 export function parseSubjectEdit(
   form: FormData,
-  stored: Stored<'name' | 'description' | 'platformUrl'> = {},
+  stored: Stored<'name' | 'description' | 'platformUrl'> & {
+    semester?: number;
+    ects?: number;
+  } = {},
 ): Parsed<SubjectEdit> {
   const code = parseCode(form);
   if (!code.ok) return code;
   const name = parseName(form, FIELD_MAX.subjectName, stored.name);
   if (!name.ok) return name;
-  const se = parseSemesterEcts(form);
+  const se = parseSemesterEcts(form, stored);
   if (!se.ok) return se;
   const description = parseDescription(form, stored.description);
   if (!description.ok) return description;
@@ -353,4 +390,68 @@ export function parseRequestKind(form: FormData): Parsed<AdminRequestKind> {
   return (ADMIN_REQUEST_KINDS as readonly string[]).includes(k)
     ? { ok: true, value: k as AdminRequestKind }
     : fail('Unknown request.');
+}
+
+const lf = (v: string) => v.replace(/\r\n?/g, '\n');
+
+/** Two URL field values that mean the same link (as `urlChanged` reads them). */
+export function sameUrl(a: string, b: string): boolean {
+  if (a === b) return true;
+  const n = urlOrNull(a);
+  return n !== undefined && n === urlOrNull(b);
+}
+
+export type ResolvedEdit<K extends string> =
+  | {
+      ok: true;
+      /** The form to parse: untouched fields carry the stored value. */
+      form: FormData;
+      /** The fields the admin changed; only these may go into the patch. */
+      touched: ReadonlySet<K>;
+    }
+  | { ok: false; message: string };
+
+/**
+ * Compares an edit form with the values it was rendered from (the hidden
+ * `orig_<field>` inputs) and with the stored row now (`current`, the
+ * `*FormValues` strings), so an edit never reverts a concurrent change:
+ * - a field without its `orig_` input (a direct POST) counts as touched and
+ *   is diffed against the stored row, as before;
+ * - an untouched field (submitted equals orig) is replaced by the stored
+ *   value, so it is neither validated nor patched;
+ * - a field submitted equal to the stored value is treated as untouched too
+ *   (another admin already made the same change);
+ * - a touched field whose stored value no longer equals orig was changed by
+ *   someone else meanwhile: the edit is refused, naming the fields.
+ * URL fields compare by `sameUrl`; text compares after LF normalisation.
+ */
+export function resolveEdit<K extends string>(
+  form: FormData,
+  current: Record<K, string>,
+  labels: Record<K, string>,
+  urlFields: readonly string[] = ['platformUrl'],
+): ResolvedEdit<K> {
+  const out = new FormData();
+  for (const [k, v] of form.entries()) out.append(k, v);
+  const touched = new Set<K>();
+  const conflicts: string[] = [];
+  for (const f of Object.keys(labels) as K[]) {
+    if (!form.has(origName(f))) {
+      touched.add(f);
+      continue;
+    }
+    const same = urlFields.includes(f)
+      ? sameUrl
+      : (a: string, b: string) => a === b;
+    const orig = field(form, origName(f));
+    const submitted = field(form, f);
+    const now = lf(current[f]);
+    // Untouched, or set to what is stored now (both admins chose the same
+    // value): nothing to write and nothing to refuse.
+    if (same(submitted, orig) || same(submitted, now)) out.set(f, now);
+    else if (!same(now, orig)) conflicts.push(labels[f]);
+    else touched.add(f);
+  }
+  if (conflicts.length > 0) return fail(CONFLICT_MESSAGE(conflicts));
+  return { ok: true, form: out, touched };
 }

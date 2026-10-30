@@ -17,6 +17,7 @@ import {
   requestPlanSync,
   subjects,
   textOrNull,
+  unassignLecturer,
   urlOrNull,
   users,
   writeAudit,
@@ -25,7 +26,11 @@ import { and, eq } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import {
   type ActionState,
+  CLASS_FIELD_LABELS,
+  classFormValues,
   field,
+  LECTURER_FIELD_LABELS,
+  lecturerFormValues,
   parseAssign,
   parseBan,
   parseClassEdit,
@@ -36,6 +41,9 @@ import {
   parseRequestKind,
   parseSubjectAdd,
   parseSubjectEdit,
+  resolveEdit,
+  SUBJECT_FIELD_LABELS,
+  subjectFormValues,
 } from './admin-forms';
 import { getDb } from './db';
 import { requireAdmin } from './session';
@@ -46,7 +54,9 @@ import { requireAdmin } from './session';
  * calls `requireAdmin()` itself (404 for everyone else), parses the form
  * (`admin-forms.ts`), calls the shared action from `@studies/db` on the main
  * pool, and audits only what was applied, with the bot's action names and
- * targets plus `source: 'web'`.
+ * targets plus `source: 'web'`. The edit actions change only the fields the
+ * admin touched and refuse one someone else changed meanwhile
+ * (`resolveEdit`), before any write or audit.
  */
 
 const NO_CHANGES = 'No changes.';
@@ -119,16 +129,23 @@ export async function editSubjectAction(
     .where(eq(subjects.code, c.value));
   // Unknown subject: the shared action gives the refusal.
   if (!cur) return done(await editSubject(db, c.value, {}));
-  const p = parseSubjectEdit(form, cur);
+  const e = resolveEdit(form, subjectFormValues(cur), SUBJECT_FIELD_LABELS);
+  if (!e.ok) return fail(e.message);
+  const p = parseSubjectEdit(e.form, cur);
   if (!p.ok) return fail(p.message);
   const v = p.value;
-  // Only what changed, so the audit row names the edited fields.
+  const t = e.touched;
+  // Only what was touched and changed, so the audit row names the edited
+  // fields.
   const patch: Parameters<typeof editSubject>[2] = {};
-  if (v.name !== cur.name) patch.name = v.name;
-  if (v.semester !== cur.semester) patch.semester = v.semester;
-  if (v.ects !== cur.ects) patch.ects = v.ects;
-  if (v.description !== cur.description) patch.description = v.description;
-  if (urlChanged(v.platformUrl, cur.platformUrl))
+  if (t.has('name') && v.name !== cur.name) patch.name = v.name;
+  // A semester other than the stored one passed the 1-or-2 check.
+  if (t.has('semester') && v.semester !== cur.semester)
+    patch.semester = v.semester as 1 | 2;
+  if (t.has('ects') && v.ects !== cur.ects) patch.ects = v.ects;
+  if (t.has('description') && v.description !== cur.description)
+    patch.description = v.description;
+  if (t.has('platformUrl') && urlChanged(v.platformUrl, cur.platformUrl))
     patch.platformUrl = v.platformUrl;
   const fields = Object.keys(patch);
   if (fields.length === 0)
@@ -162,18 +179,21 @@ export async function editClassAction(
     .where(and(eq(subjects.code, c.value), eq(classes.kind, kind)));
   // No such subject or class: the shared action gives the refusal.
   if (!cur) return done(await editClass(db, { subjectCode: c.value, kind }));
-  const p = parseClassEdit(form, cur);
+  const e = resolveEdit(form, classFormValues(cur), CLASS_FIELD_LABELS);
+  if (!e.ok) return fail(e.message);
+  const p = parseClassEdit(e.form, cur);
   if (!p.ok) return fail(p.message);
   const v = p.value;
+  const t = e.touched;
   const input: {
     assessment?: typeof v.assessment;
     note?: string;
     platformUrl?: string;
   } = {};
-  if (v.assessment !== (cur.assessment ?? 'brak'))
+  if (t.has('assessment') && v.assessment !== (cur.assessment ?? 'brak'))
     input.assessment = v.assessment;
-  if (textOrNull(v.note) !== cur.note) input.note = v.note;
-  if (urlChanged(v.platformUrl, cur.platformUrl))
+  if (t.has('note') && textOrNull(v.note) !== cur.note) input.note = v.note;
+  if (t.has('platformUrl') && urlChanged(v.platformUrl, cur.platformUrl))
     input.platformUrl = v.platformUrl;
   const fields = Object.keys(input);
   if (fields.length === 0)
@@ -215,16 +235,21 @@ export async function editLecturerAction(
   const db = getDb();
   const cur = await getLecturerAdmin(db, id);
   if (!cur) return fail(`Lecturer with id ${id} not found.`);
-  const p = parseLecturer(form, cur);
+  const e = resolveEdit(form, lecturerFormValues(cur), LECTURER_FIELD_LABELS);
+  if (!e.ok) return fail(e.message);
+  const p = parseLecturer(e.form, cur);
   if (!p.ok) return fail(p.message);
   const v = p.value;
+  const t = e.touched;
   const patch: Parameters<typeof editLecturer>[2] = {};
-  if (v.name !== cur.name) patch.name = v.name;
-  if (textOrNull(v.title) !== cur.title) patch.title = v.title;
-  if (emailOrNull(v.email) !== cur.email) patch.email = v.email;
-  if (textOrNull(v.officeHours) !== cur.officeHours)
+  if (t.has('name') && v.name !== cur.name) patch.name = v.name;
+  if (t.has('title') && textOrNull(v.title) !== cur.title)
+    patch.title = v.title;
+  if (t.has('email') && emailOrNull(v.email) !== cur.email)
+    patch.email = v.email;
+  if (t.has('officeHours') && textOrNull(v.officeHours) !== cur.officeHours)
     patch.officeHours = v.officeHours;
-  if (textOrNull(v.room) !== cur.room) patch.room = v.room;
+  if (t.has('room') && textOrNull(v.room) !== cur.room) patch.room = v.room;
   const fields = Object.keys(patch);
   if (fields.length === 0)
     return { ok: true, message: NO_CHANGES, unchanged: true };
@@ -259,6 +284,28 @@ export async function assignLecturerAction(
       groupNumber: v.group,
     });
     refresh(subjectPath(v.code), `/admin/lecturers/${v.lecturerId}`);
+  }
+  return done(r);
+}
+
+/** Removes one assignment (`id` = class_lecturers.id); class and group stay. */
+export async function unassignLecturerAction(
+  _prev: ActionState,
+  form: FormData,
+): Promise<ActionState> {
+  const user = await requireAdmin();
+  const id = parseId(field(form, 'id'));
+  if (id === null) return fail('Assignment not found.');
+  const r = await unassignLecturer(getDb(), id);
+  if (r.ok && r.assignment) {
+    const a = r.assignment;
+    await audit(user.id, 'lecturer.unassign', a.subjectCode, {
+      lecturerId: a.lecturerId,
+      lecturerName: a.lecturerName,
+      classKind: a.classKind,
+      ...(a.groupNumber === null ? {} : { groupNumber: a.groupNumber }),
+    });
+    refresh(subjectPath(a.subjectCode), `/admin/lecturers/${a.lecturerId}`);
   }
   return done(r);
 }
@@ -332,7 +379,7 @@ export async function cancelBotRequestAction(
   if (id === null) return fail('Request not found.');
   const cancelled = await cancelAdminBotRequest(getDb(), id);
   if (!cancelled)
-    return fail('Only a request that is still waiting can be cancelled.');
+    return fail('Only a request that is waiting or stuck can be cancelled.');
   await audit(user.id, 'bot.request_cancel', `bot_request:${id}`);
   refresh('/admin/sync');
   return { ok: true, message: CANCELLED_MESSAGE };

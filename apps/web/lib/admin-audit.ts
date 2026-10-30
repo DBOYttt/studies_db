@@ -16,6 +16,7 @@ export const AUDIT_ACTIONS = [
   'lecturer.add',
   'lecturer.edit',
   'lecturer.assign',
+  'lecturer.unassign',
   'user.ban',
   'user.unban',
   'plan.sync',
@@ -36,6 +37,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'lecturer.add': 'Lecturer added',
   'lecturer.edit': 'Lecturer changed',
   'lecturer.assign': 'Lecturer assigned',
+  'lecturer.unassign': 'Lecturer unassigned',
   'user.ban': 'Access blocked',
   'user.unban': 'Access unblocked',
   'plan.sync': 'Timetable sync requested',
@@ -137,6 +139,7 @@ const SUBJECT_ACTIONS = new Set([
   'subject.edit',
   'class.edit',
   'lecturer.assign',
+  'lecturer.unassign',
 ]);
 
 /**

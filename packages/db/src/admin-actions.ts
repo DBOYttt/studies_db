@@ -2,8 +2,14 @@ import { and, asc, eq, isNull } from 'drizzle-orm';
 import { setBanned } from './auth.js';
 import type { Db } from './client.js';
 import { type Assessment, CLASS_NAMES, type ClassKind } from './constants.js';
-import { ensureClass, ensureGroup, groupName } from './hierarchy.js';
-import { classes, classLecturers, lecturers, subjects } from './schema.js';
+import { ensureClassRow, ensureGroupRow, groupName } from './hierarchy.js';
+import {
+  classes,
+  classGroups,
+  classLecturers,
+  lecturers,
+  subjects,
+} from './schema.js';
 
 /** `id` is the new row's id for actions that insert one. */
 export type ActionResult = { ok: boolean; message: string; id?: number };
@@ -282,15 +288,17 @@ export async function assignLecturer(
     .where(eq(subjects.code, code));
   if (!subject) return refused(`Subject ${i.subjectCode} not found.`);
   const [lecturer] = await db
-    .select({ id: lecturers.id })
+    .select({ id: lecturers.id, title: lecturers.title, name: lecturers.name })
     .from(lecturers)
     .where(eq(lecturers.id, i.lecturerId));
   if (!lecturer) return refused(`Lecturer with id ${i.lecturerId} not found.`);
-  const classId = await ensureClass(db, subject.id, i.classKind);
-  const groupId =
+  const cls = await ensureClassRow(db, subject.id, i.classKind);
+  const group =
     i.groupNumber === undefined
       ? null
-      : await ensureGroup(db, classId, i.groupNumber);
+      : await ensureGroupRow(db, cls.id, i.groupNumber);
+  const classId = cls.id;
+  const groupId = group?.id ?? null;
   // NULL group_id is not unique-enforced, so check for an existing row.
   const [existing] = await db
     .select({ id: classLecturers.id })
@@ -308,11 +316,72 @@ export async function assignLecturer(
     await db
       .insert(classLecturers)
       .values({ classId, lecturerId: i.lecturerId, groupId });
-  const where =
-    i.groupNumber === undefined
-      ? CLASS_NAMES[i.classKind]
-      : `${CLASS_NAMES[i.classKind]}, ${groupName(i.groupNumber)}`;
-  return ok(`Assigned the lecturer to ${code} / ${where}.`);
+  const className = CLASS_NAMES[i.classKind];
+  let msg = `Assigned ${lecturerLabel(lecturer.title, lecturer.name)} to ${assignmentPlace(code, className, i.groupNumber ?? null)}.`;
+  if (cls.created) msg += ` Created the ${className} class.`;
+  if (group?.created) msg += ` Created group ${i.groupNumber}.`;
+  return ok(msg);
+}
+
+const assignmentPlace = (
+  code: string,
+  className: string,
+  groupNumber: number | null,
+) =>
+  groupNumber === null
+    ? `${code} / ${className}`
+    : `${code} / ${className}, ${groupName(groupNumber)}`;
+
+/** What `unassignLecturer` removed, for the caller's audit row. */
+export type RemovedAssignment = {
+  subjectCode: string;
+  lecturerId: number;
+  lecturerName: string;
+  classKind: ClassKind;
+  groupNumber: number | null;
+};
+
+/**
+ * Removes one `class_lecturers` row by its id. The class and the group stay
+ * (other topics and sessions hang off them).
+ */
+export async function unassignLecturer(
+  db: Db,
+  classLecturerId: number,
+): Promise<ActionResult & { assignment?: RemovedAssignment }> {
+  const [row] = await db
+    .select({
+      subjectCode: subjects.code,
+      lecturerId: lecturers.id,
+      title: lecturers.title,
+      name: lecturers.name,
+      classKind: classes.kind,
+      groupNumber: classGroups.number,
+    })
+    .from(classLecturers)
+    .innerJoin(classes, eq(classes.id, classLecturers.classId))
+    .innerJoin(subjects, eq(subjects.id, classes.subjectId))
+    .innerJoin(lecturers, eq(lecturers.id, classLecturers.lecturerId))
+    .leftJoin(classGroups, eq(classGroups.id, classLecturers.groupId))
+    .where(eq(classLecturers.id, classLecturerId));
+  if (!row) return refused('Assignment not found.');
+  const [del] = await db
+    .delete(classLecturers)
+    .where(eq(classLecturers.id, classLecturerId));
+  // Removed meanwhile by someone else: nothing was undone by this call.
+  if (del.affectedRows === 0) return refused('Assignment not found.');
+  const assignment: RemovedAssignment = {
+    subjectCode: row.subjectCode,
+    lecturerId: row.lecturerId,
+    lecturerName: lecturerLabel(row.title, row.name),
+    classKind: row.classKind,
+    groupNumber: row.groupNumber,
+  };
+  return {
+    ok: true,
+    message: `Removed ${assignment.lecturerName} from ${assignmentPlace(row.subjectCode, CLASS_NAMES[row.classKind], row.groupNumber)}.`,
+    assignment,
+  };
 }
 
 export async function banUser(

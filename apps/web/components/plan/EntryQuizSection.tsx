@@ -223,6 +223,7 @@ function ClassBlock({
         </div>
       )}
       <form
+        method="post"
         onSubmit={(e) => {
           e.preventDefault();
           turnOn();
@@ -324,6 +325,7 @@ function MarkRow({
         </button>
       </div>
       <form
+        method="post"
         onSubmit={(e) => {
           e.preventDefault();
           if (!changed) return;

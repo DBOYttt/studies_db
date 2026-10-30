@@ -37,6 +37,7 @@ const {
   connectionErrorMessage,
   queryErrorMessage,
   killQuery,
+  redactCredentials,
 } = await import('../lib/sql-console');
 const { createRateLimiter } = await import('../lib/rate-limit');
 const { POST, dynamic } = await import('../app/api/sql/route');
@@ -477,4 +478,47 @@ describe('POST /api/sql', () => {
       200,
     );
   });
+});
+
+describe('redactCredentials', () => {
+  it('hides hashes in SHOW GRANTS and SHOW CREATE USER lines', () => {
+    const hash = `'*${'B3FB'.repeat(10)}'`;
+    expect(
+      redactCredentials(
+        `GRANT USAGE ON *.* TO \`studies_ro\`@\`%\` IDENTIFIED BY PASSWORD ${hash}`,
+      ),
+    ).toBe(
+      "GRANT USAGE ON *.* TO `studies_ro`@`%` IDENTIFIED BY PASSWORD '<hidden>'",
+    );
+    expect(
+      redactCredentials(
+        "CREATE USER `u`@`%` IDENTIFIED VIA mysql_native_password USING 'abc'",
+      ),
+    ).toBe(
+      "CREATE USER `u`@`%` IDENTIFIED VIA mysql_native_password USING '<hidden>'",
+    );
+    expect(redactCredentials("SET PASSWORD = PASSWORD('x')")).toBe(
+      "SET PASSWORD = PASSWORD('<hidden>')",
+    );
+  });
+  it('passes other values through', () => {
+    expect(redactCredentials(5)).toBe(5);
+    expect(redactCredentials(null)).toBeNull();
+    expect(redactCredentials('plain')).toBe('plain');
+  });
+});
+
+describe('runReadonlyQuery credential hiding', () => {
+  it.each(['SHOW GRANTS', 'SHOW GRANTS FOR CURRENT_USER'])(
+    '%s shows no password hash',
+    async (q) => {
+      const r = await runReadonlyQuery(roPool, q);
+      expect(r.ok).toBe(true);
+      if (!r.ok) return;
+      expect(r.rows.length).toBeGreaterThan(0);
+      for (const row of r.rows)
+        for (const cell of row)
+          expect(String(cell)).not.toMatch(/'\*[0-9A-F]{40}'/);
+    },
+  );
 });

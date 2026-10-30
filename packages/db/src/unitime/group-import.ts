@@ -1,12 +1,18 @@
-import { inArray } from 'drizzle-orm';
+import { inArray, sql } from 'drizzle-orm';
 import type { Db } from '../client.js';
-import { CLASS_KINDS, type ClassKind } from '../constants.js';
+import {
+  CLASS_KINDS,
+  type ClassKind,
+  GROUP_IMPORT_MAX_PAIRS,
+} from '../constants.js';
 import { getMyGroups } from '../my-groups.js';
 import { classes, classGroups, subjects, userGroups } from '../schema.js';
 import { plural } from '../text.js';
 import { classifyEvent } from './classify.js';
 import { SafeSyncError } from './fetch.js';
-import { expandOccurrences, parseIcs } from './ics.js';
+import { countOccurrences, parseIcs } from './ics.js';
+
+export { GROUP_IMPORT_MAX_PAIRS };
 
 export interface GroupImportPreview {
   calendarName: string | null;
@@ -33,12 +39,23 @@ export interface GroupImportPreview {
     label: string;
     reason: 'subject' | 'class' | 'group';
   }[];
-  skipped: { exam: number; noKind: number; noGroup: number };
+  /** Entries left out, by reason; `noDates` ones have no occurrence left. */
+  skipped: { exam: number; noKind: number; noGroup: number; noDates: number };
 }
 
 export class NotACalendarError extends Error {}
 
-export const GROUP_IMPORT_MAX_PAIRS = 100;
+/** Most VEVENTs a calendar to import may have (checked before any expansion). */
+export const GROUP_IMPORT_MAX_EVENTS = 5000;
+export const TOO_MANY_ENTRIES_MESSAGE =
+  'The calendar has too many entries (max 5000).';
+export class TooManyEntriesError extends Error {
+  constructor() {
+    super(TOO_MANY_ENTRIES_MESSAGE);
+    this.name = 'TooManyEntriesError';
+  }
+}
+
 const UNMATCHED_CAP = 50;
 export const NO_CLASSES_MESSAGE =
   'This calendar has no classes yet. UniTime may not have published your timetable; try again later or pick your groups below.';
@@ -64,6 +81,7 @@ export function groupImportNotice(p: GroupImportPreview): string | null {
 
 export const TOO_MANY_IMPORTS = 'Too many imports. Try again in a few minutes.';
 export const IMPORT_FAILED = 'Could not read the calendar.';
+export const GROUP_IMPORT_SAVE_FAILED = 'Could not save the groups.';
 /** Imports (previews and uploads) per user per window: 6 per 10 minutes. */
 export const GROUP_IMPORT_LIMIT = 6;
 export const GROUP_IMPORT_WINDOW_MS = 10 * 60_000;
@@ -74,8 +92,50 @@ export const GROUP_IMPORT_WINDOW_MS = 10 * 60_000;
  */
 export function importErrorMessage(err: unknown): string {
   if (err instanceof NotACalendarError) return NOT_A_CALENDAR_MESSAGE;
+  if (err instanceof TooManyEntriesError) return TOO_MANY_ENTRIES_MESSAGE;
   if (err instanceof SafeSyncError) return err.message;
   return IMPORT_FAILED;
+}
+
+/**
+ * Logs an unexpected import failure (a DB error, a bug) with only its
+ * name, code and errno: the message may embed the calendar link. The
+ * expected failures (fetch, not a calendar, too many entries) are not logged.
+ */
+export function logGroupImportError(err: unknown): void {
+  if (
+    err instanceof SafeSyncError ||
+    err instanceof NotACalendarError ||
+    err instanceof TooManyEntriesError
+  )
+    return;
+  console.error('group import failed:', safeErrorFields(err));
+}
+
+const FIELD_CLIP = 64;
+
+/**
+ * The parts of an error that are safe to log: `name` and `code` only when
+ * they are strings (clipped to 64 characters), `errno` only when it is a
+ * number. Never the message.
+ */
+export function safeErrorFields(err: unknown): {
+  name: string | undefined;
+  code: string | undefined;
+  errno: number | undefined;
+} {
+  const e = (typeof err === 'object' && err !== null ? err : {}) as {
+    name?: unknown;
+    code?: unknown;
+    errno?: unknown;
+  };
+  const str = (v: unknown) =>
+    typeof v === 'string' ? v.slice(0, FIELD_CLIP) : undefined;
+  return {
+    name: str(e.name),
+    code: str(e.code),
+    errno: typeof e.errno === 'number' ? e.errno : undefined,
+  };
 }
 
 /** The matched pairs that change My groups (already saved ones are left out). */
@@ -107,13 +167,15 @@ export async function planGroupImport(
   } catch {
     throw new NotACalendarError();
   }
+  if (cal.events.length > GROUP_IMPORT_MAX_EVENTS)
+    throw new TooManyEntriesError();
   const preview: GroupImportPreview = {
     calendarName: cal.name || null,
     totalEvents: cal.events.filter((ev) => ev.status !== 'cancelled').length,
     matched: [],
     ambiguous: [],
     unmatched: [],
-    skipped: { exam: 0, noKind: 0, noGroup: 0 },
+    skipped: { exam: 0, noKind: 0, noGroup: 0, noDates: 0 },
   };
 
   type Entry = {
@@ -140,6 +202,12 @@ export async function planGroupImport(
       preview.skipped.noGroup++;
       continue;
     }
+    // Not allocating: the calendar is untrusted.
+    const weight = countOccurrences(ev);
+    if (weight === 0) {
+      preview.skipped.noDates++;
+      continue;
+    }
     entries.push({
       // The column holds 200 characters; the sync truncates the same way.
       unitimeName: c.unitimeName.slice(0, 200),
@@ -147,7 +215,7 @@ export async function planGroupImport(
       label: c.label,
       kind: c.kind,
       number: c.groupNumber,
-      weight: expandOccurrences(ev).length,
+      weight,
     });
   }
   if (entries.length === 0) return preview;
@@ -164,7 +232,14 @@ export async function planGroupImport(
         ...new Set(entries.map((e) => e.unitimeName)),
       ]),
     );
-  const subjectByName = new Map(subjectRows.map((s) => [s.unitimeName, s]));
+  // The SQL filter runs under the column's utf8mb4_unicode_ci, PAD SPACE
+  // collation (case, accents and trailing spaces ignored); the lookup
+  // normalises both sides the same way.
+  const nameKey = (n: string) =>
+    n.normalize('NFD').replace(/\p{M}/gu, '').trimEnd().toLowerCase();
+  const subjectByName = new Map(
+    subjectRows.map((s) => [nameKey(s.unitimeName ?? ''), s]),
+  );
   const classRows = subjectRows.length
     ? await db
         .select({
@@ -220,7 +295,7 @@ export async function planGroupImport(
   // classId -> groupId -> weight
   const weights = new Map<number, Map<number, number>>();
   for (const e of entries) {
-    const subject = subjectByName.get(e.unitimeName);
+    const subject = subjectByName.get(nameKey(e.unitimeName));
     if (!subject) {
       addUnmatched(e.subjectName, e.label, 'subject');
       continue;
@@ -312,27 +387,30 @@ export async function applyGroupImport(
     )
     .slice(0, GROUP_IMPORT_MAX_PAIRS);
   if (kept.length === 0) return { set: 0, skipped: total };
-  const found = await db
-    .select({ id: classGroups.id, classId: classGroups.classId })
-    .from(classGroups)
-    .where(
-      inArray(
-        classGroups.id,
-        kept.map((p) => p.groupId),
-      ),
-    );
-  const classOf = new Map(found.map((g) => [g.id, g.classId]));
-  // One group per class; a later pair for the same class wins.
-  const byClass = new Map<number, number>();
-  for (const p of kept)
-    if (classOf.get(p.groupId) === p.classId) byClass.set(p.classId, p.groupId);
-  if (byClass.size === 0) return { set: 0, skipped: total };
-  await db.transaction(async (tx) => {
+  // The groups are checked inside the transaction, under a shared lock, so a
+  // group deleted meanwhile (by the sync or an admin) is skipped, not an FK
+  // error.
+  const set = await db.transaction(async (tx) => {
+    // MariaDB has no FOR SHARE; LOCK IN SHARE MODE is its equivalent.
+    const [found] = (await tx.execute(sql`
+      SELECT id, class_id AS classId FROM class_groups
+       WHERE ${inArray(
+         classGroups.id,
+         kept.map((p) => p.groupId),
+       )}
+       LOCK IN SHARE MODE`)) as unknown as [{ id: number; classId: number }[]];
+    const classOf = new Map(found.map((g) => [g.id, g.classId]));
+    // One group per class; a later pair for the same class wins.
+    const byClass = new Map<number, number>();
+    for (const p of kept)
+      if (classOf.get(p.groupId) === p.classId)
+        byClass.set(p.classId, p.groupId);
     for (const [classId, groupId] of byClass)
       await tx
         .insert(userGroups)
         .values({ userId, classId, groupId })
         .onDuplicateKeyUpdate({ set: { groupId } });
+    return byClass.size;
   });
-  return { set: byClass.size, skipped: total - byClass.size };
+  return { set, skipped: total - set };
 }

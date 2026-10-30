@@ -3,6 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   addMark,
+  botRequests,
   classes,
   classLecturers,
   classSessions,
@@ -779,6 +780,18 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_EVENTS_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_ADMIN_SIMPLE = await createLoginToken(db, adminId);
+    // Sync tab report page (admin-round2.spec.ts): a finished resync with a
+    // short report.
+    const [adminReq] = await db.insert(botRequests).values({
+      kind: 'resync',
+      target: 'guild',
+      status: 'done',
+      payload: { requestedBy: adminId },
+      report: 'E2E resync report\n<b>not markup</b>\n',
+      startedAt: new Date(Date.now() - 120_000),
+      finishedAt: new Date(Date.now() - 60_000),
+    });
+    process.env.E2E_ADMIN_REQUEST_ID = String(adminReq.insertId);
     // Admin Users tab (admin-round2.spec.ts): blocked and unblocked there,
     // so it never signs in (blocking deletes the user's sessions).
     await upsertUser(db, {

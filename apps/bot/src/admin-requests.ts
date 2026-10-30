@@ -30,6 +30,8 @@ export const NOT_ADMIN_MESSAGE = 'The requester is no longer an admin.';
 export const NO_ROLE_MESSAGE = 'Run /setup from Discord first.';
 export const NOT_MEMBER_MESSAGE =
   'The requester is not a member of the server.';
+export const NO_DISCORD_ACCOUNT_MESSAGE =
+  'The requester has no Discord account linked.';
 const INVALID_MESSAGE = 'Invalid request.';
 
 export type AdminRequestDeps = {
@@ -47,7 +49,18 @@ export type AdminRequestDeps = {
     audit: Audit,
   ): Promise<string>;
   runResync(audit: Audit): Promise<string>;
+  /** Waits between finish-write retries; injectable so tests don't wait. */
+  sleep?(ms: number): Promise<void>;
 };
+
+/**
+ * Set when a finish write gave up (a row may be stuck `running`); the next
+ * tick then recovers under the lock. False at start: boot recovery ran.
+ */
+let needsRecovery = false;
+
+const FINISH_WAITS_MS = [1_000, 5_000];
+const SNOWFLAKE = /^\d{17,20}$/;
 
 /** The real Discord side, over the router's deps. */
 export function adminRequestDeps(deps: RouterDeps): AdminRequestDeps {
@@ -109,7 +122,16 @@ async function runRequest(
   // the first /setup (which pins the role) must come from Discord.
   const roleId = await getSetting(db, ADMIN_ROLE_SETTING);
   if (roleId === null) throw new AdminRequestError(NO_ROLE_MESSAGE);
+  // A malformed id (seed users, hand-edited rows) must not reach Discord.
+  if (!SNOWFLAKE.test(user.discordUserId)) {
+    throw new AdminRequestError(NO_DISCORD_ACCOUNT_MESSAGE);
+  }
   const guild = await deps.fetchGuild();
+  // A pinned role deleted in Discord: nobody can be checked, flag untouched.
+  // A fetch error propagates as an ordinary failed run.
+  if ((await guild.roles.fetch(roleId)) === null) {
+    throw new AdminRequestError(NO_ROLE_MESSAGE);
+  }
   let roles: string[];
   try {
     roles = await deps.fetchMemberRoles(guild, user.discordUserId);
@@ -153,27 +175,47 @@ function failureMessage(kind: string, err: unknown): string {
 }
 
 /**
- * Stores a successful run, retried once. If both tries fail the row stays
- * `running` and is failed as interrupted at the next boot: a run that worked
- * is never reported as a failed one.
+ * Writes the final status, up to 3 attempts (waits 1 s, then 5 s). If all
+ * fail the row stays `running`, `needsRecovery` is set, and the next tick
+ * fails it as interrupted (`Interrupted.`). An affected-rows count
+ * of 0 means the row was cancelled meanwhile: the result is dropped.
  */
-async function storeDone(
-  db: Db,
+async function storeFinish(
+  deps: AdminRequestDeps,
   id: number,
-  report: string,
+  status: 'done' | 'failed',
+  error: string | undefined,
+  report: string | undefined,
   log: Log,
 ): Promise<void> {
-  for (let attempt = 1; attempt <= 2; attempt++) {
+  const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
+  for (let attempt = 0; attempt <= FINISH_WAITS_MS.length; attempt++) {
     try {
-      await finishBotRequest(db, id, 'done', undefined, new Date(), report);
+      const n = await finishBotRequest(
+        deps.db,
+        id,
+        status,
+        error,
+        new Date(),
+        report,
+      );
+      if (n === 0) {
+        log(
+          `admin request ${id} finished after it was cancelled; result dropped`,
+        );
+      }
       return;
     } catch (err) {
       log(
-        `admin request ${id}: cannot store the result (try ${attempt}):`,
+        `admin request ${id}: cannot store the result (try ${attempt + 1}):`,
         err,
       );
+      if (attempt < FINISH_WAITS_MS.length)
+        await sleep(FINISH_WAITS_MS[attempt]);
     }
   }
+  needsRecovery = true;
+  log(`admin request ${id}: could not store the result`);
 }
 
 /** Claims and runs one request; null when the queue is empty. */
@@ -181,25 +223,24 @@ async function processOne(
   deps: AdminRequestDeps,
   log: Log,
 ): Promise<BotRequest | null> {
-  const { db } = deps;
-  const req = await claimNextBotRequest(db, [...ADMIN_REQUEST_KINDS]);
+  const req = await claimNextBotRequest(deps.db, [...ADMIN_REQUEST_KINDS]);
   if (!req) return null;
   let report: string;
   try {
     report = await runRequest(deps, req, log);
   } catch (err) {
     log(`admin request ${req.id} (${req.kind}) failed:`, err);
-    await finishBotRequest(
-      db,
+    await storeFinish(
+      deps,
       req.id,
       'failed',
       failureMessage(req.kind, err),
-    ).catch((e) =>
-      log(`admin request ${req.id}: cannot store the failure:`, e),
+      undefined,
+      log,
     );
     return req;
   }
-  await storeDone(db, req.id, report, log);
+  await storeFinish(deps, req.id, 'done', undefined, report, log);
   return req;
 }
 
@@ -215,6 +256,21 @@ export async function drainAdminRequests(
   const log = opts.log ?? console.error;
   const isStopped = opts.isStopped ?? (() => false);
   let n = 0;
+  // Every run happens inside the lock, so while it is free this process runs
+  // nothing: any admin row still `running` is orphaned (a finish write that
+  // failed for good). Recovering inside the lock keeps it from racing a run.
+  if (needsRecovery && !isStopped()) {
+    const done = await withSetupLock(async () => {
+      const failed = await recoverInterruptedAdminRequests(deps.db);
+      if (failed > 0) log(`admin requests failed as interrupted: ${failed}`);
+      return true;
+    }).catch((err) => {
+      log('admin request recovery failed:', err);
+      return false;
+    });
+    // A busy lock or an error keeps the flag for the next tick.
+    if (done === true) needsRecovery = false;
+  }
   for (;;) {
     if (isStopped()) return n;
     const req = await withSetupLock(() => processOne(deps, log));
@@ -249,8 +305,9 @@ export function startAdminRequestPoller(
 }
 
 /**
- * At boot: fails every `running` admin request (this process is their only
- * consumer, so they were interrupted). Awaited before the poller starts.
+ * Fails every `running` admin request (this process is their only consumer,
+ * so they were interrupted). Run at boot, awaited before the poller starts,
+ * and again under the lock after a finish write gave up.
  */
 export async function recoverInterruptedAdminRequests(db: Db): Promise<number> {
   return failStaleBotRequests(db, new Date(), 0, [...ADMIN_REQUEST_KINDS]);

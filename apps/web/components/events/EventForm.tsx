@@ -223,6 +223,7 @@ export function EventForm({
         </div>
       )}
       <form
+        method="post"
         onSubmit={(e) => {
           // Not `action={fn}`: React 19 resets uncontrolled fields after it,
           // which would empty the form on a refusal.

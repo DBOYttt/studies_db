@@ -4,8 +4,10 @@ import { ECTS_MAX, ECTS_MIN, FIELD_MAX, SEMESTERS } from '@studies/db/fields';
 import Link from 'next/link';
 import { useId } from 'react';
 import { addSubjectAction, editSubjectAction } from '@/lib/admin-actions';
+import { subjectFormValues } from '@/lib/admin-form-values';
 import { ActionForm } from './ActionForm';
 import { hint, input, label, link, textarea } from './form-styles';
+import { OrigInputs, useOrigSnapshot } from './OrigInputs';
 
 export type SubjectFormValues = {
   code: string;
@@ -19,17 +21,29 @@ export type SubjectFormValues = {
 /**
  * "Add subject" (no `subject`) or "Edit subject" (the stored values; the
  * code is fixed, sent hidden). A new subject has no forum until setup runs,
- * which the success line says.
+ * which the success line says. On edit every field's rendered value is also
+ * sent as a hidden `orig_<field>`, so the action changes only what was
+ * touched and refuses a field someone else changed meanwhile. A stored
+ * semester or ECTS outside today's range (written through the SQL console)
+ * is shown as it is and kept unless changed.
  */
 export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
   const id = useId();
   const add = subject === undefined;
+  const values = add ? undefined : subjectFormValues(subject);
+  const { orig, onSaved } = useOrigSnapshot(subject?.code ?? '', values ?? {});
+  const oddSemester =
+    subject !== undefined &&
+    !(SEMESTERS as readonly number[]).includes(subject.semester);
+  const ectsMin = Math.min(ECTS_MIN, subject?.ects ?? ECTS_MIN);
+  const ectsMax = Math.max(ECTS_MAX, subject?.ects ?? ECTS_MAX);
   return (
     <ActionForm
       action={add ? addSubjectAction : editSubjectAction}
       submitLabel={add ? 'Add subject' : 'Save subject'}
       pendingLabel={add ? 'Adding…' : 'Saving…'}
       resetOnSuccess={add}
+      onSaved={add ? undefined : onSaved}
       successText={
         add
           ? () => (
@@ -45,6 +59,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
       }
     >
       {add ? null : <input type="hidden" name="code" value={subject.code} />}
+      {add ? null : <OrigInputs values={orig} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
         <label className={label}>
           Name
@@ -52,7 +67,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
             name="name"
             required
             maxLength={FIELD_MAX.subjectName}
-            defaultValue={subject?.name}
+            defaultValue={values?.name}
             autoComplete="off"
             className={input}
           />
@@ -82,9 +97,12 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
           Semester
           <select
             name="semester"
-            defaultValue={String(subject?.semester ?? 1)}
+            defaultValue={values?.semester ?? '1'}
             className={input}
           >
+            {oddSemester && (
+              <option value={values?.semester}>{values?.semester}</option>
+            )}
             {SEMESTERS.map((s) => (
               <option key={s} value={s}>
                 {s}
@@ -98,10 +116,10 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
             name="ects"
             type="number"
             required
-            min={ECTS_MIN}
-            max={ECTS_MAX}
+            min={ectsMin}
+            max={ectsMax}
             step={1}
-            defaultValue={subject?.ects}
+            defaultValue={values?.ects}
             className={`${input} tabular-nums`}
           />
         </label>
@@ -111,7 +129,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
         <textarea
           name="description"
           maxLength={FIELD_MAX.description}
-          defaultValue={subject?.description ?? ''}
+          defaultValue={values?.description ?? ''}
           className={textarea}
           lang="pl"
         />
@@ -124,7 +142,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
               name="platformUrl"
               inputMode="url"
               maxLength={FIELD_MAX.platformUrl}
-              defaultValue={subject.platformUrl ?? ''}
+              defaultValue={values?.platformUrl}
               placeholder="https://…"
               autoComplete="off"
               spellCheck={false}

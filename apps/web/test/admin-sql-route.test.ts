@@ -1,5 +1,7 @@
 import {
   adminAudit,
+  classes,
+  classGroups,
   consumeLoginToken,
   createLoginToken,
   type Db,
@@ -51,6 +53,7 @@ const { handleAdminSqlRequest } = await import('../lib/admin-sql-handler');
 const { TOKEN_TTL_MS, signPreview } = await import('../lib/admin-sql');
 const { createRateLimiter } = await import('../lib/rate-limit');
 const { CONNECT_ERROR } = await import('../lib/sql-messages');
+const { confirmMessage } = await import('../lib/admin-console');
 
 let admin: SessionUser;
 let adminSid: string;
@@ -430,6 +433,95 @@ describe('handleAdminSqlRequest', () => {
     expect(await ectsOf('B000')).toBe(2);
   });
 
+  it('a DELETE on a cascade parent needs the typed confirmation even for 1 row', async () => {
+    const [s] = await db
+      .select({ id: subjects.id })
+      .from(subjects)
+      .where(eq(subjects.code, 'ASD'));
+    const [c] = await db
+      .insert(classes)
+      .values({ subjectId: s.id, kind: 'wyklad', name: 'Wykład' })
+      .$returningId();
+    await db
+      .insert(classGroups)
+      .values({ classId: c.id, number: 99, name: 'Gr. 99' });
+    const sql = 'DELETE FROM class_groups WHERE number = 99';
+    const preview = await json(await call({ mode: 'preview', sql }));
+    expect(preview).toMatchObject({ ok: true, affected: 1, cascade: true });
+    const groups = async () =>
+      (await db.select({ n: count() }).from(classGroups))[0].n;
+    for (const confirm of [undefined, '', 'YES']) {
+      const res = await call({
+        mode: 'execute',
+        sql,
+        token: preview.token,
+        confirm,
+      });
+      expect(res.status, String(confirm)).toBe(400);
+      expect((await json(res)).error).toBe(confirmMessage('class_groups', 1));
+    }
+    expect(await groups()).toBe(1);
+    const res = await call({
+      mode: 'execute',
+      sql,
+      token: preview.token,
+      confirm: 'class_groups',
+    });
+    expect(res.status).toBe(200);
+    expect(await groups()).toBe(0);
+    // An UPDATE on the same table is not a cascade.
+    const upd = await json(
+      await call({
+        mode: 'preview',
+        sql: "UPDATE subjects SET ects = 5 WHERE code = 'ASD'",
+      }),
+    );
+    expect(upd.cascade).toBe(false);
+  });
+
+  it('a cascading DELETE that matches no rows needs no confirmation', async () => {
+    const sql = 'DELETE FROM class_groups WHERE number = 12345';
+    const preview = await json(await call({ mode: 'preview', sql }));
+    expect(preview).toMatchObject({ ok: true, affected: 0, cascade: true });
+    const res = await call({ mode: 'execute', sql, token: preview.token });
+    expect(res.status).toBe(200);
+    expect((await json(res)).affected).toBe(0);
+  });
+
+  it('an unconfirmed cascading DELETE that matched no rows is rolled back if rows appeared', async () => {
+    const [s] = await db
+      .select({ id: subjects.id })
+      .from(subjects)
+      .where(eq(subjects.code, 'ASD'));
+    const [c] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.subjectId, s.id));
+    const sql = 'DELETE FROM class_groups WHERE number = 98';
+    const token = signPreview({
+      userId: admin.id,
+      sql,
+      affected: 0,
+      at: Date.now(),
+    });
+    await db
+      .insert(classGroups)
+      .values({ classId: c.id, number: 98, name: 'Gr. 98' });
+    const res = await call({ mode: 'execute', sql, token });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(
+      /since the preview.*Run the preview again/,
+    );
+    expect(
+      (
+        await db
+          .select({ n: count() })
+          .from(classGroups)
+          .where(eq(classGroups.number, 98))
+      )[0].n,
+    ).toBe(1);
+  });
+
   it('rolls back an unconfirmed change that grew past 100 rows since the preview', async () => {
     const sql = 'UPDATE subjects SET ects = 3 WHERE semester = 7';
     const token = signPreview({
@@ -562,7 +654,11 @@ describe('handleAdminSqlRequest', () => {
                   at: Date.now(),
                 })
               : undefined;
-          const res = await call({ mode, sql: c.sql, token }, { rw: c.pool() });
+          // `users` is a cascade parent: the DELETE carries its confirmation.
+          const res = await call(
+            { mode, sql: c.sql, token, confirm: c.table },
+            { rw: c.pool() },
+          );
           expect(res.status).toBe(400);
           expect((await json(res)).error).toBe(c.error);
           expect(await auditCount('sql.rejected')).toBe(before + 1);
@@ -680,8 +776,14 @@ describe('handleAdminSqlRequest', () => {
     const del = "DELETE FROM subjects WHERE code = 'RET1' RETURNING code";
     const d = await json(await call({ mode: 'preview', sql: del }));
     expect(d).toMatchObject({ ok: true, kind: 'delete', affected: 1 });
+    // subjects is a cascade parent: confirmed by name.
     const x = await json(
-      await call({ mode: 'execute', sql: del, token: d.token }),
+      await call({
+        mode: 'execute',
+        sql: del,
+        token: d.token,
+        confirm: 'subjects',
+      }),
     );
     expect(x).toMatchObject({ ok: true, affected: 1 });
     expect(await ectsOf('RET1')).toBeUndefined();

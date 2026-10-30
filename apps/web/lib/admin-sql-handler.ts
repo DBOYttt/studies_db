@@ -13,6 +13,7 @@ import { confirmMessage, confirmWord, rowCount } from './admin-console';
 import {
   adminSqlErrorMessage,
   CONFIRM_THRESHOLD,
+  cascadeConfirm,
   classifyStatement,
   type PermissionDetails,
   PREVIEW_ROWS,
@@ -32,7 +33,7 @@ import {
   connectionErrorMessage,
   MAX_SQL_LENGTH,
   runReadonlyQuery,
-  toJsonValue,
+  toConsoleValue,
 } from './sql-console';
 import { BUSY_ERROR, CONNECT_ERROR } from './sql-messages';
 
@@ -198,7 +199,7 @@ function shownRows(
 ): Shown {
   return {
     columns: (fields ?? []).map((f) => f.name),
-    rows: rows.slice(0, PREVIEW_ROWS).map((r) => r.map(toJsonValue)),
+    rows: rows.slice(0, PREVIEW_ROWS).map((r) => r.map(toConsoleValue)),
   };
 }
 
@@ -315,6 +316,7 @@ async function preview(
     affected,
     columns,
     rows,
+    cascade: cascadeConfirm(kind, table),
     token: signPreview({ userId: user.id, sql, affected, at: now }),
   });
 }
@@ -336,7 +338,14 @@ async function execute(
   );
   if (!token.ok) return fail(400, token.reason);
   const confirmed = body.confirm === confirmWord(table);
-  if (token.affected > CONFIRM_THRESHOLD && !confirmed) {
+  // A cascading DELETE/REPLACE is confirmed whatever its row count (the
+  // count does not include the rows it takes from other tables), unless its
+  // preview matched no rows: then it deletes nothing anywhere.
+  const cascade = cascadeConfirm(kind, table);
+  if (
+    (token.affected > CONFIRM_THRESHOLD || (cascade && token.affected > 0)) &&
+    !confirmed
+  ) {
     return fail(400, confirmMessage(table, token.affected));
   }
   // Spent before BEGIN, whatever the outcome: a retry needs a new preview.
@@ -348,8 +357,11 @@ async function execute(
   const r = await inTransaction(deps.rw, async (conn, commit) => {
     const res = await runStatement(conn, sql);
     // The data may have changed since the preview: never commit a large
-    // change that was not confirmed.
-    if (res.affected > CONFIRM_THRESHOLD && !confirmed) {
+    // change, or a cascade that now matches rows, that was not confirmed.
+    if (
+      (res.affected > CONFIRM_THRESHOLD || (cascade && res.affected > 0)) &&
+      !confirmed
+    ) {
       overLimit = res.affected;
       return null;
     }

@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/client.js';
 import { getMyGroups, setMyGroup } from '../src/my-groups.js';
@@ -6,13 +7,24 @@ import { classes, classGroups, subjects, users } from '../src/schema.js';
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 import {
   applyGroupImport,
+  GROUP_IMPORT_MAX_EVENTS,
   groupImportNotice,
+  importErrorMessage,
   NO_CLASSES_MESSAGE,
   NotACalendarError,
   notInDbMessage,
   planGroupImport,
   previewHasNothing,
+  safeErrorFields,
+  TOO_MANY_ENTRIES_MESSAGE,
+  TooManyEntriesError,
 } from '../src/unitime/group-import.js';
+import {
+  countOccurrences,
+  expandOccurrences,
+  type IcsEvent,
+  parseIcs,
+} from '../src/unitime/ics.js';
 
 const fixture = (n: string) =>
   readFileSync(new URL(`./fixtures/${n}`, import.meta.url), 'utf8');
@@ -119,7 +131,7 @@ describe('planGroupImport', () => {
         ['Analiza matematyczna', 'group'],
       ].sort(),
     );
-    expect(p.skipped).toEqual({ exam: 1, noKind: 1, noGroup: 1 });
+    expect(p.skipped).toEqual({ exam: 1, noKind: 1, noGroup: 1, noDates: 0 });
   });
 
   it('reports the current group', async () => {
@@ -302,5 +314,144 @@ describe('long names and notices', () => {
     );
     const ok = await planGroupImport(db, userId, fixture('personal.ics'));
     expect(groupImportNotice(ok)).toBeNull();
+  });
+});
+
+/** A one-event calendar for the Analiza matematyczna subject. */
+function oneEvent(extra: string[], desc = 'CWA 3', summary?: string) {
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'BEGIN:VEVENT',
+    'DTSTART;TZID=Europe/Warsaw:20261001T094500',
+    'DTEND;TZID=Europe/Warsaw:20261001T104500',
+    'STATUS:CONFIRMED',
+    ...extra,
+    'UID:one',
+    `SUMMARY:${summary ?? 'Analiza matematyczna (1rok)'}`,
+    `DESCRIPTION:${desc}`,
+    'END:VEVENT',
+    'END:VCALENDAR',
+  ].join('\r\n');
+}
+
+describe('hardening', () => {
+  it('counts occurrences exactly like the expansion', () => {
+    const events: IcsEvent[] = [
+      ...parseIcs(fixture('personal.ics')).events,
+      // UNTIL before DTSTART: no occurrences.
+      ...parseIcs(
+        oneEvent(['RRULE:FREQ=WEEKLY;UNTIL=20260901T101500Z;BYDAY=TH']),
+      ).events,
+      // Every date excluded.
+      ...parseIcs(
+        oneEvent([
+          'RRULE:FREQ=WEEKLY;UNTIL=20261015T101500Z;BYDAY=TH',
+          'EXDATE;TZID=Europe/Warsaw:20261001T094500,20261008T094500,20261015T094500',
+        ]),
+      ).events,
+      // A runaway daily rule (capped).
+      ...parseIcs(
+        oneEvent([
+          'RRULE:FREQ=WEEKLY;UNTIL=20301231T101500Z;BYDAY=MO,TU,WE,TH,FR,SA,SU',
+        ]),
+      ).events,
+    ];
+    expect(events.length).toBeGreaterThan(4);
+    for (const ev of events)
+      expect(countOccurrences(ev)).toBe(expandOccurrences(ev).length);
+    const [untilBefore, allExcluded] = events.slice(-3);
+    expect(countOccurrences(untilBefore as IcsEvent)).toBe(0);
+    expect(countOccurrences(allExcluded as IcsEvent)).toBe(0);
+  });
+
+  it('refuses a calendar with more than 5000 entries', async () => {
+    expect(GROUP_IMPORT_MAX_EVENTS).toBe(5000);
+    const lines = ['BEGIN:VCALENDAR', 'VERSION:2.0'];
+    for (let i = 0; i <= GROUP_IMPORT_MAX_EVENTS; i++)
+      lines.push(
+        'BEGIN:VEVENT',
+        'DTSTART;TZID=Europe/Warsaw:20261001T094500',
+        `UID:many${i}`,
+        'SUMMARY:Analiza matematyczna (1rok)',
+        'DESCRIPTION:CWA 1',
+        'END:VEVENT',
+      );
+    lines.push('END:VCALENDAR');
+    const err = await planGroupImport(db, userId, lines.join('\r\n')).catch(
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(TooManyEntriesError);
+    expect(importErrorMessage(err)).toBe(TOO_MANY_ENTRIES_MESSAGE);
+    expect(TOO_MANY_ENTRIES_MESSAGE).toBe(
+      'The calendar has too many entries (max 5000).',
+    );
+  });
+
+  it('does not match an entry without dates', async () => {
+    const p = await planGroupImport(
+      db,
+      userId,
+      oneEvent(['RRULE:FREQ=WEEKLY;UNTIL=20260901T101500Z;BYDAY=TH']),
+    );
+    expect(p.matched).toEqual([]);
+    expect(p.ambiguous).toEqual([]);
+    expect(p.skipped).toEqual({ exam: 0, noKind: 0, noGroup: 0, noDates: 1 });
+  });
+
+  it('matches a subject whose UniTime name differs in case and trailing spaces', async () => {
+    await addSubject('FK', 'fizyka KWANTOWA (1rok)  ', { cwiczenia: [1] });
+    const p = await planGroupImport(
+      db,
+      userId,
+      oneEvent([], 'CWA 1', 'Fizyka kwantowa (1rok)'),
+    );
+    expect(p.unmatched).toEqual([]);
+    expect(p.matched.map((m) => m.groupId)).toEqual([grp['FK.cwiczenia.1']]);
+  });
+
+  it('matches a subject whose UniTime name differs only in accents', async () => {
+    await addSubject('BD', 'Bazy danych (1rok)', { cwiczenia: [1] });
+    const p = await planGroupImport(
+      db,
+      userId,
+      oneEvent([], 'CWA 1', 'Bązy dańych (1rok)'),
+    );
+    expect(p.unmatched).toEqual([]);
+    expect(p.matched.map((m) => m.groupId)).toEqual([grp['BD.cwiczenia.1']]);
+  });
+
+  it('keeps only string name/code (clipped) and a number errno for the log', () => {
+    const long = 'x'.repeat(200);
+    expect(
+      safeErrorFields({ name: long, code: { url: 'secret' }, errno: '1452' }),
+    ).toEqual({ name: 'x'.repeat(64), code: undefined, errno: undefined });
+    expect(
+      safeErrorFields(
+        Object.assign(new Error('secret link'), {
+          code: 'ER_NO_REFERENCED_ROW_2',
+          errno: 1452,
+        }),
+      ),
+    ).toEqual({ name: 'Error', code: 'ER_NO_REFERENCED_ROW_2', errno: 1452 });
+    expect(safeErrorFields('secret')).toEqual({
+      name: undefined,
+      code: undefined,
+      errno: undefined,
+    });
+  });
+
+  it('skips a group deleted after planning without throwing', async () => {
+    await addSubject('DEL', 'Usuwany (1rok)', { cwiczenia: [1, 2] });
+    await db
+      .delete(classGroups)
+      .where(eq(classGroups.id, grp['DEL.cwiczenia.2'] as number));
+    const res = await applyGroupImport(db, userId, [
+      { classId: cls['DEL.cwiczenia'], groupId: grp['DEL.cwiczenia.1'] },
+      { classId: cls['DEL.cwiczenia'], groupId: grp['DEL.cwiczenia.2'] },
+    ]);
+    expect(res).toEqual({ set: 1, skipped: 1 });
+    const mine = await getMyGroups(db, userId);
+    expect(mine[String(cls['DEL.cwiczenia'])]).toBe(grp['DEL.cwiczenia.1']);
   });
 });

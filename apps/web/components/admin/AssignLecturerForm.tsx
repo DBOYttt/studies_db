@@ -40,49 +40,68 @@ export function AssignLecturerForm({
     >
       <input type="hidden" name="code" value={code} />
       {kind && <input type="hidden" name="kind" value={kind} />}
-      <div
-        className={`grid grid-cols-1 gap-3 ${kind ? 'sm:grid-cols-[minmax(0,1fr)_7rem]' : 'sm:grid-cols-[minmax(0,1fr)_12rem_7rem]'}`}
-      >
-        <label className={label}>
-          Lecturer
-          <select name="lecturerId" required defaultValue="" className={input}>
-            <option value="" disabled>
-              Choose a lecturer
-            </option>
-            {lecturers.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.label}
-              </option>
-            ))}
-          </select>
-        </label>
-        {!kind && (
+      {/* Label above control, full width. The subject-wide form sits in a
+          narrow column, so it always stacks; a class card puts Group beside
+          the lecturer only when the card's column is at least 20rem wide. */}
+      <div className="@container">
+        <div
+          className={
+            kind
+              ? 'flex flex-col gap-3 @xs:grid @xs:grid-cols-[minmax(10rem,1fr)_7rem]'
+              : 'flex flex-col gap-3'
+          }
+        >
           <label className={label}>
-            Class type
-            <select name="kind" required defaultValue="" className={input}>
+            Lecturer
+            <select
+              name="lecturerId"
+              required
+              defaultValue=""
+              className={`${input} min-w-0`}
+            >
               <option value="" disabled>
-                Choose a class type
+                Choose a lecturer
               </option>
-              {CLASS_KINDS.map((k) => (
-                <option key={k} value={k} lang="pl">
-                  {CLASS_NAMES[k]}
+              {lecturers.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.label}
                 </option>
               ))}
             </select>
           </label>
-        )}
-        <label className={label}>
-          Group
-          <input
-            name="group"
-            type="number"
-            min={GROUP_MIN}
-            max={GROUP_MAX}
-            step={1}
-            aria-describedby={`${id}-group`}
-            className={`${input} tabular-nums`}
-          />
-        </label>
+          {!kind && (
+            <label className={label}>
+              Class type
+              <select
+                name="kind"
+                required
+                defaultValue=""
+                className={`${input} min-w-0`}
+              >
+                <option value="" disabled>
+                  Choose a class type
+                </option>
+                {CLASS_KINDS.map((k) => (
+                  <option key={k} value={k} lang="pl">
+                    {CLASS_NAMES[k]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+          <label className={label}>
+            Group
+            <input
+              name="group"
+              type="number"
+              min={GROUP_MIN}
+              max={GROUP_MAX}
+              step={1}
+              aria-describedby={`${id}-group`}
+              className={`${input} tabular-nums`}
+            />
+          </label>
+        </div>
       </div>
       <span id={`${id}-group`} className={`${hint} -mt-1.5`}>
         Leave the group empty to assign the lecturer to all groups.

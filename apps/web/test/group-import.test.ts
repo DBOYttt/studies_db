@@ -3,11 +3,14 @@ import {
   classes,
   classGroups,
   type Db,
+  GROUP_IMPORT_MAX_PAIRS,
+  GROUP_IMPORT_SAVE_FAILED,
   getMyGroups,
   IMPORT_MAX_BYTES,
   NO_CLASSES_MESSAGE,
   NOT_A_CALENDAR_MESSAGE,
   subjects,
+  TOO_MANY_ENTRIES_MESSAGE,
   upsertUser,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
@@ -78,6 +81,20 @@ function form(fields: Record<string, string | File>): FormData {
 
 const icsFile = (text: string, name = 'personal.ics') =>
   new File([text], name, { type: 'text/calendar' });
+
+/** A calendar with one VEVENT over the 5000 cap. */
+function hugeCalendar() {
+  const lines = ['BEGIN:VCALENDAR'];
+  for (let i = 0; i <= 5000; i++)
+    lines.push(
+      'BEGIN:VEVENT',
+      'DTSTART:20261001T094500',
+      'SUMMARY:X',
+      'END:VEVENT',
+    );
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
 
 beforeAll(async () => {
   db = await resetTestDb();
@@ -251,6 +268,79 @@ describe('previewGroupImportAction', () => {
     }
   });
 
+  it('logs a DB error by name, code and errno only', async () => {
+    await signIn();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    brokenDb = {
+      select: () => {
+        throw Object.assign(
+          new Error(`Lost connection while reading ${SECRET_URL}`),
+          { code: 'PROTOCOL_CONNECTION_LOST', errno: 2013 },
+        );
+      },
+    } as unknown as Db;
+    try {
+      const r = await previewGroupImportAction(
+        form({ file: icsFile(fixture) }),
+      );
+      expect(r).toEqual({ ok: false, error: 'Could not read the calendar.' });
+    } finally {
+      brokenDb = null;
+    }
+    expect(err).toHaveBeenCalledWith('group import failed:', {
+      name: 'Error',
+      code: 'PROTOCOL_CONNECTION_LOST',
+      errno: 2013,
+    });
+    for (const call of err.mock.calls) {
+      for (const arg of call) {
+        if (arg && typeof arg === 'object')
+          expect(arg).not.toHaveProperty('message');
+      }
+    }
+    const logged = JSON.stringify(err.mock.calls);
+    expect(logged).not.toContain('s3cret-token');
+    expect(logged).not.toContain(SECRET_URL);
+    err.mockRestore();
+  });
+
+  it('does not log the expected failures', async () => {
+    await signIn();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    // NotACalendarError
+    const notCal = await previewGroupImportAction(
+      form({ file: icsFile('<html>') }),
+    );
+    expect(notCal).toEqual({ ok: false, error: NOT_A_CALENDAR_MESSAGE });
+    // TooManyEntriesError
+    const huge = await previewGroupImportAction(
+      form({ file: icsFile(hugeCalendar()) }),
+    );
+    expect(huge).toEqual({ ok: false, error: TOO_MANY_ENTRIES_MESSAGE });
+    // SafeSyncError (a failed fetch)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error(`connect failed for ${SECRET_URL}`);
+      }),
+    );
+    const down = await previewGroupImportAction(form({ url: SECRET_URL }));
+    expect(down).toEqual({
+      ok: false,
+      error: `Could not download the timetable from ${URL_HOST}`,
+    });
+    expect(err).not.toHaveBeenCalled();
+    err.mockRestore();
+  });
+
+  it('shows the too-many-entries message for a huge calendar', async () => {
+    await signIn();
+    const r = await previewGroupImportAction(
+      form({ file: icsFile(hugeCalendar()) }),
+    );
+    expect(r).toEqual({ ok: false, error: TOO_MANY_ENTRIES_MESSAGE });
+  });
+
   it('gives the no-classes notice for a calendar without classes', async () => {
     await signIn();
     const empty =
@@ -306,11 +396,6 @@ describe('applyGroupImportAction', () => {
     expect(await applyGroupImportAction('x')).toEqual(invalid);
     expect(await applyGroupImportAction(null)).toEqual(invalid);
     expect(
-      await applyGroupImportAction(
-        Array.from({ length: 101 }, () => ({ classId: classCw, groupId: gr1 })),
-      ),
-    ).toEqual(invalid);
-    expect(
       await applyGroupImportAction([{ classId: '1', groupId: gr1 }]),
     ).toEqual(invalid);
     expect(
@@ -327,6 +412,64 @@ describe('applyGroupImportAction', () => {
     expect(r).toEqual({ ok: true, set: 1 });
     expect(await getMyGroups(db, userId)).toEqual({ [classCw]: gr2 });
     expect(revalidated).toEqual(expect.arrayContaining(['/plan', '/s/plan']));
+  });
+
+  it('saves the first 100 of more than 100 valid pairs', async () => {
+    const userId = await signIn();
+    const pairs: { classId: number; groupId: number }[] = [];
+    for (let i = 0; i < GROUP_IMPORT_MAX_PAIRS + 1; i++) {
+      const [{ id: s }] = await db
+        .insert(subjects)
+        .values({
+          name: `Cap ${i}`,
+          code: `WCAP${i}`,
+          semester: 1,
+          ects: 1,
+          discordChannelId: `gi-web-cap-${i}`,
+        })
+        .$returningId();
+      const [{ id: c }] = await db
+        .insert(classes)
+        .values({ subjectId: s, kind: 'cwiczenia', name: `C${i}` })
+        .$returningId();
+      const [{ id: g }] = await db
+        .insert(classGroups)
+        .values({ classId: c, number: 1, name: 'Gr. 1' })
+        .$returningId();
+      pairs.push({ classId: c, groupId: g });
+    }
+    const r = await applyGroupImportAction(pairs);
+    expect(r).toEqual({ ok: true, set: GROUP_IMPORT_MAX_PAIRS });
+    const mine = await getMyGroups(db, userId);
+    expect(Object.keys(mine)).toHaveLength(GROUP_IMPORT_MAX_PAIRS);
+    expect(mine[String(pairs[100]?.classId)]).toBeUndefined();
+  });
+
+  it('says the groups could not be saved on a DB error, logging no message', async () => {
+    await signIn();
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    brokenDb = {
+      transaction: async () => {
+        throw Object.assign(new Error('Cannot add or update a child row'), {
+          code: 'ER_NO_REFERENCED_ROW_2',
+          errno: 1452,
+        });
+      },
+    } as unknown as Db;
+    try {
+      const r = await applyGroupImportAction([
+        { classId: classCw, groupId: gr1 },
+      ]);
+      expect(r).toEqual({ ok: false, error: GROUP_IMPORT_SAVE_FAILED });
+    } finally {
+      brokenDb = null;
+    }
+    expect(err).toHaveBeenCalledWith('group import failed:', {
+      name: 'Error',
+      code: 'ER_NO_REFERENCED_ROW_2',
+      errno: 1452,
+    });
+    err.mockRestore();
   });
 
   it('skips a group of another class without throwing', async () => {

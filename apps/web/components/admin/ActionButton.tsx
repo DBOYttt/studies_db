@@ -31,6 +31,7 @@ export function ActionButton({
   action,
   fields = {},
   label,
+  ariaLabel,
   pendingLabel = 'Working…',
   icon,
   variant = 'secondary',
@@ -42,6 +43,8 @@ export function ActionButton({
   action: Action;
   fields?: Record<string, string>;
   label: string;
+  /** Accessible name of the trigger when `label` alone is ambiguous. */
+  ariaLabel?: string;
   pendingLabel?: string;
   icon?: ReactNode;
   variant?: 'primary' | 'secondary';
@@ -87,6 +90,7 @@ export function ActionButton({
 
   return (
     <form
+      method="post"
       className={className ?? 'flex flex-col items-start'}
       onSubmit={(e) => {
         e.preventDefault();
@@ -100,6 +104,7 @@ export function ActionButton({
         <button
           ref={triggerRef}
           type="button"
+          aria-label={ariaLabel}
           aria-disabled={off || undefined}
           title={disabled ? disabledText : undefined}
           className={btn}
@@ -139,6 +144,7 @@ export function ActionButton({
       ) : (
         <button
           type="submit"
+          aria-label={ariaLabel}
           aria-disabled={off || undefined}
           title={disabled ? disabledText : undefined}
           className={btn}

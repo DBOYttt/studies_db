@@ -51,6 +51,7 @@ export async function getSubjectAdmin(db: DbExecutor, code: string) {
   const lecs = ids.length
     ? await db
         .select({
+          id: classLecturers.id,
           classId: classLecturers.classId,
           lecturerId: lecturers.id,
           name: lecturers.name,
@@ -93,6 +94,7 @@ export async function getSubjectAdmin(db: DbExecutor, code: string) {
       lecturers: lecs
         .filter((l) => l.classId === c.id)
         .map((l) => ({
+          id: l.id,
           lecturerId: l.lecturerId,
           name: l.name,
           title: l.title,

@@ -1,7 +1,12 @@
+import * as dbExports from '@studies/db';
+import { is } from 'drizzle-orm';
+import { getTableConfig, MySqlTable } from 'drizzle-orm/mysql-core';
 import { describe, expect, it } from 'vitest';
 import {
   adminSqlErrorMessage,
+  CASCADE_PARENTS,
   CONFIRM_THRESHOLD,
+  cascadeConfirm,
   classifyStatement,
   PREVIEW_ROWS,
   permissionDetails,
@@ -19,6 +24,36 @@ describe('constants', () => {
     expect(SELECT_ROWS).toBe(500);
     expect(TOKEN_TTL_MS).toBe(300_000);
     expect(CONFIRM_THRESHOLD).toBe(100);
+  });
+});
+
+describe('CASCADE_PARENTS', () => {
+  it('equals the tables referenced with ON DELETE CASCADE in the schema', () => {
+    const derived = new Set<string>();
+    for (const t of Object.values(dbExports)) {
+      if (!is(t, MySqlTable)) continue;
+      for (const fk of getTableConfig(t).foreignKeys) {
+        if (fk.onDelete !== 'cascade') continue;
+        derived.add(getTableConfig(fk.reference().foreignTable).name);
+      }
+    }
+    expect(derived.size).toBeGreaterThan(0);
+    expect([...CASCADE_PARENTS].sort()).toEqual([...derived].sort());
+  });
+
+  it('cascadeConfirm: DELETE/REPLACE on a parent, or on an unknown table', () => {
+    expect(cascadeConfirm('delete', 'class_groups')).toBe(true);
+    expect(cascadeConfirm('delete', 'subjects')).toBe(true);
+    expect(cascadeConfirm('delete', 'SUBJECTS')).toBe(true);
+    expect(cascadeConfirm('replace', 'subjects')).toBe(true);
+    expect(cascadeConfirm('delete', null)).toBe(true);
+    expect(cascadeConfirm('replace', null)).toBe(true);
+    expect(cascadeConfirm('delete', 'class_lecturers')).toBe(
+      CASCADE_PARENTS.has('class_lecturers'),
+    );
+    expect(cascadeConfirm('update', 'subjects')).toBe(false);
+    expect(cascadeConfirm('insert', 'subjects')).toBe(false);
+    expect(cascadeConfirm('select', null)).toBe(false);
   });
 });
 

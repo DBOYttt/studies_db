@@ -18,7 +18,26 @@ export interface WritePreview {
   affected: number;
   columns: string[];
   rows: unknown[][];
+  /**
+   * The statement may delete rows in other tables through ON DELETE
+   * CASCADE (`cascadeConfirm` in lib/admin-sql.ts): the typed confirmation
+   * is required whatever the row count.
+   */
+  cascade: boolean;
 }
+
+/** Preview note of a statement that may cascade. */
+export const CASCADE_NOTE =
+  'Rows in other tables that reference these rows are deleted too.';
+
+/**
+ * The typed confirmation is required: a large change, or a cascade that
+ * matches at least one row (one that matches none deletes nothing anywhere).
+ */
+export const needsConfirm = (
+  p: Pick<WritePreview, 'affected' | 'cascade'>,
+  threshold: number,
+): boolean => (p.cascade && p.affected > 0) || p.affected > threshold;
 
 /** Word the user types to confirm a large change. */
 export const confirmWord = (table: string | null): string => table ?? 'YES';
@@ -39,9 +58,9 @@ export function confirmMessage(table: string | null, affected: number): string {
 
 /**
  * "Run" is enabled only for a pending preview whose text still equals
- * the editor, with no request in flight and, above `threshold` rows, the
- * typed confirmation. The preview is cleared after every execute, so one
- * preview commits at most once.
+ * the editor, with no request in flight and, above `threshold` rows or for
+ * a cascading statement, the typed confirmation. The preview is cleared
+ * after every execute, so one preview commits at most once.
  */
 export function canExecute(s: {
   preview: WritePreview | null;
@@ -52,5 +71,5 @@ export function canExecute(s: {
 }): boolean {
   const p = s.preview;
   if (!p || s.busy || s.query !== p.sql) return false;
-  return p.affected <= s.threshold || s.confirm === confirmWord(p.table);
+  return !needsConfirm(p, s.threshold) || s.confirm === confirmWord(p.table);
 }

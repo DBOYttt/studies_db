@@ -10,12 +10,15 @@ import {
   clearMyGroups,
   fetchImportCalendar,
   GROUP_IMPORT_MAX_PAIRS,
+  GROUP_IMPORT_SAVE_FAILED,
+  type GroupImportPreview,
   getMyGroups,
   getReminderPrefs,
   importAllowedHosts,
   importErrorMessage,
   listEventsInRange,
   listMarks,
+  logGroupImportError,
   MARK_NOT_FOUND,
   normalizeImportUrl,
   planGroupImport,
@@ -366,24 +369,32 @@ async function runGroupImport(ctx: StudentContext, url: string) {
   if (!limiter.check(`discord:${ctx.userId}`))
     return ctx.show(notice(TOO_MANY_IMPORTS));
   const { db } = ctx.deps.ingest;
-  let summary: string;
+  let preview: GroupImportPreview;
   try {
     const text = await fetchImportCalendar(guard.url, {
       fetchImpl: o.fetchImpl,
     });
-    const preview = await planGroupImport(db, ctx.userId, text);
-    const pairs = changedPairs(preview).slice(0, GROUP_IMPORT_MAX_PAIRS);
-    const { set } = pairs.length
-      ? await applyGroupImport(db, ctx.userId, pairs)
-      : { set: 0 };
-    summary = groupImportSummary(preview, {
-      set,
-      changed: new Set(pairs.map((p) => p.classId)),
-    });
+    preview = await planGroupImport(db, ctx.userId, text);
   } catch (err) {
-    // Not logged: the error may embed the link.
+    // Only name/code/errno of an unexpected error: the message may embed
+    // the link.
+    logGroupImportError(err);
     return ctx.show(notice(importErrorMessage(err)));
   }
+  const pairs = changedPairs(preview).slice(0, GROUP_IMPORT_MAX_PAIRS);
+  let set = 0;
+  if (pairs.length) {
+    try {
+      ({ set } = await applyGroupImport(db, ctx.userId, pairs));
+    } catch (err) {
+      logGroupImportError(err);
+      return ctx.show(notice(GROUP_IMPORT_SAVE_FAILED));
+    }
+  }
+  const summary = groupImportSummary(preview, {
+    set,
+    changed: new Set(pairs.map((p) => p.classId)),
+  });
   await ctx.show(notice(summary));
   // The summary stays even when the refreshed view cannot be sent.
   try {

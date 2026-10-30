@@ -128,7 +128,7 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   await assign.getByLabel('Class type').selectOption({ label: 'Wykład' });
   await assign.getByRole('button', { name: 'Assign' }).click();
   await expect(assign.getByRole('status')).toHaveText(
-    `Assigned the lecturer to ${CODE} / Wykład.`,
+    `Assigned ${LECTURER_LABEL} to ${CODE} / Wykład. Created the Wykład class.`,
   );
 
   const card = page.getByRole('region', { name: 'Wykład', exact: true });
@@ -146,11 +146,26 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   await assignHere.getByLabel('Group').fill('2');
   await assignHere.getByRole('button', { name: 'Assign' }).click();
   await expect(assignHere.getByRole('status')).toHaveText(
-    `Assigned the lecturer to ${CODE} / Wykład, Gr. 2.`,
+    `Assigned ${LECTURER_LABEL} to ${CODE} / Wykład, Gr. 2. Created group 2.`,
   );
-  await expect(card.getByRole('list', { name: 'Lecturers' })).toContainText(
-    'Gr. 2',
-  );
+  const lecturerList = card.getByRole('list', { name: 'Lecturers' });
+  await expect(lecturerList).toContainText('Gr. 2');
+
+  // Undo it: Remove asks first, then only the group assignment goes.
+  await lecturerList
+    .getByRole('button', {
+      name: `Remove ${LECTURER_LABEL} from Wykład, Gr. 2`,
+    })
+    .click();
+  await lecturerList
+    .getByRole('group', {
+      name: `Remove ${LECTURER_LABEL} from Wykład, Gr. 2?`,
+    })
+    .getByRole('button', { name: 'Confirm remove' })
+    .click();
+  await expect(lecturerList.getByRole('listitem')).toHaveCount(1);
+  await expect(lecturerList).toContainText('all groups');
+  await expect(lecturerList).not.toContainText('Gr. 2');
 
   await settings.getByLabel('Assessment').selectOption({ label: 'Exam' });
   await settings.getByLabel('Note').fill('Pisemny, 90 minut');
@@ -213,6 +228,7 @@ test('the audit log has a row for each change, from the website', async ({
     [bySubject('Subject added'), 1],
     [bySubject('Subject changed'), 1],
     [bySubject('Lecturer assigned'), 2],
+    [bySubject('Lecturer unassigned'), 1],
     [bySubject('Class changed'), 1],
     [byLecturer('Lecturer added'), 1],
     [byLecturer('Lecturer changed'), 1],
@@ -310,7 +326,8 @@ test('queue a setup preview, see it queued, cancel it', async ({ page }) => {
   );
 
   await row.getByRole('button', { name: 'Cancel' }).click();
-  await expect(row).toContainText('failed');
+  await expect(row).toContainText('cancelled');
+  await expect(row).not.toContainText('failed');
   await expect(row).toContainText('Cancelled.');
   await expect(
     bot.getByRole('button', { name: 'Run setup' }),
@@ -331,6 +348,80 @@ test('queue a setup preview, see it queued, cancel it', async ({ page }) => {
   ).toBeVisible();
 });
 
+test('a request report opens on its own page', async ({ page }) => {
+  const id = process.env.E2E_ADMIN_REQUEST_ID;
+  const report = 'E2E resync report\n<b>not markup</b>\n';
+  await page.goto('/admin/sync');
+  const row = page
+    .getByRole('region', { name: 'Bot requests' })
+    .getByRole('row')
+    .filter({ hasText: `#${id}` });
+  await expect(row).toContainText('done');
+  await row
+    .getByRole('link', { name: `Report (${report.length} chars)` })
+    .click();
+  await expect(page).toHaveURL(new RegExp(`/admin/sync/requests/${id}$`));
+  await expect(
+    page.getByRole('heading', { level: 1, name: /Fetch from Discord/ }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('link', { name: `Request #${id}` }),
+  ).toBeVisible();
+  // Rendered as text: the tag is shown, not parsed.
+  const pre = page.getByRole('region', { name: 'Report' }).locator('pre');
+  await expect(pre).toContainText('E2E resync report');
+  await expect(pre).toContainText('<b>not markup</b>');
+  await expect(pre.locator('b')).toHaveCount(0);
+
+  for (const path of [
+    '/admin/sync/requests/999999',
+    '/admin/sync/requests/x',
+  ]) {
+    const res = await page.goto(path);
+    expect(res?.status(), path).toBe(404);
+  }
+});
+
+test("a refresh from another form does not hide another admin's change", async ({
+  page,
+  context,
+}) => {
+  await page.goto(`/admin/subjects/${CODE}`);
+  const edit = page.getByRole('region', { name: 'Edit subject' });
+  // Admin A types a description but does not save yet.
+  await edit.getByLabel('Description').fill('Opis od A');
+  // Admin B (another tab) saves a different one meanwhile.
+  const other = await context.newPage();
+  await other.goto(`/admin/subjects/${CODE}`);
+  const otherEdit = other.getByRole('region', { name: 'Edit subject' });
+  await otherEdit.getByLabel('Description').fill('Opis od B');
+  await otherEdit.getByRole('button', { name: 'Save subject' }).click();
+  await expect(otherEdit.getByRole('status')).toHaveText(
+    `Updated subject ${CODE}.`,
+  );
+  await other.close();
+  // A saves the class form: the page refreshes with B's description.
+  const settings = page
+    .getByRole('region', { name: 'Wykład', exact: true })
+    .getByRole('form', { name: 'Wykład settings' });
+  await settings.getByLabel('Note').fill('Pisemny, 60 minut');
+  await settings.getByRole('button', { name: 'Save class' }).click();
+  await expect(settings.getByRole('status')).toHaveText(
+    `Updated ${CODE} / Wykład.`,
+  );
+  // A's subject save is refused instead of overwriting B's description.
+  await edit.getByRole('button', { name: 'Save subject' }).click();
+  await expect(edit.getByRole('alert')).toHaveText(
+    'Someone else changed description meanwhile. Reload the page to see the new values.',
+  );
+  await page.reload();
+  await expect(
+    page
+      .getByRole('region', { name: 'Edit subject' })
+      .getByLabel('Description'),
+  ).toHaveValue('Opis od B');
+});
+
 test.describe('a student', () => {
   loginOnce('nonadmin', process.env.E2E_TOKEN_NONADMIN, { mode: 'simple' });
 
@@ -341,6 +432,7 @@ test.describe('a student', () => {
       '/admin/lecturers',
       '/admin/users',
       '/admin/sync',
+      `/admin/sync/requests/${process.env.E2E_ADMIN_REQUEST_ID}`,
     ]) {
       const res = await page.goto(path);
       expect(res?.status(), path).toBe(404);

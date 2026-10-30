@@ -162,6 +162,7 @@ describe('parseAuditTarget', () => {
       'subject.edit',
       'class.edit',
       'lecturer.assign',
+      'lecturer.unassign',
     ])
       expect(parseAuditTarget(a, 'ASD'), a).toEqual({
         type: 'subject',
@@ -237,6 +238,7 @@ describe('audit filter options for the web admin actions', () => {
     'lecturer.add': 'Lecturer added',
     'lecturer.edit': 'Lecturer changed',
     'lecturer.assign': 'Lecturer assigned',
+    'lecturer.unassign': 'Lecturer unassigned',
     'user.ban': 'Access blocked',
     'user.unban': 'Access unblocked',
     'plan.sync': 'Timetable sync requested',

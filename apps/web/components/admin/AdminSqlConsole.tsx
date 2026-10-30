@@ -17,8 +17,10 @@ import { ResultGrid } from '@/components/ResultGrid';
 import { editorTheme, sqlHighlight } from '@/components/SqlConsole';
 import { SqlText } from '@/components/SqlText';
 import {
+  CASCADE_NOTE,
   canExecute,
   confirmWord,
+  needsConfirm,
   rowCount,
   rowsWillChange,
   type WriteKind,
@@ -42,6 +44,7 @@ type ApiOk =
       affected: number;
       columns: string[];
       rows: unknown[][];
+      cascade: boolean;
       token: string;
     }
   | {
@@ -171,6 +174,7 @@ export function AdminSqlConsole({
             affected: r.affected,
             columns: r.columns,
             rows: r.rows,
+            cascade: r.cascade === true,
           });
         }
       } finally {
@@ -203,7 +207,7 @@ export function AdminSqlConsole({
         mode: 'execute',
         sql: p.sql,
         token: p.token,
-        ...(p.affected > confirmThreshold ? { confirm } : {}),
+        ...(needsConfirm(p, confirmThreshold) ? { confirm } : {}),
       });
       if (!r) return;
       // Whatever happened, this preview is spent: a retry needs a new one.
@@ -256,7 +260,8 @@ export function AdminSqlConsole({
     threshold: confirmThreshold,
   });
   const stale = preview !== null && query !== preview.sql;
-  const needsConfirm = preview !== null && preview.affected > confirmThreshold;
+  const askConfirm =
+    preview !== null && needsConfirm(preview, confirmThreshold);
   const previewCells = useMemo(
     () => (preview ? toCells(preview.rows) : []),
     [preview],
@@ -388,7 +393,13 @@ export function AdminSqlConsole({
                 to execute it.
               </p>
             )}
-            {needsConfirm && (
+            {preview.cascade && preview.affected > 0 && (
+              <p className="m-0 flex items-center gap-1.5 border-b border-line bg-warn-bg px-3 py-2 text-warn-fg">
+                <Warning weight="fill" size={16} aria-hidden />
+                {CASCADE_NOTE}
+              </p>
+            )}
+            {askConfirm && (
               <div className="flex flex-col gap-1.5 px-3 py-2.5 sm:flex-row sm:items-center sm:gap-3">
                 <label htmlFor="admin-sql-confirm" className="text-pretty">
                   This change affects {rowCount(preview.affected)}. To confirm,

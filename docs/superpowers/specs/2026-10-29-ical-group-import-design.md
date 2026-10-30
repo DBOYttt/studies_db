@@ -49,15 +49,15 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
 
 ### Matching (pure + one read, in `packages/db/src/unitime/group-import.ts`)
 
-`planGroupImport(db, icsText)` returns a preview. It has no side effects.
+`planGroupImport(db, userId, icsText)` returns a preview. It has no side effects.
 
-1. `parseIcs`, then `classifyEvent` for each VEVENT. Each event is weighted by its number of occurrences (`expandOccurrences`, capped as today).
+1. `parseIcs`, then `classifyEvent` for each VEVENT. A calendar with more than 5000 VEVENTs is refused first ("The calendar has too many entries (max 5000)."). Each event is weighted by its number of occurrences (`countOccurrences`: the rules and caps of `expandOccurrences`, without allocating); an entry with no occurrence left is skipped as `noDates` ("N without dates"). Subject names are matched like the column's `utf8mb4_unicode_ci` collation: case, accents and trailing spaces are ignored on both sides.
 2. **Skipped entries:**
    - exams (`sessionKind = 'exam'`);
    - entries with no class kind;
    - entries with no group number.
    - Each skipped entry is counted under a reason.
-3. **Subject:** matched by `subjects.unitime_name = unitimeName`, the exact key the sync uses. A subject that is soft-deleted or missing is **unmatched**. The import never creates subjects, classes or groups.
+3. **Subject:** matched by `subjects.unitime_name = unitimeName`, the exact key the sync uses. A subject that is missing is **unmatched**. The import never creates subjects, classes or groups.
 4. **Class:** matched by `(subject_id, kind)`. **Group:** matched by `(class_id, number)`. Either one missing makes the entry unmatched, with a reason.
 5. **Per class, one group:** the group with the most occurrences wins.
    - On a tie between different groups, the class is **ambiguous**. It is listed with its candidates, and nothing is set for it.
@@ -67,10 +67,10 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
    {
      calendarName: string | null;
      totalEvents: number;
-     matched: { classId, groupId, subjectName, className, groupName, currentGroupId: number | null }[];
+     matched: { classId, groupId, subjectName, className, groupName, currentGroupId: number | null; currentGroupName: string | null }[];
      ambiguous: { classId, subjectName, className, groupNames: string[] }[];
      unmatched: { subjectName: string; label: string; reason: 'subject' | 'class' | 'group' }[];  // deduped, max 50
-     skipped: { exam: number; noKind: number; noGroup: number };
+     skipped: { exam: number; noKind: number; noGroup: number; noDates: number };
    }
    ```
 
@@ -86,7 +86,7 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
   - it writes in one transaction with an upsert;
   - it **merges**: classes not in `pairs` keep their saved group;
   - it returns `{ set: number, skipped: number }`. Invalid pairs are skipped, never an error.
-- **Size cap:** `pairs` is capped at 100 entries.
+- **Size cap:** `pairs` is capped at 100 entries: the web client, the web action and the bot keep the first 100. The group check runs inside the transaction (`LOCK IN SHARE MODE`), so a group deleted meanwhile is skipped. A failed save says "Could not save the groups."; unexpected errors are logged as `group import failed:` with only `name` and `code` (when strings, clipped to 64 characters) and `errno` (when a number), via `safeErrorFields`.
 
 ### Web
 

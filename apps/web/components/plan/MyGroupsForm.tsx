@@ -112,6 +112,7 @@ export function MyGroupsForm({
 
   return (
     <form
+      method="post"
       onSubmit={onSubmit}
       aria-labelledby="my-groups-title"
       className="max-w-3xl overflow-hidden rounded-md border border-line-strong"

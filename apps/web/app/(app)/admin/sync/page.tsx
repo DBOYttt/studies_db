@@ -12,9 +12,10 @@ import {
   listAdminBotRequests,
   planStatusText,
 } from '@studies/db';
+import Link from 'next/link';
 import { ActionButton } from '@/components/admin/ActionButton';
 import { AutoRefresh } from '@/components/admin/AutoRefresh';
-import { box, boxHead, td, th } from '@/components/admin/form-styles';
+import { box, boxHead, link, td, th } from '@/components/admin/form-styles';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import {
@@ -24,8 +25,13 @@ import {
 } from '@/lib/admin-actions';
 import { formatAuditTime } from '@/lib/admin-audit';
 import {
+  activeRequestText,
+  canCancelRequest,
   hasActiveRequest,
   REQUEST_KIND_LABELS,
+  reportLabel,
+  requestHref,
+  requestStatusLabel,
   staleNotice,
 } from '@/lib/admin-sync';
 import { getDb } from '@/lib/db';
@@ -38,6 +44,7 @@ const STATUS_TONE: Record<string, string> = {
   running: 'text-accent-ink',
   done: 'text-ok-fg',
   failed: 'text-err-fg',
+  cancelled: 'text-muted',
 };
 
 const kindLabel = (k: string) =>
@@ -49,7 +56,8 @@ const time = (d: Date | null) =>
  * /admin/sync: the timetable sync (worker) and the Discord server requests
  * (bot): setup preview, setup and resync, queued in `bot_requests` and run
  * by the bot one at a time. The page refreshes itself while one is queued
- * or running.
+ * or running. Reports are not loaded here (the list refreshes every few
+ * seconds): each links to /admin/sync/requests/[id].
  */
 export default async function AdminSyncPage() {
   await requireAdmin();
@@ -60,6 +68,7 @@ export default async function AdminSyncPage() {
   ]);
   const now = new Date();
   const active = hasActiveRequest(requests);
+  const activeText = activeRequestText(requests);
   const activeId = requests.find(
     (r) => r.status === 'queued' || r.status === 'running',
   )?.id;
@@ -157,10 +166,8 @@ export default async function AdminSyncPage() {
               <h2 id="admin-sync-bot" className="m-0 text-[13px] font-semibold">
                 Discord server
               </h2>
-              {active && (
-                <span className="ml-auto text-xs text-muted">
-                  A request is in progress
-                </span>
+              {activeText && (
+                <span className="ml-auto text-xs text-muted">{activeText}</span>
               )}
             </div>
             <ul className="m-0 flex flex-col p-0">
@@ -222,73 +229,74 @@ export default async function AdminSyncPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {requests.map((r, i) => (
-                    <tr key={r.id} className={i % 2 ? 'bg-zebra' : ''}>
-                      <td className={`${td} whitespace-nowrap`}>
-                        <span
-                          className={`font-mono font-semibold ${STATUS_TONE[r.status] ?? ''}`}
-                        >
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className={`${td} whitespace-nowrap`}>
-                        {kindLabel(r.kind)}
-                        <span className="ml-1 font-mono text-[11px] text-faint">
-                          #{r.id}
-                        </span>
-                      </td>
-                      <td className={td}>
-                        {r.requesterName ?? (
-                          <span className="text-faint">—</span>
-                        )}
-                      </td>
-                      <td className={`${td} whitespace-nowrap tabular-nums`}>
-                        {time(r.createdAt)}
-                      </td>
-                      <td className={`${td} whitespace-nowrap tabular-nums`}>
-                        {time(r.startedAt)}
-                      </td>
-                      <td className={`${td} whitespace-nowrap tabular-nums`}>
-                        {time(r.finishedAt)}
-                      </td>
-                      <td className={`${td} min-w-[220px]`}>
-                        <div className="flex flex-col items-start gap-1.5">
-                          {r.error && (
-                            <span
-                              className={
-                                r.status === 'failed'
-                                  ? 'text-err-fg'
-                                  : 'text-muted'
-                              }
-                            >
-                              {r.error}
-                            </span>
-                          )}
-                          {r.report && (
-                            <details className="w-full">
-                              <summary className="cursor-pointer text-accent-ink">
-                                Report
-                              </summary>
-                              <pre className="mt-1 max-h-[420px] max-w-[min(720px,80vw)] overflow-auto rounded border border-line bg-bar px-2 py-1.5 font-mono text-xs whitespace-pre-wrap">
-                                {r.report}
-                              </pre>
-                            </details>
-                          )}
-                          {r.status === 'queued' && (
-                            <ActionButton
-                              action={cancelBotRequestAction}
-                              fields={{ id: String(r.id) }}
-                              label="Cancel"
-                              pendingLabel="Cancelling…"
-                            />
-                          )}
-                          {!r.error && !r.report && r.status !== 'queued' && (
+                  {requests.map((r, i) => {
+                    const status = requestStatusLabel(r);
+                    const cancellable = canCancelRequest(r, now);
+                    return (
+                      <tr key={r.id} className={i % 2 ? 'bg-zebra' : ''}>
+                        <td className={`${td} whitespace-nowrap`}>
+                          <span
+                            className={`font-mono font-semibold ${STATUS_TONE[status] ?? ''}`}
+                          >
+                            {status}
+                          </span>
+                        </td>
+                        <td className={`${td} whitespace-nowrap`}>
+                          {kindLabel(r.kind)}
+                          <span className="ml-1 font-mono text-[11px] text-faint">
+                            #{r.id}
+                          </span>
+                        </td>
+                        <td className={td}>
+                          {r.requesterName ?? (
                             <span className="text-faint">—</span>
                           )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className={`${td} whitespace-nowrap tabular-nums`}>
+                          {time(r.createdAt)}
+                        </td>
+                        <td className={`${td} whitespace-nowrap tabular-nums`}>
+                          {time(r.startedAt)}
+                        </td>
+                        <td className={`${td} whitespace-nowrap tabular-nums`}>
+                          {time(r.finishedAt)}
+                        </td>
+                        <td className={`${td} min-w-[220px]`}>
+                          <div className="flex flex-col items-start gap-1.5">
+                            {r.error && (
+                              <span
+                                className={
+                                  status === 'failed'
+                                    ? 'text-err-fg'
+                                    : 'text-muted'
+                                }
+                              >
+                                {r.error}
+                              </span>
+                            )}
+                            {r.reportChars > 0 && (
+                              <Link href={requestHref(r.id)} className={link}>
+                                {reportLabel(r.reportChars)}
+                              </Link>
+                            )}
+                            {cancellable && (
+                              <ActionButton
+                                action={cancelBotRequestAction}
+                                fields={{ id: String(r.id) }}
+                                label="Cancel"
+                                pendingLabel="Cancelling…"
+                              />
+                            )}
+                            {!r.error &&
+                              r.reportChars === 0 &&
+                              !cancellable && (
+                                <span className="text-faint">—</span>
+                              )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
