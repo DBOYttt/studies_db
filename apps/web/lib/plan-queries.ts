@@ -111,12 +111,19 @@ export const SESSION_COLUMNS = [
   'status',
 ];
 
-/** List: one page of `v_class_sessions` by start time. */
+/**
+ * List: one page of `v_class_sessions` by start time; with `from` (a wall
+ * Date) only sessions starting at or after it.
+ */
 export function planListPage(
   pool: mysql.Pool,
-  o: GridOpts & PlanFilter,
+  o: GridOpts & PlanFilter & { from?: Date | null },
 ): Promise<SqlPage> {
   const { where, params } = filterWhere(o, '');
+  if (o.from) {
+    where.unshift('starts_at >= ?');
+    params.unshift(wallSql(o.from));
+  }
   return pageSql(pool, {
     select: SESSION_COLUMNS.join(', '),
     from: 'v_class_sessions',

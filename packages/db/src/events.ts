@@ -825,14 +825,16 @@ export async function listEventsInRange(
 const UPCOMING_MAX_SPAN_DAYS = 31;
 
 /**
- * The next `limit` events that have not ended at `nowWall_`. The start
- * bound is a range on `idx_events_starts`, so MariaDB reads only recent
- * rows in index order and stops at `limit`; the end test stays exact.
+ * The next `limit` events that have not ended at `nowWall_`, after skipping
+ * `offset` of them (the events index pages). The start bound is a range on
+ * `idx_events_starts`, so MariaDB reads only recent rows in index order and
+ * stops at `offset + limit`; the end test stays exact.
  */
 export async function listUpcomingEvents(
   pool: mysql.Pool,
   nowWall_: Date,
   limit: number,
+  offset = 0,
 ): Promise<PlanSession[]> {
   const now = wallLiteral(nowWall_);
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
@@ -840,8 +842,8 @@ export async function listUpcomingEvents(
      WHERE e.starts_at >= ? - INTERVAL ${UPCOMING_MAX_SPAN_DAYS} DAY
        AND ${END_SQL} >= ?
      ORDER BY e.starts_at, e.id
-     LIMIT ?`,
-    [now, now, Math.max(0, Math.floor(limit))],
+     LIMIT ? OFFSET ?`,
+    [now, now, Math.max(0, Math.floor(limit)), Math.max(0, Math.floor(offset))],
   );
   return rows.map(toEventSession);
 }

@@ -288,3 +288,51 @@ test('a stale session cookie still redirects before anything streams', async ({
     await context.close();
   }
 });
+
+test("Start shows today's classes above Upcoming events", async ({ page }) => {
+  await page.goto('/s');
+  const main = page.getByRole('main');
+  const today = main.getByRole('region', { name: /^Today/ });
+  await expect(today).toBeVisible();
+  // The seed has a UKL lecture today, 12:00–13:30 (all users see lectures).
+  await expect(
+    today.getByRole('link', { name: /12:00–13:30.*Układ zajęć/ }),
+  ).toBeVisible();
+  const t = await today.boundingBox();
+  const u = await main
+    .getByRole('heading', { name: 'Upcoming events' })
+    .boundingBox();
+  expect(t?.y).toBeLessThan(u?.y ?? 0);
+});
+
+test('"See all events" opens the events index with the upcoming events', async ({
+  page,
+}) => {
+  await page.goto('/s');
+  await page
+    .getByRole('region', { name: 'Upcoming events' })
+    .getByRole('link', { name: 'See all events' })
+    .click();
+  await expect(page).toHaveURL(/\/s\/wydarzenia$/);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Events' }),
+  ).toBeVisible();
+  const list = page.getByRole('list', { name: 'Upcoming events' });
+  // Seeded far ahead (26 Jan 2027); the past seeded events are not listed.
+  await expect(
+    list.getByRole('link', { name: /Kolokwium audytu/ }),
+  ).toBeVisible();
+  await expect(list.getByText('Kolokwium z ocen')).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Add event' })).toHaveAttribute(
+    'href',
+    '/s/wydarzenia/nowe',
+  );
+});
+
+test('the advanced events index and the mode switch', async ({ page }) => {
+  await page.goto('/mode?to=advanced&next=%2Fs%2Fwydarzenia');
+  await expect(page).toHaveURL(/\/wydarzenia$/);
+  await expect(
+    page.getByRole('link', { name: /Kolokwium audytu/ }),
+  ).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
+});

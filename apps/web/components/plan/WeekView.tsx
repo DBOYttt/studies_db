@@ -216,6 +216,21 @@ export function WeekView({
   const heading = weekHeading(week, days);
   // Day headers name the day columns (role="group") for screen readers.
   const dayId = `${useId()}-day`;
+  /*
+   * A narrow screen shows only a day or two of the week: bring today's
+   * column into view (next to the sticky hour gutter) when the week opens.
+   * Wide screens have nothing to scroll, so this does nothing there.
+   */
+  const hasGrid = shown.length > 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when another week opens (its day ids change only in the DOM)
+  useLayoutEffect(() => {
+    if (!hasGrid || today === null) return;
+    const scroller = scrollerRef.current;
+    const header = document.getElementById(`${dayId}-${today}`);
+    if (!scroller || !header) return;
+    if (scroller.scrollWidth <= scroller.clientWidth) return;
+    scroller.scrollLeft = Math.max(0, header.offsetLeft - GUTTER);
+  }, [dayId, today, week.year, week.week, hasGrid]);
 
   return (
     <section aria-label="Week timetable" className="flex flex-col gap-3">

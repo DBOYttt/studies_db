@@ -4,6 +4,7 @@ import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
+import { TodayCard } from '@/components/simple/TodayCard';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
@@ -11,6 +12,7 @@ import { nowWall, type PlanSession } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
+import { type TodayClasses, todayForUser } from '@/lib/today';
 import { upcomingForUser } from '@/lib/upcoming-events';
 
 export const dynamic = 'force-dynamic';
@@ -35,6 +37,10 @@ export default async function SimpleStart({
     user.id,
     nowWall(),
   ).catch(() => []);
+  // Today's classes stream the same way; a failure drops the card.
+  const today = todayForUser(db, getViewsPool(), user.id, new Date()).catch(
+    () => null,
+  );
   const [cards, recent, preview] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5, withTotal: false }),
@@ -58,7 +64,11 @@ export default async function SimpleStart({
       }
     >
       <h1 className="sr-only">Start</h1>
-      {/* What's next first: upcoming events above the subject grid. */}
+      {/* What's next first: today's classes and upcoming events above the
+          subject grid. */}
+      <Suspense fallback={<TodayCard today={null} />}>
+        <TodaySlot today={today} />
+      </Suspense>
       <Suspense fallback={<UpcomingEvents events={null} />}>
         <UpcomingSlot events={upcoming} />
       </Suspense>
@@ -79,6 +89,11 @@ export default async function SimpleStart({
       />
     </SimpleShell>
   );
+}
+
+async function TodaySlot({ today }: { today: Promise<TodayClasses | null> }) {
+  const t = await today;
+  return t ? <TodayCard today={t} /> : null;
 }
 
 async function UpcomingSlot({ events }: { events: Promise<PlanSession[]> }) {

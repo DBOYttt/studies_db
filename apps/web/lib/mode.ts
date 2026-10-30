@@ -81,7 +81,7 @@ function enc(segment: string): string {
   }
 }
 
-/** `nowe`, `<id>` or `<id>/edytuj` below `/wydarzenia`, else null. */
+/** `nowe`, `<id>` or `<id>/edytuj` below `/wydarzenia`, else null (the index itself is mapped by `modeTarget`). */
 function eventPath(rest: string[]): string | null {
   if (
     rest.length === 1 &&
@@ -135,6 +135,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
     if (seg[1] === 'search' && seg.length === 2)
       return `/search${pick(params, ['q'])}`;
     if (seg[1] === 'wydarzenia') {
+      if (seg.length === 2) return `/wydarzenia${pick(params, ['page'])}`;
       const e = eventPath(seg.slice(2));
       if (e) return `/wydarzenia${e}`;
     }
@@ -155,6 +156,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
   if (seg[0] === 'search' && seg.length === 1)
     return `/s/search${pick(params, ['q'])}`;
   if (seg[0] === 'wydarzenia') {
+    if (seg.length === 1) return `/s/wydarzenia${pick(params, ['page'])}`;
     const e = eventPath(seg.slice(1));
     if (e) return `/s/wydarzenia${e}`;
   }

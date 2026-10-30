@@ -166,6 +166,16 @@ describe('modeTarget event pages', () => {
       '/s/wydarzenia/12/edytuj',
     );
   });
+  it('maps the events index with its page', () => {
+    expect(modeTarget('advanced', '/s/wydarzenia')).toBe('/wydarzenia');
+    expect(modeTarget('simple', '/wydarzenia')).toBe('/s/wydarzenia');
+    expect(modeTarget('advanced', '/s/wydarzenia?page=3&x=1')).toBe(
+      '/wydarzenia?page=3',
+    );
+    expect(modeTarget('simple', '/wydarzenia?page=2')).toBe(
+      '/s/wydarzenia?page=2',
+    );
+  });
   it('falls back for unknown event paths', () => {
     expect(modeTarget('advanced', '/s/wydarzenia/x/y')).toBe('/');
     expect(modeTarget('simple', '/wydarzenia/abc')).toBe('/s');

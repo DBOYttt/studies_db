@@ -21,6 +21,7 @@ test('pages fit 375 px without sideways scrolling', async ({ page }) => {
     '/s/subjects/FIZ',
     eventPage(),
     '/s/wydarzenia/nowe',
+    '/s/wydarzenia',
     '/s/search?q=tarcie',
   ]) {
     await page.goto(path);
@@ -122,4 +123,26 @@ test('a field scrolled to the top edge keeps its label in view', async ({
   const [m, l] = await Promise.all([main.boundingBox(), label.boundingBox()]);
   expect(await main.evaluate((x) => x.scrollTop)).toBeGreaterThan(0);
   expect(l?.y ?? -1).toBeGreaterThanOrEqual(m?.y ?? 0);
+});
+
+test("the week opens scrolled to today's column", async ({ page }) => {
+  // The seed has a UKL lecture today, so the current week has a grid. The
+  // plan may open on next week once this one is over: "Today" opens this one.
+  await page.goto('/s/plan');
+  await page
+    .getByRole('navigation', { name: 'Weeks' })
+    .getByRole('link', { name: 'Today' })
+    .click();
+  const scroller = page.getByTestId('plan-scroller');
+  const today = page.getByTestId('plan-day').filter({ hasText: '(today)' });
+  await expect(today).toHaveCount(1);
+  await expect
+    .poll(async () => {
+      const s = await scroller.boundingBox();
+      const t = await today.boundingBox();
+      if (!s || !t) return false;
+      // Fully inside the scroller's visible part (past the hour gutter).
+      return t.x >= s.x && t.x + t.width <= s.x + s.width + 1;
+    })
+    .toBe(true);
 });
