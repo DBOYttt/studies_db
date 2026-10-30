@@ -98,7 +98,7 @@ export function subjectModal(
   fields.push(
     field({
       id: 'semester',
-      label: `Semester (${SEMESTERS.join(' or ')})`,
+      label: `Semester (${Math.min(...SEMESTERS)}–${Math.max(...SEMESTERS)})`,
       max: 2,
       value: s ? String(s.semester) : null,
       required: true,

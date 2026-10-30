@@ -554,6 +554,12 @@ describe('modals', () => {
     ]);
   });
 
+  it('subjectModal(): the semester label gives the range', () => {
+    const json = JSON.stringify(subjectModal().toJSON());
+    expect(json).toContain('"Semester (1–7)"');
+    expect(json).not.toContain(' or ');
+  });
+
   it('subjectModal(existing) has no code field and is prefilled', () => {
     const m = subjectModal(AM);
     expectValidModal(m);
