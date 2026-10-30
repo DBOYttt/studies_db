@@ -721,7 +721,17 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_EVENTS = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_HEADERS = await createLoginToken(db, userId);
     process.env.E2E_TOKEN_PLAN_LAYOUT = await createLoginToken(db, userId);
-    process.env.E2E_TOKEN_DEAD_ENDS = await createLoginToken(db, userId);
+    // Its own student: events.spec and this spec both add events, and together
+    // they would pass the shared user's hourly add limit (MAX_EVENTS_PER_HOUR).
+    const deadEndsUserId = await upsertUser(db, {
+      discordUserId: 'e2e-dead-ends',
+      displayName: 'Dorota Testowa',
+      avatarUrl: null,
+    });
+    process.env.E2E_TOKEN_DEAD_ENDS = await createLoginToken(
+      db,
+      deadEndsUserId,
+    );
     // Accessibility (a11y.spec.ts): page titles never name a deleted event
     // to a student.
     const [{ id: hiddenEventId }] = await db
