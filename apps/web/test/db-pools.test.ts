@@ -39,6 +39,23 @@ describe('db pools', () => {
     expect(users.filter((f) => !ALLOWED.includes(f))).toEqual([]);
   });
 
+  it('the table browser page uses the RO pool only for browseView', () => {
+    const page = readFileSync(
+      join(root, 'app/(app)/tables/[view]/page.tsx'),
+      'utf8',
+    );
+    expect(page.match(/getRoPool\(/g)).toHaveLength(1);
+    expect(page).toMatch(/browseView\(\s*getRoPool\(\)/);
+  });
+
+  it('no module outside lib/db.ts creates its own pool', () => {
+    const creators = ['app', 'components', 'lib']
+      .flatMap((d) => walk(join(root, d)))
+      .filter((f) => /createPool\(/.test(readFileSync(f, 'utf8')))
+      .map((f) => relative(root, f));
+    expect(creators).toEqual(['lib/db.ts']);
+  });
+
   it('pool sizes stay within MAX_USER_CONNECTIONS 10 with 2 spare', () => {
     expect(VIEWS_POOL_OPTIONS.connectionLimit).toBe(4);
     expect(RO_POOL_OPTIONS.connectionLimit).toBe(4);
