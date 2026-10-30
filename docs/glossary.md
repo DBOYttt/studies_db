@@ -180,3 +180,11 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Platforma przedmiotu (both modes, was "UPeL / platform") | Subject platform |
 | N plików, M tematów (both searches) | N files, M topics |
 | Pokaż tematy w trybie zaawansowanym | Show topics in Advanced |
+
+## Added with semesters
+
+| Polish | English |
+|---|---|
+| Semestr (1-7) | Semester |
+| Plan zajęć: źródło UniTime (iCal) per semestr | Timetable feed |
+| Pokaż wszystkie semestry | Show all semesters |

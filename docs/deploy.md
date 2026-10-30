@@ -295,17 +295,44 @@ classes and groups from their current tags; re-running it is safe.
 
 ## Plan zajęć (UniTime)
 
-Set `UNITIME_ICAL_URL` in `.env` to the UniTime iCalendar export URL to enable the timetable sync. The
-worker syncs at start-up only if the last run is older than 6 hours, then every 6 hours, and within a
-minute after an admin runs the bot's `/plan sync` (the only way to request a sync; the web UI has none).
-The URL is a secret: it is never stored in the database or logged (only its host is), so keep it out of
-version control. Without it the sync is disabled and the worker logs that once at start.
+Per-semester feeds are stored in the database and edited in the admin panel (`/admin/sync`, "Timetable feeds"),
+see "Upgrading to semesters (0027)" below. `UNITIME_ICAL_URL` in `.env` (the UniTime iCalendar export URL) is
+only the fallback used while no feed is stored. The worker syncs at start-up only if the last run is older
+than 6 hours, then every 6 hours, and within a minute after an admin runs the bot's `/plan sync` or saves a
+feed or presses "Sync timetable" on the admin Sync page. A URL in `.env` is a secret and is never logged (only
+its host is), so keep it out of version control. Without any feed or env URL the sync is disabled and the
+worker logs that once at start.
 
 The optional `UNITIME_EXAM_ICAL_URL` is a second UniTime feed (the exam timetable), equally secret. The
 worker reads it right after the main feed in the same runs and stores every entry as an exam session. Each
 feed only removes its own rows, and an empty exam feed changes nothing. If this feed fails, the main feed
 is still synced and the status shows `Exam timetable: <error>`. It is used only when `UNITIME_ICAL_URL`
-is set too.
+is set too (the env fallback; stored feeds carry their own optional exam link).
+
+### Upgrading to semesters (0027)
+
+Migration 0027 adds the `unitime_feeds` table (one row per semester 1-7: class link, optional exam link) and
+the nullable column `class_sessions.feed_semester`. It has no backfill: existing sessions keep
+`feed_semester` NULL. Feed URLs are secrets stored in that table, which `studies_ro` and `studies_rw` cannot
+read; the admin panel shows only host + `/...` + the last 4 characters and the audit log keeps hosts only.
+
+1. Back up (`scripts/backup.sh`).
+2. Deploy (`compose up`; `migrate` applies 0027).
+3. Set `UNITIME_IMPORT_HOSTS` in `.env` (comma-separated feed hosts, default `plan.agh.edu.pl`). Compose now
+   passes it to the worker, which re-validates every stored URL against it on each sync; a feed on another
+   host is refused with "host not allowed".
+4. Re-run `pnpm --filter @studies/bot register` (semester choices are 1-7 now).
+5. In `/admin/sync`, add the feed of every semester at once (class link, optional exam link). Saving requests
+   a sync. As soon as a feed is stored the env URLs are ignored, and at the next run where every class feed
+   succeeded the worker deletes sessions with no `feed_semester` (the old env feed's rows) or of a semester
+   without a stored feed. With only some semesters stored, the others' timetables disappear until you add them.
+   Clearing a semester's feed likewise removes its sessions at the next successful sync.
+6. Remove `UNITIME_ICAL_URL` and `UNITIME_EXAM_ICAL_URL` from `.env`.
+
+New subjects imported by a feed get that feed's semester. `/setup` creates `Semestr 1` ... `Semestr 7`
+categories in numeric order; a category created in a later run is appended after the existing ones, so drag
+it into place in Discord if you care. A category holds at most 50 channels: further subjects of that semester
+get no forum and `/setup` warns.
 
 **Migrating an existing database to 0006.** Migration 0006 adds `UNIQUE(email)` to `lecturers`; if
 duplicates exist it fails and leaves the migration half-applied. Before migrating, run
