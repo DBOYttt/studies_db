@@ -38,7 +38,7 @@ The web and the bot still never call each other. Requests that need Discord go t
   - **Enqueue:** `enqueueAdminBotRequest(db, kind, userId)` refuses with `{ ok: false, message: 'The bot is already working on a request.' }` when any admin kind is `queued` or `running`. It checks inside a transaction with a locking read, then calls `enqueueBotRequest`.
   - **Cancel:** `cancelAdminBotRequest(db, id)` works only while the request is `queued`. It sets status `failed` with error `Cancelled.`; the status enum is left unchanged.
   - **List:** `listAdminBotRequests(db, limit = 20)` returns the requests newest first, each with its requester's display name.
-- **Migration:** add a column `bot_requests.report TEXT NULL`. It holds the setup/resync report text (≤ 60 000 chars, truncated with `…`). Generate it with `drizzle-kit generate`. `finishBotRequest` gains an optional `report` argument.
+- **Migration:** add a column `bot_requests.report MEDIUMTEXT NULL`. It holds the setup/resync report text (≤ 60 000 chars, truncated with `…`). Generate it with `drizzle-kit generate`. `finishBotRequest` gains an optional `report` argument.
 - **Web plan sync:** "Sync timetable" uses the existing `requestPlanSync(db)` and `getPlanSyncStatus(db)`. The status card text matches the bot's `/plan status` reply. `planStatusText` moves from `apps/bot/src/commands/plan.ts` to `packages/db/src/unitime/status.ts` (the bot re-exports it).
 
 ## 2. Bot

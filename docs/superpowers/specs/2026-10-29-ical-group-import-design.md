@@ -49,7 +49,7 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
 
 ### Matching (pure + one read, in `packages/db/src/unitime/group-import.ts`)
 
-`planGroupImport(db, icsText)` returns a preview. It has no side effects.
+`planGroupImport(db, userId, icsText)` returns a preview. It has no side effects.
 
 1. `parseIcs`, then `classifyEvent` for each VEVENT. A calendar with more than 5000 VEVENTs is refused first ("The calendar has too many entries (max 5000)."). Each event is weighted by its number of occurrences (`countOccurrences`: the rules and caps of `expandOccurrences`, without allocating); an entry with no occurrence left is skipped as `noDates` ("N without dates"). Subject names are matched like the column's `utf8mb4_unicode_ci` collation: case, accents and trailing spaces are ignored on both sides.
 2. **Skipped entries:**
@@ -57,7 +57,7 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
    - entries with no class kind;
    - entries with no group number.
    - Each skipped entry is counted under a reason.
-3. **Subject:** matched by `subjects.unitime_name = unitimeName`, the exact key the sync uses. A subject that is soft-deleted or missing is **unmatched**. The import never creates subjects, classes or groups.
+3. **Subject:** matched by `subjects.unitime_name = unitimeName`, the exact key the sync uses. A subject that is missing is **unmatched**. The import never creates subjects, classes or groups.
 4. **Class:** matched by `(subject_id, kind)`. **Group:** matched by `(class_id, number)`. Either one missing makes the entry unmatched, with a reason.
 5. **Per class, one group:** the group with the most occurrences wins.
    - On a tie between different groups, the class is **ambiguous**. It is listed with its candidates, and nothing is set for it.
@@ -67,7 +67,7 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
    {
      calendarName: string | null;
      totalEvents: number;
-     matched: { classId, groupId, subjectName, className, groupName, currentGroupId: number | null }[];
+     matched: { classId, groupId, subjectName, className, groupName, currentGroupId: number | null; currentGroupName: string | null }[];
      ambiguous: { classId, subjectName, className, groupNames: string[] }[];
      unmatched: { subjectName: string; label: string; reason: 'subject' | 'class' | 'group' }[];  // deduped, max 50
      skipped: { exam: number; noKind: number; noGroup: number; noDates: number };

@@ -191,6 +191,16 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
 5. The boot catch-up now holds the `/setup` lock for its whole run, so a `/setup` (or a web setup) right
    after a restart may answer that setup is already running; try again when the catch-up is done.
 
+### Upgrading to the 2026-10-30 audit fixes
+
+1. No migration. Rebuild and recreate `web` and `bot` (`podman compose --profile app up -d --build`).
+2. My groups can be imported from a personal UniTime iCal link. `UNITIME_IMPORT_HOSTS` lists the allowed
+   hosts (comma-separated, default `plan.agh.edu.pl`); the hosts of `UNITIME_ICAL_URL` and
+   `UNITIME_EXAM_ICAL_URL` are importable too. `web` and `bot` make outbound HTTPS requests to these hosts,
+   so allow them if egress is filtered. An import is capped at 5000 calendar entries.
+3. The digest thread in `#wydarzenia` is now named `📅 Reminders`. An existing thread keeps its old name
+   `📅 Przypomnienia` until you rename it by hand.
+
 ## Tagi forum
 
 The bot builds the class/group hierarchy from the tags of forum posts. `/setup` creates the forums and these
