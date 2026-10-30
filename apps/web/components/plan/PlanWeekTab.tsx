@@ -1,65 +1,19 @@
-import { getMyGroups, listEventsInRange } from '@studies/db';
+import { getMyGroups } from '@studies/db';
 import { listWeekMarks } from '@studies/db/plan';
 import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
 import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
-import {
-  defaultWeek,
-  type IsoWeek,
-  isoWeekOf,
-  nowWall,
-  parseIsoWeek,
-  sanitizeMyGroups,
-  shiftWeek,
-  weekDays,
-  weekStart,
-} from '@/lib/plan';
-import {
-  annotatePlanWeek,
-  eventsForFilter,
-  newEventHref,
-} from '@/lib/plan-events';
-import {
-  listMyGroupOptions,
-  listWeekSessions,
-  type PlanFilter,
-  sessionRange,
-} from '@/lib/plan-queries';
+import { isoWeekOf, nowWall, sanitizeMyGroups, weekDays } from '@/lib/plan';
+import { annotatePlanWeek, newEventHref } from '@/lib/plan-events';
+import { listMyGroupOptions, type PlanFilter } from '@/lib/plan-queries';
 import { toWeekSession, wallDateKey, weekNav } from '@/lib/plan-view';
+import { loadPlanWeek } from '@/lib/plan-week-data';
 import { loadLinkContext } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
 
 const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
-
-/**
- * The week shown without `?week=` (`defaultWeek`): when that is the current
- * week, the ends of its sessions and events (as the plan filter keeps them)
- * decide whether it is already over.
- */
-async function openingWeek(
-  pool: ReturnType<typeof getViewsPool>,
-  now: Date,
-  filter: PlanFilter,
-): Promise<IsoWeek> {
-  const range = await sessionRange(pool, filter);
-  const current = isoWeekOf(now);
-  const week = defaultWeek(now, range);
-  if (week.year !== current.year || week.week !== current.week) return week;
-  const [{ rows }, events] = await Promise.all([
-    listWeekSessions(pool, current, filter),
-    listEventsInRange(
-      pool,
-      weekStart(current),
-      weekStart(shiftWeek(current, 1)),
-    ),
-  ]);
-  const ends = [...rows, ...eventsForFilter(events, filter)].map(
-    (s) => s.endsAt,
-  );
-  return defaultWeek(now, range, ends);
-}
 
 /**
  * Week timetable of /plan, a subject or a lecturer (server part): `?week=`
@@ -88,11 +42,9 @@ export async function PlanWeekTab({
   const user = myGroupsFilter ? await requireUser() : null;
   const raw = typeof rawWeek === 'string' ? rawWeek : undefined;
   try {
-    const week = parseIsoWeek(raw) ?? (await openingWeek(pool, now, filter));
-    const [{ rows: classRows }, events, links, options, stored] =
+    const [{ week, classRows, events }, links, options, stored] =
       await Promise.all([
-        listWeekSessions(pool, week, filter),
-        listEventsInRange(pool, weekStart(week), weekStart(shiftWeek(week, 1))),
+        loadPlanWeek(pool, raw, now, filter),
         // Without the lookups blocks link to the subject only.
         loadLinkContext(getDb()).catch(() => undefined),
         myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),

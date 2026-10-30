@@ -27,7 +27,7 @@ export default async function SimpleStart({
   const cardsP = cachedSubjectCards();
   const [cards, recent, preview, upcoming] = await Promise.all([
     cardsP,
-    listSimpleFiles(db, { limit: 5 }),
+    listSimpleFiles(db, { limit: 5, withTotal: false }),
     loadSimplePreview(db, sp, cardsP),
     // Events are optional on the start page: a failure leaves the card empty.
     upcomingForUser(db, getViewsPool(), user.id, nowWall()).catch(() => []),

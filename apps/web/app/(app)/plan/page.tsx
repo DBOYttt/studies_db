@@ -49,7 +49,8 @@ export default async function PlanPage({
   const sp = await searchParams;
   const tab = parseEntityTab(sp, TABS);
   // Without the status the screen still works, just without the footer.
-  const status = await getPlanSyncStatus(getDb()).catch(() => null);
+  // Not awaited here: it loads alongside the tab's data.
+  const status = getPlanSyncStatus(getDb()).catch(() => null);
 
   return (
     <>
@@ -84,18 +85,30 @@ export default async function PlanPage({
             );
           })}
         </nav>
-        {status && syncFailed(status) && <SyncWarning status={status} />}
+        <SyncWarningSlot status={status} />
         {tab === 'week' && (
           <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
         )}
         {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
         {tab === 'groups' && <GroupsTab weekHref="/plan" />}
-        {status && (
-          <p className="m-0 text-xs text-muted">{syncLine(status.lastOkAt)}</p>
-        )}
+        <SyncFooter status={status} />
       </div>
     </>
   );
+}
+
+type StatusPromise = Promise<PlanSyncStatus | null>;
+
+async function SyncWarningSlot({ status }: { status: StatusPromise }) {
+  const s = await status;
+  return s && syncFailed(s) ? <SyncWarning status={s} /> : null;
+}
+
+async function SyncFooter({ status }: { status: StatusPromise }) {
+  const s = await status;
+  return s ? (
+    <p className="m-0 text-xs text-muted">{syncLine(s.lastOkAt)}</p>
+  ) : null;
 }
 
 function SyncWarning({ status }: { status: PlanSyncStatus }) {

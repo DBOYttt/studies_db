@@ -894,5 +894,57 @@ describe('event actions', () => {
       const upAll = await listUpcomingEvents(pool, W(2030, 1, 7, 23), 10);
       expect(upAll.map((r) => r.id).slice(0, 2)).toEqual([allDay, timed]);
     });
+
+    it('listUpcomingEvents: the 31-day start window keeps what the end test kept', async () => {
+      const ins = async (o: Partial<typeof events.$inferInsert>) =>
+        (
+          await db
+            .insert(events)
+            .values({
+              kind: 'inne',
+              title: 'Okno',
+              startsAt: W(2040, 3, 15),
+              ...o,
+            })
+            .$returningId()
+        )[0].id;
+      const now = W(2040, 3, 15, 12);
+      const future = await ins({ startsAt: W(2040, 3, 20, 9) });
+      const running = await ins({
+        startsAt: W(2040, 3, 15, 10),
+        endsAt: W(2040, 3, 15, 13),
+      });
+      const allDayToday = await ins({ startsAt: W(2040, 3, 15), allDay: true });
+      const openNow = await ins({ startsAt: now });
+      // Started 30 days ago and still running: inside the window.
+      const longRun = await ins({
+        startsAt: W(2040, 2, 14, 12),
+        endsAt: W(2040, 3, 16, 12),
+      });
+      await ins({ startsAt: W(2040, 3, 14, 9), endsAt: W(2040, 3, 14, 10) });
+      await ins({ startsAt: W(2040, 3, 14), allDay: true });
+      await ins({ startsAt: W(2040, 3, 15, 9), endsAt: W(2040, 3, 15, 11) });
+      // Accepted limit: started more than 31 days ago (console only).
+      const tooOld = await ins({
+        startsAt: W(2040, 2, 1, 12),
+        endsAt: W(2040, 3, 20, 12),
+      });
+
+      const up = (await listUpcomingEvents(pool, now, 100)).map((r) => r.id);
+      expect(up).toEqual([longRun, allDayToday, running, openNow, future]);
+      // The same rows, in the same order, as the old end-only test (except
+      // the out-of-window one).
+      const [old] = await pool.query<mysql.RowDataPacket[]>(
+        `SELECT e.id FROM v_events e
+          WHERE CASE WHEN e.all_day THEN e.starts_at + INTERVAL 1 DAY
+                     ELSE COALESCE(e.ends_at, e.starts_at) END >= ?
+          ORDER BY e.starts_at, e.id LIMIT 100`,
+        ['2040-03-15 12:00:00'],
+      );
+      expect(old.map((r) => Number(r.id)).filter((i) => i !== tooOld)).toEqual(
+        up,
+      );
+      expect(old.map((r) => Number(r.id))).toContain(tooOld);
+    });
   });
 });

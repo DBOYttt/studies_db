@@ -118,7 +118,10 @@ describe('panel entry-quiz reads', () => {
       )[0].id;
     id.z = await subject('ZZ', 'Zarządzanie');
     id.a = await subject('AA', 'Analiza');
-    const cls = async (subjectId: number, kind: 'laboratorium' | 'wyklad') =>
+    const cls = async (
+      subjectId: number,
+      kind: 'laboratorium' | 'wyklad' | 'projekt',
+    ) =>
       (
         await db
           .insert(classes)
@@ -129,6 +132,8 @@ describe('panel entry-quiz reads', () => {
     id.aLec = await cls(id.a, 'wyklad');
     id.zLab = await cls(id.z, 'laboratorium');
     id.noSessions = await cls(id.z, 'wyklad');
+    // Its only session is an exam row: not markable.
+    id.examOnly = await cls(id.a, 'projekt');
     const grp = async (number: number) =>
       (
         await db
@@ -165,6 +170,7 @@ describe('panel entry-quiz reads', () => {
     await session(id.aLab, '2026-10-07T10:00:00', { groupId: id.g1 });
     await session(id.aLec, '2026-10-13T08:00:00');
     await session(id.zLab, '2026-10-13T08:00:00', { subjectId: id.z });
+    await session(id.examOnly, '2026-11-20T10:00:00', { kind: 'exam' });
   });
   afterAll(async () => {
     await pool.end();

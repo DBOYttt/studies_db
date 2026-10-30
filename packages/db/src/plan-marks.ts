@@ -8,6 +8,17 @@ import type mysql from 'mysql2/promise';
 import { type ClassKind, KIND_ORDER } from './constants.js';
 import type { WeekMark } from './plan-annotate.js';
 
+/**
+ * `c` has a session (of `kind`, when given). A scalar subquery with LIMIT 1
+ * rather than IN/EXISTS: MariaDB turns those into a semi-join that scans all
+ * of `class_sessions`, while this runs as a dependent subquery probing the
+ * `class_id` index once per class. It stays on `v_class_sessions` (whose
+ * other joins are eliminated), since `studies_ro` reads only the views.
+ */
+export const hasSessionSql = (kindSql: string) =>
+  `(SELECT cs.id FROM v_class_sessions cs
+     WHERE cs.class_id = c.id${kindSql} LIMIT 1) IS NOT NULL`;
+
 /** Active entry-quiz marks of the classes, by id, with their skipped dates. */
 export async function listWeekMarks(
   pool: mysql.Pool,
@@ -69,8 +80,7 @@ export async function listMarkableClasses(
        FROM v_classes c
        JOIN v_subjects s ON s.id = c.subject_id
        LEFT JOIN v_class_groups g ON g.class_id = c.id
-      WHERE c.id IN (SELECT class_id FROM v_class_sessions
-                      WHERE class_id IS NOT NULL AND kind = 'class')
+      WHERE ${hasSessionSql(" AND cs.kind = 'class'")}
       ORDER BY c.id, g.number`,
   );
   type Row = MarkableClass & { order: number };
