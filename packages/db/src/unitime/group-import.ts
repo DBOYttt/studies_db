@@ -405,11 +405,17 @@ export async function applyGroupImport(
     for (const p of kept)
       if (classOf.get(p.groupId) === p.classId)
         byClass.set(p.classId, p.groupId);
-    for (const [classId, groupId] of byClass)
+    if (byClass.size > 0)
       await tx
         .insert(userGroups)
-        .values({ userId, classId, groupId })
-        .onDuplicateKeyUpdate({ set: { groupId } });
+        .values(
+          [...byClass].map(([classId, groupId]) => ({
+            userId,
+            classId,
+            groupId,
+          })),
+        )
+        .onDuplicateKeyUpdate({ set: { groupId: sql`VALUES(group_id)` } });
     return byClass.size;
   });
   return { set, skipped: total - set };

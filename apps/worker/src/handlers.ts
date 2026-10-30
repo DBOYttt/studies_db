@@ -5,6 +5,7 @@ import {
   openInStorage,
   previewRelPath,
   pruneBotRequests,
+  pruneReminderLog,
   purgeExpiredAuth,
   resolveInStorage,
 } from '@studies/db';
@@ -219,15 +220,19 @@ export async function startWorker(
     try {
       const r = await pruneBotRequests(deps.db, t);
       const j = await pruneJobs(deps.db, t);
+      const l = await pruneReminderLog(deps.db, t);
       // Set only on success, so a failed prune is retried on the next tick.
       lastPrune = t.getTime();
-      if (r + j > 0) {
+      if (r + j + l > 0) {
         console.log(
-          `Worker: usunięto ${r} starych żądań do bota i ${j} zakończonych jobów`,
+          `Worker: usunięto ${r} starych żądań do bota, ${j} zakończonych jobów i ${l} wpisów reminder_log`,
         );
       }
     } catch (err) {
-      console.error('Worker: błąd pruneBotRequests/pruneJobs:', err);
+      console.error(
+        'Worker: błąd pruneBotRequests/pruneJobs/pruneReminderLog:',
+        err,
+      );
     }
   };
 

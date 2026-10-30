@@ -16,6 +16,7 @@ import {
   consumeLoginToken,
   createLoginToken,
   type Db,
+  events,
   getSessionUser,
   insertMaterial,
   jobs,
@@ -23,6 +24,7 @@ import {
   materials,
   originalRelPath,
   planProcessing,
+  reminderLog,
   sessions,
   subjects,
   topics,
@@ -484,6 +486,47 @@ describe('startWorker', () => {
     expect(
       await getSessionUser(db, (live as { sessionToken: string }).sessionToken),
     ).not.toBeNull();
+  });
+
+  it('prunes reminder_log rows of events that started over 60 days ago when it starts', async () => {
+    await db.delete(reminderLog);
+    await db.delete(events);
+    const day = 24 * 3600_000;
+    const mk = async (ago: number) => {
+      const startsAt = new Date(Date.now() - ago * day);
+      const [e] = await db
+        .insert(events)
+        .values({ kind: 'kolokwium', title: `T${ago}`, startsAt })
+        .$returningId();
+      await db.insert(reminderLog).values({
+        eventId: e.id,
+        userId: 0,
+        kind: 'digest',
+        forStartsAt: startsAt,
+      });
+      return e.id;
+    };
+    await mk(70);
+    const recent = await mk(50);
+    const ac = new AbortController();
+    const p = startWorker(deps(), {
+      concurrency: 1,
+      pollMs: 50,
+      signal: ac.signal,
+    });
+    for (
+      let i = 0;
+      i < 50 && (await db.select().from(reminderLog)).length > 1;
+      i++
+    ) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    ac.abort();
+    await p;
+    expect((await db.select().from(reminderLog)).map((r) => r.eventId)).toEqual(
+      [recent],
+    );
+    await db.delete(events);
   });
 
   it('prunes finished bot requests and jobs older than 30 days when it starts', async () => {

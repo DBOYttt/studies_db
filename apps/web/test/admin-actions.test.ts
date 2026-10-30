@@ -62,6 +62,8 @@ vi.mock('next/cache', () => ({
     revalidated.push(p);
   },
 }));
+const invalidated = vi.fn();
+vi.mock('@/lib/count-cache', () => ({ invalidateCounts: invalidated }));
 vi.mock('react', async (importOriginal) => ({
   ...(await importOriginal<typeof import('react')>()),
   cache: <T>(fn: T) => fn,
@@ -117,6 +119,7 @@ afterAll(() => closeTestDb(db));
 beforeEach(() => {
   cookieSid = admin.sid;
   revalidated.length = 0;
+  invalidated.mockClear();
 });
 
 describe('admin actions: gate', () => {
@@ -167,6 +170,8 @@ describe('admin actions: subjects', () => {
     });
     expect(a.details).toMatchObject({ source: 'web', channelId: null });
     expect(revalidated).toContain('/admin/subjects');
+    // the nav and card counts follow the change
+    expect(invalidated).toHaveBeenCalled();
   });
 
   it('refuses invalid input with a specific message and no audit', async () => {

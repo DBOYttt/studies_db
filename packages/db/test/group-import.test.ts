@@ -1,8 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { eq } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/mysql2';
+import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { Db } from '../src/client.js';
 import { getMyGroups, setMyGroup } from '../src/my-groups.js';
+import * as schema from '../src/schema.js';
 import { classes, classGroups, subjects, users } from '../src/schema.js';
 import { closeTestDb, resetTestDb } from '../src/testing.js';
 import {
@@ -260,6 +263,44 @@ describe('applyGroupImport', () => {
     const mine = await getMyGroups(db, userId);
     expect(mine[String(pairs[99]?.classId)]).toBe(pairs[99]?.groupId);
     expect(mine[String(pairs[100]?.classId)]).toBeUndefined();
+  });
+
+  it('saves all pairs in one write statement', async () => {
+    const pairs = [
+      { classId: cls['CH.cwiczenia'], groupId: grp['CH.cwiczenia.2'] },
+      { classId: cls['CH.laboratorium'], groupId: grp['CH.laboratorium.3'] },
+      { classId: cls['CH.wyklad'], groupId: grp['CH.wyklad.1'] },
+    ];
+    const log: string[] = [];
+    const pool = mysql.createPool({
+      uri: process.env.TEST_DATABASE_URL as string,
+      charset: 'utf8mb4',
+      timezone: 'Z',
+    });
+    try {
+      const logged = drizzle(pool, {
+        schema,
+        mode: 'default',
+        logger: { logQuery: (q: string) => log.push(q) },
+      });
+      const res = await applyGroupImport(logged, userId, pairs);
+      expect(res).toEqual({ set: 3, skipped: 0 });
+    } finally {
+      await pool.end();
+    }
+    expect(
+      log.filter((q) => /^insert into `user_groups`/i.test(q)),
+    ).toHaveLength(1);
+    const mine = await getMyGroups(db, userId);
+    expect(mine[String(cls['CH.laboratorium'])]).toBe(grp['CH.laboratorium.3']);
+    // a second run only updates
+    const again = await applyGroupImport(db, userId, [
+      { classId: cls['CH.cwiczenia'], groupId: grp['CH.cwiczenia.1'] },
+    ]);
+    expect(again).toEqual({ set: 1, skipped: 0 });
+    expect((await getMyGroups(db, userId))[String(cls['CH.cwiczenia'])]).toBe(
+      grp['CH.cwiczenia.1'],
+    );
   });
 
   it('lets the last pair win for the same class', async () => {
