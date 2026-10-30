@@ -67,6 +67,16 @@ describe('securityHeaderRules', () => {
     expect(all.has('Content-Security-Policy')).toBe(false);
   });
 
+  it('turns off powerful browser features and isolates the browsing context on every path', () => {
+    for (const env of ['development', 'production']) {
+      const all = rule(env, '/:path*');
+      expect(all.get('Permissions-Policy')).toBe(
+        'camera=(), microphone=(), geolocation=(), payment=()',
+      );
+      expect(all.get('Cross-Origin-Opener-Policy')).toBe('same-origin');
+    }
+  });
+
   it('sends the CSP and Referrer-Policy outside the routes with their own', () => {
     const own = rule('development', OWN_POLICY_SOURCE);
     expect(own.get('Content-Security-Policy')).toBe(

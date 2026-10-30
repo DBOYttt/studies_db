@@ -27,8 +27,8 @@ Fill in: `MARIADB_ROOT_PASSWORD` and `DB_RO_PASSWORD` (keep the passwords inside
 
 Website uploads for events are written by the `web` container (user `node`, uid 1000) to
 `$STORAGE_DIR/uploads`. The `storage` volume is created by root, so the one-shot `migrate` service
-creates that directory on every `compose up`, owned by uid 1000 with mode 0750 (the bot runs as root and
-can read and delete the files). Without it every upload answers 503. If you run the apps outside compose,
+creates that directory on every `compose up`, owned by uid 1000 with mode 0750 (the bot runs as uid 1000 too
+and can read and delete the files). Without it every upload answers 503. If you run the apps outside compose,
 create `uploads/` yourself with an owner that matches the web process.
 
 The `worker` service does not load `.env` as a whole: compose passes it only `DATABASE_URL`,
@@ -38,7 +38,7 @@ If you add a worker setting, list it under `worker.environment` in `compose.yaml
 
 The worker image runs as user `node` (uid 1000) and writes only `$STORAGE_DIR/previews`, which the `migrate`
 service creates and hands to uid 1000 on every `compose up` (existing previews included). It reads the
-originals the bot (root) writes with mode 0644. Compose caps the worker at `mem_limit`
+originals the bot (uid 1000) writes. Compose caps the worker at `mem_limit`
 (`WORKER_MEM_LIMIT`, default `2g`) and `pids_limit: 512`, and `soffice`/`pdftotext` get only `PATH`, a
 throwaway `HOME`, `LANG` and `TMPDIR`, never `DATABASE_URL`. Known residual risk: conversions still have network
 access (the worker needs the DB and the UniTime feed). Cutting it off needs a separate conversion container
@@ -67,10 +67,13 @@ podman compose --profile app --profile prod up -d --build   # + cloudflared
 podman compose ps   # mariadb healthy, migrate exited 0, bot/worker/web running
 ```
 
-To check locally, temporarily add `ports: ["3000:3000"]` to `web`, then
-`curl -sI localhost:3000/` should redirect to `/login-info`.
+Check the web container with `podman compose ps` (`web` must be `healthy`). Nothing is published on the host
+and the image has no curl, so to query it directly use
+`podman exec studies_db_web_1 node -e "fetch('http://127.0.0.1:3000/login-info').then(r=>console.log(r.status))"`
+(container name may differ; see `podman ps`).
 
-Register slash commands once (see apps/bot README) if commands changed.
+Register slash commands once if commands changed. The bot image has no pnpm, so on the server run
+`podman compose run --rm bot node --import tsx src/register-commands.ts`.
 
 ### Upgrading to the class/group hierarchy (migration 0004)
 
@@ -200,6 +203,79 @@ renames the legacy Polish-titled info posts and updates a stale `#wydarzenia` to
    so allow them if egress is filtered. An import is capped at 5000 calendar entries.
 3. The digest thread in `#wydarzenia` is now named `📅 Reminders`. An existing thread keeps its old name
    `📅 Przypomnienia` until you rename it by hand.
+
+### Upgrading to the G5 hardening (2026-10-30 audit, R1-R12)
+
+Back up first (`scripts/backup.sh`). Steps, in order:
+
+1. **App DB user.** Set `DB_APP_PASSWORD` (URL-safe) in `.env` and change `DATABASE_URL` to
+   `mysql://studies_app:<pw>@mariadb:3306/studies`. `migrate` creates `studies_app` (DML on the `studies`
+   database only, no DDL, FILE or GRANT); web, bot and worker connect as it. Root stays only in
+   `MARIADB_ROOT_PASSWORD`, used by `mariadb` and `migrate`.
+2. **Import hosts.** web and bot no longer get `UNITIME_ICAL_URL` / `UNITIME_EXAM_ICAL_URL`, so the feed hosts
+   are not importable automatically. If a feed is on a host other than `plan.agh.edu.pl`, set
+   `UNITIME_IMPORT_HOSTS` to the full comma-separated list **including `plan.agh.edu.pl`**: a non-empty value
+   replaces the default.
+3. **No `env_file` any more.** Each service gets only the variables listed under its `environment:` in
+   `compose.yaml`. Anything you added to `.env` for a service (`TZ`, `NODE_OPTIONS`, `HTTP(S)_PROXY`, ...) no
+   longer reaches it; list it there. `.env` must now hold `DATABASE_URL`, `DATABASE_RO_URL`, `WEB_BASE_URL`,
+   `DB_RO_PASSWORD`, `MARIADB_ROOT_PASSWORD` and `TUNNEL_TOKEN` even for `ps`, `logs` and `down`: compose
+   refuses to interpolate otherwise (this includes the dev override `-f compose.dev.yaml`).
+4. **Recreate, don't just restart.** The containers move from the implicit default network to
+   `studies_db_edge` / `studies_db_backend`, and the bot image changed:
+
+   ```sh
+   podman compose --profile app --profile prod down        # never with -v: it deletes the DB and file volumes
+   podman compose --profile app --profile prod up -d --build
+   podman network rm studies_db_default                    # only if it is left behind
+   ```
+
+   Rebuild everything: the web image build (`next build`) needs more than about 2 GB of RAM in the build
+   host or VM. It was never built end to end on the dev machine, so the first real build is on the server.
+5. **Storage ownership.** The bot now runs as uid 1000 (it was root). On every `up`, `migrate` chowns
+   `originals/`, `uploads/` and `tmp/` (recursively, without following symlinks) and `previews/` to
+   1000:1000, so existing root-owned originals are covered and no manual step is needed. The volume root
+   stays root-owned. The walk touches only metadata but grows with the archive. Outside compose, give those
+   four directories to the user the apps run as.
+6. **Read-only services.** bot, worker and web run with a read-only root filesystem, all capabilities dropped
+   and `no-new-privileges`; only `/tmp` (512 MB tmpfs), web's `.next/cache` (512 MB tmpfs) and
+   `/data/storage` are writable. Anything that writes elsewhere fails with `EROFS`, by design. The Next
+   cache is lost on restart. `cloudflared` is read-only and cap-dropped too. cloudflared is on its own
+   `edge` network (shared only with `web`); mariadb, migrate and the apps are on `backend`, which is not
+   internal (mariadb still has egress).
+7. **Health and the tunnel.** cloudflared starts only once `web` is healthy (a `GET /login-info` inside the
+   container), and `up` waits for that. Podman runs healthchecks through systemd timers, so a rootless host
+   needs `loginctl enable-linger <user>` (see "Surviving a server reboot"); without it `web` stays
+   `starting` and the tunnel never comes up. The old `curl -sI localhost:3000/` check no longer works
+   (nothing is published, no curl in the image); use `podman compose ps` or the `podman exec ... node -e
+   "fetch(...)"` command under "Run".
+8. **CLI inside containers.** The bot runtime image has no pnpm or corepack. Re-register slash commands on
+   the server with `podman compose run --rm bot node --import tsx src/register-commands.ts` (this replaces
+   `pnpm --filter @studies/bot register` in the older sections above). `migrate` no longer has
+   `DATABASE_URL` or `WEB_BASE_URL`, so a login link needs them passed in:
+   `podman compose run --rm -e DATABASE_URL=... -e WEB_BASE_URL=... migrate node --import tsx src/cli/login-link.ts <discordUserId>`.
+   Note `pnpm db:seed --reset` needs a root `DATABASE_URL` (it TRUNCATEs); `studies_app` cannot.
+9. **Resource limits.** web and bot have `mem_limit: 1g`; the worker has `cpus: "1.5"` on top of its 2 GB /
+   512 pids. On rootless podman `cpus` needs the `cpu` cgroup controller delegated to the user. Check
+   `cat /sys/fs/cgroup/user.slice/user-$(id -u).slice/cgroup.controllers`. If `cpu` is missing, add
+   `/etc/systemd/system/user@.service.d/delegate.conf` with
+   `[Service]` / `Delegate=memory pids cpu cpuset io` and reboot, or the worker will not start.
+10. **Pinned images.** mariadb (11.8.9 at its digest), `node:22-bookworm-slim` and cloudflared (2026.10.6) are
+    pinned by index digest and no longer move with `--pull` or a rebuild. Bump a digest on purpose: read the
+    index digest with `podman manifest inspect <image>:<tag>` (not `podman image inspect`'s `.Digest`, which
+    is the local platform's manifest). `MARIADB_AUTO_UPGRADE` runs `mariadb-upgrade` when the mariadb digest
+    changes, so run `scripts/backup.sh` before bumping it. cloudflared no longer self-updates: bump it
+    regularly. `packageManager` carries a sha512 now; very old local corepack versions may refuse pnpm 12
+    (the images are fine).
+11. **Migrate resets the app grants.** Every `migrate` run does REVOKE then GRANT for `studies_app`, so new
+    connections can fail for a few milliseconds. Compose runs `migrate` before the services start; if you
+    re-run it by hand against a live stack, accept that blip.
+12. **Rollback.** Point `DATABASE_URL` back at root (`mysql://root:<MARIADB_ROOT_PASSWORD>@mariadb:3306/studies`)
+    and recreate the services. The storage ownership change is harmless for a root process.
+
+Also changed: responses carry `Permissions-Policy` (camera, microphone, geolocation and payment off) and
+`Cross-Origin-Opener-Policy: same-origin`; `scripts/backup.sh` uses `umask 077` and makes `BACKUP_DIR` mode
+0700; `.mcp.json` pins `@upstash/context7-mcp` and `@playwright/mcp` to exact versions (dev tooling only).
 
 ## Tagi forum
 

@@ -38,6 +38,11 @@ export function baseSecurityHeaders(nodeEnv: string | undefined): Header[] {
   const headers = [
     { key: 'X-Frame-Options', value: 'DENY' },
     { key: 'X-Content-Type-Options', value: 'nosniff' },
+    {
+      key: 'Permissions-Policy',
+      value: 'camera=(), microphone=(), geolocation=(), payment=()',
+    },
+    { key: 'Cross-Origin-Opener-Policy', value: 'same-origin' },
   ];
   // Dev and e2e servers run on plain HTTP (audit ruling R2).
   if (nodeEnv === 'production') {

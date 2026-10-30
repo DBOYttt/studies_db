@@ -1,7 +1,8 @@
 # Production-style stack.
 #   podman compose --profile app up -d --build                 # local full stack
 #   podman compose --profile app --profile prod up -d --build  # + cloudflared tunnel
-# Dev: publish the DB on 127.0.0.1:3307 with the override file:
+# Dev: publish the DB on 127.0.0.1:3307 with the override file (needs a full
+# .env: compose interpolates every service, even for `up mariadb`):
 #   podman compose -f compose.yaml -f compose.dev.yaml up -d mariadb
 # (or keep using `pnpm db:up`, which runs its own container).
 #
@@ -200,6 +201,9 @@ services:
     environment:
       TUNNEL_TOKEN: ${TUNNEL_TOKEN:?set TUNNEL_TOKEN in .env}
     networks: [edge]
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
     depends_on:
       web:
         condition: service_healthy

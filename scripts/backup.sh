@@ -4,6 +4,7 @@
 # The DB root password is read inside the container from its own env, so it
 # never appears in `ps`. SKIP_STORAGE=1 skips the rsync step (dev DB only).
 set -euo pipefail
+umask 077
 cd "$(dirname "$0")/.."
 
 if [ -z "${BACKUP_DIR:-}" ] && [ -f .env ]; then
@@ -13,6 +14,7 @@ fi
 : "${BACKUP_DIR:?BACKUP_DIR not set (env or .env)}"
 CONTAINER="${DB_CONTAINER:-studies-mariadb}"
 mkdir -p "$BACKUP_DIR/storage"
+chmod 700 "$BACKUP_DIR"
 
 out="$BACKUP_DIR/studies-$(date +%F).sql.gz"
 tmp="$out.tmp"
