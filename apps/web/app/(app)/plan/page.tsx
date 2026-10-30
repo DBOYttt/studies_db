@@ -7,9 +7,11 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { errBox, GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { toCells } from '@/lib/cells';
@@ -87,7 +89,9 @@ export default async function PlanPage({
         </nav>
         <SyncWarningSlot status={status} />
         {tab === 'week' && (
-          <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
+          <Suspense fallback={<PlanWeekSkeleton />}>
+            <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
+          </Suspense>
         )}
         {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
         {tab === 'groups' && <GroupsTab weekHref="/plan" />}

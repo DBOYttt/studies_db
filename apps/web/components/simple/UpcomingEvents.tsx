@@ -1,10 +1,14 @@
 import Link from 'next/link';
 import { EventKindIcon } from '@/components/events/EventKindIcon';
+import { Bone, SkeletonRegion } from '@/components/Skeleton';
 import type { PlanSession } from '@/lib/plan';
 import { eventPageHref, eventWhenShort } from '@/lib/plan-events';
 
-/** Start page card: the next events matching My groups. */
-export function UpcomingEvents({ events }: { events: PlanSession[] }) {
+/**
+ * Start page card: the next events matching My groups. `null` while they
+ * load: the heading and link stay, the list is a placeholder.
+ */
+export function UpcomingEvents({ events }: { events: PlanSession[] | null }) {
   return (
     <section aria-labelledby="upcoming-events" className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
@@ -18,7 +22,16 @@ export function UpcomingEvents({ events }: { events: PlanSession[] }) {
           + Add event
         </Link>
       </div>
-      {events.length === 0 ? (
+      {events === null ? (
+        <SkeletonRegion className="flex flex-col divide-y divide-line rounded-md border border-line-strong bg-panel">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="flex items-center gap-3 px-3.5 py-2.5">
+              <Bone className="h-4 w-48 max-w-[60%]" />
+              <Bone className="h-3 w-20" />
+            </div>
+          ))}
+        </SkeletonRegion>
+      ) : events.length === 0 ? (
         <p className="m-0 rounded-md border border-line-strong bg-zebra px-4 py-3 text-muted">
           No upcoming events.
         </p>

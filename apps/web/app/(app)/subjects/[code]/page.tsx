@@ -14,7 +14,7 @@ import { MARK_NOTE_MAX } from '@studies/db';
 import { ASSESSMENT_NAMES } from '@studies/db/constants';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
-import type { ReactNode } from 'react';
+import { type ReactNode, Suspense } from 'react';
 import { PreviewPanel } from '@/components/explorer/PreviewPanel';
 import { TagSelect } from '@/components/explorer/TagSelect';
 import {
@@ -25,6 +25,7 @@ import {
 import { EntryQuizSection } from '@/components/plan/EntryQuizSection';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import {
   type Crumb,
   ScreenHeader,
@@ -252,17 +253,19 @@ export default async function SubjectPage({
           <LecturersTab subjectId={subject.id} classList={classList} />
         )}
         {tab === 'plan' && (
-          <PlanWeekTab
-            week={sp.week}
-            path={`/subjects/${encodeURIComponent(code)}`}
-            extra={Object.fromEntries(
-              new URLSearchParams(
-                subjectTabHref(code, sel, filters, 'plan').split('?')[1],
-              ),
-            )}
-            filter={{ subjectId: subject.id }}
-            myGroupsFilter={false}
-          />
+          <Suspense fallback={<PlanWeekSkeleton />}>
+            <PlanWeekTab
+              week={sp.week}
+              path={`/subjects/${encodeURIComponent(code)}`}
+              extra={Object.fromEntries(
+                new URLSearchParams(
+                  subjectTabHref(code, sel, filters, 'plan').split('?')[1],
+                ),
+              )}
+              filter={{ subjectId: subject.id }}
+              myGroupsFilter={false}
+            />
+          </Suspense>
         )}
         {tab === 'sql' && <SqlTab code={code} q={sp.q} editPath={sqlPath} />}
         {tab === 'map' && (

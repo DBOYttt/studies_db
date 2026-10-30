@@ -5,8 +5,10 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
 import Link from 'next/link';
+import { Suspense } from 'react';
 import { GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
@@ -88,7 +90,9 @@ export default async function SimplePlan({
       </nav>
       <SyncWarning status={status} />
       {tab === 'week' ? (
-        <PlanWeekTab week={sp.week} path="/s/plan" myGroupsFilter simple />
+        <Suspense fallback={<PlanWeekSkeleton />}>
+          <PlanWeekTab week={sp.week} path="/s/plan" myGroupsFilter simple />
+        </Suspense>
       ) : (
         <GroupsTab weekHref="/s/plan" />
       )}

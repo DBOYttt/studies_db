@@ -6,8 +6,10 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { Suspense } from 'react';
 import { EntityFilesGrid } from '@/components/EntityFilesGrid';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
+import { PlanWeekSkeleton } from '@/components/Skeleton';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
 import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
@@ -169,13 +171,15 @@ export default async function LecturerPage({
           />
         )}
         {tab === 'plan' && (
-          <PlanWeekTab
-            week={sp.week}
-            path={base}
-            extra={{ tab: 'plan' }}
-            filter={{ lecturerId: id }}
-            myGroupsFilter={false}
-          />
+          <Suspense fallback={<PlanWeekSkeleton />}>
+            <PlanWeekTab
+              week={sp.week}
+              path={base}
+              extra={{ tab: 'plan' }}
+              filter={{ lecturerId: id }}
+              myGroupsFilter={false}
+            />
+          </Suspense>
         )}
       </div>
     </>

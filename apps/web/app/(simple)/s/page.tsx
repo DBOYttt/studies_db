@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
@@ -6,7 +7,7 @@ import { SubjectCards } from '@/components/simple/SubjectCards';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
-import { nowWall } from '@/lib/plan';
+import { nowWall, type PlanSession } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
@@ -25,12 +26,19 @@ export default async function SimpleStart({
   const sp = await searchParams;
   const db = getDb();
   const cardsP = cachedSubjectCards();
-  const [cards, recent, preview, upcoming] = await Promise.all([
+  // Started now, awaited in its own Suspense boundary so the rest of the
+  // page does not wait for it. Events are optional on the start page: a
+  // failure leaves the card empty.
+  const upcoming = upcomingForUser(
+    db,
+    getViewsPool(),
+    user.id,
+    nowWall(),
+  ).catch(() => []);
+  const [cards, recent, preview] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5, withTotal: false }),
     loadSimplePreview(db, sp, cardsP),
-    // Events are optional on the start page: a failure leaves the card empty.
-    upcomingForUser(db, getViewsPool(), user.id, nowWall()).catch(() => []),
   ]);
   return (
     <SimpleShell
@@ -51,7 +59,9 @@ export default async function SimpleStart({
     >
       <h1 className="sr-only">Start</h1>
       {/* What's next first: upcoming events above the subject grid. */}
-      <UpcomingEvents events={upcoming} />
+      <Suspense fallback={<UpcomingEvents events={null} />}>
+        <UpcomingSlot events={upcoming} />
+      </Suspense>
       <div>
         <h2 className="mt-3 mb-0 text-base font-semibold">Subjects</h2>
         <p className="mt-1 mb-0 text-pretty text-muted">
@@ -69,4 +79,8 @@ export default async function SimpleStart({
       />
     </SimpleShell>
   );
+}
+
+async function UpcomingSlot({ events }: { events: Promise<PlanSession[]> }) {
+  return <UpcomingEvents events={await events} />;
 }
