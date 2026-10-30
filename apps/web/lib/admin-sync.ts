@@ -1,7 +1,11 @@
 /** Pure helpers of the /admin/sync page (admin bot requests). */
 import {
   type AdminRequestKind,
+  type Db,
   isCancelled,
+  listFeeds,
+  maskFeedUrl,
+  SEMESTERS,
   STUCK_AFTER_MS,
 } from '@studies/db';
 
@@ -66,3 +70,27 @@ export const reportLabel = (chars: number): string =>
   `Report (${countFmt.format(chars)} chars)`;
 
 export const requestHref = (id: number): string => `/admin/sync/requests/${id}`;
+
+export type FeedRow = {
+  semester: number;
+  classMasked: string | null;
+  examMasked: string | null;
+  updatedAt: Date | null;
+};
+
+/**
+ * One row per semester (always 7) for the Timetable feeds card. Only the
+ * masked form of a link leaves this function: the stored link is a secret.
+ */
+export async function loadFeedRows(db: Db): Promise<FeedRow[]> {
+  const stored = new Map((await listFeeds(db)).map((f) => [f.semester, f]));
+  return SEMESTERS.map((semester) => {
+    const f = stored.get(semester);
+    return {
+      semester,
+      classMasked: f ? maskFeedUrl(f.classUrl) : null,
+      examMasked: f?.examUrl ? maskFeedUrl(f.examUrl) : null,
+      updatedAt: f?.updatedAt ?? null,
+    };
+  });
+}

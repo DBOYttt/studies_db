@@ -2,6 +2,7 @@ import {
   ArrowsClockwise,
   CalendarBlank,
   DiscordLogo,
+  LinkSimple,
   ListChecks,
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
@@ -16,6 +17,7 @@ import type { Metadata } from 'next';
 import Link from 'next/link';
 import { ActionButton } from '@/components/admin/ActionButton';
 import { AutoRefresh } from '@/components/admin/AutoRefresh';
+import { FeedsCard } from '@/components/admin/FeedsCard';
 import { box, boxHead, link, td, th } from '@/components/admin/form-styles';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
@@ -29,6 +31,7 @@ import {
   activeRequestText,
   canCancelRequest,
   hasActiveRequest,
+  loadFeedRows,
   REQUEST_KIND_LABELS,
   reportLabel,
   requestHref,
@@ -68,9 +71,10 @@ const time = (d: Date | null) =>
 export default async function AdminSyncPage() {
   await requireAdmin();
   const db = getDb();
-  const [plan, requests] = await Promise.all([
+  const [plan, requests, feedRows] = await Promise.all([
     getPlanSyncStatus(db),
     listAdminBotRequests(db, 20),
+    loadFeedRows(db),
   ]);
   const now = new Date();
   const active = hasActiveRequest(requests);
@@ -202,6 +206,27 @@ export default async function AdminSyncPage() {
             </ul>
           </section>
         </div>
+
+        <section aria-labelledby="admin-sync-feeds" className={box}>
+          <div className={boxHead}>
+            <LinkSimple size={15} className="text-accent-ink" aria-hidden />
+            <h2 id="admin-sync-feeds" className="m-0 text-[13px] font-semibold">
+              Timetable feeds
+            </h2>
+          </div>
+          <p className="m-0 border-b border-line px-3 py-2 text-muted">
+            One UniTime iCal link per semester. Links are secret: only the host
+            is shown.
+          </p>
+          <FeedsCard
+            rows={feedRows.map((r) => ({
+              semester: r.semester,
+              classMasked: r.classMasked,
+              examMasked: r.examMasked,
+              updated: r.updatedAt ? formatAuditTime(r.updatedAt) : null,
+            }))}
+          />
+        </section>
 
         <section aria-labelledby="admin-sync-requests" className={box}>
           <div className={boxHead}>

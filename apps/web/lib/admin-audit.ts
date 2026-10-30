@@ -52,6 +52,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
 const ACTION_NAMES: Record<string, string> = {
   ...AUDIT_ACTION_LABELS,
   ...AUDIT_LABELS,
+  'plan.feed_set': 'Timetable feed saved',
+  'plan.feed_clear': 'Timetable feed cleared',
   'class_mark.add': 'Entry quiz turned on',
   'class_mark.edit': 'Entry quiz note changed',
   'class_mark.remove': 'Entry quiz turned off',
@@ -131,6 +133,7 @@ export type AuditTargetRef =
   | { type: 'event'; id: number }
   | { type: 'series'; id: number }
   | { type: 'class_mark'; id: number }
+  | { type: 'semester'; n: number }
   | { type: 'subject'; code: string };
 
 /** Actions whose target is a subject code (bot admin panel). */
@@ -153,6 +156,8 @@ export function parseAuditTarget(
   target: string | null,
 ): AuditTargetRef | null {
   if (!target) return null;
+  const sem = /^semester:([1-7])$/.exec(target);
+  if (sem) return { type: 'semester', n: Number(sem[1]) };
   const m = /^(series|event|class_mark):([1-9]\d{0,9})$/.exec(target);
   if (m) {
     const type = m[1] as 'series' | 'event' | 'class_mark';

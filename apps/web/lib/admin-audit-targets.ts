@@ -126,6 +126,8 @@ export async function loadAuditTargets(
             }
           : { label: `Series #${ref.id} (removed)` },
       );
+    } else if (ref.type === 'semester') {
+      out.set(row, { label: `Semester ${ref.n}` });
     } else if (ref.type === 'class_mark') {
       const m = byMark.get(ref.id);
       out.set(
