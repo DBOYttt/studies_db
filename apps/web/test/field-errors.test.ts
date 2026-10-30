@@ -26,7 +26,7 @@ describe('admin parse refusals name their field', () => {
   it.each([
     [{ ...subject, name: '  ' }, 'name'],
     [{ ...subject, code: 'a b' }, 'code'],
-    [{ ...subject, semester: '3' }, 'semester'],
+    [{ ...subject, semester: '8' }, 'semester'],
     [{ ...subject, ects: 'x' }, 'ects'],
     [{ ...subject, description: 'x'.repeat(5000) }, 'description'],
   ])('subject add %#', (o, fieldName) => {

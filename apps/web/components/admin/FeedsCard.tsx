@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { Field } from '@/components/Field';
 import { clearFeedAction, saveFeedAction } from '@/lib/admin-feeds';
+import type { ActionState } from '@/lib/admin-forms';
 import { fieldAria } from '@/lib/field-errors';
 import { ActionButton, secondaryBtn } from './ActionButton';
 import { ActionForm } from './ActionForm';
@@ -29,6 +30,10 @@ const notSet = <span className="text-muted">Not set</span>;
  */
 export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
   const [editing, setEditing] = useState<number | null>(null);
+  // A cleared semester closes its edit row.
+  const closeAfterClear = (semester: number) => (s: ActionState) => {
+    if (s?.ok) setEditing((cur) => (cur === semester ? null : cur));
+  };
 
   return (
     <CardStatus>
@@ -83,6 +88,7 @@ export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
                           ariaLabel={`Clear semester ${r.semester} feed`}
                           pendingLabel="Clearing…"
                           cardStatus
+                          onResult={closeAfterClear(r.semester)}
                           confirm={{
                             question: `Clear the semester ${r.semester} feeds?`,
                             confirmLabel: 'Confirm clear',

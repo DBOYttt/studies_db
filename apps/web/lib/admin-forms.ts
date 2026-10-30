@@ -7,7 +7,7 @@ import {
   FIELD_MAX,
   GROUP_MAX,
   GROUP_MIN,
-  SEMESTERS,
+  isSemester,
   type Semester,
   type SubjectInput,
   textOrNull,
@@ -62,7 +62,7 @@ export type Parsed<T> = { ok: true; value: T } | Refusal;
 const fail = (message: string, field?: string): Refusal =>
   field === undefined ? { ok: false, message } : { ok: false, message, field };
 
-export const SEMESTER_TEXT = 'Semester must be 1 or 2.';
+export const SEMESTER_TEXT = 'Semester must be a whole number from 1 to 7.';
 export const ECTS_TEXT = `ECTS must be a whole number from ${ECTS_MIN} to ${ECTS_MAX}.`;
 export const GROUP_TEXT = `Group must be a whole number from ${GROUP_MIN} to ${GROUP_MAX}.`;
 export const CODE_TEXT =
@@ -168,11 +168,8 @@ function parseSemesterEcts(
   const sv = field(form, 'semester');
   const s = sameNumber(sv, stored.semester)
     ? (stored.semester as number)
-    : wholeIn(sv, 0, 9);
-  if (
-    s === null ||
-    (s !== stored.semester && !(SEMESTERS as readonly number[]).includes(s))
-  )
+    : wholeIn(sv, 0, 99);
+  if (s === null || (s !== stored.semester && !isSemester(s)))
     return fail(SEMESTER_TEXT, 'semester');
   const ev = field(form, 'ects');
   const ects = sameNumber(ev, stored.ects)

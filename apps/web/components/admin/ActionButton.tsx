@@ -44,6 +44,7 @@ export function ActionButton({
   disabledText,
   className,
   cardStatus = false,
+  onResult,
 }: {
   action: Action;
   fields?: Record<string, string>;
@@ -59,6 +60,8 @@ export function ActionButton({
   className?: string;
   /** Report to the enclosing `CardStatus` (see above). */
   cardStatus?: boolean;
+  /** Called with every result, even if this button unmounts meanwhile. */
+  onResult?: (r: ActionState) => void;
 }) {
   const card = useCardStatus();
   const report = cardStatus ? card : null;
@@ -69,6 +72,7 @@ export function ActionButton({
     card?.(null);
     const r = await action(prev, form);
     report?.(r);
+    onResult?.(r);
     return r;
   };
   const [state, formAction, pending] = useActionState(act, null);

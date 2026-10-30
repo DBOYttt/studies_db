@@ -175,12 +175,25 @@ describe('admin actions: subjects', () => {
     expect(invalidated).toHaveBeenCalled();
   });
 
+  it('accepts semester 7', async () => {
+    const r = await A.addSubjectAction(
+      null,
+      subjectForm({ code: 'sem7', semester: '7' }),
+    );
+    expect(r?.ok).toBe(true);
+    await db.delete(subjects).where(eq(subjects.code, 'sem7'));
+  });
+
   it('refuses invalid input with a specific message and no audit', async () => {
     const before = (await audits()).length;
     const cases: [Record<string, string>, string, string][] = [
       [{ ects: '31' }, 'ECTS must be a whole number from 0 to 30.', 'ects'],
       [{ ects: '2.5' }, 'ECTS must be a whole number from 0 to 30.', 'ects'],
-      [{ semester: '3' }, 'Semester must be 1 or 2.', 'semester'],
+      [
+        { semester: '8' },
+        'Semester must be a whole number from 1 to 7.',
+        'semester',
+      ],
       [
         { name: 'x'.repeat(201) },
         'The name must be at most 200 characters.',
@@ -968,7 +981,7 @@ describe('admin actions: concurrent edits (orig_* fields)', () => {
     await db.insert(subjects).values({
       name: 'Stary',
       code: 'OOR',
-      semester: 3,
+      semester: 8,
       ects: 40,
     });
     const r = await A.editSubjectAction(
@@ -976,7 +989,7 @@ describe('admin actions: concurrent edits (orig_* fields)', () => {
       fd({
         ...rendered({
           name: 'Stary',
-          semester: '3',
+          semester: '8',
           ects: '40',
           description: '',
           platformUrl: '',
@@ -990,7 +1003,7 @@ describe('admin actions: concurrent edits (orig_* fields)', () => {
       .select()
       .from(subjects)
       .where(eq(subjects.code, 'OOR'));
-    expect(s).toMatchObject({ name: 'Nowy', semester: 3, ects: 40 });
+    expect(s).toMatchObject({ name: 'Nowy', semester: 8, ects: 40 });
     // Changing it to another out-of-range value is still refused.
     expect(
       await A.editSubjectAction(
@@ -998,7 +1011,7 @@ describe('admin actions: concurrent edits (orig_* fields)', () => {
         fd({
           code: 'OOR',
           name: 'Nowy',
-          semester: '4',
+          semester: '9',
           ects: '40',
           description: '',
           platformUrl: '',
@@ -1006,7 +1019,7 @@ describe('admin actions: concurrent edits (orig_* fields)', () => {
       ),
     ).toEqual({
       ok: false,
-      message: 'Semester must be 1 or 2.',
+      message: 'Semester must be a whole number from 1 to 7.',
       field: 'semester',
     });
   });

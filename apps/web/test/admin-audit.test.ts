@@ -247,6 +247,8 @@ describe('audit filter options for the web admin actions', () => {
     'bot.setup': 'Server set up',
     'bot.setup_dry_run': 'Server setup previewed',
     'bot.resync': 'Resync',
+    'plan.feed_set': 'Timetable feed saved',
+    'plan.feed_clear': 'Timetable feed cleared',
   } as const;
   it('lists each one with its label, after the SQL ones', () => {
     expect(AUDIT_ACTIONS.slice(0, 2)).toEqual(['sql.execute', 'sql.rejected']);

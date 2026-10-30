@@ -154,6 +154,53 @@ describe('admin feeds actions', () => {
     expect((await listFeeds(db))[0]?.examUrl).toBeNull();
   });
 
+  it('remove_exam wins over a typed exam_url', async () => {
+    await F.saveFeedAction(
+      null as never,
+      fd({ semester: '3', class_url: CLASS, exam_url: EXAM }),
+    );
+    const r = await F.saveFeedAction(
+      null as never,
+      fd({ semester: '3', exam_url: EXAM, remove_exam: 'on' }),
+    );
+    expect(r?.ok).toBe(true);
+    expect((await listFeeds(db))[0]?.examUrl).toBeNull();
+  });
+
+  it('a duplicated semester field uses the first value', async () => {
+    const f = new FormData();
+    f.append('semester', '4');
+    f.append('semester', '5');
+    f.set('class_url', CLASS);
+    const r = await F.saveFeedAction(null as never, f);
+    expect(r?.ok).toBe(true);
+    const sems = (await listFeeds(db)).map((x) => x.semester);
+    expect(sems).toContain(4);
+    expect(sems).not.toContain(5);
+    await F.clearFeedAction(null as never, fd({ semester: '4' }));
+  });
+
+  it('a failed sync request after the save is still ok', async () => {
+    // The audit insert is the first db.insert; fail the plan_sync one.
+    const real = db.insert.bind(db);
+    let n = 0;
+    const s2 = vi.spyOn(db, 'insert').mockImplementation(((t: never) => {
+      n++;
+      if (n >= 2) throw new Error('down');
+      return real(t);
+    }) as never);
+    const r = await F.saveFeedAction(
+      null as never,
+      fd({ semester: '6', class_url: CLASS }),
+    );
+    s2.mockRestore();
+    expect(r).toEqual({
+      ok: true,
+      message: 'Feed saved. The sync request failed; use Sync now.',
+    });
+    await F.clearFeedAction(null as never, fd({ semester: '6' }));
+  });
+
   it('clearFeedAction deletes and audits', async () => {
     const r = await F.clearFeedAction(null as never, fd({ semester: '3' }));
     expect(r?.ok).toBe(true);

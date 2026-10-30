@@ -79,8 +79,20 @@ export async function saveFeedAction(
     classHost: r.classHost,
     examHost: r.examHost,
   });
-  await requestPlanSync(db);
+  let syncFailed = false;
+  try {
+    await requestPlanSync(db);
+  } catch (err) {
+    // The feed is saved: report success, never a retryable error.
+    syncFailed = true;
+    console.error('plan sync request failed after feed save', err);
+  }
   refresh();
+  if (syncFailed)
+    return {
+      ok: true,
+      message: 'Feed saved. The sync request failed; use Sync now.',
+    };
   return {
     ok: true,
     message: `Semester ${semester} feed saved. A timetable sync is requested.`,
