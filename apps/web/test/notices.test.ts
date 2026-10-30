@@ -9,6 +9,9 @@ import {
 describe('NOTICES', () => {
   it('maps each key to a fixed English sentence', () => {
     expect(NOTICES['event-deleted']).toBe('This event was deleted.');
+    expect(NOTICES['event-saved']).toBe('Event saved.');
+    expect(NOTICES['event-restored']).toBe('Event restored.');
+    expect(NOTICES['groups-saved']).toBe('Groups saved.');
     expect(SESSION_ENDED).toBe(
       'Your session has ended. Sign in again with /link in Discord.',
     );

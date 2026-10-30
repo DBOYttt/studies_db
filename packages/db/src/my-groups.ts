@@ -48,6 +48,72 @@ export async function setMyGroup(
   return { ok: true };
 }
 
+/**
+ * Writes the whole choice a form shows (class id -> group id, null = "All
+ * groups"), so the form's Save makes the page's state the stored one even
+ * when another tab changed it meanwhile (last Save wins). Classes left out
+ * are not touched. All or nothing: one group outside its class refuses it.
+ */
+export async function saveMyGroups(
+  db: Db,
+  userId: number,
+  choice: Record<string, number | null>,
+): Promise<{ ok: boolean }> {
+  const entries = Object.entries(choice).map(([cid, gid]) => ({
+    classId: Number(cid),
+    groupId: gid,
+  }));
+  if (
+    entries.some(
+      (e) =>
+        !Number.isSafeInteger(e.classId) ||
+        (e.groupId !== null && !Number.isSafeInteger(e.groupId)),
+    )
+  ) {
+    return { ok: false };
+  }
+  const picks = entries.filter(
+    (e): e is { classId: number; groupId: number } => e.groupId !== null,
+  );
+  const drops = entries.filter((e) => e.groupId === null).map((e) => e.classId);
+  if (picks.length > 0) {
+    const found = await db
+      .select({ id: classGroups.id, classId: classGroups.classId })
+      .from(classGroups)
+      .where(
+        inArray(
+          classGroups.id,
+          picks.map((p) => p.groupId),
+        ),
+      );
+    const classOf = new Map(found.map((g) => [g.id, g.classId]));
+    if (picks.some((p) => classOf.get(p.groupId) !== p.classId)) {
+      return { ok: false };
+    }
+  }
+  await db.transaction(async (tx) => {
+    if (drops.length > 0) {
+      await tx
+        .delete(userGroups)
+        .where(
+          and(
+            eq(userGroups.userId, userId),
+            inArray(userGroups.classId, drops),
+          ),
+        );
+    }
+    if (picks.length > 0) {
+      await tx
+        .insert(userGroups)
+        .values(picks.map((p) => ({ userId, ...p })))
+        .onDuplicateKeyUpdate({
+          set: { groupId: sql`VALUES(${userGroups.groupId})` },
+        });
+    }
+  });
+  return { ok: true };
+}
+
 export async function clearMyGroups(db: Db, userId: number): Promise<void> {
   await db.delete(userGroups).where(eq(userGroups.userId, userId));
 }

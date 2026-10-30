@@ -42,6 +42,7 @@ vi.mock('react', async (importOriginal) => ({
 
 const {
   saveMyGroupAction,
+  saveMyGroupsAction,
   clearMyGroupsAction,
   importMyGroupsAction,
   saveRemindersAction,
@@ -96,6 +97,7 @@ describe('my-groups actions', () => {
   it('every action requires a session', async () => {
     cookieSid = undefined;
     await expect(saveMyGroupAction(classA, grA1)).rejects.toThrow('redirect');
+    await expect(saveMyGroupsAction({})).rejects.toThrow('redirect');
     await expect(clearMyGroupsAction()).rejects.toThrow('redirect');
     await expect(importMyGroupsAction({})).rejects.toThrow('redirect');
     await expect(saveRemindersAction(true, true)).rejects.toThrow('redirect');
@@ -141,6 +143,44 @@ describe('my-groups actions', () => {
     expect(await getMyGroups(db, aliceId)).toEqual({});
     expect(await getMyGroups(db, bobId)).toEqual({ [classA]: grA2 });
     await clearMyGroups(db, bobId);
+  });
+
+  it('Save writes the whole shown choice (last Save wins)', async () => {
+    cookieSid = aliceSid;
+    // Another tab picked these meanwhile.
+    await saveMyGroupAction(classA, grA1);
+    await saveMyGroupAction(classB, grB1);
+    expect(
+      await saveMyGroupsAction({ [classA]: grA2, [classB]: null }),
+    ).toEqual({ ok: true });
+    expect(await getMyGroups(db, aliceId)).toEqual({ [classA]: grA2 });
+    expect(await getMyGroups(db, bobId)).toEqual({});
+    await clearMyGroups(db, aliceId);
+  });
+
+  it('Save refuses malformed choices and writes nothing', async () => {
+    cookieSid = aliceSid;
+    await saveMyGroupAction(classA, grA1);
+    const bad: unknown[] = [
+      null,
+      [],
+      'x',
+      { [classA]: 2.5 },
+      { [classA]: '3' },
+      { '01': grA1 },
+      { x: grA1 },
+      { [classA]: grB1 }, // group of another class
+      Object.fromEntries(
+        Array.from({ length: 501 }, (_, i) => [String(1_000_001 + i), null]),
+      ),
+    ];
+    for (const b of bad)
+      expect(
+        await saveMyGroupsAction(b as Record<string, number | null>),
+        JSON.stringify(b)?.slice(0, 40),
+      ).toEqual({ ok: false });
+    expect(await getMyGroups(db, aliceId)).toEqual({ [classA]: grA1 });
+    await clearMyGroups(db, aliceId);
   });
 
   it('import keeps only canonical numeric keys', async () => {

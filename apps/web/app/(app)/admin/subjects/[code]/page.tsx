@@ -11,6 +11,7 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/admin/ActionButton';
 import { AssignLecturerForm } from '@/components/admin/AssignLecturerForm';
+import { CardStatus } from '@/components/admin/CardStatus';
 import { ClassForm } from '@/components/admin/ClassForm';
 import { box, boxHead, link } from '@/components/admin/form-styles';
 import { SubjectForm } from '@/components/admin/SubjectForm';
@@ -199,58 +200,62 @@ export default async function AdminSubjectPage({
                           />
                         </div>
                         <div className="min-w-0 border-t border-line @2xl:border-t-0">
-                          <h4
-                            id={`${headId}-lecturers`}
-                            className="m-0 px-3 pt-3 text-[13px] font-semibold"
-                          >
-                            Lecturers
-                          </h4>
-                          {c.lecturers.length === 0 ? (
-                            <p className="m-0 px-3 pt-1 text-muted">
-                              None assigned.
-                            </p>
-                          ) : (
-                            <ul
-                              aria-labelledby={`${headId}-lecturers`}
-                              className="px-3 pt-1"
+                          {/* Remove's message outlives the row it removes. */}
+                          <CardStatus>
+                            <h4
+                              id={`${headId}-lecturers`}
+                              className="m-0 px-3 pt-3 text-[13px] font-semibold"
                             >
-                              {c.lecturers.map((l) => {
-                                const who = lecturerLabel(l);
-                                const where = l.groupName
-                                  ? `${CLASS_NAMES[c.kind]}, ${l.groupName}`
-                                  : CLASS_NAMES[c.kind];
-                                return (
-                                  <li
-                                    key={l.id}
-                                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line py-1 last:border-b-0"
-                                  >
-                                    <Link
-                                      href={`/admin/lecturers/${l.lecturerId}`}
-                                      className={`${link} min-w-0 flex-1 truncate`}
-                                      lang="pl"
+                              Lecturers
+                            </h4>
+                            {c.lecturers.length === 0 ? (
+                              <p className="m-0 px-3 pt-1 text-muted">
+                                None assigned.
+                              </p>
+                            ) : (
+                              <ul
+                                aria-labelledby={`${headId}-lecturers`}
+                                className="px-3 pt-1"
+                              >
+                                {c.lecturers.map((l) => {
+                                  const who = lecturerLabel(l);
+                                  const where = l.groupName
+                                    ? `${CLASS_NAMES[c.kind]}, ${l.groupName}`
+                                    : CLASS_NAMES[c.kind];
+                                  return (
+                                    <li
+                                      key={l.id}
+                                      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line py-1 last:border-b-0"
                                     >
-                                      {who}
-                                    </Link>
-                                    <span className="shrink-0 text-xs text-muted">
-                                      {l.groupName ?? 'all groups'}
-                                    </span>
-                                    <ActionButton
-                                      action={unassignLecturerAction}
-                                      fields={{ id: String(l.id) }}
-                                      label="Remove"
-                                      ariaLabel={`Remove ${who} from ${where}`}
-                                      pendingLabel="Removing…"
-                                      confirm={{
-                                        question: `Remove ${who} from ${where}?`,
-                                        confirmLabel: 'Confirm remove',
-                                      }}
-                                      className="flex flex-col items-end"
-                                    />
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
+                                      <Link
+                                        href={`/admin/lecturers/${l.lecturerId}`}
+                                        className={`${link} min-w-0 flex-1 truncate`}
+                                        lang="pl"
+                                      >
+                                        {who}
+                                      </Link>
+                                      <span className="shrink-0 text-xs text-muted">
+                                        {l.groupName ?? 'all groups'}
+                                      </span>
+                                      <ActionButton
+                                        action={unassignLecturerAction}
+                                        fields={{ id: String(l.id) }}
+                                        label="Remove"
+                                        ariaLabel={`Remove ${who} from ${where}`}
+                                        pendingLabel="Removing…"
+                                        confirm={{
+                                          question: `Remove ${who} from ${where}?`,
+                                          confirmLabel: 'Confirm remove',
+                                        }}
+                                        className="flex flex-col items-end"
+                                        cardStatus
+                                      />
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                          </CardStatus>
                           {options.length > 0 && (
                             <AssignLecturerForm
                               code={subject.code}

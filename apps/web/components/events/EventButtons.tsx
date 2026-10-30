@@ -13,7 +13,10 @@ import { deleteEventAction, restoreEventAction } from '@/lib/event-actions';
 const btn =
   'inline-flex h-8 items-center gap-1.5 rounded border border-line-strong bg-panel px-3 text-accent-ink hover:border-accent disabled:opacity-60';
 
-/** Edit / Delete (two steps) for a live event, Restore for a deleted one. */
+/**
+ * Edit / Delete (two steps) for a live event, Restore for a deleted one.
+ * Delete and Restore redirect with a notice; only a refusal comes back.
+ */
 export function EventButtons({
   id,
   base,
@@ -52,7 +55,7 @@ export function EventButtons({
           type="button"
           disabled={pending}
           className={`${btn} self-start`}
-          onClick={() => run(() => restoreEventAction(id))}
+          onClick={() => run(() => restoreEventAction(id, base))}
         >
           <ArrowCounterClockwise size={15} aria-hidden />
           Restore

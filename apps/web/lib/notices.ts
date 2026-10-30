@@ -1,4 +1,5 @@
 import { safeNext } from './mode';
+import { STATUS } from './status-text';
 
 /**
  * One-shot notices carried through a redirect as `?notice=<key>`. Only these
@@ -7,6 +8,9 @@ import { safeNext } from './mode';
  */
 export const NOTICES = {
   'event-deleted': 'This event was deleted.',
+  'event-saved': 'Event saved.',
+  'event-restored': STATUS.eventRestored,
+  'groups-saved': 'Groups saved.',
   'session-ended':
     'Your session has ended. Sign in again with /link in Discord.',
 } as const;

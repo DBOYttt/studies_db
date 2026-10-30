@@ -1,6 +1,7 @@
 import type { AuditRow } from '@studies/db';
 import { EVENT_KINDS } from '@studies/db/constants';
 import { MONTHS_SHORT } from '@studies/db/text';
+import { Notice } from '@/components/Notice';
 import { FileList } from '@/components/simple/FileList';
 import type { LinkedTopic } from '@/lib/event-queries';
 import { AUDIT_LABELS, auditSummary, whenLabel } from '@/lib/event-view';
@@ -12,7 +13,6 @@ import { EventKindIcon } from './EventKindIcon';
 import { EventUploads, type UploadItem } from './EventUploads';
 import { LinkedPosts } from './LinkedPosts';
 import { PostLine } from './PostLine';
-import { SavedStatus } from './SavedStatus';
 
 export type EventPageData = {
   id: number;
@@ -57,7 +57,7 @@ export function EventDetails({
   editHref,
   selectedFileId,
   canRestore,
-  savedText = null,
+  notice = null,
 }: {
   e: EventPageData;
   base: 'simple' | 'advanced';
@@ -65,8 +65,8 @@ export function EventDetails({
   editHref: string;
   selectedFileId: number | null;
   canRestore: boolean;
-  /** "Event added." / "Changes saved." right after the add / edit redirect. */
-  savedText?: string | null;
+  /** `?notice=` text ("Event saved.", "Event restored."), or null. */
+  notice?: string | null;
 }) {
   const kind = EVENT_KINDS[e.kind];
   const rows: [string, string][] = [
@@ -102,7 +102,7 @@ export function EventDetails({
           {e.title}
         </h1>
       </div>
-      <SavedStatus text={savedText} />
+      <Notice text={notice} />
       {e.deleted && (
         <div
           role="status"

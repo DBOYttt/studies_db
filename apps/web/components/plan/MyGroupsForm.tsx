@@ -6,6 +6,7 @@ import { type FormEvent, useMemo, useRef, useState } from 'react';
 import {
   clearMyGroupsAction,
   saveMyGroupAction,
+  saveMyGroupsAction,
 } from '@/lib/my-groups-actions';
 import { type MyGroups, sanitizeMyGroups } from '@/lib/plan';
 import type { MyGroupOption } from '@/lib/plan-queries';
@@ -13,7 +14,7 @@ import { MY_GROUPS_HELP } from '@/lib/plan-view';
 import { STATUS } from '@/lib/status-text';
 
 const primaryBtn =
-  'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover';
+  'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover aria-disabled:opacity-60';
 const btn =
   'inline-flex items-center gap-[5px] rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent';
 const selectCls =
@@ -22,23 +23,29 @@ const selectCls =
 /**
  * "My groups": one select per class with groups (All = no choice).
  * Each pick shows at once and is saved to the account in the background (a
- * rejected save reverts that one choice); Save waits for pending saves and
- * returns to the week view; Clear forgets all choices. A save that lands
- * says so in the polite status line ("Group saved.").
+ * rejected save reverts that one choice), saying so in the polite status line
+ * next to Save ("Group saved."). Save waits for those, then writes every
+ * class as this page shows it, so the last Save wins even when another tab
+ * changed the groups meanwhile, and opens the week view with "Groups saved."
+ * (`savedHref`). Clear forgets all choices.
  */
 export function MyGroupsForm({
   options,
   initialGroups,
-  weekHref,
+  savedHref,
 }: {
   options: MyGroupOption[];
   initialGroups: MyGroups;
-  weekHref: string;
+  /** The week view with the "Groups saved." notice. */
+  savedHref: string;
 }) {
   const router = useRouter();
   const [chosen, setChosen] = useState<MyGroups>(initialGroups);
   const [failed, setFailed] = useState(false);
   const [status, setStatus] = useState('');
+  const [saving, setSaving] = useState(false);
+  // A double click must not run Save twice (state lags one render).
+  const busy = useRef(false);
   const pending = useRef(new Set<Promise<unknown>>());
   // Latest save per class: a superseded save never reverts the newer choice.
   const seq = useRef(new Map<string, number>());
@@ -53,6 +60,9 @@ export function MyGroupsForm({
       ),
     [chosen, options],
   );
+  // Read by Save after awaiting the background saves (a revert may land).
+  const latest = useRef(current);
+  latest.current = current;
 
   const track = (p: Promise<unknown>) => {
     pending.current.add(p);
@@ -90,8 +100,31 @@ export function MyGroupsForm({
 
   const onSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    if (busy.current) return;
+    busy.current = true;
+    setSaving(true);
+    setFailed(false);
     await Promise.allSettled([...pending.current]);
-    router.push(weekHref);
+    // Every shown class, "All groups" as null: the page's choice is what stays.
+    const choice = Object.fromEntries(
+      options.map((o) => [
+        String(o.classId),
+        latest.current[String(o.classId)] ?? null,
+      ]),
+    );
+    let ok = false;
+    try {
+      ok = (await saveMyGroupsAction(choice)).ok;
+    } catch {
+      ok = false;
+    }
+    if (ok) {
+      router.push(savedHref);
+      return;
+    }
+    busy.current = false;
+    setSaving(false);
+    setFailed(true);
   };
 
   const onClear = () => {
@@ -174,9 +207,13 @@ export function MyGroupsForm({
         </p>
       )}
       <div className="flex flex-wrap items-center gap-1.5 bg-bar px-3 py-2">
-        <button type="submit" className={primaryBtn}>
+        <button
+          type="submit"
+          aria-disabled={saving || undefined}
+          className={primaryBtn}
+        >
           <FloppyDisk size={14} aria-hidden />
-          Save
+          {saving ? 'Saving…' : 'Save'}
         </button>
         <button type="button" onClick={onClear} className={btn}>
           <X size={14} aria-hidden />

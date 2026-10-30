@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import type { ActionState } from '@/lib/admin-forms';
+import { useCardStatus } from './CardStatus';
 import { primaryBtn } from './form-styles';
 
 type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
@@ -26,6 +27,8 @@ const dangerBtn =
  * then does nothing; `disabledText` says why. The result goes to a polite
  * `role="status"` or a `role="alert"`. Callers key it on what the button
  * means (e.g. blocked or not), so a toggled button starts with no message.
+ * With `cardStatus` inside a `CardStatus`, the result goes to the card's
+ * status area instead, which outlives a row this action removes.
  */
 export function ActionButton({
   action,
@@ -39,6 +42,7 @@ export function ActionButton({
   disabled = false,
   disabledText,
   className,
+  cardStatus = false,
 }: {
   action: Action;
   fields?: Record<string, string>;
@@ -52,8 +56,19 @@ export function ActionButton({
   disabled?: boolean;
   disabledText?: string;
   className?: string;
+  /** Report to the enclosing `CardStatus` (see above). */
+  cardStatus?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, null);
+  const card = useCardStatus();
+  const report = cardStatus ? card : null;
+  // Reported from the call itself: the row (and this button) may unmount in
+  // the same commit that delivers the result.
+  const act = async (prev: ActionState, form: FormData) => {
+    const r = await action(prev, form);
+    report?.(r);
+    return r;
+  };
+  const [state, formAction, pending] = useActionState(act, null);
   const [asking, setAsking] = useState(false);
   // The last result is hidden once a new question opens, so an old message
   // never sits beside it; a new result shows again.
@@ -153,10 +168,12 @@ export function ActionButton({
           {pending ? pendingLabel : label}
         </button>
       )}
-      <div role="status" className="text-ok-fg not-empty:mt-1.5">
-        {state?.ok && !pending && !stale ? state.message : null}
-      </div>
-      {state && !state.ok && !pending && !stale && (
+      {!report && (
+        <div role="status" className="text-ok-fg not-empty:mt-1.5">
+          {state?.ok && !pending && !stale ? state.message : null}
+        </div>
+      )}
+      {!report && state && !state.ok && !pending && !stale && (
         <p role="alert" className="m-0 mt-1.5 text-err-fg">
           {state.message}
         </p>

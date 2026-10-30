@@ -12,6 +12,7 @@ import {
   useState,
   useTransition,
 } from 'react';
+import { Notice } from '@/components/Notice';
 import {
   createEventAction,
   restoreEventAction,
@@ -128,6 +129,9 @@ export function EventForm({
   });
   const [repeat, setRepeat] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [restored, setRestored] = useState(false);
+  // Which transition is pending: only a save says "Saving…".
+  const [restoring, setRestoring] = useState(false);
   const [status, setStatusNow] = useState('');
   // The auto-fill message is written a moment after the line is cleared, so
   // a second pick is a new change that screen readers announce again.
@@ -195,10 +199,15 @@ export function EventForm({
 
   const restore = () => {
     if (pending) return;
+    setRestoring(true);
     start(async () => {
-      const r = await restoreEventAction(eventId ?? 0);
-      if (r.ok) router.refresh();
-      else setError(r.message);
+      // No redirect from here: typed values stay, the form says it.
+      const r = await restoreEventAction(eventId ?? 0, base, 'edit');
+      if (r.ok) {
+        setRestored(true);
+        router.refresh();
+      } else setError(r.message);
+      setRestoring(false);
     });
   };
 
@@ -222,6 +231,11 @@ export function EventForm({
           )}
         </div>
       )}
+      <Notice
+        text={restored && !deleted ? STATUS.eventRestored : null}
+        param={null}
+        className="mb-3.5"
+      />
       <form
         method="post"
         onSubmit={(e) => {
@@ -501,7 +515,11 @@ export function EventForm({
             className={primaryBtn}
           >
             <FloppyDisk size={15} aria-hidden />
-            {eventId === undefined ? 'Add event' : 'Save'}
+            {pending && !restoring
+              ? 'Saving…'
+              : eventId === undefined
+                ? 'Add event'
+                : 'Save'}
           </button>
           <Link href={cancelHref} className="link">
             Cancel

@@ -5,9 +5,9 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
+import { noticeFromSearchParams } from '@/lib/notices';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview, navSubjects } from '@/lib/simple-page';
-import { savedStatus } from '@/lib/status-text';
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +58,7 @@ export default async function SimpleEvent({
         editHref={`${baseHref}/edytuj`}
         selectedFileId={preview?.file.id ?? null}
         canRestore={user.isAdmin}
-        savedText={savedStatus(sp.saved)}
+        notice={noticeFromSearchParams(sp)}
       />
     </SimpleShell>
   );

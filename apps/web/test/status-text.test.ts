@@ -1,10 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  blockDayPrefix,
-  quizStatus,
-  STATUS,
-  savedStatus,
-} from '../lib/status-text';
+import { blockDayPrefix, quizStatus, STATUS } from '../lib/status-text';
 
 describe('quizStatus', () => {
   it('names the groups a change applies to', () => {
@@ -45,8 +40,7 @@ describe('STATUS', () => {
       sessionFilled: 'Date, time and place filled in.',
       postLinked: 'Post linked.',
       postUnlinked: 'Post unlinked.',
-      eventAdded: 'Event added.',
-      eventSaved: 'Changes saved.',
+      eventRestored: 'Event restored.',
     });
   });
 });
@@ -56,15 +50,5 @@ describe('blockDayPrefix', () => {
     const d = new Date(Date.UTC(2026, 9, 13, 10));
     expect(blockDayPrefix(d, '10:00–11:30')).toBe('Tue 13 Oct, 10:00–11:30 ');
     expect(blockDayPrefix(d, 'all day')).toBe('Tue 13 Oct, all day ');
-  });
-});
-
-describe('savedStatus', () => {
-  it('maps the one-shot ?saved= of the event page to its status line', () => {
-    expect(savedStatus('added')).toBe('Event added.');
-    expect(savedStatus('edited')).toBe('Changes saved.');
-    for (const v of [undefined, '', 'x', ['added']]) {
-      expect(savedStatus(v), String(v)).toBeNull();
-    }
   });
 });

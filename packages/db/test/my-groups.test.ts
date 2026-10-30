@@ -5,6 +5,7 @@ import {
   clearMyGroups,
   getMyGroups,
   importMyGroups,
+  saveMyGroups,
   setMyGroup,
 } from '../src/my-groups.js';
 import {
@@ -106,6 +107,36 @@ describe('my groups', () => {
       false,
     );
     expect(await getMyGroups(db, userId)).toEqual({ [c1]: g1 });
+  });
+  it('save writes the whole shown choice: picks and drops', async () => {
+    await clearMyGroups(db, userId);
+    await setMyGroup(db, userId, c1, g1);
+    await setMyGroup(db, userId, c2, h1);
+    expect(await saveMyGroups(db, userId, { [c1]: g2, [c2]: null })).toEqual({
+      ok: true,
+    });
+    expect(await getMyGroups(db, userId)).toEqual({ [c1]: g2 });
+    // A class left out of the choice is not touched.
+    await setMyGroup(db, userId, c2, h1);
+    expect(await saveMyGroups(db, userId, { [c1]: null })).toEqual({
+      ok: true,
+    });
+    expect(await getMyGroups(db, userId)).toEqual({ [c2]: h1 });
+    expect(await saveMyGroups(db, userId, {})).toEqual({ ok: true });
+    expect(await getMyGroups(db, userId)).toEqual({ [c2]: h1 });
+  });
+  it('save refuses the whole choice when one pair is invalid', async () => {
+    await clearMyGroups(db, userId);
+    await setMyGroup(db, userId, c1, g1);
+    expect(await saveMyGroups(db, userId, { [c1]: g2, [c2]: g1 })).toEqual({
+      ok: false,
+    });
+    expect(await saveMyGroups(db, userId, { [c1]: null, '999999': 1 })).toEqual(
+      { ok: false },
+    );
+    expect(await getMyGroups(db, userId)).toEqual({ [c1]: g1 });
+    await clearMyGroups(db, userId);
+    await importMyGroups(db, userId, { [c1]: g1 });
   });
   it('cascades when the group is deleted', async () => {
     await db.delete(classGroups).where(eq(classGroups.id, g1));

@@ -55,9 +55,9 @@ test('add an event; its page does not bother students with the Discord post', as
     page.getByRole('heading', { name: 'Kolokwium z tarcia' }),
   ).toBeVisible();
   // A one-shot confirmation, announced in a status line; the URL loses
-  // ?saved= so a reload doesn't repeat it.
+  // ?notice= so a reload doesn't repeat it.
   await expect(
-    page.getByRole('status').filter({ hasText: /^Event added\.$/ }),
+    page.getByRole('status').filter({ hasText: /^Event saved\.$/ }),
   ).toBeVisible();
   await expect(page.getByText(/Discord post/)).toHaveCount(0);
   // No top "Add event" link on an event page.
@@ -67,7 +67,7 @@ test('add an event; its page does not bother students with the Discord post', as
   await expect(page.getByText('C-12')).toBeVisible();
   await expect(page.getByText('Event added', { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Event added.')).toHaveCount(0);
+  await expect(page.getByText('Event saved.')).toHaveCount(0);
 });
 
 function isoWeekParam(iso: string): string {
@@ -171,7 +171,7 @@ test('edit the title', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(eventUrl);
   await expect(
-    page.getByRole('status').filter({ hasText: /^Changes saved\.$/ }),
+    page.getByRole('status').filter({ hasText: /^Event saved\.$/ }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Kolokwium z tarcia (poprawione)' }),
@@ -342,7 +342,11 @@ test('delete the event; an admin sees it with Restore', async ({
     await expect(
       p.getByText('This event was deleted', { exact: true }),
     ).toBeHidden();
-    await expect(p.getByText('Event restored')).toBeVisible();
+    await expect(
+      p.getByRole('status').filter({ hasText: /^Event restored\.$/ }),
+    ).toBeVisible();
+    // The History entry too.
+    await expect(p.getByText('Event restored', { exact: true })).toBeVisible();
   } finally {
     await admin.close();
   }
@@ -465,6 +469,9 @@ test.describe('concurrent edits', () => {
         .fill('Przywrócone i zmienione');
       await p.getByRole('button', { name: 'Restore' }).click();
       await expect(p.getByRole('button', { name: 'Restore' })).toBeHidden();
+      await expect(
+        p.getByRole('status').filter({ hasText: /^Event restored\.$/ }),
+      ).toBeVisible();
       await expect(p.getByLabel('Title', { exact: true })).toHaveValue(
         'Przywrócone i zmienione',
       );

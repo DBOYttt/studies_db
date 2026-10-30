@@ -157,7 +157,7 @@ describe('event actions', () => {
       A.createEventAction(
         form({ subjectId: String(subjectId), base: 'advanced' }),
       ),
-    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+\?saved=added$/);
+    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+\?notice=event-saved$/);
     // the v_events count in the nav is dropped from the cache
     expect(counts.invalidated).toBeGreaterThan(invalidated);
     const [ev] = await eventRows();
@@ -166,7 +166,7 @@ describe('event actions', () => {
 
     await expect(
       A.updateEventAction(ev.id, form({ title: 'Nowy tytuł' })),
-    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}?saved=edited`);
+    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}?notice=event-saved`);
     expect((await eventRows())[0].title).toBe('Nowy tytuł');
 
     expect((await A.linkTopicAction(ev.id, topicId)).ok).toBe(true);
@@ -183,8 +183,22 @@ describe('event actions', () => {
     await expect(A.restoreEventAction(ev.id)).rejects.toThrow('notFound');
     expect((await eventRows())[0].deletedAt).not.toBeNull();
     cookieSid = admin.sid;
-    expect((await A.restoreEventAction(ev.id)).ok).toBe(true);
+    await expect(A.restoreEventAction(ev.id)).rejects.toThrow(
+      `redirect:/s/wydarzenia/${ev.id}?notice=event-restored`,
+    );
     expect((await eventRows())[0].deletedAt).toBeNull();
+    // From the edit form: no redirect (it would drop the typed values).
+    await A.deleteEventAction(ev.id).catch(() => {});
+    expect((await A.restoreEventAction(ev.id, 'advanced', 'edit')).ok).toBe(
+      true,
+    );
+    expect((await eventRows())[0].deletedAt).toBeNull();
+    // Already live (a double click, another admin): same confirmation.
+    await expect(A.restoreEventAction(ev.id)).rejects.toThrow(
+      `redirect:/s/wydarzenia/${ev.id}?notice=event-restored`,
+    );
+    // An event that does not exist: the refusal comes back, no redirect.
+    expect((await A.restoreEventAction(999_999)).ok).toBe(false);
   });
 
   it('a stale version is refused; the current one saves', async () => {
@@ -262,7 +276,7 @@ describe('event actions', () => {
       .slice(0, 10);
     await expect(
       A.createEventAction(form({ repeat: 'weekly', until })),
-    ).rejects.toThrow(/redirect:\/s\/wydarzenia\/\d+/);
+    ).rejects.toThrow(/redirect:\/s\/wydarzenia\/\d+\?notice=event-saved$/);
     const rows = async () => (await eventRows()).sort((a, b) => a.id - b.id);
     const all = await rows();
     expect(all).toHaveLength(3);

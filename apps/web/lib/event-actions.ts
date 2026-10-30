@@ -48,6 +48,9 @@ const baseOf = (form: FormData): Base =>
 const eventHref = (base: Base, id: number) =>
   base === 'simple' ? `/s/wydarzenia/${id}` : `/wydarzenia/${id}`;
 const planHref = (base: Base) => (base === 'simple' ? '/s/plan' : '/plan');
+/** The event page with the "Event saved." banner. */
+const savedHref = (base: Base, id: number) =>
+  withNotice(eventHref(base, id), 'event-saved');
 
 function refresh(id?: number) {
   invalidateCounts();
@@ -134,15 +137,13 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
       .limit(1);
     refresh(first?.id);
     redirect(
-      first
-        ? `${eventHref(baseOf(form), first.id)}?saved=added`
-        : planHref(baseOf(form)),
+      first ? savedHref(baseOf(form), first.id) : planHref(baseOf(form)),
     );
   }
   const r = await addEvent(getDb(), user.id, input, 'web');
   if (!r.ok || r.id === undefined) return r;
   refresh(r.id);
-  redirect(`${eventHref(baseOf(form), r.id)}?saved=added`);
+  redirect(savedHref(baseOf(form), r.id));
 }
 
 /** Saves an edit and returns to the event page; returns only a refusal. */
@@ -180,7 +181,7 @@ export async function updateEventAction(
   );
   if (!r.ok) return r;
   refresh(id);
-  redirect(`${eventHref(baseOf(form), id)}?saved=edited`);
+  redirect(savedHref(baseOf(form), id));
 }
 
 export async function deleteEventAction(
@@ -215,13 +216,29 @@ export async function deleteEventAction(
   redirect(plan);
 }
 
-/** Admin only (404 for everyone else). */
-export async function restoreEventAction(id: number): Promise<ActionResult> {
+/**
+ * Admin only (404 for everyone else). From the event page it reopens that
+ * page with "Event restored." and returns only a refusal. From the edit
+ * form (`from = 'edit'`) it returns the result instead: a redirect would
+ * remount the form and drop what the admin typed, so the form says it.
+ */
+export async function restoreEventAction(
+  id: number,
+  base: Base = 'simple',
+  from: 'event' | 'edit' = 'event',
+): Promise<ActionResult> {
   const admin = await requireAdmin();
   if (!isId(id)) return fail(EVENT_NOT_FOUND);
+  const b: Base = base === 'advanced' ? 'advanced' : 'simple';
   const r = await restoreEvent(getDb(), admin.id, id, 'web');
   if (r.ok) refresh(id);
-  return r;
+  if (from === 'edit') return r;
+  if (!r.ok) {
+    // Already live again (a double click, another admin): the wanted state.
+    const ev = await getEvent(getDb(), id);
+    if (!ev || ev.deletedAt !== null) return r;
+  }
+  redirect(withNotice(eventHref(b, id), 'event-restored'));
 }
 
 export async function linkTopicAction(

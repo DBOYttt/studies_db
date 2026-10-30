@@ -15,11 +15,19 @@ test('a chosen group follows the user into a fresh browser context', async ({
   const saved = page.waitForResponse((r) => r.request().method() === 'POST');
   await select.selectOption({ label: 'Gr. 2' });
   await saved;
-  await expect(
-    page.getByRole('form', { name: 'My groups' }).getByRole('status'),
-  ).toHaveText('Group saved.');
+  const groupStatus = page
+    .getByRole('form', { name: 'My groups' })
+    .getByRole('status');
+  await expect(groupStatus).toHaveText('Group saved.');
+  // Still there a while later (nothing re-renders it away).
+  await page.waitForTimeout(4500);
+  await expect(groupStatus).toHaveText('Group saved.');
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(/\/s\/plan$/);
+  // Save confirms itself on the week view it opens.
+  await expect(
+    page.getByRole('status').filter({ hasText: /^Groups saved\.$/ }),
+  ).toBeVisible();
 
   // New context = empty localStorage; only the session cookie is shared.
   const other = await browser.newContext({ locale: 'pl-PL' });
@@ -141,13 +149,53 @@ test('Reminders checkboxes persist', async ({ page }) => {
   const saved = page.waitForResponse((r) => r.request().method() === 'POST');
   await day.check();
   await saved;
-  await expect(
-    page.getByRole('region', { name: 'Reminders' }).getByRole('status'),
-  ).toHaveText('Reminders saved.');
+  const reminderStatus = page
+    .getByRole('region', { name: 'Reminders' })
+    .getByRole('status');
+  await expect(reminderStatus).toHaveText('Reminders saved.');
+  await expect(reminderStatus).toBeVisible();
+  await page.waitForTimeout(4500);
+  await expect(reminderStatus).toHaveText('Reminders saved.');
   await page.reload();
   await expect(page.getByLabel('24 h before')).toBeChecked();
   await expect(hour).not.toBeChecked();
   const undone = page.waitForResponse((r) => r.request().method() === 'POST');
   await page.getByLabel('24 h before').uncheck();
   await undone;
+});
+
+// QA chaos F4: the Save of a tab opened earlier must not be silently lost.
+test('the last Save wins when two tabs edit My groups', async ({
+  page,
+  context,
+}) => {
+  const tab2 = await context.newPage();
+  await page.goto(GROUPS);
+  await tab2.goto(GROUPS);
+  const label = /Plan testowy.*Ćwiczenia/;
+
+  // Tab 2 picks Gr. 2 but does not press Save yet.
+  let posted = tab2.waitForResponse((r) => r.request().method() === 'POST');
+  await tab2.getByLabel(label).selectOption({ label: 'Gr. 2' });
+  await posted;
+
+  // Tab 1 picks Gr. 1 and saves.
+  posted = page.waitForResponse((r) => r.request().method() === 'POST');
+  await page.getByLabel(label).selectOption({ label: 'Gr. 1' });
+  await posted;
+  await page.getByRole('button', { name: 'Save' }).click();
+  await expect(page).toHaveURL(/\/s\/plan$/);
+
+  // Tab 2 still shows Gr. 2 and saves it: that is the choice that stays.
+  await tab2.getByRole('button', { name: 'Save' }).click();
+  await expect(tab2).toHaveURL(/\/s\/plan$/);
+  await tab2.goto(GROUPS);
+  await expect(tab2.getByLabel(label).locator('option:checked')).toHaveText(
+    'Gr. 2',
+  );
+
+  const cleared = tab2.waitForResponse((r) => r.request().method() === 'POST');
+  await tab2.getByRole('button', { name: 'Clear' }).click();
+  await cleared;
+  await tab2.close();
 });
