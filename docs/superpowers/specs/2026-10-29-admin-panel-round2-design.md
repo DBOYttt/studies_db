@@ -36,7 +36,7 @@ The web and the bot still never call each other. Requests that need Discord go t
   - `listUsersAdmin(db, { q, limit: 50, offset })`: display name, Discord id, is_admin, is_banned, created_at; `q` matches display name or id with LIKE (escape `%`/`_`).
 - **Admin bot requests:** new kinds `setup`, `setup_dry_run` and `resync`, with target `guild` and payload `{ requestedBy: <users.id> }`.
   - **Enqueue:** `enqueueAdminBotRequest(db, kind, userId)` refuses with `{ ok: false, message: 'The bot is already working on a request.' }` when any admin kind is `queued` or `running`. It checks inside a transaction with a locking read, then calls `enqueueBotRequest`.
-  - **Cancel:** `cancelAdminBotRequest(db, id)` works only while the request is `queued`. It sets status `failed` with error `Cancelled.`; the status enum is left unchanged.
+  - **Cancel:** `cancelAdminBotRequest(db, id)` works while the request is `queued`, or `running` but started more than 15 minutes ago (`STUCK_AFTER_MS`; the Sync page warns it may be stuck). It sets status `failed` with error `Cancelled.`; the status enum is left unchanged. A bot still finishing a cancelled run drops its result (`finishBotRequest` only updates `running` rows).
   - **List:** `listAdminBotRequests(db, limit = 20)` returns the requests newest first, each with its requester's display name.
 - **Migration:** add a column `bot_requests.report MEDIUMTEXT NULL`. It holds the setup/resync report text (≤ 60 000 chars, truncated with `…`). Generate it with `drizzle-kit generate`. `finishBotRequest` gains an optional `report` argument.
 - **Web plan sync:** "Sync timetable" uses the existing `requestPlanSync(db)` and `getPlanSyncStatus(db)`. The status card text matches the bot's `/plan status` reply. `planStatusText` moves from `apps/bot/src/commands/plan.ts` to `packages/db/src/unitime/status.ts` (the bot re-exports it).
@@ -98,7 +98,7 @@ The web and the bot still never call each other. Requests that need Discord go t
 - **db:**
   - the list helpers;
   - `enqueueAdminBotRequest`: it refuses while one is queued or running, and runs unaffected by event kinds;
-  - cancel works only while queued;
+  - cancel works while queued, or while running for more than 15 minutes, and never on a recently started run;
   - `report` storage and truncation.
 - **bot:**
   - the poller with fakes: setup, dry run and resync store the report and audit with `source: 'web'`;
