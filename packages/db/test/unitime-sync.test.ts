@@ -19,7 +19,11 @@ import {
   recordPlanSync,
   requestPlanSync,
 } from '../src/unitime/status.js';
-import { removeUnownedSessions, syncTimetable } from '../src/unitime/sync.js';
+import {
+  removeFeedScopedSessions,
+  removeUnownedSessions,
+  syncTimetable,
+} from '../src/unitime/sync.js';
 
 const FIXTURE = readFileSync(
   new URL('./fixtures/unitime.ics', import.meta.url),
@@ -720,7 +724,37 @@ describe('feed semesters', () => {
     expect([...(await feedOf()).keys()].sort()).toEqual(['q3', 'q5']);
   });
 
-  it('removeUnownedSessions deletes NULL rows and semesters outside keep', async () => {
+  it('removeUnownedSessions deletes NULL rows of kept semesters and semesters outside keep', async () => {
+    await resetTestDb();
+    // Env rows: "(1rok)" lands in semester 1, "(2rok)" in semester 3.
+    await syncTimetable(
+      db,
+      calendar(
+        ev('e1', '20261005', 'Fizyka (1rok)'),
+        ev('e3', '20261006', 'Chemia (2rok)'),
+      ),
+    );
+    await syncTimetable(db, calendar(ev('n3', '20261007')), {
+      feedSemester: 3,
+    });
+    await syncTimetable(db, calendar(ev('n5', '20261008')), {
+      feedSemester: 5,
+    });
+    expect(await removeUnownedSessions(db, [3])).toBe(2);
+    expect([...(await feedOf()).keys()].sort()).toEqual(['e1', 'n3']);
+  });
+
+  it('removeUnownedSessions with an empty keep deletes only feed rows', async () => {
+    await resetTestDb();
+    await syncTimetable(db, calendar(ev('n1', '20261006')));
+    await syncTimetable(db, calendar(ev('n2', '20261007')), {
+      feedSemester: 4,
+    });
+    expect(await removeUnownedSessions(db, [])).toBe(1);
+    expect([...(await feedOf()).keys()]).toEqual(['n1']);
+  });
+
+  it('removeFeedScopedSessions deletes every feed row and keeps env rows', async () => {
     await resetTestDb();
     await syncTimetable(db, calendar(ev('n1', '20261006')));
     await syncTimetable(db, calendar(ev('n3', '20261007')), {
@@ -729,18 +763,32 @@ describe('feed semesters', () => {
     await syncTimetable(db, calendar(ev('n5', '20261008')), {
       feedSemester: 5,
     });
-    expect(await removeUnownedSessions(db, [3])).toBe(2);
-    expect([...(await feedOf()).keys()]).toEqual(['n3']);
+    expect(await removeFeedScopedSessions(db)).toBe(2);
+    expect([...(await feedOf()).keys()]).toEqual(['n1']);
   });
 
-  it('removeUnownedSessions with an empty keep deletes only NULL rows', async () => {
+  it('a class feed takes over an env exam row it also lists (feed_semester only)', async () => {
     await resetTestDb();
-    await syncTimetable(db, calendar(ev('n1', '20261006')));
-    await syncTimetable(db, calendar(ev('n2', '20261007')), {
-      feedSemester: 4,
+    await syncTimetable(db, calendar(MAIN_EXAM), {
+      allExams: true,
+      source: 'exams',
     });
-    expect(await removeUnownedSessions(db, [])).toBe(1);
-    expect([...(await feedOf()).keys()]).toEqual(['n2']);
+    const before = (await sessionsByUid(db)).get('800000002');
+    expect(before).toMatchObject({ source: 'exams', feedSemester: null });
+    const moved = MAIN_EXAM.replace('LOCATION:D-1 101', 'LOCATION:B-2 7');
+    const stats = await syncTimetable(db, calendar(LECTURE, moved), {
+      feedSemester: 1,
+    });
+    expect(stats).toMatchObject({ updated: 1, created: 1, deleted: 0 });
+    const after = (await sessionsByUid(db)).get('800000002');
+    expect(after).toMatchObject({
+      source: 'exams',
+      feedSemester: 1,
+      room: before?.room,
+    });
+    // Cleanup with semester 1 stored no longer drops it.
+    expect(await removeUnownedSessions(db, [1])).toBe(0);
+    expect((await sessionsByUid(db)).has('800000002')).toBe(true);
   });
 
   it('planStatusText lists feeds', () => {

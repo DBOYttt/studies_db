@@ -1,4 +1,13 @@
-import { and, eq, inArray, isNull, notInArray, or, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
 import type { Semester } from '../admin-fields.js';
 import type { Db, DbExecutor } from '../client.js';
 import type { SessionKind, SessionSource } from '../constants.js';
@@ -372,7 +381,18 @@ export async function syncTimetable(
       // feed's row wins. The class sync leaves it alone; the exam sync takes
       // over a row the class feed imported first.
       if (row.source === 'exams' && source !== 'exams') {
-        stats.unchanged++;
+        // An env exam row (NULL) the semester feed also lists is claimed for
+        // that semester only, so its cleanup does not delete it.
+        if (row.feedSemester === null && opts.feedSemester !== undefined) {
+          await tx
+            .update(classSessions)
+            .set({
+              feedSemester: opts.feedSemester,
+              updatedAt: sql`CURRENT_TIMESTAMP`,
+            })
+            .where(eq(classSessions.id, row.id));
+          stats.updated++;
+        } else stats.unchanged++;
         continue;
       }
       if (sameSession(row, want)) {
@@ -399,23 +419,43 @@ export async function syncTimetable(
 }
 
 /**
- * Deletes the sessions no stored semester feed owns: feed_semester IS NULL
- * (the retired env feed) or a semester not in `keep` (its feed was cleared).
- * Returns how many were removed.
+ * Deletes the sessions no stored semester feed owns: rows of a semester not
+ * in `keep` (its feed was cleared), and env-feed rows (feed_semester NULL)
+ * of subjects whose semester is in `keep` (that semester's feed replaced
+ * them). Env rows of a semester without a stored feed stay until its feed is
+ * added. Returns how many were removed.
  */
 export async function removeUnownedSessions(
   db: Db,
   keep: readonly number[],
 ): Promise<number> {
+  if (keep.length === 0) return removeFeedScopedSessions(db);
+  const keptSubjects = db
+    .select({ id: subjects.id })
+    .from(subjects)
+    .where(inArray(subjects.semester, [...keep]));
   const [res] = await db
     .delete(classSessions)
     .where(
-      keep.length === 0
-        ? isNull(classSessions.feedSemester)
-        : or(
-            isNull(classSessions.feedSemester),
-            notInArray(classSessions.feedSemester, [...keep]),
-          ),
+      or(
+        and(
+          isNull(classSessions.feedSemester),
+          inArray(classSessions.subjectId, keptSubjects),
+        ),
+        notInArray(classSessions.feedSemester, [...keep]),
+      ),
     );
+  return res.affectedRows;
+}
+
+/**
+ * Deletes every row a semester feed imported (feed_semester NOT NULL). The
+ * worker runs it when no feed is stored, so clearing the last feed removes
+ * its sessions; env-feed rows stay. Returns how many were removed.
+ */
+export async function removeFeedScopedSessions(db: Db): Promise<number> {
+  const [res] = await db
+    .delete(classSessions)
+    .where(isNotNull(classSessions.feedSemester));
   return res.affectedRows;
 }

@@ -7,6 +7,7 @@ import {
   listFeeds,
   type PlanSyncStatus,
   recordPlanSync,
+  removeFeedScopedSessions,
   removeUnownedSessions,
   SafeSyncError,
   type SyncStats,
@@ -197,7 +198,31 @@ export async function runPlanSyncOnce(deps: {
   const now = deps.now ?? (() => new Date());
   const env = deps.env ?? process.env;
   const feeds = await listFeeds(deps.db);
+  let cleanupError: string | null = null;
+  if (feeds.length === 0) {
+    // No stored feed: the rows of feeds cleared since go first, then the env
+    // fallback (or nothing) runs.
+    try {
+      const n = await removeFeedScopedSessions(deps.db);
+      if (n > 0) console.log(`Plan: usunięto ${n} sesji usuniętych feedów`);
+    } catch (err) {
+      const raw = err instanceof Error ? err.message : String(err);
+      cleanupError = `Cleanup: ${scrub(raw, deps.url, deps.examUrl)}`;
+      console.error(`Plan: błąd czyszczenia: ${cleanupError}`);
+    }
+  }
   if (feeds.length === 0 && !deps.url) {
+    if (cleanupError) {
+      try {
+        await recordPlanSync(deps.db, {
+          at: now(),
+          ok: false,
+          error: cleanupError,
+        });
+      } catch {
+        console.error('Plan: nie zapisano statusu');
+      }
+    }
     if (!noSourceLogged) {
       noSourceLogged = true;
       console.log('Plan: brak źródeł planu — pomijam');
@@ -212,7 +237,7 @@ export async function runPlanSyncOnce(deps: {
   // Recorded as the run time: a request made while the sync runs is newer
   // than this and so still counts as pending.
   const startedAt = now();
-  const errors: string[] = [];
+  const errors: string[] = cleanupError ? [cleanupError] : [];
   let stats: SyncStats | null = null;
 
   if (feeds.length > 0) {

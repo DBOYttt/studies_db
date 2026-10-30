@@ -71,11 +71,27 @@ afterAll(async () => {
 });
 
 describe('admin lists', () => {
-  it('lists subjects by code with forumLinked and classCount', async () => {
+  it('lists subjects with forumLinked and classCount', async () => {
     const rows = await listSubjectsAdmin(db);
-    expect(rows.map((r) => r.code)).toEqual(['AM', 'ASD']);
-    expect(rows[0]).toMatchObject({ forumLinked: false, classCount: 0 });
-    expect(rows[1]).toMatchObject({ forumLinked: true, classCount: 2 });
+    expect(rows.map((r) => r.code)).toEqual(['ASD', 'AM']);
+    expect(rows[1]).toMatchObject({ forumLinked: false, classCount: 0 });
+    expect(rows[0]).toMatchObject({ forumLinked: true, classCount: 2 });
+  });
+
+  it('lists subjects by semester, then code', async () => {
+    await db.insert(subjects).values([
+      { name: 'Bazy', code: 'BD', semester: 3, ects: 4 },
+      { name: 'Cyfrowe', code: 'AC', semester: 3, ects: 4 },
+      { name: 'Zero', code: 'ZZ', semester: 1, ects: 1 },
+    ]);
+    const rows = await listSubjectsAdmin(db);
+    expect(rows.map((r) => [r.semester, r.code])).toEqual([
+      [1, 'ASD'],
+      [1, 'ZZ'],
+      [2, 'AM'],
+      [3, 'AC'],
+      [3, 'BD'],
+    ]);
   });
 
   it('gets a subject case-insensitively after trim', async () => {

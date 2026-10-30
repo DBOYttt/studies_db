@@ -22,7 +22,7 @@ export async function listSubjectsAdmin(db: DbExecutor) {
       classCount: sql<number>`(SELECT COUNT(*) FROM ${classes} WHERE ${classes.subjectId} = subjects.id)`,
     })
     .from(subjects)
-    .orderBy(asc(subjects.code));
+    .orderBy(asc(subjects.semester), asc(subjects.code));
   return rows.map(({ discordChannelId, classCount, ...r }) => ({
     ...r,
     forumLinked: discordChannelId !== null,

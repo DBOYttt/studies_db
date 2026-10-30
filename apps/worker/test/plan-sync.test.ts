@@ -8,9 +8,11 @@ import {
   getPlanSyncStatus,
   type PlanSyncStatus,
   requestPlanSync,
+  subjects,
   unitimeFeeds,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
+import { eq } from 'drizzle-orm';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   fetchTimetable,
@@ -561,6 +563,8 @@ describe('runPlanSyncOnce with semester feeds', () => {
         (r) => r.feedSemester === null,
       ).length;
     expect(await nullRows()).toBeGreaterThan(0);
+    // Env rows go only for subjects of a semester with a stored feed.
+    await db.update(subjects).set({ semester: 3 });
 
     await setFeeds([
       { semester: 3, classUrl: C3 },
@@ -651,5 +655,68 @@ describe('runPlanSyncOnce with semester feeds', () => {
 
     await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
     expect(await sems()).toEqual(new Set([3]));
+  });
+  it('a feed stored for one semester keeps the env rows of the other semesters', async () => {
+    await db.delete(classSessions);
+    await setFeeds([]);
+    await runPlanSyncOnce({ db, url: ENV_URL, env, fetchImpl: feedFetch([]) });
+    const envRows = await db.select().from(classSessions);
+    const subjectIds = [...new Set(envRows.map((r) => r.subjectId))];
+    expect(subjectIds.length).toBeGreaterThan(1);
+    const [third, ...firsts] = subjectIds as number[];
+    await db.update(subjects).set({ semester: 1 });
+    await db
+      .update(subjects)
+      .set({ semester: 3 })
+      .where(eq(subjects.id, third as number));
+    const firstIds = new Set(
+      envRows
+        .filter((r) => firsts.includes(r.subjectId as number))
+        .map((r) => r.id),
+    );
+
+    await setFeeds([{ semester: 3, classUrl: C3 }]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
+    expect((await getPlanSyncStatus(db)).lastError).toBeNull();
+    const nullRows = (await db.select().from(classSessions)).filter(
+      (r) => r.feedSemester === null,
+    );
+    // Semester 1 has no feed: its env rows survive the fully successful run.
+    expect(new Set(nullRows.map((r) => r.id))).toEqual(firstIds);
+    // Semester 3's env rows are gone.
+    expect(nullRows.some((r) => r.subjectId === third)).toBe(false);
+  });
+
+  it('clearing the last feed removes its sessions on the next run, without an env URL', async () => {
+    await db.delete(classSessions);
+    await setFeeds([
+      { semester: 3, classUrl: C3 },
+      { semester: 5, classUrl: C5 },
+    ]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
+    expect((await db.select().from(classSessions)).length).toBeGreaterThan(0);
+
+    await setFeeds([]);
+    const seen: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen) });
+    } finally {
+      logSpy.mockRestore();
+    }
+    expect(seen).toEqual([]);
+    expect(await db.select().from(classSessions)).toEqual([]);
+  });
+
+  it('clearing the last feed with an env URL removes feed rows and keeps env rows', async () => {
+    await db.delete(classSessions);
+    await setFeeds([{ semester: 3, classUrl: C3 }]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
+
+    await setFeeds([]);
+    await runPlanSyncOnce({ db, url: ENV_URL, env, fetchImpl: feedFetch([]) });
+    const rows = await db.select().from(classSessions);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.feedSemester === null)).toBe(true);
   });
 });
