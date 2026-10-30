@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { SemesterProvider } from '@/components/SemesterSwitcher';
+import { getViewsPool } from '@/lib/db';
+import { currentSemester, listPresentSemesters } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
 /**
@@ -12,5 +15,13 @@ export default async function SimpleLayout({
   children: ReactNode;
 }) {
   await requireUser();
-  return children;
+  const [current, present] = await Promise.all([
+    currentSemester({}),
+    listPresentSemesters(getViewsPool()).catch(() => []),
+  ]);
+  return (
+    <SemesterProvider present={present} current={current}>
+      {children}
+    </SemesterProvider>
+  );
 }

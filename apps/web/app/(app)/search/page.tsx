@@ -3,12 +3,14 @@ import { searchAll } from '@studies/db';
 import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Highlight } from '@/components/Highlight';
+import { SemesterEmpty } from '@/components/SemesterEmpty';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
 import { explorerHref } from '@/lib/explorer';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
 import { searchCounts, searchCountText } from '@/lib/search-count';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
 export const metadata: Metadata = { title: 'Search' };
@@ -33,6 +35,7 @@ export default async function SearchPage({
 }) {
   await requireUser();
   const sp = await searchParams;
+  const semester = await currentSemester(sp);
   const q = (typeof sp.q === 'string' ? sp.q : '').slice(0, 200).trim();
   const subjectId = posInt(sp.subject);
   const tagId = posInt(sp.tag);
@@ -41,7 +44,13 @@ export default async function SearchPage({
     listSubjectOptions(db),
     listAllTags(db),
     q
-      ? searchAll(db, { q, subjectId, tagId, limit: SEARCH_LIMIT })
+      ? searchAll(db, {
+          q,
+          subjectId,
+          tagId,
+          limit: SEARCH_LIMIT,
+          semester: semester ?? undefined,
+        })
       : Promise.resolve([]),
   ]);
   // searchAll caps at SEARCH_LIMIT (its maximum): a full page means "maybe more".
@@ -178,6 +187,10 @@ export default async function SearchPage({
           >
             <WarningCircle size={16} weight="fill" aria-hidden />
             <span>No results for “{q}”.</span>
+            <SemesterEmpty
+              semester={semester}
+              path={`/search?q=${encodeURIComponent(q)}`}
+            />
           </div>
         )}
       </div>

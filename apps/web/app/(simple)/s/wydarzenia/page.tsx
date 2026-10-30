@@ -8,6 +8,7 @@ import { getViewsPool } from '@/lib/db';
 import { parseEventsPage, upcomingEventsPage } from '@/lib/events-index';
 import { noticeFromSearchParams } from '@/lib/notices';
 import { nowWall } from '@/lib/plan';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
 
@@ -25,11 +26,15 @@ export default async function SimpleEventsIndex({
 }) {
   const user = await requireUser();
   const sp = await searchParams;
+  const semester = await currentSemester(sp);
   const [cards, data] = await Promise.all([
-    cachedSubjectCards(),
-    upcomingEventsPage(getViewsPool(), nowWall(), parseEventsPage(sp)).catch(
-      () => null,
-    ),
+    cachedSubjectCards(semester),
+    upcomingEventsPage(
+      getViewsPool(),
+      nowWall(),
+      parseEventsPage(sp),
+      semester,
+    ).catch(() => null),
   ]);
   return (
     <SimpleShell
@@ -40,7 +45,7 @@ export default async function SimpleEventsIndex({
       adminEntry={user.isAdmin ? <SimpleAdminEntry /> : null}
     >
       <Notice text={noticeFromSearchParams(sp)} />
-      <EventsIndex data={data} simple />
+      <EventsIndex data={data} simple semester={semester} />
     </SimpleShell>
   );
 }

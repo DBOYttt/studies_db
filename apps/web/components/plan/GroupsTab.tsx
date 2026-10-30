@@ -13,11 +13,18 @@ export const errBox =
   'rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg';
 
 /** "My groups" tab of the timetable; `weekHref` is the week view of the same mode. */
-export async function GroupsTab({ weekHref }: { weekHref: string }) {
+export async function GroupsTab({
+  weekHref,
+  semester = null,
+}: {
+  weekHref: string;
+  /** The chosen semester: only its classes are offered. */
+  semester?: number | null;
+}) {
   const user = await requireUser();
   try {
     const [options, stored, reminders] = await Promise.all([
-      listMyGroupOptions(getViewsPool()),
+      listMyGroupOptions(getViewsPool(), semester),
       getMyGroups(getDb(), user.id),
       getReminderPrefs(getDb(), user.id),
     ]);

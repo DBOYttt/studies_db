@@ -1,6 +1,7 @@
 import { Plus } from '@phosphor-icons/react/dist/ssr';
 import Link from 'next/link';
 import { EventRow } from '@/components/events/EventRow';
+import { SemesterEmpty } from '@/components/SemesterEmpty';
 import { type EventsPage, eventsIndexHref } from '@/lib/events-index';
 
 const navBtn =
@@ -13,9 +14,12 @@ const navBtn =
 export function EventsIndex({
   data,
   simple,
+  semester = null,
 }: {
   data: EventsPage | null;
   simple: boolean;
+  /** The chosen semester (empty state offers "Show all semesters"). */
+  semester?: number | null;
 }) {
   const base = simple ? '/s/wydarzenia' : '/wydarzenia';
   return (
@@ -53,9 +57,17 @@ export function EventsIndex({
           Could not load the events. Try again.
         </p>
       ) : data.events.length === 0 ? (
-        <p className="m-0 rounded-md border border-line-strong bg-zebra px-4 py-3 text-muted">
-          {data.page > 1 ? 'No more upcoming events.' : 'No upcoming events.'}
-        </p>
+        <div className="flex flex-col gap-1.5 rounded-md border border-line-strong bg-zebra px-4 py-3 text-muted">
+          <p className="m-0">
+            {data.page > 1 ? 'No more upcoming events.' : 'No upcoming events.'}
+          </p>
+          {data.page === 1 && (
+            <SemesterEmpty
+              semester={semester}
+              path={eventsIndexHref(simple, 1)}
+            />
+          )}
+        </div>
       ) : (
         <ul
           aria-label="Upcoming events"

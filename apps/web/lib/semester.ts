@@ -1,34 +1,21 @@
-import { isSemester, type Semester } from '@studies/db/fields';
+import type mysql from 'mysql2/promise';
 import { cookies } from 'next/headers';
+import {
+  SEMESTER_COOKIE,
+  type Semester,
+  semesterFromRequest,
+} from './semester-pure';
 
-export type { Semester };
-
-export const SEMESTER_COOKIE = 'studiesdb.semester';
+export {
+  parseSemesterValue,
+  SEMESTER_COOKIE,
+  type Semester,
+  type SemesterOption,
+  semesterFromRequest,
+  semesterOptions,
+} from './semester-pure';
 
 type SP = Record<string, string | string[] | undefined>;
-
-/** `1`..`7` exactly (first value only), else null: no spaces, signs or zeros. */
-export function parseSemesterValue(
-  v: string | string[] | undefined,
-): Semester | null {
-  const s = Array.isArray(v) ? v[0] : v;
-  if (typeof s !== 'string' || !/^[1-7]$/.test(s)) return null;
-  const n = Number(s);
-  return isSemester(n) ? n : null;
-}
-
-/**
- * `?sem=` wins (`all` is null even when a cookie is set); a missing or bad
- * `?sem` falls back to the cookie, whose bad value means all semesters.
- */
-export function semesterFromRequest(
-  sp: SP,
-  cookieValue: string | undefined,
-): Semester | null {
-  const raw = Array.isArray(sp.sem) ? sp.sem[0] : sp.sem;
-  if (raw === 'all') return null;
-  return parseSemesterValue(raw) ?? parseSemesterValue(cookieValue);
-}
 
 /** The chosen semester of this request (`?sem=` then the cookie), or null. */
 export async function currentSemester(sp: SP): Promise<Semester | null> {
@@ -57,4 +44,14 @@ export function withoutSem(path: string): string {
   params.delete('sem');
   const qs = params.toString();
   return `${rest.slice(0, q)}${qs ? `?${qs}` : ''}${hash}`;
+}
+
+/** Semesters that have at least one subject, ascending (public view only). */
+export async function listPresentSemesters(
+  pool: mysql.Pool,
+): Promise<number[]> {
+  const [rows] = await pool.query(
+    'SELECT DISTINCT semester FROM v_subjects ORDER BY semester',
+  );
+  return (rows as { semester: number }[]).map((r) => Number(r.semester));
 }

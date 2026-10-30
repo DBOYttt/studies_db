@@ -47,7 +47,9 @@ export async function PlanWeekTab({
         loadPlanWeek(pool, raw, now, filter),
         // Without the lookups blocks link to the subject only.
         loadLinkContext(getDb()).catch(() => undefined),
-        myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
+        myGroupsFilter
+          ? listMyGroupOptions(pool, filter.semester)
+          : Promise.resolve(null),
         user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
       ]);
     const marks = await listWeekMarks(

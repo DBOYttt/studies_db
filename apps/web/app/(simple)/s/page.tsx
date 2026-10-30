@@ -1,5 +1,6 @@
 import type { Metadata } from 'next';
 import { Suspense } from 'react';
+import { SemesterEmpty } from '@/components/SemesterEmpty';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
@@ -11,6 +12,7 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
 import { loadMyGroups } from '@/lib/my-groups-load';
 import { nowWall, type PlanSession } from '@/lib/plan';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
@@ -31,16 +33,23 @@ export default async function SimpleStart({
   const user = await requireUser();
   const sp = await searchParams;
   const db = getDb();
-  const cardsP = cachedSubjectCards();
+  const semester = await currentSemester(sp);
+  const cardsP = cachedSubjectCards(semester);
   // Started now, awaited in its own Suspense boundary so the rest of the
   // page does not wait for it. Events are optional on the start page: a
   // failure leaves the card empty.
   // My groups is read once for both cards.
   const pool = getViewsPool();
   const mine = loadMyGroups(db, pool, user.id);
-  const upcoming = upcomingForUser(db, pool, user.id, nowWall(), 5, mine).catch(
-    () => [],
-  );
+  const upcoming = upcomingForUser(
+    db,
+    pool,
+    user.id,
+    nowWall(),
+    5,
+    mine,
+    semester,
+  ).catch(() => []);
   // Today's classes stream the same way; a failure says so in the card.
   const today = todayForUser(db, pool, user.id, new Date(), { mine }).catch(
     () => 'error' as const,
@@ -48,7 +57,7 @@ export default async function SimpleStart({
   const [cards, recent, preview] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5, withTotal: false }),
-    loadSimplePreview(db, sp, cardsP),
+    loadSimplePreview(db, sp, cachedSubjectCards()),
   ]);
   return (
     <SimpleShell
@@ -83,6 +92,7 @@ export default async function SimpleStart({
         </p>
       </div>
       <SubjectCards cards={cards} />
+      {cards.length === 0 && <SemesterEmpty semester={semester} path="/s" />}
       <h2 className="mt-3 mb-0 text-base font-semibold">Recently added</h2>
       <FileList
         files={isoFiles(recent.rows)}

@@ -7,6 +7,7 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { plural } from '@/lib/format';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { parsePageParam } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
@@ -31,11 +32,12 @@ export default async function SimpleRecent({
   const sp = await searchParams;
   const db = getDb();
   const page = parsePageParam(sp, MAX_PAGES);
-  const cardsP = cachedSubjectCards();
+  const semester = await currentSemester(sp);
+  const cardsP = cachedSubjectCards(semester);
   const [cards, list, preview] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: page * PER_PAGE }),
-    loadSimplePreview(db, sp, cardsP),
+    loadSimplePreview(db, sp, cachedSubjectCards()),
   ]);
   const baseHref = page > 1 ? `/s/recent?page=${page}` : '/s/recent';
   const shown = list.rows.length;

@@ -8,6 +8,7 @@ import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { EXAMPLE_QUERIES } from '@/lib/example-queries';
 import { plural } from '@/lib/format';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import {
   MAX_ROWS,
@@ -36,7 +37,7 @@ export default async function SimpleReports({
   const r = parseReportIndex((await searchParams).r);
   const query = EXAMPLE_QUERIES[r];
   const [cards, result] = await Promise.all([
-    cachedSubjectCards(),
+    cachedSubjectCards(await currentSemester({})),
     runReadonlyQuery(getRoPool(), query.sql, { maxRows: MAX_ROWS }).catch(
       (err: unknown) => ({ ok: false as const, error: roErrorMessage(err) }),
     ),

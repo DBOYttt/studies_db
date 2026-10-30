@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SemesterBar, SemesterSwitcher } from '@/components/SemesterSwitcher';
 import { ModeSwitch } from '@/components/shell/ModeSwitch';
 import { SkipLink } from '@/components/shell/SkipLink';
 import type { SessionUser } from '@/lib/session';
@@ -169,6 +170,7 @@ export function SimpleShell({
           </button>
           <Crumbs crumbs={crumbs} />
           <div className="flex shrink-0 items-center gap-2 text-[13px] text-muted">
+            <SemesterSwitcher />
             <ModeSwitch mode="simple" />
             {user.avatarUrl ? (
               // biome-ignore lint/performance/noImgElement: external Discord CDN avatar
@@ -204,6 +206,7 @@ export function SimpleShell({
             </form>
           </div>
         </header>
+        <SemesterBar />
         <div className="flex min-h-0 flex-1">
           <main
             id="content"

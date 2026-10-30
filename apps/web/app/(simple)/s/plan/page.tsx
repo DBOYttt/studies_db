@@ -18,6 +18,7 @@ import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
 import { noticeFromSearchParams } from '@/lib/notices';
 import { syncFailed, syncLine } from '@/lib/plan-view';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
 
@@ -47,7 +48,8 @@ export default async function SimplePlan({
   // Without the status the screen still works, just without the footer.
   // Not awaited here: it loads alongside the tab's data.
   const status = getPlanSyncStatus(db).catch(() => null);
-  const cards = await cachedSubjectCards();
+  const semester = await currentSemester(sp);
+  const cards = await cachedSubjectCards(semester);
   return (
     <SimpleShell
       subjects={navSubjects(cards)}
@@ -97,10 +99,16 @@ export default async function SimplePlan({
       <SyncWarning status={status} />
       {tab === 'week' ? (
         <Suspense fallback={<PlanWeekSkeleton />}>
-          <PlanWeekTab week={sp.week} path="/s/plan" myGroupsFilter simple />
+          <PlanWeekTab
+            week={sp.week}
+            path="/s/plan"
+            filter={{ semester }}
+            myGroupsFilter
+            simple
+          />
         </Suspense>
       ) : (
-        <GroupsTab weekHref="/s/plan" />
+        <GroupsTab weekHref="/s/plan" semester={semester} />
       )}
       <SyncFooter status={status} />
     </SimpleShell>

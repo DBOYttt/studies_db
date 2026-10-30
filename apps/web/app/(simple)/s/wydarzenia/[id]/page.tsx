@@ -8,6 +8,7 @@ import { getDb } from '@/lib/db';
 import { loadEventPage, parseEventId } from '@/lib/event-page';
 import { noticeFromSearchParams } from '@/lib/notices';
 import { eventMetadata } from '@/lib/page-meta';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { loadSimplePreview, navSubjects } from '@/lib/simple-page';
 
@@ -36,9 +37,9 @@ export default async function SimpleEvent({
   const db = getDb();
   const [e, cards] = await Promise.all([
     loadEventPage(id, user),
-    cachedSubjectCards(),
+    cachedSubjectCards(await currentSemester(sp)),
   ]);
-  const preview = await loadSimplePreview(db, sp, cards);
+  const preview = await loadSimplePreview(db, sp, cachedSubjectCards());
   const baseHref = `/s/wydarzenia/${id}`;
   return (
     <SimpleShell
