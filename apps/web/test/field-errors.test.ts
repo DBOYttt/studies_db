@@ -6,13 +6,7 @@ import {
   parseSubjectAdd,
   parseSubjectEdit,
 } from '@/lib/admin-forms';
-import { composeWhen } from '@/lib/event-view';
-import {
-  eventFieldOf,
-  fieldAria,
-  fieldErrorId,
-  withEventField,
-} from '@/lib/field-errors';
+import { fieldAria, fieldErrorId } from '@/lib/field-errors';
 
 const form = (o: Record<string, string>) => {
   const f = new FormData();
@@ -73,49 +67,6 @@ describe('admin parse refusals name their field', () => {
         form({ code: 'ASD', lecturerId: '1', kind: 'wyklad', group: '0' }),
       ),
     ).toMatchObject({ ok: false, field: 'group' });
-  });
-});
-
-describe('event refusals map to their field', () => {
-  it.each([
-    ['The title must be 1 to 100 characters.', 'title'],
-    ['The place can be at most 100 characters.', 'place'],
-    ['The note can be at most 1000 characters.', 'note'],
-    ['The end must be after the start.', 'end'],
-    ['The date cannot be more than a year ahead.', 'date'],
-    ['Enter the date until which the event repeats.', 'until'],
-  ])('%s', (message, fieldName) => {
-    expect(eventFieldOf(message)).toBe(fieldName);
-  });
-
-  it("maps the form's own When messages", () => {
-    const missing = composeWhen('', '', '');
-    const noStart = composeWhen('2026-11-05', '', '10:00');
-    if (missing.ok || noStart.ok) throw new Error('expected refusals');
-    expect(eventFieldOf(missing.message)).toBe('date');
-    expect(eventFieldOf(noStart.message)).toBe('start');
-  });
-
-  it('leaves other refusals general', () => {
-    expect(eventFieldOf('You are banned.')).toBeUndefined();
-    expect(eventFieldOf('toString')).toBeUndefined();
-    expect(withEventField({ ok: false, message: 'Event not found.' })).toEqual({
-      ok: false,
-      message: 'Event not found.',
-    });
-  });
-
-  it('adds the field to a refusal only', () => {
-    expect(
-      withEventField({
-        ok: false,
-        message: 'The title must be 1 to 100 characters.',
-      }),
-    ).toMatchObject({ field: 'title' });
-    expect(withEventField({ ok: true, message: 'Invalid time.' })).toEqual({
-      ok: true,
-      message: 'Invalid time.',
-    });
   });
 });
 

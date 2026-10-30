@@ -149,6 +149,10 @@ describe('event actions', () => {
     expect(
       await A.createEventAction(form({ start: '', end: '11:00' })),
     ).toEqual({ ok: false, message: 'Enter the start time.', field: 'start' });
+    // the db's subject check names the Subject select
+    expect(
+      await A.createEventAction(form({ subjectId: '999999' })),
+    ).toMatchObject({ ok: false, field: 'subjectId' });
     expect(await eventRows()).toHaveLength(0);
   });
 
@@ -295,9 +299,27 @@ describe('event actions', () => {
     });
     expect(await eventRows()).toHaveLength(before);
 
-    // a missing "do" is refused in Polish
+    // a missing "do" is refused, about Until
     const bad = await A.createEventAction(form({ repeat: 'weekly' }));
-    expect(bad.ok).toBe(false);
+    expect(bad).toMatchObject({ ok: false, field: 'until' });
+    // more than the series' cap of occurrences is about Until too
+    const far = new Date(Date.now() + 300 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const tooMany = await A.createEventAction(
+      form({ repeat: 'weekly', until: far }),
+    );
+    expect(tooMany).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('occurrences'),
+      field: 'until',
+    });
+    // so is an end date before the first event (the db's own message)
+    const before2 = await A.createEventAction(
+      form({ repeat: 'weekly', until: '2000-01-01' }),
+    );
+    expect(before2).toMatchObject({ ok: false, field: 'until' });
+    expect(await eventRows()).toHaveLength(before);
 
     await expect(
       A.updateEventAction(

@@ -12,10 +12,16 @@ import { loadEvent } from './page-loaders';
 import type { SessionUser } from './session';
 import { uploadFileExists } from './storage';
 
+/** The `[id]` segment as an event id, or null unless a positive integer. */
+export function eventIdOf(raw: string): number | null {
+  return /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : null;
+}
+
 /** Parses the `[id]` segment; 404 for anything but a positive integer. */
 export function parseEventId(raw: string): number {
-  if (!/^[1-9]\d{0,9}$/.test(raw)) notFound();
-  return Number(raw);
+  const id = eventIdOf(raw);
+  if (id === null) notFound();
+  return id;
 }
 
 /**

@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { lecturerLabel, parseSubjectParam } from './admin-pages';
 import { parseEntityId } from './entity-page';
+import { eventIdOf } from './event-page';
 import {
   loadEvent,
   loadLecturer,
@@ -50,8 +51,6 @@ const decoded = (raw: string): string | null => {
   }
 };
 
-const EVENT_ID_RE = /^[1-9]\d{0,9}$/;
-
 /**
  * Loads for a title; `name` null means the visitor gets a 404. A failed load
  * (the page shows its own error) gets the plain `fallback` title.
@@ -81,19 +80,24 @@ export async function subjectMetadata(rawCode: string): Promise<Metadata> {
 
 /**
  * The event pages: the event's title, prefixed for the edit form. A deleted
- * event is only titled for an admin, as only an admin may open its page.
+ * event's page is a 404 for a non-admin, so it gets the 404 title; its edit
+ * form still opens (with the "This event was deleted" banner), titled
+ * `Edit event` without the name.
  */
 export async function eventMetadata(
   rawId: string,
   edit = false,
 ): Promise<Metadata> {
   const user = await currentUser();
-  if (!user || !EVENT_ID_RE.test(rawId)) return HIDDEN;
+  const id = eventIdOf(rawId);
+  if (!user || id === null) return HIDDEN;
   return titled(
-    loadEvent(Number(rawId)),
+    loadEvent(id),
     (ev) =>
       ev.deletedAt !== null && !user.isAdmin
-        ? null
+        ? edit
+          ? 'Edit event'
+          : null
         : edit
           ? `Edit ${ev.title}`
           : ev.title,

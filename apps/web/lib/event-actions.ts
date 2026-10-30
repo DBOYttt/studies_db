@@ -23,9 +23,9 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { invalidateCounts } from './count-cache';
 import { getDb, getViewsPool } from './db';
+import { withEventField } from './event-fields';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
-import { withEventField } from './field-errors';
 import { withNotice } from './notices';
 import { nowWall } from './plan';
 import { requireAdmin, requireUser } from './session';
@@ -121,7 +121,7 @@ export type EventFormResult = ActionResult & { field?: string };
 export async function createEventAction(
   form: FormData,
 ): Promise<EventFormResult> {
-  return withEventField(await createEvent(form));
+  return withEventField(await createEvent(form), form);
 }
 
 async function createEvent(form: FormData): Promise<ActionResult> {
@@ -164,7 +164,7 @@ export async function updateEventAction(
   id: number,
   form: FormData,
 ): Promise<EventFormResult> {
-  return withEventField(await updateEvent(id, form));
+  return withEventField(await updateEvent(id, form), form);
 }
 
 async function updateEvent(id: number, form: FormData): Promise<ActionResult> {
