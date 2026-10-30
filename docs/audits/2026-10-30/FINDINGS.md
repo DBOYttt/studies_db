@@ -39,14 +39,14 @@ Still open after G5:
   still copy the whole repo with dev dependencies.
 - `DATABASE_URL` and `DB_APP_PASSWORD` must be kept in sync by hand.
 
-**G6 (performance)**, branch `fix/g6-performance`: f4b61ab and 37f6071 (Task 1, a views pool for fixed application queries, separate from the user-SQL pool), c80759d (Task 2, index-friendly upcoming events, group options and timetable loading), 935ee73 (Task 3, claim and audit indexes in migration 0026, search snippets after the limit), 14a75ff (Task 4, refresh back-off, nav cache refresh, `reminder_log` pruning, batched import), and this commit (Task 5, P12: the week timetable and the Start page's Upcoming events stream behind `<Suspense>` skeletons; `loading.tsx` only on segments that cannot 404 or redirect, because a group-root fallback turned the admin and entity 404s into streamed 200s).
+**G6 (performance)**, branch `fix/g6-performance`: f4b61ab and 37f6071 (Task 1, a views pool for fixed application queries, separate from the user-SQL pool), c80759d (Task 2, index-friendly upcoming events, group options and timetable loading), 935ee73 (Task 3, claim and audit indexes in migration 0026, search snippets after the limit), 14a75ff (Task 4, refresh back-off, nav cache refresh, `reminder_log` pruning, batched import), and this commit (Task 5, P12: the week timetable and the Start page's Upcoming events stream behind `<Suspense>` skeletons; `loading.tsx` only on advanced segments that cannot 404 or redirect, because a group-root fallback turned the admin and entity 404s into streamed 200s; simple mode keeps its own frame while pages load, and `/s/plan`'s slow part is under `<Suspense>`).
 
 Still open after G6:
 - The upcoming-events index range only pays off once events spread beyond 31 days.
 - The views pool has no queue limit.
 - Search ties are now ordered explicitly (material first, then id); check that this is the order wanted.
 - AutoRefresh's back-off does not reset when the active request changes.
-- No `loading.tsx` on admin pages, entity pages, `/tables/<view>`, `/` and `/s` itself (see above); they render as before.
+- No `loading.tsx` on admin pages, entity pages, `/tables/<view>`, `/`, or any simple page (`/s`, `/s/plan`, `/s/search`, `/s/recent`, `/s/reports`); they render as before. `/s/search`, `/s/recent` and `/s/reports` could stream their results under an in-page `<Suspense key=…>` inside `SimpleShell` later.
 
 ## Not verified / needs a live check
 - **Preview "Loading…" hang:** reported by 4 personas. Re-checked on a quiet sandbox, where the PDF loaded in about 3 s, so it was dev-server load. A preview timeout fallback (curator E5) is still worth adding under G7.

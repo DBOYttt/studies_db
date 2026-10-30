@@ -278,7 +278,8 @@ test('a stale session cookie still redirects before anything streams', async ({
       },
     ]);
     const page = await context.newPage();
-    for (const path of ['/s', '/s/plan']) {
+    // /plan: an advanced page behind a loading.tsx boundary.
+    for (const path of ['/s', '/s/plan', '/plan']) {
       const res = await page.request.get(path, { maxRedirects: 0 });
       expect([303, 307], path).toContain(res.status());
       expect(res.headers().location, path).toMatch(/^\/login-info/);

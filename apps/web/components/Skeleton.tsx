@@ -15,8 +15,10 @@ export function Bone({ className = '' }: { className?: string }) {
 }
 
 /**
- * Busy region (role=status is polite): screen readers hear one "Loading…";
- * the blocks are aria-hidden and the wrappers carry no text.
+ * Busy placeholder: `aria-busy` on the blocks' container, and a separate
+ * polite status (outside it, so busy does not hold it back) saying
+ * "Loading…". It is visually hidden and positioned out of the layout flow.
+ * The blocks are aria-hidden and the wrappers carry no text.
  */
 export function SkeletonRegion({
   className = '',
@@ -26,10 +28,14 @@ export function SkeletonRegion({
   children: ReactNode;
 }) {
   return (
-    <div role="status" aria-busy="true" className={className}>
-      <span className="sr-only">Loading…</span>
-      {children}
-    </div>
+    <>
+      <span role="status" className="sr-only">
+        Loading…
+      </span>
+      <div aria-busy="true" className={className}>
+        {children}
+      </div>
+    </>
   );
 }
 
@@ -81,53 +87,5 @@ export function AppPaneSkeleton() {
         ))}
       </div>
     </SkeletonRegion>
-  );
-}
-
-/**
- * Simple view while a page loads. Each simple page renders its own
- * SimpleShell, so this draws the same frame (sidebar, top bar, content) with
- * neutral blocks; it knows no user and no subjects.
- */
-export function SimplePageSkeleton() {
-  return (
-    <div className="grid h-[100dvh] grid-cols-[minmax(0,1fr)] overflow-hidden text-[14px] md:grid-cols-[248px_minmax(0,1fr)]">
-      <div
-        aria-hidden
-        className="flex flex-col gap-3 border-r border-line-strong bg-surface p-4 max-md:hidden"
-      >
-        <Bone className="h-6 w-32" />
-        {[0, 1, 2, 3, 4, 5].map((i) => (
-          <Bone key={i} className="h-4 w-full" />
-        ))}
-      </div>
-      <div className="flex min-h-0 min-w-0 flex-col">
-        <div
-          aria-hidden
-          className="flex h-12 shrink-0 items-center gap-3 border-b border-line-strong bg-bar px-5 max-md:px-2"
-        >
-          <Bone className="h-4 w-40" />
-          <span className="flex-1" />
-          <Bone className="h-4 w-24" />
-        </div>
-        <main className="min-w-0 flex-1 overflow-y-auto px-7 pt-6 pb-10 max-md:px-4 max-md:pt-5">
-          <SkeletonRegion className="grid max-w-[1080px] grid-cols-[minmax(0,1fr)] gap-4">
-            <Bone className="h-7 w-48" />
-            <Bone className="h-4 w-80 max-w-full" />
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
-              {[0, 1, 2, 3, 4, 5].map((i) => (
-                <div
-                  key={i}
-                  className="flex flex-col gap-2 rounded-md border border-line-strong bg-panel p-3.5"
-                >
-                  <Bone className="h-4 w-2/3" />
-                  <Bone className="h-3 w-1/3" />
-                </div>
-              ))}
-            </div>
-          </SkeletonRegion>
-        </main>
-      </div>
-    </div>
   );
 }
