@@ -4,6 +4,7 @@ import {
   classSessions,
   createRateLimiter,
   type Db,
+  GROUP_IMPORT_SAVE_FAILED,
   type GroupImportPreview,
   getMyGroups,
   NO_CLASSES_MESSAGE,
@@ -43,7 +44,7 @@ const preview = (
   matched: [],
   ambiguous: [],
   unmatched: [],
-  skipped: { exam: 0, noKind: 0, noGroup: 0 },
+  skipped: { exam: 0, noKind: 0, noGroup: 0, noDates: 0 },
   ...over,
 });
 const all = (n: number) => new Set(Array.from({ length: n }, (_, k) => k + 1));
@@ -126,6 +127,21 @@ describe('groupImportSummary', () => {
       '• Przedmiot 1 · Laboratorium: Gr. 1',
       'Several groups for A · B; pick one in My groups.',
       '2 entries not matched.',
+    ]);
+  });
+
+  it('counts the entries without dates', () => {
+    const s = groupImportSummary(
+      preview({
+        matched: matched(1),
+        skipped: { exam: 1, noKind: 0, noGroup: 0, noDates: 2 },
+      }),
+      { set: 1, changed: all(1) },
+    );
+    expect(s.split('\n')).toEqual([
+      'Saved 1 group.',
+      '• Przedmiot 1 · Laboratorium: Gr. 1',
+      'Skipped: 2 without dates.',
     ]);
   });
 
@@ -421,6 +437,25 @@ describe('import from UniTime in #panel', () => {
     const logged = JSON.stringify(spies.map((s) => s.mock.calls));
     expect(logged).not.toContain('SECRET');
     expect(logged).not.toContain('calendar?q');
+  });
+
+  it('says the groups could not be saved when saving fails, logging no message', async () => {
+    const err = vi.spyOn(console, 'error').mockImplementation(() => {});
+    vi.spyOn(db, 'transaction').mockRejectedValue(
+      Object.assign(new Error(`Cannot add a child row (${URL_OK})`), {
+        code: 'ER_NO_REFERENCED_ROW_2',
+        errno: 1452,
+      }),
+    );
+    const i = interaction(SUBMIT, URL_OK);
+    await handler(calendarFetch())(i);
+    expect(textOf(i.editReply.mock.calls[0][0])).toBe(GROUP_IMPORT_SAVE_FAILED);
+    expect(err).toHaveBeenCalledWith('group import failed:', {
+      name: 'Error',
+      code: 'ER_NO_REFERENCED_ROW_2',
+      errno: 1452,
+    });
+    expect(JSON.stringify(err.mock.calls)).not.toContain('SECRET');
   });
 
   it('keeps the summary when the groups view cannot be sent', async () => {

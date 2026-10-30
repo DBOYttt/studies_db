@@ -245,17 +245,18 @@ function buildEvent(props: Prop[]): IcsEvent | null {
 export const MAX_OCCURRENCES = 500;
 
 /**
- * Expands a (weekly) event into its occurrences, in wall time. Unsupported
- * rules yield the first occurrence only. UNTIL is capped at one year after
- * the start and the result at `max` occurrences, so a hostile rule can't run
- * away.
+ * Walks the occurrence start instants of a weekly event (the rules of
+ * `expandOccurrences`) and returns how many it visited, at most `max`.
  */
-export function expandOccurrences(
+function walkOccurrences(
   ev: IcsEvent,
-  max = MAX_OCCURRENCES,
-): { start: WallTime; end: WallTime }[] {
-  if (!ev.rrule) return [{ start: ev.start, end: ev.end }];
-  const duration = ev.end.getTime() - ev.start.getTime();
+  max: number,
+  visit: (start: number) => void,
+): number {
+  if (!ev.rrule) {
+    visit(ev.start.getTime());
+    return 1;
+  }
   const byDay =
     ev.rrule.byDay.length > 0 ? [...ev.rrule.byDay] : [ev.start.getUTCDay()];
   // Weeks start on Monday (WKST=MO); offsets 0..6 = Mon..Sun.
@@ -275,14 +276,40 @@ export function expandOccurrences(
   );
   const skip = new Set(ev.exdates.map((d) => d.getTime()));
 
-  const out: { start: WallTime; end: WallTime }[] = [];
+  let n = 0;
   for (let week = monday; week + timeOfDay <= until; week += 7 * DAY_MS) {
     for (const off of offsets) {
       const s = week + off * DAY_MS + timeOfDay;
       if (s < ev.start.getTime() || s > until || skip.has(s)) continue;
-      out.push({ start: new Date(s), end: new Date(s + duration) });
-      if (out.length >= max) return out;
+      visit(s);
+      if (++n >= max) return n;
     }
   }
+  return n;
+}
+
+/**
+ * Expands a (weekly) event into its occurrences, in wall time. Unsupported
+ * rules yield the first occurrence only. UNTIL is capped at one year after
+ * the start and the result at `max` occurrences, so a hostile rule can't run
+ * away.
+ */
+export function expandOccurrences(
+  ev: IcsEvent,
+  max = MAX_OCCURRENCES,
+): { start: WallTime; end: WallTime }[] {
+  const duration = ev.end.getTime() - ev.start.getTime();
+  const out: { start: WallTime; end: WallTime }[] = [];
+  walkOccurrences(ev, max, (s) =>
+    out.push({ start: new Date(s), end: new Date(s + duration) }),
+  );
   return out;
+}
+
+/**
+ * `expandOccurrences(ev, max).length`, without allocating the occurrences
+ * (the import weighs every entry of an untrusted calendar this way).
+ */
+export function countOccurrences(ev: IcsEvent, max = MAX_OCCURRENCES): number {
+  return walkOccurrences(ev, max, () => {});
 }

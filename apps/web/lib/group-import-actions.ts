@@ -4,10 +4,12 @@ import {
   applyGroupImport,
   fetchImportCalendar,
   GROUP_IMPORT_MAX_PAIRS,
+  GROUP_IMPORT_SAVE_FAILED,
   type GroupImportPreview,
   groupImportNotice,
   importAllowedHosts,
   importErrorMessage,
+  logGroupImportError,
   normalizeImportUrl,
   planGroupImport,
 } from '@studies/db';
@@ -63,32 +65,42 @@ export async function previewGroupImportAction(
     const preview = await planGroupImport(getDb(), user.id, text);
     return { ok: true, preview, notice: groupImportNotice(preview) };
   } catch (err) {
-    // Not logged: the error may embed the link.
+    // Only name/code/errno of an unexpected error: the message may embed
+    // the link.
+    logGroupImportError(err);
     return { ok: false, error: importErrorMessage(err) };
   }
 }
 
-/** Saves the chosen `{ classId, groupId }` pairs (merged into My groups). */
+/**
+ * Saves the chosen `{ classId, groupId }` pairs (merged into My groups);
+ * only the first `GROUP_IMPORT_MAX_PAIRS` are kept, like the bot.
+ */
 export async function applyGroupImportAction(
   pairs: unknown,
 ): Promise<{ ok: true; set: number } | Fail> {
   const user = await requireUser();
-  const valid =
-    Array.isArray(pairs) &&
-    pairs.length <= GROUP_IMPORT_MAX_PAIRS &&
-    pairs.every(
-      (p) =>
-        typeof p === 'object' &&
-        p !== null &&
-        isId((p as { classId?: unknown }).classId) &&
-        isId((p as { groupId?: unknown }).groupId),
-    );
+  if (!Array.isArray(pairs)) return { ok: false, error: 'Invalid selection.' };
+  const head: unknown[] = pairs.slice(0, GROUP_IMPORT_MAX_PAIRS);
+  const valid = head.every(
+    (p) =>
+      typeof p === 'object' &&
+      p !== null &&
+      isId((p as { classId?: unknown }).classId) &&
+      isId((p as { groupId?: unknown }).groupId),
+  );
   if (!valid) return { ok: false, error: 'Invalid selection.' };
-  const clean = (pairs as { classId: number; groupId: number }[]).map((p) => ({
+  const clean = (head as { classId: number; groupId: number }[]).map((p) => ({
     classId: p.classId,
     groupId: p.groupId,
   }));
-  const { set } = await applyGroupImport(getDb(), user.id, clean);
+  let set: number;
+  try {
+    ({ set } = await applyGroupImport(getDb(), user.id, clean));
+  } catch (err) {
+    logGroupImportError(err);
+    return { ok: false, error: GROUP_IMPORT_SAVE_FAILED };
+  }
   revalidatePath('/plan');
   revalidatePath('/s/plan');
   return { ok: true, set };

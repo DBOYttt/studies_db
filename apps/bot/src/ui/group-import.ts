@@ -66,5 +66,8 @@ export function groupImportSummary(
   if (unmatched.length > 0) {
     lines.push(`${plural(unmatched.length, 'entry', 'entries')} not matched.`);
   }
+  if (preview.skipped.noDates > 0) {
+    lines.push(`Skipped: ${preview.skipped.noDates} without dates.`);
+  }
   return clip(lines.join('\n'), MAX_TEXT);
 }

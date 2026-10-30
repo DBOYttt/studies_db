@@ -209,3 +209,6 @@ export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;
 export const MAX_UPLOADS_PER_HOUR = 30;
 /** All files of one upload request (Cloudflare refuses bodies over 100 MB). */
 export const MAX_UPLOAD_TOTAL_BYTES = 95 * 1024 * 1024;
+
+/** Most `{ classId, groupId }` pairs one group import saves. */
+export const GROUP_IMPORT_MAX_PAIRS = 100;

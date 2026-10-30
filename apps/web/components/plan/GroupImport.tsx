@@ -2,6 +2,7 @@
 
 import { CalendarPlus, Check, Eye } from '@phosphor-icons/react';
 import type { GroupImportPreview } from '@studies/db';
+import { GROUP_IMPORT_MAX_PAIRS } from '@studies/db/constants';
 import { useRouter } from 'next/navigation';
 import { type FormEvent, useRef, useState } from 'react';
 import { plural } from '@/lib/format';
@@ -98,7 +99,9 @@ export function GroupImport() {
   const onApply = () =>
     run('apply', async () => {
       const r = await applyGroupImportAction(
-        changes.map((m) => ({ classId: m.classId, groupId: m.groupId })),
+        changes
+          .slice(0, GROUP_IMPORT_MAX_PAIRS)
+          .map((m) => ({ classId: m.classId, groupId: m.groupId })),
       );
       if (!r.ok) {
         setError(r.error);
@@ -116,6 +119,7 @@ export function GroupImport() {
         p.skipped.exam && plural(p.skipped.exam, 'exam', 'exams'),
         p.skipped.noKind && `${p.skipped.noKind} without a class type`,
         p.skipped.noGroup && `${p.skipped.noGroup} without a group`,
+        p.skipped.noDates && `${p.skipped.noDates} without dates`,
       ].filter(Boolean)
     : [];
 
