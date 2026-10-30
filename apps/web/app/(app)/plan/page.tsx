@@ -66,31 +66,40 @@ export default async function PlanPage({
       <h1 className="sr-only">Timetable</h1>
       <div className="flex flex-col gap-3.5">
         <Notice text={noticeFromSearchParams(sp)} />
-        <nav
-          aria-label="Timetable view"
-          className="flex self-start overflow-hidden rounded-md border border-line-strong"
-        >
-          {SUB_TABS.map(([key, label, I, href], i) => {
-            const active = key === tab;
-            return (
-              <Link
-                key={key}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-1.5 px-3 py-[5px] ${
-                  i > 0 ? 'border-l border-line-strong' : ''
-                } ${
-                  active
-                    ? 'bg-selected font-semibold text-fg'
-                    : 'bg-panel text-accent-ink hover:bg-list-hover hover:underline'
-                }`}
-              >
-                <I size={15} aria-hidden />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <nav
+            aria-label="Timetable view"
+            className="flex self-start overflow-hidden rounded-md border border-line-strong"
+          >
+            {SUB_TABS.map(([key, label, I, href], i) => {
+              const active = key === tab;
+              return (
+                <Link
+                  key={key}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex items-center gap-1.5 px-3 py-[5px] ${
+                    i > 0 ? 'border-l border-line-strong' : ''
+                  } ${
+                    active
+                      ? 'bg-selected font-semibold text-fg'
+                      : 'bg-panel text-accent-ink hover:bg-list-hover hover:underline'
+                  }`}
+                >
+                  <I size={15} aria-hidden />
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+          {/* The events index: every upcoming event, not only this week's. */}
+          <Link
+            href="/wydarzenia"
+            className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+          >
+            All events
+          </Link>
+        </div>
         <SyncWarningSlot status={status} />
         {tab === 'week' && (
           <Suspense fallback={<PlanWeekSkeleton />}>

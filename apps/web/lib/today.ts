@@ -3,16 +3,16 @@
  * under My groups (every group while none is picked), and the next class
  * when the day has none. Fixed queries on the views pool.
  */
-import { type DbExecutor, getMyGroups } from '@studies/db';
+import type { DbExecutor } from '@studies/db';
 import { toPlanSession, wallSql } from '@studies/db/plan';
 import type mysql from 'mysql2/promise';
+import { loadMyGroups } from './my-groups-load';
 import {
   filterMyGroups,
+  type MyGroups,
   nowWall,
   type PlanSession,
-  sanitizeMyGroups,
 } from './plan';
-import { listMyGroupOptions } from './plan-queries';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -48,9 +48,6 @@ const SELECT = `SELECT cs.id, cs.starts_at, cs.ends_at, cs.subject_id,
        FROM v_class_sessions cs
        JOIN v_subjects s ON s.id = cs.subject_id`;
 
-/** How many upcoming sessions are scanned for the next one of My groups. */
-const NEXT_SCAN = 200;
-
 async function sessionsBetween(
   pool: mysql.Pool,
   from: Date,
@@ -66,22 +63,41 @@ async function sessionsBetween(
 }
 
 /**
- * The first confirmed sessions from `from` on (a range on the start index,
- * stopped at the scan size). My groups is applied afterwards, so a student
- * whose next class is more than NEXT_SCAN sessions away sees none (accepted).
+ * `filterMyGroups` as SQL: with a pick, sessions without a class or group
+ * always pass, others only in a picked (class, group). No pick: no filter.
  */
-async function confirmedFrom(
+export function myGroupsWhere(mine: MyGroups): {
+  sql: string;
+  params: number[];
+} {
+  const picks = Object.entries(mine);
+  if (picks.length === 0) return { sql: 'TRUE', params: [] };
+  return {
+    sql: `(cs.class_id IS NULL OR cs.group_id IS NULL OR ${picks
+      .map(() => '(cs.class_id = ? AND cs.group_id = ?)')
+      .join(' OR ')})`,
+    params: picks.flatMap(([c, g]) => [Number(c), g]),
+  };
+}
+
+/**
+ * The first confirmed session of My groups from `from` on: a range on the
+ * start index read in order, stopped at the first match.
+ */
+async function nextConfirmed(
   pool: mysql.Pool,
   from: Date,
-): Promise<PlanSession[]> {
+  mine: MyGroups,
+): Promise<PlanSession | null> {
+  const g = myGroupsWhere(mine);
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `${SELECT}
-      WHERE cs.starts_at >= ? AND cs.status = 'confirmed'
+      WHERE cs.starts_at >= ? AND cs.status = 'confirmed' AND ${g.sql}
       ORDER BY cs.starts_at, cs.ends_at, cs.id
-      LIMIT ${NEXT_SCAN}`,
-    [wallSql(from)],
+      LIMIT 1`,
+    [wallSql(from), ...g.params],
   );
-  return rows.map(toPlanSession);
+  return rows[0] ? toPlanSession(rows[0]) : null;
 }
 
 export async function todayForUser(
@@ -89,22 +105,18 @@ export async function todayForUser(
   pool: mysql.Pool,
   userId: number,
   now: Date,
+  /** My groups already being loaded for this request (`loadMyGroups`). */
+  opts: { mine?: Promise<MyGroups> } = {},
 ): Promise<TodayClasses> {
   const { start, end } = wallDay(now);
-  const [day, stored, options] = await Promise.all([
+  const [day, mine] = await Promise.all([
     sessionsBetween(pool, start, end),
-    getMyGroups(db, userId),
-    listMyGroupOptions(pool),
+    opts.mine ?? loadMyGroups(db, pool, userId),
   ]);
-  const valid = Object.fromEntries(
-    options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
-  );
-  const mine = sanitizeMyGroups(stored, valid);
   const sessions = filterMyGroups(day, mine);
-  let next: PlanSession | null = null;
-  if (!sessions.some((s) => s.status === 'confirmed')) {
-    next = filterMyGroups(await confirmedFrom(pool, end), mine)[0] ?? null;
-  }
+  const next = sessions.some((s) => s.status === 'confirmed')
+    ? null
+    : await nextConfirmed(pool, end, mine);
   return {
     day: start,
     sessions,

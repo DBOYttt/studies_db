@@ -94,15 +94,16 @@ function SessionRow({ s, withDay }: { s: PlanSession; withDay?: boolean }) {
 /**
  * Start page card: today's classes (Warsaw day) under My groups, or every
  * group with a nudge to pick yours; on a day without classes, the next one.
- * `null` while loading: the heading stays, the list is a placeholder.
+ * `null` while loading: the heading stays, the list is a placeholder;
+ * 'error' when the query failed (one muted line keeps the layout).
  */
-export function TodayCard({ today }: { today: TodayClasses | null }) {
+export function TodayCard({ today }: { today: TodayClasses | 'error' | null }) {
   return (
     <section aria-labelledby="today-classes" className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between gap-3">
         <h2 id="today-classes" className="m-0 text-base font-semibold">
           Today
-          {today && (
+          {today && today !== 'error' && (
             <span className="ml-2 font-mono text-xs font-normal text-muted">
               {wallShortDate(today.day)}
             </span>
@@ -123,6 +124,10 @@ export function TodayCard({ today }: { today: TodayClasses | null }) {
             </div>
           ))}
         </SkeletonRegion>
+      ) : today === 'error' ? (
+        <p className="m-0 text-[13px] text-muted">
+          Could not load today's classes.
+        </p>
       ) : (
         <TodayBody today={today} />
       )}

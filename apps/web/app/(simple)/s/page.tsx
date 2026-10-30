@@ -8,6 +8,7 @@ import { TodayCard } from '@/components/simple/TodayCard';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
+import { loadMyGroups } from '@/lib/my-groups-load';
 import { nowWall, type PlanSession } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
@@ -31,15 +32,15 @@ export default async function SimpleStart({
   // Started now, awaited in its own Suspense boundary so the rest of the
   // page does not wait for it. Events are optional on the start page: a
   // failure leaves the card empty.
-  const upcoming = upcomingForUser(
-    db,
-    getViewsPool(),
-    user.id,
-    nowWall(),
-  ).catch(() => []);
-  // Today's classes stream the same way; a failure drops the card.
-  const today = todayForUser(db, getViewsPool(), user.id, new Date()).catch(
-    () => null,
+  // My groups is read once for both cards.
+  const pool = getViewsPool();
+  const mine = loadMyGroups(db, pool, user.id);
+  const upcoming = upcomingForUser(db, pool, user.id, nowWall(), 5, mine).catch(
+    () => [],
+  );
+  // Today's classes stream the same way; a failure says so in the card.
+  const today = todayForUser(db, pool, user.id, new Date(), { mine }).catch(
+    () => 'error' as const,
   );
   const [cards, recent, preview] = await Promise.all([
     cardsP,
@@ -91,9 +92,12 @@ export default async function SimpleStart({
   );
 }
 
-async function TodaySlot({ today }: { today: Promise<TodayClasses | null> }) {
-  const t = await today;
-  return t ? <TodayCard today={t} /> : null;
+async function TodaySlot({
+  today,
+}: {
+  today: Promise<TodayClasses | 'error'>;
+}) {
+  return <TodayCard today={await today} />;
 }
 
 async function UpcomingSlot({ events }: { events: Promise<PlanSession[]> }) {

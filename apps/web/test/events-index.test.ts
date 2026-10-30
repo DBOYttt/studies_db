@@ -6,6 +6,7 @@ import { RO_POOL_OPTIONS } from '../lib/db';
 import {
   EVENTS_PER_PAGE,
   eventsIndexHref,
+  hasNextPage,
   MAX_EVENTS_PAGE,
   parseEventsPage,
   upcomingEventsPage,
@@ -23,6 +24,15 @@ describe('parseEventsPage', () => {
       expect(parseEventsPage({ page: bad })).toBe(1);
     }
     expect(parseEventsPage({ page: '999999' })).toBe(MAX_EVENTS_PAGE);
+  });
+});
+
+describe('hasNextPage', () => {
+  it('needs a 26th row and stops at the page cap', () => {
+    expect(hasNextPage(EVENTS_PER_PAGE + 1, 1)).toBe(true);
+    expect(hasNextPage(EVENTS_PER_PAGE, 1)).toBe(false);
+    expect(hasNextPage(EVENTS_PER_PAGE + 1, MAX_EVENTS_PAGE - 1)).toBe(true);
+    expect(hasNextPage(EVENTS_PER_PAGE + 1, MAX_EVENTS_PAGE)).toBe(false);
   });
 });
 

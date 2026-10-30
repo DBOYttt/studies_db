@@ -24,6 +24,13 @@ export function parseEventsPage(sp: SP): number {
 export const eventsIndexHref = (simple: boolean, page: number): string =>
   `${simple ? '/s/wydarzenia' : '/wydarzenia'}${page > 1 ? `?page=${page}` : ''}`;
 
+/**
+ * Whether "Next" leads anywhere: a row past this page was read, and the
+ * next page is not beyond the cap (which would parse back to this page).
+ */
+export const hasNextPage = (fetched: number, page: number): boolean =>
+  fetched > EVENTS_PER_PAGE && page < MAX_EVENTS_PAGE;
+
 export interface EventsPage {
   events: PlanSession[];
   page: number;
@@ -44,6 +51,6 @@ export async function upcomingEventsPage(
   return {
     events: rows.slice(0, EVENTS_PER_PAGE),
     page,
-    hasNext: rows.length > EVENTS_PER_PAGE,
+    hasNext: hasNextPage(rows.length, page),
   };
 }

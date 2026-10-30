@@ -24,7 +24,11 @@ export function EventsIndex({
         <div className="flex flex-col gap-0.5">
           <h1
             id="events-index"
-            className="m-0 text-[22px] font-semibold tracking-[-0.01em]"
+            className={
+              simple
+                ? 'm-0 text-[22px] font-semibold tracking-[-0.01em]'
+                : 'm-0 text-lg font-semibold'
+            }
           >
             Events
           </h1>

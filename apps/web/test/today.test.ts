@@ -7,10 +7,13 @@ import {
   subjects,
   users,
 } from '@studies/db';
+import { toWall } from '@studies/db/plan';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
+import { loadMyGroups } from '../lib/my-groups-load';
+import { filterMyGroups } from '../lib/plan';
 import { listFrom, todayForUser, wallDay } from '../lib/today';
 
 /** Wall Date: UTC fields equal the Warsaw wall clock. */
@@ -241,5 +244,69 @@ describe('listFrom', () => {
     expect(listFrom({ past: '0' }, now)).toEqual(W(2026, 10, 25));
     expect(listFrom({ past: '1' }, now)).toBeNull();
     expect(listFrom({ past: ['1', '1'] }, now)).toEqual(W(2026, 10, 25));
+  });
+});
+
+describe('next class behind many hidden sessions', () => {
+  beforeAll(async () => {
+    // 2027-03: 250 Gr. 2 sessions (hidden for the Gr. 1 pick), then Gr. 1.
+    const rows = Array.from({ length: 250 }, (_, i) => {
+      const start = W(2027, 3, 1, 8, 0);
+      start.setUTCMinutes(i * 60);
+      return {
+        uid: `hidden${i}`,
+        occurrenceStart: start,
+        startsAt: start,
+        endsAt: new Date(start.getTime() + 30 * 60_000),
+        label: `hidden${i}`,
+        subjectId: id.fiz,
+        classId: id.ex,
+        groupId: id.g2,
+        status: 'confirmed' as const,
+      };
+    });
+    await db.insert(classSessions).values(rows);
+    await mkSession('farG1', W(2027, 4, 1, 9, 0), {
+      classId: id.ex,
+      groupId: id.g1,
+    });
+  });
+
+  it('still finds the next class of My groups', async () => {
+    const now = new Date('2027-02-20T10:00:00Z');
+    const picked = await todayForUser(db, ro, id.picked, now);
+    expect(picked.next?.id).toBe(id.farG1);
+    const none = await todayForUser(db, ro, id.none, now);
+    expect(none.next?.label).toBe('hidden0');
+  });
+
+  it('applies the same rule as filterMyGroups', async () => {
+    const mine = await loadMyGroups(db, ro, id.picked);
+    // Every session from the first DST-test day on, filtered in JS.
+    const [all] = await ro.query<mysql.RowDataPacket[]>(
+      `SELECT id, class_id, group_id, starts_at FROM v_class_sessions
+        WHERE status = 'confirmed' ORDER BY starts_at, ends_at, id`,
+    );
+    const sessions = all.map((r) => ({
+      id: Number(r.id),
+      classId: r.class_id == null ? null : Number(r.class_id),
+      groupId: r.group_id == null ? null : Number(r.group_id),
+      startsAt: toWall(r.starts_at),
+    }));
+    for (const day of [
+      '2026-10-23T10:00:00Z',
+      '2026-10-27T10:00:00Z',
+      '2027-02-20T10:00:00Z',
+    ]) {
+      const t = await todayForUser(db, ro, id.picked, new Date(day), {
+        mine: Promise.resolve(mine),
+      });
+      const from = wallDay(new Date(day)).end;
+      const expected = filterMyGroups(
+        sessions.filter((x) => x.startsAt >= from) as never,
+        mine,
+      )[0] as { id: number } | undefined;
+      expect(t.next?.id ?? null).toBe(expected?.id ?? null);
+    }
   });
 });

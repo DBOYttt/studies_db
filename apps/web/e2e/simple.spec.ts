@@ -332,6 +332,12 @@ test('"See all events" opens the events index with the upcoming events', async (
 test('the advanced events index and the mode switch', async ({ page }) => {
   await page.goto('/mode?to=advanced&next=%2Fs%2Fwydarzenia');
   await expect(page).toHaveURL(/\/wydarzenia$/);
+  await page.goto('/plan');
+  await page.getByRole('link', { name: 'All events' }).click();
+  await expect(page).toHaveURL(/\/wydarzenia$/);
+  await expect(
+    page.getByRole('heading', { level: 1, name: 'Events' }),
+  ).toBeVisible();
   await expect(
     page.getByRole('link', { name: /Kolokwium audytu/ }),
   ).toHaveAttribute('href', /^\/wydarzenia\/\d+$/);
