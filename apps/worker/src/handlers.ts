@@ -2,6 +2,7 @@ import { stat } from 'node:fs/promises';
 import {
   type Db,
   materials,
+  openInStorage,
   previewRelPath,
   pruneBotRequests,
   purgeExpiredAuth,
@@ -12,7 +13,7 @@ import { convertToPdf } from './convert.js';
 import {
   extractPdfText,
   MAX_TEXT_BYTES,
-  readTextFile,
+  readTextHandle,
   truncateUtf8,
 } from './extract.js';
 import {
@@ -51,6 +52,16 @@ const exists = (path: string) =>
     },
   );
 
+/**
+ * Throws StorageAccessError (permanent, see failJob) unless `rel` is a
+ * regular file really inside storage: no symlink, also not through a
+ * symlinked directory. For files read by path by soffice / pdftotext.
+ */
+async function checkInStorage(storageDir: string, rel: string): Promise<void> {
+  const { handle } = await openInStorage(storageDir, rel);
+  await handle.close();
+}
+
 /** Runs one job; throws on failure (the caller records it via failJob). */
 export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
   // Only what the job needs: never the large extracted_text / search_text.
@@ -75,6 +86,7 @@ export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
     const rel = previewRelPath(m.sha256);
     const preview = resolveInStorage(deps.storageDir, rel);
     if (!(await exists(preview))) {
+      await checkInStorage(deps.storageDir, m.storagePath);
       await convertToPdf(original, preview, {
         timeoutMs: CONVERT_TIMEOUT_MS,
         bin: deps.sofficeBin,
@@ -93,14 +105,20 @@ export async function runJob(deps: WorkerDeps, job: Job): Promise<void> {
   let text: string;
   const pdfOpts = { timeoutMs: EXTRACT_TIMEOUT_MS, bin: deps.pdftotextBin };
   if (m.previewKind === 'pdf' && m.previewPath) {
-    text = await extractPdfText(
-      resolveInStorage(deps.storageDir, m.previewPath),
-      pdfOpts,
-    );
+    const preview = resolveInStorage(deps.storageDir, m.previewPath);
+    await checkInStorage(deps.storageDir, m.previewPath);
+    text = await extractPdfText(preview, pdfOpts);
   } else if (m.previewKind === 'pdf') {
+    await checkInStorage(deps.storageDir, m.storagePath);
     text = await extractPdfText(original, pdfOpts);
   } else if (m.previewKind === 'text') {
-    text = await readTextFile(original);
+    // Read through the handle: the text ends up user-visible (search).
+    const { handle } = await openInStorage(deps.storageDir, m.storagePath);
+    try {
+      text = await readTextHandle(handle);
+    } finally {
+      await handle.close();
+    }
   } else {
     throw new Error(`no text source for preview_kind=${m.previewKind}`);
   }

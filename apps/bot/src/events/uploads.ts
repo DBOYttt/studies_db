@@ -333,30 +333,39 @@ export async function postEventUploads(
       // the check above); the content goes to Discord from these handles.
       const chunk: Ready[] = [];
       const streams: Readable[] = [];
-      for (const x of packed) {
-        try {
-          const { handle } = await openUpload(storageDir, x.rel);
-          streams.push(handle.createReadStream());
-          chunk.push(x);
-        } catch {
-          await fail([x.id], FILE_MISSING);
-        }
-      }
-      if (chunk.length === 0) continue;
-      const chunkIds = chunk.map((x) => x.id);
       let sent: SentFile[];
       try {
-        sent = await guild.sendFiles(
-          post.threadId,
-          content,
-          chunk.map((x, i) => ({ name: x.name, data: streams[i] })),
-        );
-      } catch (err) {
-        console.error(`event ${eventId}: cannot send files:`, err);
-        await fail(chunkIds, isTooBig(err) ? TOO_BIG : SEND_FAILED);
-        continue;
+        for (const x of packed) {
+          let data: Readable;
+          try {
+            data = (
+              await openUpload(storageDir, x.rel)
+            ).handle.createReadStream();
+          } catch {
+            await fail([x.id], FILE_MISSING);
+            continue;
+          }
+          streams.push(data);
+          chunk.push(x);
+        }
+        if (chunk.length === 0) continue;
+        try {
+          sent = await guild.sendFiles(
+            post.threadId,
+            content,
+            chunk.map((x, i) => ({ name: x.name, data: streams[i] })),
+          );
+        } catch (err) {
+          console.error(`event ${eventId}: cannot send files:`, err);
+          await fail(
+            chunk.map((x) => x.id),
+            isTooBig(err) ? TOO_BIG : SEND_FAILED,
+          );
+          continue;
+        }
       } finally {
-        // Closes every handle, also of a stream the send never read.
+        // Closes every handle (also when fail() throws, or for a stream the
+        // send never read).
         for (const st of streams) st.destroy();
       }
       // Remember the Discord ids first: a crash or an ingest failure must not
