@@ -49,7 +49,12 @@ function useOptions() {
     { sem: params.get('sem') ?? undefined },
     cookie,
   );
-  return { path, options: semesterOptions(present, current, path) };
+  // Admin pages are never filtered: no switcher there.
+  const admin = pathname === '/admin' || pathname.startsWith('/admin/');
+  return {
+    path,
+    options: admin ? [] : semesterOptions(present, current, path),
+  };
 }
 
 /** Segmented links for the top bar (tablet and desktop). */

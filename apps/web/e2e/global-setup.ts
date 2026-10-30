@@ -726,6 +726,44 @@ export default async function globalSetup() {
       createdBy: userId,
       updatedBy: userId,
     });
+    // Semester 1 counterpart (SEM1): a session today and an event in 2 days,
+    // both on page 1 / in the current week, gone once semester 3 is chosen.
+    const [{ id: sem1Id }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Semestr pierwszy',
+        code: 'SEM1',
+        semester: 1,
+        ects: 2,
+        discordChannelId: 'e2e-ch-sem1',
+      })
+      .$returningId();
+    const sem1Cw = await ensureClass(db, sem1Id, 'cwiczenia');
+    const sem1Gr1 = await ensureGroup(db, sem1Cw, 1);
+    await db
+      .insert(classSessions)
+      .values(
+        session(
+          'e2e-sem1-today',
+          sem1Id,
+          sem1Cw,
+          sem1Gr1,
+          null,
+          'Ćwiczenia gr 1',
+          'S-1 101',
+          today(18),
+          today(19, 30),
+        ),
+      );
+    await db.insert(events).values({
+      kind: 'inne',
+      title: 'Wyjazd pierwszego semestru',
+      subjectId: sem1Id,
+      startsAt: ahead(2, 10),
+      endsAt: ahead(2, 12),
+      createdBy: userId,
+      updatedBy: userId,
+    });
     const semestersUserId = await upsertUser(db, {
       discordUserId: 'e2e-semesters',
       displayName: 'Sylwia Semestralna',

@@ -40,6 +40,11 @@ export default async function SearchPage({
   const subjectId = posInt(sp.subject);
   const tagId = posInt(sp.tag);
   const db = getDb();
+  // Where "Show all semesters" returns: the same search, filters kept.
+  const returnParams = new URLSearchParams({ q });
+  if (subjectId) returnParams.set('subject', String(subjectId));
+  if (tagId) returnParams.set('tag', String(tagId));
+  const returnPath = `/search?${returnParams}`;
   const [subjects, tags, hits] = await Promise.all([
     listSubjectOptions(db),
     listAllTags(db),
@@ -187,10 +192,7 @@ export default async function SearchPage({
           >
             <WarningCircle size={16} weight="fill" aria-hidden />
             <span>No results for “{q}”.</span>
-            <SemesterEmpty
-              semester={semester}
-              path={`/search?q=${encodeURIComponent(q)}`}
-            />
+            <SemesterEmpty semester={semester} path={returnPath} />
           </div>
         )}
       </div>

@@ -14,8 +14,8 @@ import { requireUser } from '@/lib/session';
 import {
   querySubjectsGrid,
   SUBJECTS_COLUMNS,
-  SUBJECTS_SQL,
   type SubjectGridRow,
+  subjectsGridSql,
 } from '@/lib/subjects-grid';
 
 export const metadata: Metadata = { title: 'Subjects' };
@@ -73,7 +73,7 @@ export default async function Home({
           <ResultGrid
             columns={[...SUBJECTS_COLUMNS]}
             rows={rows}
-            sql={SUBJECTS_SQL}
+            sql={subjectsGridSql(semester)}
             name="subjects"
           />
         </>

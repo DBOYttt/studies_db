@@ -24,6 +24,16 @@ export const SUBJECTS_SEMESTER_SQL = `${SUBJECTS_SELECT}
 WHERE s.semester = ?
 ${SUBJECTS_ORDER}`;
 
+/**
+ * The SQL text shown above the grid for `semester`: what actually runs, with
+ * the bound semester (an integer 1-7) written in.
+ */
+export function subjectsGridSql(semester?: number | null): string {
+  return semester == null
+    ? SUBJECTS_SQL
+    : SUBJECTS_SEMESTER_SQL.replace('?', String(Math.trunc(semester)));
+}
+
 export const SUBJECTS_COLUMNS = [
   'code',
   'name',

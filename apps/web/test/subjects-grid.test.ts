@@ -13,7 +13,7 @@ import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 const { RO_POOL_OPTIONS } = await import('../lib/db');
-const { querySubjectsGrid, SUBJECTS_SQL } = await import(
+const { querySubjectsGrid, SUBJECTS_SQL, subjectsGridSql } = await import(
   '../lib/subjects-grid'
 );
 
@@ -105,6 +105,12 @@ describe('querySubjectsGrid', () => {
     expect(two[0].files).toBe(2);
     expect(await querySubjectsGrid(pool, 6)).toEqual([]);
     expect((await querySubjectsGrid(pool, null)).length).toBe(3);
+  });
+
+  it('shows the SQL that ran, with the semester written in', () => {
+    expect(subjectsGridSql(null)).toBe(SUBJECTS_SQL);
+    expect(subjectsGridSql(3)).toContain('WHERE s.semester = 3');
+    expect(subjectsGridSql(3)).not.toContain('?');
   });
 
   it('counts live files only (no join fan-out)', async () => {

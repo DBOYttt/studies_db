@@ -19,7 +19,8 @@ import { requireUser } from '@/lib/session';
 export default async function AppLayout({ children }: { children: ReactNode }) {
   const user = await requireUser();
   // Cached for up to a minute (lib/count-cache.ts).
-  // A layout has no searchParams: the nav tree follows the cookie only.
+  // Layouts get no searchParams, so the nav tree (and the switcher's server
+  // value) follow the cookie only; pages also honour `?sem=`.
   const semester = await currentSemester({});
   const [subjects, counts, present] = await Promise.all([
     cachedNavSubjects(semester),

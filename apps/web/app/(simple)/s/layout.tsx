@@ -15,6 +15,7 @@ export default async function SimpleLayout({
   children: ReactNode;
 }) {
   await requireUser();
+  // Layouts get no searchParams: follows the cookie only (see the app layout).
   const [current, present] = await Promise.all([
     currentSemester({}),
     listPresentSemesters(getViewsPool()).catch(() => []),

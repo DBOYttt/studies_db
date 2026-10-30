@@ -92,12 +92,6 @@ export default async function SimpleSearch({
           )}
         </p>
       </div>
-      {q && hits.length === 0 && (
-        <SemesterEmpty
-          semester={semester}
-          path={`/s/search?q=${encodeURIComponent(q)}`}
-        />
-      )}
       {q && (
         <FileList
           files={isoFiles(hits)}
@@ -107,6 +101,9 @@ export default async function SimpleSearch({
           q={q}
           emptyText="Nothing found. Try another word."
         />
+      )}
+      {q && hits.length === 0 && (
+        <SemesterEmpty semester={semester} path={baseHref} />
       )}
     </SimpleShell>
   );
