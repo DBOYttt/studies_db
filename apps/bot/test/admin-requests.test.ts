@@ -16,8 +16,8 @@ import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type AdminRequestDeps,
   drainAdminRequests,
+  NO_DISCORD_ACCOUNT_MESSAGE,
   NO_ROLE_MESSAGE,
-  NOT_MEMBER_MESSAGE,
   recoverInterruptedAdminRequests,
 } from '../src/admin-requests.js';
 import { withSetupLock } from '../src/ops.js';
@@ -329,6 +329,29 @@ describe('drainAdminRequests', () => {
 });
 
 describe('finish retry and recovery', () => {
+  const past = () => new Date(Date.now() - 60_000);
+  async function giveUp() {
+    const id = await enqueue('resync');
+    const origUpdate = db.update.bind(db);
+    let armed = false;
+    vi.spyOn(db, 'update').mockImplementation(((t: unknown) => {
+      if (armed && t === botRequests) throw new Error('db down');
+      return origUpdate(t as never);
+    }) as never);
+    await drainAdminRequests(
+      fakeDeps({
+        sleep: async () => {},
+        runResync: vi.fn(async () => {
+          armed = true;
+          return 'ok';
+        }),
+      }),
+      { log },
+    );
+    vi.restoreAllMocks();
+    return id;
+  }
+
   it('retries the finish write after 1 s and 5 s', async () => {
     const id = await enqueue('resync');
     const sleep = vi.fn(async (_ms: number) => {});
@@ -393,15 +416,26 @@ describe('finish retry and recovery', () => {
     );
   });
 
-  it('a row left running with the lock free is failed on the next tick', async () => {
-    const id = await enqueue('setup');
-    await db
-      .update(botRequests)
-      .set({ status: 'running', startedAt: new Date(Date.now() - 60_000) });
+  it('recovers only after a give-up, on the next tick, then stops', async () => {
+    // A normal tick leaves a stray running row alone.
+    const stray = await enqueue('setup');
+    await db.update(botRequests).set({ status: 'running', startedAt: past() });
+    await drainAdminRequests(fakeDeps(), { log });
+    expect((await request(stray)).status).toBe('running');
+    // A give-up arms the recovery.
+    await db.delete(botRequests);
+    const id = await giveUp();
+    await db.update(botRequests).set({ startedAt: past() });
     expect(await drainAdminRequests(fakeDeps(), { log })).toBe(0);
     const r = await request(id);
     expect(r.status).toBe('failed');
     expect(r.error).toBe(STALE_BOT_REQUEST_ERROR);
+    // Recovery cleared the flag: the next stray row is left alone.
+    await db.delete(botRequests);
+    const again = await enqueue('setup');
+    await db.update(botRequests).set({ status: 'running', startedAt: past() });
+    await drainAdminRequests(fakeDeps(), { log });
+    expect((await request(again)).status).toBe('running');
   });
 
   it('with the lock held a running row is not touched', async () => {
@@ -439,7 +473,7 @@ describe('requester checks before REST calls', () => {
     await drainAdminRequests(deps, { log });
     const r = await request(id);
     expect(r.status).toBe('failed');
-    expect(r.error).toBe(NOT_MEMBER_MESSAGE);
+    expect(r.error).toBe(NO_DISCORD_ACCOUNT_MESSAGE);
     expect(deps.fetchGuild).not.toHaveBeenCalled();
     expect(deps.fetchMemberRoles).not.toHaveBeenCalled();
   });

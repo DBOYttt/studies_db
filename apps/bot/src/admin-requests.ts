@@ -30,6 +30,8 @@ export const NOT_ADMIN_MESSAGE = 'The requester is no longer an admin.';
 export const NO_ROLE_MESSAGE = 'Run /setup from Discord first.';
 export const NOT_MEMBER_MESSAGE =
   'The requester is not a member of the server.';
+export const NO_DISCORD_ACCOUNT_MESSAGE =
+  'The requester has no Discord account linked.';
 const INVALID_MESSAGE = 'Invalid request.';
 
 export type AdminRequestDeps = {
@@ -50,6 +52,12 @@ export type AdminRequestDeps = {
   /** Waits between finish-write retries; injectable so tests don't wait. */
   sleep?(ms: number): Promise<void>;
 };
+
+/**
+ * Set when a finish write gave up (a row may be stuck `running`); the next
+ * tick then recovers under the lock. False at start: boot recovery ran.
+ */
+let needsRecovery = false;
 
 const FINISH_WAITS_MS = [1_000, 5_000];
 const SNOWFLAKE = /^\d{17,20}$/;
@@ -116,7 +124,7 @@ async function runRequest(
   if (roleId === null) throw new AdminRequestError(NO_ROLE_MESSAGE);
   // A malformed id (seed users, hand-edited rows) must not reach Discord.
   if (!SNOWFLAKE.test(user.discordUserId)) {
-    throw new AdminRequestError(NOT_MEMBER_MESSAGE);
+    throw new AdminRequestError(NO_DISCORD_ACCOUNT_MESSAGE);
   }
   const guild = await deps.fetchGuild();
   // A pinned role deleted in Discord: nobody can be checked, flag untouched.
@@ -168,8 +176,8 @@ function failureMessage(kind: string, err: unknown): string {
 
 /**
  * Writes the final status, up to 3 attempts (waits 1 s, then 5 s). If all
- * fail the row stays `running` and the per-tick recovery fails it later; a
- * run that worked is never reported as a failed one. An affected-rows count
+ * fail the row stays `running`, `needsRecovery` is set, and the next tick
+ * fails it as interrupted (`Interrupted.`). An affected-rows count
  * of 0 means the row was cancelled meanwhile: the result is dropped.
  */
 async function storeFinish(
@@ -206,6 +214,7 @@ async function storeFinish(
         await sleep(FINISH_WAITS_MS[attempt]);
     }
   }
+  needsRecovery = true;
   log(`admin request ${id}: could not store the result`);
 }
 
@@ -250,11 +259,17 @@ export async function drainAdminRequests(
   // Every run happens inside the lock, so while it is free this process runs
   // nothing: any admin row still `running` is orphaned (a finish write that
   // failed for good). Recovering inside the lock keeps it from racing a run.
-  if (!isStopped()) {
-    await withSetupLock(async () => {
+  if (needsRecovery && !isStopped()) {
+    const done = await withSetupLock(async () => {
       const failed = await recoverInterruptedAdminRequests(deps.db);
       if (failed > 0) log(`admin requests failed as interrupted: ${failed}`);
-    }).catch((err) => log('admin request recovery failed:', err));
+      return true;
+    }).catch((err) => {
+      log('admin request recovery failed:', err);
+      return false;
+    });
+    // A busy lock or an error keeps the flag for the next tick.
+    if (done === true) needsRecovery = false;
   }
   for (;;) {
     if (isStopped()) return n;
@@ -290,8 +305,9 @@ export function startAdminRequestPoller(
 }
 
 /**
- * At boot: fails every `running` admin request (this process is their only
- * consumer, so they were interrupted). Awaited before the poller starts.
+ * Fails every `running` admin request (this process is their only consumer,
+ * so they were interrupted). Run at boot, awaited before the poller starts,
+ * and again under the lock after a finish write gave up.
  */
 export async function recoverInterruptedAdminRequests(db: Db): Promise<number> {
   return failStaleBotRequests(db, new Date(), 0, [...ADMIN_REQUEST_KINDS]);
