@@ -19,6 +19,7 @@ import {
   editClass,
   editLecturer,
   editSubject,
+  type Semester,
   upsertUser,
 } from '@studies/db';
 import type { ModalBuilder } from 'discord.js';
@@ -308,11 +309,11 @@ async function openModal(
 const textField = (i: UiInteraction, id: string) =>
   i.isModalSubmit() ? i.fields.getTextInputValue(id) : '';
 
-function parseSemester(s: string): 1 | 2 | null {
+function parseSemester(s: string): Semester | null {
   const t = s.trim();
   if (!NUM_RE.test(t)) return null;
   const n = Number(t);
-  return (SEMESTERS as readonly number[]).includes(n) ? (n as 1 | 2) : null;
+  return (SEMESTERS as readonly number[]).includes(n) ? (n as Semester) : null;
 }
 
 function parseEcts(s: string): number | null {

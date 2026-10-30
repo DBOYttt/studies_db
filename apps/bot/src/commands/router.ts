@@ -14,6 +14,7 @@ import {
   lecturers,
   listSubjects,
   type RateLimiter,
+  type Semester,
   subjects,
   upsertUser,
 } from '@studies/db';
@@ -238,7 +239,7 @@ async function runCommand(
           channelId: channel.id,
           name: i.options.getString('name', true),
           code,
-          semester: i.options.getInteger('semester', true) as 1 | 2,
+          semester: i.options.getInteger('semester', true) as Semester,
           ects: i.options.getInteger('ects', true),
           description: i.options.getString('description') ?? undefined,
         });
@@ -271,7 +272,7 @@ async function runCommand(
       const code = i.options.getString('code', true);
       const patch = {
         name: i.options.getString('name') ?? undefined,
-        semester: semester === null ? undefined : (semester as 1 | 2),
+        semester: semester === null ? undefined : (semester as Semester),
         ects: ects === null ? undefined : ects,
         description: i.options.getString('description') ?? undefined,
         platformUrl: i.options.getString('platform_url') ?? undefined,

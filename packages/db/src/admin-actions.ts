@@ -1,4 +1,5 @@
 import { and, asc, eq, isNull } from 'drizzle-orm';
+import type { Semester } from './admin-fields.js';
 import { setBanned } from './auth.js';
 import type { Db } from './client.js';
 import { type Assessment, CLASS_NAMES, type ClassKind } from './constants.js';
@@ -22,7 +23,7 @@ export type SubjectInput = {
   channelId: string | null;
   name: string;
   code: string;
-  semester: 1 | 2;
+  semester: Semester;
   ects: number;
   description?: string;
 };

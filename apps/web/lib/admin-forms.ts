@@ -8,6 +8,7 @@ import {
   GROUP_MAX,
   GROUP_MIN,
   SEMESTERS,
+  type Semester,
   type SubjectInput,
   textOrNull,
   urlOrNull,
@@ -216,7 +217,7 @@ export function parseSubjectAdd(form: FormData): Parsed<SubjectInput> {
       name: name.value,
       code: code.value,
       // No stored value on add: the semester passed the range check.
-      semester: se.value.semester as 1 | 2,
+      semester: se.value.semester as Semester,
       ects: se.value.ects,
       ...(description.value === null ? {} : { description: description.value }),
     },
