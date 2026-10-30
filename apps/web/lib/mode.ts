@@ -36,6 +36,18 @@ function hasControl(s: string): boolean {
   }
 }
 
+/**
+ * `.`/`..` segments or a backslash in the path (also percent-encoded):
+ * `/.//evil.com` or `/a/..//evil.com` normalise to the scheme-relative
+ * `//evil.com`, so any caller that resolves the path would hand out another
+ * origin. No page of the app needs them.
+ */
+function hasDotSegmentOrBackslash(path: string): boolean {
+  const d = decodeURIComponent(path);
+  if (d.includes('\\')) return true;
+  return d.split('/').some((seg) => seg === '.' || seg === '..');
+}
+
 /** Same-origin relative path starting with a single `/`, else null. */
 export function safeNext(next: string | null | undefined): string | null {
   if (!next?.startsWith('/')) return null;
@@ -44,7 +56,13 @@ export function safeNext(next: string | null | undefined): string | null {
   try {
     const d = decodeURIComponent(next);
     if (d.startsWith('//') || d.startsWith('/\\')) return null;
+    if (hasDotSegmentOrBackslash(next.split(/[?#]/, 1)[0])) return null;
   } catch {
+    return null;
+  }
+  // Belt and braces: what a browser would make of it stays on this origin.
+  const u = new URL(next, 'http://x.invalid');
+  if (u.origin !== 'http://x.invalid' || u.pathname.startsWith('//')) {
     return null;
   }
   return next;
@@ -63,7 +81,7 @@ function enc(segment: string): string {
   }
 }
 
-/** `nowe`, `<id>` or `<id>/edytuj` below `/wydarzenia`, else null. */
+/** `nowe`, `<id>` or `<id>/edytuj` below `/wydarzenia`, else null (the index itself is mapped by `modeTarget`). */
 function eventPath(rest: string[]): string | null {
   if (
     rest.length === 1 &&
@@ -105,7 +123,8 @@ export function modeTarget(to: UiMode, next: string | null): string {
   // Already in the target mode: stay exactly where the user is.
   const safe = safeNext(next);
   if (safe !== null && isSimplePath(safe) === (to === 'simple')) return safe;
-  const { path, params } = parse(next);
+  // A rejected `next` is not mapped either: it falls back to the start page.
+  const { path, params } = parse(safe);
   const seg = path.split('/').filter(Boolean);
   if (to === 'advanced') {
     if (seg[0] !== 's') return '/';
@@ -116,6 +135,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
     if (seg[1] === 'search' && seg.length === 2)
       return `/search${pick(params, ['q'])}`;
     if (seg[1] === 'wydarzenia') {
+      if (seg.length === 2) return `/wydarzenia${pick(params, ['page'])}`;
       const e = eventPath(seg.slice(2));
       if (e) return `/wydarzenia${e}`;
     }
@@ -136,6 +156,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
   if (seg[0] === 'search' && seg.length === 1)
     return `/s/search${pick(params, ['q'])}`;
   if (seg[0] === 'wydarzenia') {
+    if (seg.length === 1) return `/s/wydarzenia${pick(params, ['page'])}`;
     const e = eventPath(seg.slice(1));
     if (e) return `/s/wydarzenia${e}`;
   }

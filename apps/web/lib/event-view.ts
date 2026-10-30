@@ -8,6 +8,9 @@ import { MONTHS_SHORT, WEEKDAYS_SHORT } from '@studies/db/text';
 const pad = (n: number) => String(n).padStart(2, '0');
 const TIME_RE = /^([01]?\d|2[0-3]):[0-5]\d$/;
 
+/** A time of day the form accepts (`H:MM` or `HH:MM`, 00:00-23:59). */
+export const isTimeOfDay = (v: string): boolean => TIME_RE.test(v.trim());
+
 /** Date `YYYY-MM-DD`, start/end `HH:MM` (or empty) → `DD.MM.YYYY [HH:MM[-HH:MM]]`. */
 export function composeWhen(
   date: string,

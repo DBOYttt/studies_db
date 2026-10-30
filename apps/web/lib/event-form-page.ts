@@ -1,10 +1,11 @@
-import { getEvent, toWall } from '@studies/db';
+import { toWall } from '@studies/db';
 import type { EventKind } from '@studies/db/constants';
 import { EVENT_KINDS } from '@studies/db/constants';
 import { notFound } from 'next/navigation';
 import type { EventFormValues } from '@/components/events/EventForm';
-import { getDb, getViewsPool } from './db';
+import { getViewsPool } from './db';
 import { formWhen } from './event-view';
+import { loadEvent } from './page-loaders';
 import { nowWall } from './plan';
 import {
   getSessionOption,
@@ -97,7 +98,7 @@ export async function loadNewEventForm(
 export async function loadEventForm(
   id: number,
 ): Promise<{ values: EventFormValues; deleted: boolean }> {
-  const ev = await getEvent(getDb(), id);
+  const ev = await loadEvent(id);
   if (!ev) notFound();
   const w = formWhen(
     toWall(ev.startsAt),

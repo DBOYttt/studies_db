@@ -166,6 +166,12 @@ test('add a lecturer, assign them, edit the class and the lecturer', async ({
   await expect(lecturerList.getByRole('listitem')).toHaveCount(1);
   await expect(lecturerList).toContainText('all groups');
   await expect(lecturerList).not.toContainText('Gr. 2');
+  // The row is gone, but the card still says what happened.
+  await expect(
+    card.getByRole('status').filter({
+      hasText: `Removed ${LECTURER_LABEL} from ${CODE} / Wykład, Gr. 2.`,
+    }),
+  ).toBeVisible();
 
   await settings.getByLabel('Assessment').selectOption({ label: 'Exam' });
   await settings.getByLabel('Note').fill('Pisemny, 90 minut');

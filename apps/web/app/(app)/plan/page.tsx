@@ -6,8 +6,10 @@ import {
   Warning,
 } from '@phosphor-icons/react/dist/ssr';
 import { getPlanSyncStatus, type PlanSyncStatus } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { Suspense } from 'react';
+import { Notice } from '@/components/Notice';
 import { errBox, GroupsTab } from '@/components/plan/GroupsTab';
 import { PlanWeekTab } from '@/components/plan/PlanWeekTab';
 import { ResultGrid } from '@/components/ResultGrid';
@@ -23,10 +25,14 @@ import {
   parseEntityGrid,
   parseEntityTab,
 } from '@/lib/entity-page';
+import { noticeFromSearchParams } from '@/lib/notices';
 import { planListPage } from '@/lib/plan-queries';
 import { syncFailed, syncLine, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
 import { requireUser } from '@/lib/session';
+import { listFrom } from '@/lib/today';
+
+export const metadata: Metadata = { title: 'Timetable' };
 
 export const dynamic = 'force-dynamic';
 
@@ -62,38 +68,50 @@ export default async function PlanPage({
       />
       <h1 className="sr-only">Timetable</h1>
       <div className="flex flex-col gap-3.5">
-        <nav
-          aria-label="Timetable view"
-          className="flex self-start overflow-hidden rounded-md border border-line-strong"
-        >
-          {SUB_TABS.map(([key, label, I, href], i) => {
-            const active = key === tab;
-            return (
-              <Link
-                key={key}
-                href={href}
-                aria-current={active ? 'page' : undefined}
-                className={`flex items-center gap-1.5 px-3 py-[5px] ${
-                  i > 0 ? 'border-l border-line-strong' : ''
-                } ${
-                  active
-                    ? 'bg-selected font-semibold text-fg'
-                    : 'bg-panel text-accent-ink hover:bg-list-hover hover:underline'
-                }`}
-              >
-                <I size={15} aria-hidden />
-                {label}
-              </Link>
-            );
-          })}
-        </nav>
+        <Notice text={noticeFromSearchParams(sp)} />
+        <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          <nav
+            aria-label="Timetable view"
+            className="flex self-start overflow-hidden rounded-md border border-line-strong"
+          >
+            {SUB_TABS.map(([key, label, I, href], i) => {
+              const active = key === tab;
+              return (
+                <Link
+                  key={key}
+                  href={href}
+                  aria-current={active ? 'page' : undefined}
+                  className={`flex items-center gap-1.5 px-3 py-[5px] max-sm:min-h-11 ${
+                    i > 0 ? 'border-l border-line-strong' : ''
+                  } ${
+                    active
+                      ? 'bg-selected font-semibold text-fg'
+                      : 'bg-panel text-accent-ink hover:bg-list-hover hover:underline'
+                  }`}
+                >
+                  <I size={15} aria-hidden />
+                  {label}
+                </Link>
+              );
+            })}
+          </nav>
+          {/* The events index: every upcoming event, not only this week's. */}
+          <Link
+            href="/wydarzenia"
+            className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+          >
+            All events
+          </Link>
+        </div>
         <SyncWarningSlot status={status} />
         {tab === 'week' && (
           <Suspense fallback={<PlanWeekSkeleton />}>
             <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
           </Suspense>
         )}
-        {tab === 'list' && <ListTab grid={parseEntityGrid(sp)} />}
+        {tab === 'list' && (
+          <ListTab grid={parseEntityGrid(sp)} from={listFrom(sp, new Date())} />
+        )}
         {tab === 'groups' && <GroupsTab weekHref="/plan" />}
         <SyncFooter status={status} />
       </div>
@@ -138,11 +156,19 @@ function SyncWarning({ status }: { status: PlanSyncStatus }) {
 /** Wall DATETIME columns of v_class_sessions, shown as MariaDB prints them. */
 const WALL_COLUMNS = new Set(['starts_at', 'ends_at']);
 
-async function ListTab({ grid }: { grid: EntityGridParams }) {
+async function ListTab({
+  grid,
+  from,
+}: {
+  grid: EntityGridParams;
+  /** Wall today 00:00, or null with "Show past". */
+  from: Date | null;
+}) {
   const [result, links] = await Promise.all([
     planListPage(getViewsPool(), {
       page: grid.page,
       perPage: grid.perPage,
+      from,
     }).then(
       (page) => ({ page, error: null }),
       (err: unknown) => ({ page: null, error: roErrorMessage(err) }),
@@ -150,11 +176,15 @@ async function ListTab({ grid }: { grid: EntityGridParams }) {
     loadLinkContext(getDb()).catch(() => undefined),
   ]);
   const { page } = result;
+  const toggle = <PastToggle grid={grid} showingPast={from === null} />;
   if (!page) {
     return (
-      <div role="alert" className={errBox}>
-        Could not load data: {result.error ?? 'no data'}
-      </div>
+      <>
+        {toggle}
+        <div role="alert" className={errBox}>
+          Could not load data: {result.error ?? 'no data'}
+        </div>
+      </>
     );
   }
   // toJsonValue turned the wall Dates into ISO strings with a misleading `Z`.
@@ -165,32 +195,61 @@ async function ListTab({ grid }: { grid: EntityGridParams }) {
         : v,
     ),
   );
+  const query = (n: number) => {
+    const q = entityGridQuery('list', grid, n);
+    return from === null ? `${q}&past=1` : q;
+  };
   return (
-    <ResultGrid
-      columns={page.columns}
-      rows={toCells(rows, {
-        view: 'v_class_sessions',
-        columns: page.columns,
-        links,
-      })}
-      sql={page.sql}
-      total={page.total}
-      nav={{
-        basePath: '/plan',
-        query: entityGridQuery('list', grid, page.page),
-      }}
-      paging={{
-        page: page.page,
-        pageCount: page.pageCount,
-        perPage: page.perPage,
-      }}
-      // Fixed order (starts_at, id): no sortable headers.
-      sorting={{
-        sort: 'starts_at',
-        dir: 'asc',
-        sortKeys: page.columns.map(() => null),
-      }}
-      name="timetable"
-    />
+    <>
+      {toggle}
+      <ResultGrid
+        columns={page.columns}
+        rows={toCells(rows, {
+          view: 'v_class_sessions',
+          columns: page.columns,
+          links,
+        })}
+        sql={page.sql}
+        total={page.total}
+        nav={{
+          basePath: '/plan',
+          query: query(page.page),
+        }}
+        paging={{
+          page: page.page,
+          pageCount: page.pageCount,
+          perPage: page.perPage,
+        }}
+        // Fixed order (starts_at, id): no sortable headers.
+        sorting={{
+          sort: 'starts_at',
+          dir: 'asc',
+          sortKeys: page.columns.map(() => null),
+        }}
+        name="timetable"
+      />
+    </>
+  );
+}
+
+/** "Show past" / "From today" switch above the List (back to page 1). */
+function PastToggle({
+  grid,
+  showingPast,
+}: {
+  grid: EntityGridParams;
+  showingPast: boolean;
+}) {
+  const q = entityGridQuery('list', grid, 1);
+  return (
+    <p className="m-0 flex flex-wrap items-baseline gap-x-2 text-muted">
+      {showingPast ? 'Showing all sessions.' : 'Showing sessions from today.'}
+      <Link
+        href={`/plan?${showingPast ? q : `${q}&past=1`}`}
+        className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+      >
+        {showingPast ? 'From today' : 'Show past'}
+      </Link>
+    </p>
   );
 }

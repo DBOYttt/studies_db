@@ -367,4 +367,21 @@ describe('planListPage', () => {
     });
     expect(l.rows.map((r) => r[0])).toEqual([id.ex2]);
   });
+  it('starts at `from` (the List default: today 00:00)', async () => {
+    const p = await planListPage(ro, {
+      page: 1,
+      perPage: 25,
+      from: W(2026, 10, 14),
+    });
+    expect(p.rows.map((r) => r[0])).toEqual([id.algEx, id.nextMon, id.last]);
+    expect(p.total).toBe(3);
+    expect(p.sql).toContain("starts_at >= '2026-10-14 00:00:00'");
+    const sub = await planListPage(ro, {
+      page: 1,
+      perPage: 25,
+      from: W(2026, 10, 19),
+      subjectId: id.alg,
+    });
+    expect(sub.rows.map((r) => r[0])).toEqual([id.last]);
+  });
 });

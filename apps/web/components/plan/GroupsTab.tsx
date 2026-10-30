@@ -1,6 +1,7 @@
 import { getMyGroups, getReminderPrefs } from '@studies/db';
 import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
+import { withNotice } from '@/lib/notices';
 import { listMyGroupOptions } from '@/lib/plan-queries';
 import { requireUser } from '@/lib/session';
 import { GroupImport } from './GroupImport';
@@ -29,7 +30,7 @@ export async function GroupsTab({ weekHref }: { weekHref: string }) {
           key={JSON.stringify(stored)}
           options={options}
           initialGroups={stored}
-          weekHref={weekHref}
+          savedHref={withNotice(weekHref, 'groups-saved')}
         />
         <RemindersForm
           dayBefore={reminders.dayBefore}

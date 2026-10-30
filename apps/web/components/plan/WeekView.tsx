@@ -73,7 +73,7 @@ const DAY_MIN = 128;
 const PANEL_ID = 'session-panel';
 
 const navBtn =
-  'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover';
+  'inline-flex items-center gap-1 rounded border border-line-strong bg-panel px-2.5 py-[5px] text-accent-ink hover:border-accent hover:text-accent-ink-hover max-sm:min-h-11';
 
 type Session = PlanSession & { links: SessionLinks };
 
@@ -216,6 +216,21 @@ export function WeekView({
   const heading = weekHeading(week, days);
   // Day headers name the day columns (role="group") for screen readers.
   const dayId = `${useId()}-day`;
+  /*
+   * A narrow screen shows only a day or two of the week: bring today's
+   * column into view (next to the sticky hour gutter) when the week opens.
+   * Wide screens have nothing to scroll, so this does nothing there.
+   */
+  const hasGrid = shown.length > 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: re-run when another week opens (its day ids change only in the DOM)
+  useLayoutEffect(() => {
+    if (!hasGrid || today === null) return;
+    const scroller = scrollerRef.current;
+    const header = document.getElementById(`${dayId}-${today}`);
+    if (!scroller || !header) return;
+    if (scroller.scrollWidth <= scroller.clientWidth) return;
+    scroller.scrollLeft = Math.max(0, header.offsetLeft - GUTTER);
+  }, [dayId, today, week.year, week.week, hasGrid]);
 
   return (
     <section aria-label="Week timetable" className="flex flex-col gap-3">
@@ -236,7 +251,7 @@ export function WeekView({
           {newEventHref && (
             <Link
               href={newEventHref}
-              className="ml-1 inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px"
+              className="ml-1 inline-flex items-center gap-1 rounded bg-accent-fill px-2.5 py-[5px] font-semibold text-on-accent hover:bg-accent-fill-hover active:translate-y-px max-sm:min-h-11"
             >
               <Plus size={13} weight="bold" aria-hidden />
               Add event

@@ -55,9 +55,9 @@ test('add an event; its page does not bother students with the Discord post', as
     page.getByRole('heading', { name: 'Kolokwium z tarcia' }),
   ).toBeVisible();
   // A one-shot confirmation, announced in a status line; the URL loses
-  // ?saved= so a reload doesn't repeat it.
+  // ?notice= so a reload doesn't repeat it.
   await expect(
-    page.getByRole('status').filter({ hasText: /^Event added\.$/ }),
+    page.getByRole('status').filter({ hasText: /^Event saved\.$/ }),
   ).toBeVisible();
   await expect(page.getByText(/Discord post/)).toHaveCount(0);
   // No top "Add event" link on an event page.
@@ -67,7 +67,7 @@ test('add an event; its page does not bother students with the Discord post', as
   await expect(page.getByText('C-12')).toBeVisible();
   await expect(page.getByText('Event added', { exact: true })).toBeVisible();
   await page.reload();
-  await expect(page.getByText('Event added.')).toHaveCount(0);
+  await expect(page.getByText('Event saved.')).toHaveCount(0);
 });
 
 function isoWeekParam(iso: string): string {
@@ -127,17 +127,19 @@ test('required fields are marked and the all-day hint describes the times', asyn
 test('an invalid form shows the English message', async ({ page }) => {
   await page.goto('/s/wydarzenia/nowe');
   await page.getByLabel('Title', { exact: true }).fill('Coś');
-  await page.getByLabel('Date').fill('2001-01-01');
+  const date = page.getByLabel('Date');
+  await date.fill('2001-01-01');
   const submit = page.getByRole('button', { name: 'Add event' });
   await submit.click();
   await expect(
     page.getByText('The date cannot be more than a month in the past.'),
   ).toBeVisible();
-  // The refusal describes the submit button, which keeps focus.
-  await expect(submit).toHaveAccessibleDescription(
+  // A refusal about a field describes that field, which gets focus.
+  await expect(date).toHaveAccessibleDescription(
     'The date cannot be more than a month in the past.',
   );
-  await expect(submit).toBeFocused();
+  await expect(date).toHaveAttribute('aria-invalid', 'true');
+  await expect(date).toBeFocused();
 });
 
 test('a refused save keeps the typed values', async ({ page }) => {
@@ -171,7 +173,7 @@ test('edit the title', async ({ page }) => {
   await page.getByRole('button', { name: 'Save' }).click();
   await expect(page).toHaveURL(eventUrl);
   await expect(
-    page.getByRole('status').filter({ hasText: /^Changes saved\.$/ }),
+    page.getByRole('status').filter({ hasText: /^Event saved\.$/ }),
   ).toBeVisible();
   await expect(
     page.getByRole('heading', { name: 'Kolokwium z tarcia (poprawione)' }),
@@ -342,7 +344,11 @@ test('delete the event; an admin sees it with Restore', async ({
     await expect(
       p.getByText('This event was deleted', { exact: true }),
     ).toBeHidden();
-    await expect(p.getByText('Event restored')).toBeVisible();
+    await expect(
+      p.getByRole('status').filter({ hasText: /^Event restored\.$/ }),
+    ).toBeVisible();
+    // The History entry too.
+    await expect(p.getByText('Event restored', { exact: true })).toBeVisible();
   } finally {
     await admin.close();
   }
@@ -465,6 +471,9 @@ test.describe('concurrent edits', () => {
         .fill('Przywrócone i zmienione');
       await p.getByRole('button', { name: 'Restore' }).click();
       await expect(p.getByRole('button', { name: 'Restore' })).toBeHidden();
+      await expect(
+        p.getByRole('status').filter({ hasText: /^Event restored\.$/ }),
+      ).toBeVisible();
       await expect(p.getByLabel('Title', { exact: true })).toHaveValue(
         'Przywrócone i zmienione',
       );

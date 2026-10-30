@@ -35,11 +35,15 @@ import {
 } from '@studies/db/constants';
 import { EVENT_NOT_FOUND } from '@studies/db/text';
 import busboy from 'busboy';
+import { NOTICES } from './notices';
 import { isCrossOrigin } from './same-origin';
 
 export const UPLOAD_ERRORS = {
   origin: 'Invalid request origin.',
   notFound: EVENT_NOT_FOUND,
+  // A tab left open on an event deleted since (also for an unknown id, so
+  // the answer doesn't tell the two apart).
+  gone: NOTICES['event-deleted'],
   storage: 'File upload is unavailable.',
   none: 'No files selected.',
   count: `You can send at most ${MAX_UPLOAD_FILES} files at once.`,
@@ -262,7 +266,7 @@ export async function handleEventUpload(
   if (isRefusal(who)) return fail(403, BANNED_MESSAGE);
 
   const ev = await getEvent(db, eventId);
-  if (!ev || ev.deletedAt !== null) return fail(404, UPLOAD_ERRORS.notFound);
+  if (!ev || ev.deletedAt !== null) return fail(404, UPLOAD_ERRORS.gone);
   if (!storageRoot) return fail(503, UPLOAD_ERRORS.storage);
 
   const declared = Number(req.headers.get('content-length'));

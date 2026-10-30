@@ -1,14 +1,17 @@
+import type { Metadata } from 'next';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
-import { searchCountText } from '@/lib/search-count';
+import { searchCounts, searchCountText } from '@/lib/search-count';
 import { requireUser } from '@/lib/session';
 import { advancedSearchHref, parseSearchQuery } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { searchSimpleFiles } from '@/lib/simple-queries';
+
+export const metadata: Metadata = { title: 'Search' };
 
 export const dynamic = 'force-dynamic';
 
@@ -59,14 +62,22 @@ export default async function SimpleSearch({
         <p className="mt-1 mb-0 text-pretty text-muted">
           {q ? (
             <>
-              {searchCountText(
-                hits.length,
-                topics,
-                hits.length >= SEARCH_LIMIT ? SEARCH_LIMIT : undefined,
-              )}
+              {/* Simple lists files only: the topics are counted where they
+                  are listed, in Advanced. */}
+              <span>
+                {searchCountText(
+                  searchCounts(
+                    hits.map((f) => ({ materialId: f.id, topicId: f.topicId })),
+                  ).files,
+                  undefined,
+                  hits.length >= SEARCH_LIMIT ? SEARCH_LIMIT : undefined,
+                )}
+              </span>
               {topics > 0 && (
                 <>
-                  {' '}
+                  <span aria-hidden className="px-1.5 text-subtle">
+                    ·
+                  </span>
                   <a href={advancedSearchHref(q)} className="link">
                     Show topics in Advanced
                   </a>

@@ -1,5 +1,6 @@
 import { MagnifyingGlass, Users } from '@phosphor-icons/react/dist/ssr';
 import { listUsersAdmin } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { redirect } from 'next/navigation';
 import { ActionButton } from '@/components/admin/ActionButton';
@@ -17,8 +18,13 @@ import { setBanAction } from '@/lib/admin-actions';
 import { parseUsersQuery, USERS_PAGE_SIZE, usersHref } from '@/lib/admin-pages';
 import { getDb } from '@/lib/db';
 import { formatDate, plural } from '@/lib/format';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
 import { userHref } from '@/lib/view-links';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('Users · Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

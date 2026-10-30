@@ -1,17 +1,23 @@
+import type { Metadata } from 'next';
 import { Suspense } from 'react';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
+import { TodayCard } from '@/components/simple/TodayCard';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
+import { loadMyGroups } from '@/lib/my-groups-load';
 import { nowWall, type PlanSession } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
+import { type TodayClasses, todayForUser } from '@/lib/today';
 import { upcomingForUser } from '@/lib/upcoming-events';
+
+export const metadata: Metadata = { title: 'Start' };
 
 export const dynamic = 'force-dynamic';
 
@@ -29,12 +35,16 @@ export default async function SimpleStart({
   // Started now, awaited in its own Suspense boundary so the rest of the
   // page does not wait for it. Events are optional on the start page: a
   // failure leaves the card empty.
-  const upcoming = upcomingForUser(
-    db,
-    getViewsPool(),
-    user.id,
-    nowWall(),
-  ).catch(() => []);
+  // My groups is read once for both cards.
+  const pool = getViewsPool();
+  const mine = loadMyGroups(db, pool, user.id);
+  const upcoming = upcomingForUser(db, pool, user.id, nowWall(), 5, mine).catch(
+    () => [],
+  );
+  // Today's classes stream the same way; a failure says so in the card.
+  const today = todayForUser(db, pool, user.id, new Date(), { mine }).catch(
+    () => 'error' as const,
+  );
   const [cards, recent, preview] = await Promise.all([
     cardsP,
     listSimpleFiles(db, { limit: 5, withTotal: false }),
@@ -58,7 +68,11 @@ export default async function SimpleStart({
       }
     >
       <h1 className="sr-only">Start</h1>
-      {/* What's next first: upcoming events above the subject grid. */}
+      {/* What's next first: today's classes and upcoming events above the
+          subject grid. */}
+      <Suspense fallback={<TodayCard today={null} />}>
+        <TodaySlot today={today} />
+      </Suspense>
       <Suspense fallback={<UpcomingEvents events={null} />}>
         <UpcomingSlot events={upcoming} />
       </Suspense>
@@ -79,6 +93,14 @@ export default async function SimpleStart({
       />
     </SimpleShell>
   );
+}
+
+async function TodaySlot({
+  today,
+}: {
+  today: Promise<TodayClasses | 'error'>;
+}) {
+  return <TodayCard today={await today} />;
 }
 
 async function UpcomingSlot({ events }: { events: Promise<PlanSession[]> }) {

@@ -48,6 +48,75 @@ export async function setMyGroup(
   return { ok: true };
 }
 
+/**
+ * Writes the classes a form changed (class id -> group id, null = "All
+ * groups"), so the form's Save makes them stored even when another tab
+ * changed them meanwhile (last Save of a class wins). Classes left out are
+ * not touched. All or nothing: one group outside its class refuses it.
+ */
+export async function saveMyGroups(
+  db: Db,
+  userId: number,
+  choice: Record<string, number | null>,
+): Promise<{ ok: boolean }> {
+  const entries = Object.entries(choice).map(([cid, gid]) => ({
+    classId: Number(cid),
+    groupId: gid,
+  }));
+  if (
+    entries.some(
+      (e) =>
+        !Number.isSafeInteger(e.classId) ||
+        (e.groupId !== null && !Number.isSafeInteger(e.groupId)),
+    )
+  ) {
+    return { ok: false };
+  }
+  const picks = entries.filter(
+    (e): e is { classId: number; groupId: number } => e.groupId !== null,
+  );
+  const drops = entries.filter((e) => e.groupId === null).map((e) => e.classId);
+  // Checked inside the transaction under a shared lock, so a group deleted
+  // meanwhile (the sync, an admin) refuses the save instead of an FK error.
+  return db.transaction(async (tx) => {
+    if (picks.length > 0) {
+      // MariaDB has no FOR SHARE; LOCK IN SHARE MODE is its equivalent.
+      const [found] = (await tx.execute(sql`
+        SELECT id, class_id AS classId FROM class_groups
+         WHERE ${inArray(
+           classGroups.id,
+           picks.map((p) => p.groupId),
+         )}
+         LOCK IN SHARE MODE`)) as unknown as [
+        { id: number; classId: number }[],
+      ];
+      const classOf = new Map(found.map((g) => [g.id, g.classId]));
+      if (picks.some((p) => classOf.get(p.groupId) !== p.classId)) {
+        return { ok: false };
+      }
+    }
+    if (drops.length > 0) {
+      await tx
+        .delete(userGroups)
+        .where(
+          and(
+            eq(userGroups.userId, userId),
+            inArray(userGroups.classId, drops),
+          ),
+        );
+    }
+    if (picks.length > 0) {
+      await tx
+        .insert(userGroups)
+        .values(picks.map((p) => ({ userId, ...p })))
+        .onDuplicateKeyUpdate({
+          set: { groupId: sql`VALUES(${userGroups.groupId})` },
+        });
+    }
+    return { ok: true };
+  });
+}
+
 export async function clearMyGroups(db: Db, userId: number): Promise<void> {
   await db.delete(userGroups).where(eq(userGroups.userId, userId));
 }

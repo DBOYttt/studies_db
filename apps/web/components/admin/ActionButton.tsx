@@ -9,6 +9,7 @@ import {
   useState,
 } from 'react';
 import type { ActionState } from '@/lib/admin-forms';
+import { useCardStatus } from './CardStatus';
 import { primaryBtn } from './form-styles';
 
 type Action = (prev: ActionState, form: FormData) => Promise<ActionState>;
@@ -21,11 +22,14 @@ const dangerBtn =
 /**
  * One button that runs an admin Server Action with fixed hidden `fields`.
  * With `confirm` the first click only asks (the events' inline confirm
- * pattern): a second, explicit button runs it, and Cancel backs out.
+ * pattern): a second, explicit button runs it, and Cancel or Escape backs
+ * out.
  * `disabled` keeps the button focusable but `aria-disabled`, and a submit
  * then does nothing; `disabledText` says why. The result goes to a polite
  * `role="status"` or a `role="alert"`. Callers key it on what the button
  * means (e.g. blocked or not), so a toggled button starts with no message.
+ * With `cardStatus` inside a `CardStatus`, the result goes to the card's
+ * status area instead, which outlives a row this action removes.
  */
 export function ActionButton({
   action,
@@ -39,6 +43,7 @@ export function ActionButton({
   disabled = false,
   disabledText,
   className,
+  cardStatus = false,
 }: {
   action: Action;
   fields?: Record<string, string>;
@@ -52,8 +57,21 @@ export function ActionButton({
   disabled?: boolean;
   disabledText?: string;
   className?: string;
+  /** Report to the enclosing `CardStatus` (see above). */
+  cardStatus?: boolean;
 }) {
-  const [state, formAction, pending] = useActionState(action, null);
+  const card = useCardStatus();
+  const report = cardStatus ? card : null;
+  // Reported from the call itself: the row (and this button) may unmount in
+  // the same commit that delivers the result. Any button in a card clears
+  // the card's last message when it starts.
+  const act = async (prev: ActionState, form: FormData) => {
+    card?.(null);
+    const r = await action(prev, form);
+    report?.(r);
+    return r;
+  };
+  const [state, formAction, pending] = useActionState(act, null);
   const [asking, setAsking] = useState(false);
   // The last result is hidden once a new question opens, so an old message
   // never sits beside it; a new result shows again.
@@ -120,6 +138,13 @@ export function ActionButton({
       ) : confirm ? (
         <fieldset
           aria-label={confirm.question}
+          // Escape backs out like Cancel (focus goes back to the trigger).
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              setAsking(false);
+            }
+          }}
           className="m-0 flex min-w-0 flex-wrap items-center gap-2 rounded-md border border-err-line bg-err-bg px-3 py-2"
         >
           <span className="w-full font-semibold text-err-fg sm:w-auto">
@@ -153,10 +178,12 @@ export function ActionButton({
           {pending ? pendingLabel : label}
         </button>
       )}
-      <div role="status" className="text-ok-fg not-empty:mt-1.5">
-        {state?.ok && !pending && !stale ? state.message : null}
-      </div>
-      {state && !state.ok && !pending && !stale && (
+      {!report && (
+        <div role="status" className="text-ok-fg not-empty:mt-1.5">
+          {state?.ok && !pending && !stale ? state.message : null}
+        </div>
+      )}
+      {!report && state && !state.ok && !pending && !stale && (
         <p role="alert" className="m-0 mt-1.5 text-err-fg">
           {state.message}
         </p>

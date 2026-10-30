@@ -18,13 +18,15 @@ import {
 } from '@studies/db';
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
 import { EVENT_NOT_FOUND } from '@studies/db/text';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { invalidateCounts } from './count-cache';
 import { getDb, getViewsPool } from './db';
+import { withEventField } from './event-fields';
 import { type LinkedTopic, searchTopics } from './event-queries';
 import { composeWhen, whenOf } from './event-view';
+import { withNotice } from './notices';
 import { nowWall } from './plan';
 import { requireAdmin, requireUser } from './session';
 import { type SessionOption, upcomingSessionOptions } from './session-options';
@@ -41,12 +43,18 @@ const isId = (v: unknown): v is number =>
 
 const fail = (message: string): ActionResult => ({ ok: false, message });
 
+const FOLLOWING_STILL_LIVE =
+  'This occurrence was already deleted, but later ones are still on the timetable. Reload the page to see them.';
+
 type Base = 'simple' | 'advanced';
 const baseOf = (form: FormData): Base =>
   form.get('base') === 'advanced' ? 'advanced' : 'simple';
 const eventHref = (base: Base, id: number) =>
   base === 'simple' ? `/s/wydarzenia/${id}` : `/wydarzenia/${id}`;
 const planHref = (base: Base) => (base === 'simple' ? '/s/plan' : '/plan');
+/** The event page with the "Event saved." banner. */
+const savedHref = (base: Base, id: number) =>
+  withNotice(eventHref(base, id), 'event-saved');
 
 function refresh(id?: number) {
   invalidateCounts();
@@ -106,8 +114,20 @@ const isResult = (x: EventInput | ActionResult): x is ActionResult => 'ok' in x;
 const scopeOf = (v: unknown): 'one' | 'following' =>
   v === 'following' ? 'following' : 'one';
 
-/** Adds an event (or a series) and opens its page; returns only a refusal. */
-export async function createEventAction(form: FormData): Promise<ActionResult> {
+/** A refusal of the event form, with the input it is about (if any). */
+export type EventFormResult = ActionResult & { field?: string };
+
+/**
+ * Adds an event (or a series) and opens its page; returns only a refusal,
+ * naming the input it is about when it is about one.
+ */
+export async function createEventAction(
+  form: FormData,
+): Promise<EventFormResult> {
+  return withEventField(await createEvent(form), form);
+}
+
+async function createEvent(form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   const input = readForm(form);
   if (isResult(input)) return input;
@@ -133,22 +153,24 @@ export async function createEventAction(form: FormData): Promise<ActionResult> {
       .limit(1);
     refresh(first?.id);
     redirect(
-      first
-        ? `${eventHref(baseOf(form), first.id)}?saved=added`
-        : planHref(baseOf(form)),
+      first ? savedHref(baseOf(form), first.id) : planHref(baseOf(form)),
     );
   }
   const r = await addEvent(getDb(), user.id, input, 'web');
   if (!r.ok || r.id === undefined) return r;
   refresh(r.id);
-  redirect(`${eventHref(baseOf(form), r.id)}?saved=added`);
+  redirect(savedHref(baseOf(form), r.id));
 }
 
 /** Saves an edit and returns to the event page; returns only a refusal. */
 export async function updateEventAction(
   id: number,
   form: FormData,
-): Promise<ActionResult> {
+): Promise<EventFormResult> {
+  return withEventField(await updateEvent(id, form), form);
+}
+
+async function updateEvent(id: number, form: FormData): Promise<ActionResult> {
   const user = await requireUser();
   if (!isId(id)) return fail(EVENT_NOT_FOUND);
   const input = readForm(form);
@@ -179,7 +201,7 @@ export async function updateEventAction(
   );
   if (!r.ok) return r;
   refresh(id);
-  redirect(`${eventHref(baseOf(form), id)}?saved=edited`);
+  redirect(savedHref(baseOf(form), id));
 }
 
 export async function deleteEventAction(
@@ -198,18 +220,65 @@ export async function deleteEventAction(
         ? version
         : undefined,
   });
-  if (!r.ok) return r;
+  const plan = withNotice(
+    planHref(base === 'advanced' ? 'advanced' : 'simple'),
+    'event-deleted',
+  );
+  if (!r.ok) {
+    // Already gone (the second click of a double click, a stale tab): the
+    // user wanted it deleted, so this is not an error. A row that never
+    // existed reads the same, so the answer reveals nothing.
+    const ev = await getEvent(getDb(), id);
+    if (!ev) redirect(plan);
+    if (ev.deletedAt !== null) {
+      // "This and following" from a stale tab, after just this occurrence
+      // was deleted: later occurrences are still live, so "deleted" would
+      // be untrue. The shared delete cannot start from a deleted row.
+      if (scopeOf(scope) === 'following' && ev.seriesId !== null) {
+        const [later] = await getDb()
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.seriesId, ev.seriesId),
+              isNull(events.deletedAt),
+              gte(events.startsAt, ev.startsAt),
+            ),
+          )
+          .limit(1);
+        if (later) return fail(FOLLOWING_STILL_LIVE);
+      }
+      redirect(plan);
+    }
+    return r;
+  }
   refresh(id);
-  redirect(planHref(base === 'advanced' ? 'advanced' : 'simple'));
+  redirect(plan);
 }
 
-/** Admin only (404 for everyone else). */
-export async function restoreEventAction(id: number): Promise<ActionResult> {
+/**
+ * Admin only (404 for everyone else). From the event page it reopens that
+ * page with "Event restored." and returns only a refusal. From the edit
+ * form (`from = 'edit'`) it returns the result instead: a redirect would
+ * remount the form and drop what the admin typed, so the form says it.
+ */
+export async function restoreEventAction(
+  id: number,
+  base: Base = 'simple',
+  from: 'event' | 'edit' = 'event',
+): Promise<ActionResult> {
   const admin = await requireAdmin();
   if (!isId(id)) return fail(EVENT_NOT_FOUND);
+  const b: Base = base === 'advanced' ? 'advanced' : 'simple';
   const r = await restoreEvent(getDb(), admin.id, id, 'web');
   if (r.ok) refresh(id);
-  return r;
+  if (from === 'edit') return r;
+  if (!r.ok) {
+    // Already live again (a double click, another admin): the wanted state.
+    const ev = await getEvent(getDb(), id);
+    if (!ev || ev.deletedAt !== null) return r;
+  }
+  redirect(withNotice(eventHref(b, id), 'event-restored'));
 }
 
 export async function linkTopicAction(

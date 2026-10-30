@@ -1,4 +1,4 @@
-import { expect, type Page, test } from '@playwright/test';
+import { expect, type Locator, type Page, test } from '@playwright/test';
 import { loginOnce } from './session';
 
 // Phone width (mobile QA persona): nothing scrolls sideways, and the
@@ -21,6 +21,7 @@ test('pages fit 375 px without sideways scrolling', async ({ page }) => {
     '/s/subjects/FIZ',
     eventPage(),
     '/s/wydarzenia/nowe',
+    '/s/wydarzenia',
     '/s/search?q=tarcie',
   ]) {
     await page.goto(path);
@@ -122,4 +123,117 @@ test('a field scrolled to the top edge keeps its label in view', async ({
   const [m, l] = await Promise.all([main.boundingBox(), label.boundingBox()]);
   expect(await main.evaluate((x) => x.scrollTop)).toBeGreaterThan(0);
   expect(l?.y ?? -1).toBeGreaterThanOrEqual(m?.y ?? 0);
+});
+
+test("the week opens scrolled to today's column", async ({ page }) => {
+  // The seed has a UKL lecture today, so the current week has a grid. The
+  // plan may open on next week once this one is over: "Today" opens this one.
+  await page.goto('/s/plan');
+  await page
+    .getByRole('navigation', { name: 'Weeks' })
+    .getByRole('link', { name: 'Today' })
+    .click();
+  const scroller = page.getByTestId('plan-scroller');
+  const today = page.getByTestId('plan-day').filter({ hasText: '(today)' });
+  await expect(today).toHaveCount(1);
+  await expect
+    .poll(async () => {
+      const s = await scroller.boundingBox();
+      const t = await today.boundingBox();
+      if (!s || !t) return false;
+      // Fully inside the scroller's visible part (past the hour gutter).
+      return t.x >= s.x && t.x + t.width <= s.x + s.width + 1;
+    })
+    .toBe(true);
+});
+
+/** The top bar controls of a shell (simple or advanced). */
+function topBarControls(page: Page) {
+  const bar = page.locator('header').first();
+  const mode = page.getByRole('navigation', { name: 'View mode' });
+  return {
+    menu: bar.getByRole('button', { name: 'Open navigation panel' }),
+    simple: mode.getByText('Simple'),
+    advanced: mode.getByText('Advanced'),
+    signOut: bar.getByRole('button', { name: 'Sign out' }),
+  };
+}
+
+const heightOf = async (l: Locator) => (await l.boundingBox())?.height ?? 0;
+
+test('top bar controls are at least 44 px tall on a phone', async ({
+  page,
+}) => {
+  await page.goto('/s/wydarzenia/nowe');
+  const simple = topBarControls(page);
+  const back = page
+    .getByRole('navigation', { name: 'Breadcrumb' })
+    .getByRole('link', { name: /^Back to / });
+  for (const l of [...Object.values(simple), back]) {
+    expect(await heightOf(l)).toBeGreaterThanOrEqual(44);
+  }
+  await page.goto('/plan');
+  for (const l of Object.values(topBarControls(page))) {
+    expect(await heightOf(l)).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('timetable, event and preview controls are at least 44 px tall on a phone', async ({
+  page,
+}) => {
+  await page.goto('/s/plan');
+  const weeks = page.getByRole('navigation', { name: 'Weeks' });
+  const views = page.getByRole('navigation', { name: 'Timetable view' });
+  for (const l of [
+    weeks.getByRole('link', { name: '‹ Previous' }),
+    weeks.getByRole('link', { name: 'Next ›' }),
+    views.getByRole('link', { name: 'Week' }),
+    views.getByRole('link', { name: 'My groups' }),
+  ]) {
+    expect(await heightOf(l)).toBeGreaterThanOrEqual(44);
+  }
+  await page.goto(eventPage());
+  for (const l of [
+    page.getByRole('link', { name: 'Edit', exact: true }),
+    page.getByRole('button', { name: 'Delete', exact: true }),
+    page.getByRole('button', { name: 'Search', exact: true }),
+  ]) {
+    expect(await heightOf(l)).toBeGreaterThanOrEqual(44);
+  }
+  await page.goto('/s/subjects/FIZ');
+  await page.getByRole('link', { name: 'Preview file sample.pdf' }).click();
+  const buttons = page.getByTestId('pdf-toolbar').getByRole('button');
+  await expect(buttons).toHaveCount(4);
+  for (const l of await buttons.all()) {
+    expect(await heightOf(l)).toBeGreaterThanOrEqual(44);
+  }
+});
+
+test('the desktop top bar keeps its control heights', async ({ page }) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  // Heights before the phone tap targets (2026-10-30), +1 px of rounding.
+  const OLD = {
+    simple: { simple: 22, advanced: 22, signOut: 19.5 },
+    advanced: { simple: 22, advanced: 22, signOut: 19.5 },
+  };
+  await page.goto('/s/wydarzenia/nowe');
+  const s = topBarControls(page);
+  const sh = {
+    simple: await heightOf(s.simple),
+    advanced: await heightOf(s.advanced),
+    signOut: await heightOf(s.signOut),
+  };
+  await page.goto('/plan');
+  const a = topBarControls(page);
+  const ah = {
+    simple: await heightOf(a.simple),
+    advanced: await heightOf(a.advanced),
+    signOut: await heightOf(a.signOut),
+  };
+  for (const k of ['simple', 'advanced', 'signOut'] as const) {
+    expect(sh[k]).toBeGreaterThan(0);
+    expect(sh[k]).toBeLessThanOrEqual(OLD.simple[k] + 1);
+    expect(ah[k]).toBeGreaterThan(0);
+    expect(ah[k]).toBeLessThanOrEqual(OLD.advanced[k] + 1);
+  }
 });

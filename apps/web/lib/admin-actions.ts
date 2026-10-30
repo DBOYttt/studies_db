@@ -41,6 +41,7 @@ import {
   parseRequestKind,
   parseSubjectAdd,
   parseSubjectEdit,
+  type Refusal,
   resolveEdit,
   SUBJECT_FIELD_LABELS,
   subjectFormValues,
@@ -62,6 +63,11 @@ import { requireAdmin } from './session';
 
 const NO_CHANGES = 'No changes.';
 const fail = (message: string): ActionState => ({ ok: false, message });
+/** A parse refusal, keeping the input it names (`ActionState.field`). */
+const refuse = (p: Refusal): ActionState =>
+  p.field === undefined
+    ? fail(p.message)
+    : { ok: false, message: p.message, field: p.field };
 const done = (r: { ok: boolean; message: string }): ActionState => ({
   ok: r.ok,
   message: r.message,
@@ -108,7 +114,7 @@ export async function addSubjectAction(
 ): Promise<ActionState> {
   const user = await requireAdmin();
   const p = parseSubjectAdd(form);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const r = await addSubject(getDb(), p.value);
   if (r.ok) {
     await audit(user.id, 'subject.add', p.value.code, { channelId: null });
@@ -134,7 +140,7 @@ export async function editSubjectAction(
   const e = resolveEdit(form, subjectFormValues(cur), SUBJECT_FIELD_LABELS);
   if (!e.ok) return fail(e.message);
   const p = parseSubjectEdit(e.form, cur);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const v = p.value;
   const t = e.touched;
   // Only what was touched and changed, so the audit row names the edited
@@ -184,7 +190,7 @@ export async function editClassAction(
   const e = resolveEdit(form, classFormValues(cur), CLASS_FIELD_LABELS);
   if (!e.ok) return fail(e.message);
   const p = parseClassEdit(e.form, cur);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const v = p.value;
   const t = e.touched;
   const input: {
@@ -218,7 +224,7 @@ export async function addLecturerAction(
 ): Promise<ActionState> {
   const user = await requireAdmin();
   const p = parseLecturer(form);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const r = await addLecturer(getDb(), p.value);
   if (r.ok && r.id !== undefined) {
     await audit(user.id, 'lecturer.add', String(r.id), { name: p.value.name });
@@ -240,7 +246,7 @@ export async function editLecturerAction(
   const e = resolveEdit(form, lecturerFormValues(cur), LECTURER_FIELD_LABELS);
   if (!e.ok) return fail(e.message);
   const p = parseLecturer(e.form, cur);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const v = p.value;
   const t = e.touched;
   const patch: Parameters<typeof editLecturer>[2] = {};
@@ -271,7 +277,7 @@ export async function assignLecturerAction(
 ): Promise<ActionState> {
   const user = await requireAdmin();
   const p = parseAssign(form);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const v = p.value;
   const r = await assignLecturer(getDb(), {
     subjectCode: v.code,
@@ -318,7 +324,7 @@ export async function setBanAction(
 ): Promise<ActionState> {
   const user = await requireAdmin();
   const p = parseBan(form);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const db = getDb();
   const [me] = await db
     .select({ discordUserId: users.discordUserId })
@@ -359,7 +365,7 @@ export async function requestBotAction(
 ): Promise<ActionState> {
   const user = await requireAdmin();
   const p = parseRequestKind(form);
-  if (!p.ok) return fail(p.message);
+  if (!p.ok) return refuse(p);
   const r = await enqueueAdminBotRequest(getDb(), p.value, user.id);
   if (!r.ok) return fail(r.message);
   await audit(user.id, 'bot.request', `bot_request:${r.id}`, {

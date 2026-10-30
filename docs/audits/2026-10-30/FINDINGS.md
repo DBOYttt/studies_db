@@ -49,8 +49,20 @@ Still open after G6:
 - Not done from P4/P13: the optional 60 s cache on group options, `syncTimetable`'s per-session UPDATEs (still serial), and the `lastBotRequest` filesort; `reminder_log` has no index on `for_starts_at`, so each prune batch scans the table.
 - No `loading.tsx` on admin pages, entity pages, `/tables/<view>`, `/`, or any simple page (`/s`, `/s/plan`, `/s/search`, `/s/recent`, `/s/reports`); they render as before. `/s/search`, `/s/recent` and `/s/reports` could stream their results under an in-page `<Suspense key=…>` inside `SimpleShell` later.
 
+**G7 (student UX)**, branch `feat/g7-student-ux`: d610a7b and dd8a268 (Task 1, friendly 404, notices and the expired-session page; redirect hardening of `safeNext` and `withNotice`; the proxy passes only POST Server Actions through), 174ef0f and 9602e62 (Task 2, save confirmations; My groups Save writes only the classes this tab changed), 2e1f7e0 and c844b5f (Task 3, a Today card on Start, an events index, the List view from today, the phone week scrolled to today), cb0ab45 and 910584e (Task 4, page titles, delete-dialog focus and Escape, field errors tied to their fields, `--faint` contrast, `lang`, file-specific Preview/Download names), and this commit (Task 5, U12: 44 px tap targets below `sm` for the top bars, PDF toolbar, event Edit/Delete, timetable Previous/Next, tabs and Search, with the 1440 px heights unchanged; U14: date/time pickers drawn with a dark `color-scheme` in dark mode; U13: one counting rule for both searches, `searchCounts`, over what each page lists, and simple drops the topic count it never listed; a 15 s preview timeout, curator E5).
+
+Still open after G7:
+- Today has no Test or Entry-quiz badges.
+- In the evening, after today's classes, Today shows no next class.
+- Other `usePathname` components may still hit the F3 hydration window.
+- A deleted event's edit page stays reachable for non-admins (only its tab title is hidden; the crumbs and the form still show the name).
+- The last Save across two tabs silently wins.
+- A failed per-pick save leaves the class marked as changed.
+- The admin field-error focus has no e2e.
+- Simple search still finds files through their topic title or subject name, so for the same query it can list (and count) more files than Advanced, which counts topic-title hits as topics.
+
 ## Not verified / needs a live check
-- **Preview "Loading…" hang:** reported by 4 personas. Re-checked on a quiet sandbox, where the PDF loaded in about 3 s, so it was dev-server load. A preview timeout fallback (curator E5) is still worth adding under G7.
+- **Preview "Loading…" hang:** reported by 4 personas. Re-checked on a quiet sandbox, where the PDF loaded in about 3 s, so it was dev-server load. G7 added the timeout fallback (curator E5): after 15 s without a first render, or on a load error, the preview says "Could not load the preview." with a Download link.
 - **R2's linked-content path:** inferred, not reproduced.
 - **Stack traces in a production build** (security F3, last round's F4): not checked.
 - **Bot items that need a live server:**

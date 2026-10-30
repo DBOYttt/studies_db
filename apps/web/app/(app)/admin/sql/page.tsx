@@ -1,10 +1,16 @@
 import { Prohibit } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import { AdminSqlConsole } from '@/components/admin/AdminSqlConsole';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { CONFIRM_THRESHOLD } from '@/lib/admin-sql';
 import { getRwPool } from '@/lib/db';
+import { adminMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata(): Promise<Metadata> {
+  return adminMetadata('SQL — write · Admin');
+}
 
 export const dynamic = 'force-dynamic';
 

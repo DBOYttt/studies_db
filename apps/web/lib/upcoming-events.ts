@@ -1,12 +1,7 @@
-import { type DbExecutor, getMyGroups, listUpcomingEvents } from '@studies/db';
+import { type DbExecutor, listUpcomingEvents } from '@studies/db';
 import type mysql from 'mysql2/promise';
-import {
-  filterMyGroups,
-  type MyGroups,
-  type PlanSession,
-  sanitizeMyGroups,
-} from './plan';
-import { listMyGroupOptions } from './plan-queries';
+import { loadMyGroups } from './my-groups-load';
+import { filterMyGroups, type MyGroups, type PlanSession } from './plan';
 
 /** The first `limit` events matching My groups (pure; input in time order). */
 export const pickUpcoming = (
@@ -25,14 +20,12 @@ export async function upcomingForUser(
   userId: number,
   nowWall: Date,
   limit = 5,
+  /** My groups already being loaded for this request (`loadMyGroups`). */
+  mine?: Promise<MyGroups>,
 ): Promise<PlanSession[]> {
-  const [events, stored, options] = await Promise.all([
+  const [events, groups] = await Promise.all([
     listUpcomingEvents(pool, nowWall, SCAN),
-    getMyGroups(db, userId),
-    listMyGroupOptions(pool),
+    mine ?? loadMyGroups(db, pool, userId),
   ]);
-  const valid = Object.fromEntries(
-    options.map((o) => [String(o.classId), o.groups.map((g) => g.id)]),
-  );
-  return pickUpcoming(events, sanitizeMyGroups(stored, valid), limit);
+  return pickUpcoming(events, groups, limit);
 }

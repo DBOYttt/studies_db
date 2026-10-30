@@ -1,4 +1,5 @@
 import { ChatsCircle, Files, User } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import {
   EntityFilesGrid,
@@ -14,8 +15,17 @@ import {
 } from '@/lib/entity-page';
 import { getUser, userFiles, userTopics } from '@/lib/entity-queries';
 import { formatDate } from '@/lib/format';
+import { idMetadata } from '@/lib/page-meta';
 import { requireUser } from '@/lib/session';
 import { userHref } from '@/lib/view-links';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return idMetadata('User', (await params).id);
+}
 
 export const dynamic = 'force-dynamic';
 

@@ -28,6 +28,7 @@ vi.mock('@/lib/db', () => ({ getDb: () => fakeDb ?? db }));
 
 let cookieSid: string | undefined;
 vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
   cookies: async () => ({
     get: (n: string) =>
       n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,

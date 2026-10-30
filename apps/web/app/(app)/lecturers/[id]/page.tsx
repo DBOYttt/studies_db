@@ -4,6 +4,7 @@ import {
   Files,
   Stack,
 } from '@phosphor-icons/react/dist/ssr';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { Suspense } from 'react';
@@ -19,14 +20,24 @@ import {
   parseEntityTab,
 } from '@/lib/entity-page';
 import {
-  getLecturer,
+  type getLecturer,
   type LecturerAssignment,
   lecturerFiles,
   listLecturerAssignments,
 } from '@/lib/entity-queries';
 import { explorerHref } from '@/lib/explorer';
+import { loadLecturer } from '@/lib/page-loaders';
+import { lecturerMetadata } from '@/lib/page-meta';
 import { requireUser } from '@/lib/session';
 import { lecturerHref } from '@/lib/view-links';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return lecturerMetadata((await params).id);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -58,7 +69,7 @@ export default async function LecturerPage({
 
   let lecturer: Awaited<ReturnType<typeof getLecturer>> = null;
   try {
-    lecturer = await getLecturer(pool, id);
+    lecturer = await loadLecturer(id);
   } catch (err) {
     return (
       <>

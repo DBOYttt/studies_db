@@ -1,6 +1,7 @@
 import { ArrowSquareOut, Info } from '@phosphor-icons/react/dist/ssr';
 import { MARK_NOTE_MAX } from '@studies/db';
 import { CLASS_NAMES } from '@studies/db/constants';
+import type { Metadata } from 'next';
 import { notFound } from 'next/navigation';
 import { EntryQuizSection } from '@/components/plan/EntryQuizSection';
 import { FileList } from '@/components/simple/FileList';
@@ -15,11 +16,12 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
 import { loadEntryQuiz } from '@/lib/entry-quiz';
 import { safeExternalUrl } from '@/lib/format';
+import { loadSubject } from '@/lib/page-loaders';
+import { subjectMetadata } from '@/lib/page-meta';
 import { nowWall } from '@/lib/plan';
 import { nextSessions } from '@/lib/plan-queries';
 import { wallDateKey } from '@/lib/plan-view';
 import {
-  getSubject,
   listSubjectClasses,
   listSubjectLecturers,
   listSubjectTags,
@@ -28,6 +30,14 @@ import { requireUser } from '@/lib/session';
 import { chipHref, groupLecturers, parseSimpleFilters } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}): Promise<Metadata> {
+  return subjectMetadata((await params).code);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -52,7 +62,7 @@ export default async function SimpleSubject({
   } catch {
     notFound();
   }
-  const subject = await getSubject(db, code);
+  const subject = await loadSubject(code);
   if (!subject) notFound();
   const [cards, classes, tags, lecturerRows, upcoming] = await Promise.all([
     cachedSubjectCards(),

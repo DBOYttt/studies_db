@@ -945,6 +945,12 @@ describe('event actions', () => {
         up,
       );
       expect(old.map((r) => Number(r.id))).toContain(tooOld);
+
+      // Paging (the events index): `offset` skips rows of the same order.
+      const page2 = await listUpcomingEvents(pool, now, 2, 2);
+      expect(page2.map((r) => r.id)).toEqual(up.slice(2, 4));
+      const past = await listUpcomingEvents(pool, now, 2, 10);
+      expect(past).toEqual([]);
     });
   });
 });

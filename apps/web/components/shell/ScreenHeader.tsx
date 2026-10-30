@@ -37,7 +37,7 @@ const BASE_CRUMBS: Crumb[] = [
  * are always prepended.
  *
  * Layout contract (components/shell/ShellFrame.tsx): the crumbs are absolutely
- * positioned over the 38px top bar of the main column and end before the
+ * positioned over the top bar (38px; 48px below `sm`, for 44px tap targets) of the main column and end before the
  * user block (ShellFrame measures it into --topbar-end-w); long labels
  * ellipsize. The tab strip cancels the content padding
  * (--content-px / --content-pt) and sticks to the top of the scroll area.
@@ -54,7 +54,7 @@ export function ScreenHeader({
     <>
       <nav
         aria-label="Breadcrumb"
-        className="absolute top-0 right-[var(--topbar-end-w,220px)] left-12 z-[1] flex h-[38px] items-center overflow-hidden whitespace-nowrap md:left-4"
+        className="absolute top-0 right-[var(--topbar-end-w,220px)] left-12 z-[1] flex h-[38px] items-center overflow-hidden whitespace-nowrap max-sm:left-14 max-sm:h-12 md:left-4"
       >
         <ol className="flex min-w-0 flex-1 items-center gap-1.5">
           {all.map((c, i) => {
@@ -104,7 +104,7 @@ export function ScreenHeader({
         >
           {tabs.map((t) => {
             const I = t.icon;
-            const cls = `-mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-md border px-[13px] py-[7px] hover:underline ${
+            const cls = `-mb-px flex items-center gap-1.5 whitespace-nowrap rounded-t-md border px-[13px] py-[7px] hover:underline max-sm:min-h-11 ${
               t.active
                 ? 'border-line-strong border-b-page bg-page font-semibold text-fg'
                 : 'border-transparent text-accent-ink'

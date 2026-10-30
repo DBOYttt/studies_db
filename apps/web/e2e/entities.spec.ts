@@ -35,12 +35,16 @@ test('lecturer page: assignments, materials of own groups, links', async ({
   await tabsNav(page).getByRole('link', { name: 'Materials' }).click();
   await expect(page).toHaveURL(/tab=files/);
   await expect(
-    main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }),
+    main.getByRole('link', { name: 'lab-sprawozdanie.pdf', exact: true }),
   ).toBeVisible();
-  await expect(main.getByRole('link', { name: 'lab-gr2.pdf' })).toHaveCount(0);
+  await expect(
+    main.getByRole('link', { name: 'lab-gr2.pdf', exact: true }),
+  ).toHaveCount(0);
 
   // Preview opens the preview panel next to the grid.
-  await main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }).click();
+  await main
+    .getByRole('link', { name: 'lab-sprawozdanie.pdf', exact: true })
+    .click();
   await expect(page).toHaveURL(/preview=\d+/);
   await expect(
     page.getByRole('complementary', { name: 'File preview' }),
@@ -76,7 +80,9 @@ test('user page: uploaded files and topics', async ({ page }) => {
     'Ewa Testowa',
   );
   for (const f of ['sample.pdf', 'lab-sprawozdanie.pdf', 'lab-gr2.pdf']) {
-    await expect(main.getByRole('link', { name: f })).toBeVisible();
+    await expect(
+      main.getByRole('link', { name: f, exact: true }),
+    ).toBeVisible();
   }
   await tabsNav(page).getByRole('link', { name: 'Topics' }).click();
   await expect(page).toHaveURL(/tab=topics/);
@@ -101,9 +107,11 @@ test('tag page: tagged topics and their files', async ({ page }) => {
   ).toHaveCount(0);
   await tabsNav(page).getByRole('link', { name: 'Files' }).click();
   await expect(page).toHaveURL(/tab=files/);
-  await expect(main.getByRole('link', { name: 'sample.pdf' })).toBeVisible();
   await expect(
-    main.getByRole('link', { name: 'lab-sprawozdanie.pdf' }),
+    main.getByRole('link', { name: 'sample.pdf', exact: true }),
+  ).toBeVisible();
+  await expect(
+    main.getByRole('link', { name: 'lab-sprawozdanie.pdf', exact: true }),
   ).toHaveCount(0);
 });
 

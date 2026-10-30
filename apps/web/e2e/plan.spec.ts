@@ -85,11 +85,24 @@ test('My groups filters groups, persists, and clears', async ({ page }) => {
   await expect(blocks).toHaveCount(4);
 });
 
-test('list tab is a v_class_sessions grid', async ({ page }) => {
+test('list tab is a v_class_sessions grid from today, with "Show past"', async ({
+  page,
+}) => {
   await page.goto('/plan?tab=list');
   const main = page.getByRole('main');
   await expect(main.getByText('v_class_sessions').first()).toBeVisible();
+  await expect(main.getByText('Showing sessions from today.')).toBeVisible();
+  // SESJ labs are 7 and 14 days ahead; the PLAN week (Oct 2026) is past.
+  await expect(
+    main.getByRole('cell', { name: 'F-6 601' }).first(),
+  ).toBeVisible();
+  await expect(main.getByRole('cell', { name: 'A-1 101' })).toHaveCount(0);
+  await main.getByRole('link', { name: 'Show past' }).click();
+  await expect(page).toHaveURL(/past=1/);
+  await expect(main.getByText('Showing all sessions.')).toBeVisible();
   await expect(main.getByRole('cell', { name: 'A-1 101' })).toBeVisible();
+  await main.getByRole('link', { name: 'From today' }).click();
+  await expect(main.getByRole('cell', { name: 'A-1 101' })).toHaveCount(0);
 });
 
 test('subject plan tab shows only that subject', async ({ page }) => {

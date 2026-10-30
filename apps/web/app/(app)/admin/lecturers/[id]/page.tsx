@@ -3,7 +3,7 @@ import {
   ChalkboardTeacher,
   PencilSimpleLine,
 } from '@phosphor-icons/react/dist/ssr';
-import { getLecturerAdmin } from '@studies/db';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { box, boxHead, link } from '@/components/admin/form-styles';
@@ -11,10 +11,19 @@ import { LecturerForm } from '@/components/admin/LecturerForm';
 import { ADMIN_CRUMB, adminTabs } from '@/components/shell/admin-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { lecturerLabel } from '@/lib/admin-pages';
-import { getDb } from '@/lib/db';
 import { parseEntityId } from '@/lib/entity-page';
+import { loadLecturerAdmin } from '@/lib/page-loaders';
+import { adminLecturerMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
 import { lecturerHref } from '@/lib/view-links';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  return adminLecturerMetadata((await params).id);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +36,7 @@ export default async function AdminLecturerPage({
   await requireAdmin();
   const id = parseEntityId((await params).id);
   if (id === null) notFound();
-  const lecturer = await getLecturerAdmin(getDb(), id);
+  const lecturer = await loadLecturerAdmin(id);
   if (!lecturer) notFound();
   const name = lecturerLabel(lecturer);
 

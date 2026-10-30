@@ -12,6 +12,8 @@ import {
   useState,
   useTransition,
 } from 'react';
+import { Field, type FormError } from '@/components/Field';
+import { Notice } from '@/components/Notice';
 import {
   createEventAction,
   restoreEventAction,
@@ -20,6 +22,7 @@ import {
 } from '@/lib/event-actions';
 import { type FormVersion, nextFormVersion } from '@/lib/event-form-version';
 import type { SubjectOption } from '@/lib/event-queries';
+import { fieldAria, visibleControl } from '@/lib/field-errors';
 import { type SessionOption, sessionFormFields } from '@/lib/session-options';
 import { STATUS } from '@/lib/status-text';
 
@@ -52,7 +55,9 @@ const groupKey = (classId: number | null, groupId: number | null) =>
 const GONE = EVENT_NOT_FOUND;
 
 const input =
-  'h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent';
+  'h-8 w-full rounded border border-line-strong bg-panel px-2 text-fg focus:border-accent aria-invalid:border-err-fg';
+/** Id prefix of the field messages (one event form per page). */
+const FORM_ID = 'event-form';
 const label = 'flex flex-col gap-1 text-[13px] font-semibold text-fg';
 const primaryBtn =
   'inline-flex items-center gap-[5px] rounded bg-accent-fill px-3 py-[6px] font-semibold text-on-accent hover:bg-accent-fill-hover aria-disabled:opacity-60';
@@ -65,8 +70,9 @@ const primaryBtn =
  * group follow the chosen subject. For a Test with a class, "Pick a session"
  * lists the class/group's upcoming sessions and fills date, time and place
  * (still editable), saying so in a polite status line. A refusal is shown
- * in place and describes the submit button; success redirects from the
- * action. The submit is `aria-disabled` while saving (not `disabled`, which
+ * under the input it is about (`aria-invalid`, described by the message,
+ * focused), or else in place, describing the submit button; success
+ * redirects from the action. The submit is `aria-disabled` while saving (not `disabled`, which
  * would drop focus).
  */
 export function EventForm({
@@ -127,7 +133,17 @@ export function EventForm({
     failed: false,
   });
   const [repeat, setRepeat] = useState('');
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<FormError>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+  // A field error moves focus to its input once it is marked invalid.
+  useEffect(() => {
+    if (error?.field) visibleControl(formRef.current, error.field)?.focus();
+  }, [error]);
+  const aria = (name: string, describedBy?: string) =>
+    fieldAria(error, FORM_ID, name, describedBy);
+  const [restored, setRestored] = useState(false);
+  // Which transition is pending: only a save says "Saving…".
+  const [restoring, setRestoring] = useState(false);
   const [status, setStatusNow] = useState('');
   // The auto-fill message is written a moment after the line is cleared, so
   // a second pick is a new change that screen readers announce again.
@@ -186,7 +202,12 @@ export function EventForm({
           : await updateEventAction(eventId, fd);
       // Success redirects; only a refusal comes back.
       if (r && !r.ok) {
-        setError(r.message);
+        // A field the form does not show (e.g. Until without Repeat) keeps
+        // the message general.
+        const field = visibleControl(formRef.current, r.field)
+          ? r.field
+          : undefined;
+        setError({ message: r.message, field });
         // Deleted meanwhile: re-render the page for the banner; typed values stay.
         if (eventId !== undefined && r.message === GONE) router.refresh();
       }
@@ -195,10 +216,18 @@ export function EventForm({
 
   const restore = () => {
     if (pending) return;
+    setRestoring(true);
     start(async () => {
-      const r = await restoreEventAction(eventId ?? 0);
-      if (r.ok) router.refresh();
-      else setError(r.message);
+      try {
+        // No redirect from here: typed values stay, the form says it.
+        const r = await restoreEventAction(eventId ?? 0, base, 'edit');
+        if (r.ok) {
+          setRestored(true);
+          router.refresh();
+        } else setError({ message: r.message });
+      } finally {
+        setRestoring(false);
+      }
     });
   };
 
@@ -222,7 +251,13 @@ export function EventForm({
           )}
         </div>
       )}
+      <Notice
+        text={restored && !deleted ? STATUS.eventRestored : null}
+        param={null}
+        className="mb-3.5"
+      />
       <form
+        ref={formRef}
         method="post"
         onSubmit={(e) => {
           // Not `action={fn}`: React 19 resets uncontrolled fields after it,
@@ -239,13 +274,14 @@ export function EventForm({
         {version !== undefined && (
           <input type="hidden" name="version" value={version} />
         )}
-        <label className={label}>
+        <Field className={label} error={error} formId={FORM_ID} name="kind">
           Type
           <select
             name="kind"
             value={kind}
             onChange={(e) => setKind(e.target.value as EventKind)}
             className={input}
+            {...aria('kind')}
           >
             {Object.entries(EVENT_KINDS).map(([k, v]) => (
               <option key={k} value={k}>
@@ -253,8 +289,13 @@ export function EventForm({
               </option>
             ))}
           </select>
-        </label>
-        <label className={label}>
+        </Field>
+        <Field
+          className={label}
+          error={error}
+          formId={FORM_ID}
+          name="subjectId"
+        >
           Subject
           <select
             name="subjectId"
@@ -266,6 +307,7 @@ export function EventForm({
               setSessionId('');
             }}
             className={input}
+            {...aria('subjectId')}
           >
             <option value="">No subject</option>
             {options.map((s) => (
@@ -274,10 +316,15 @@ export function EventForm({
               </option>
             ))}
           </select>
-        </label>
+        </Field>
         {subject && subject.classes.length > 0 && (
           <div className="flex flex-col gap-3.5">
-            <label className={label}>
+            <Field
+              className={label}
+              error={error}
+              formId={FORM_ID}
+              name="classId"
+            >
               Class
               <select
                 name="classId"
@@ -288,6 +335,7 @@ export function EventForm({
                   setSessionId('');
                 }}
                 className={input}
+                {...aria('classId')}
               >
                 <option value="">All</option>
                 {subject.classes.map((c) => (
@@ -296,9 +344,14 @@ export function EventForm({
                   </option>
                 ))}
               </select>
-            </label>
+            </Field>
             {cls && cls.groups.length > 0 && (
-              <label className={label}>
+              <Field
+                className={label}
+                error={error}
+                formId={FORM_ID}
+                name="groupId"
+              >
                 Group
                 <select
                   name="groupId"
@@ -308,6 +361,7 @@ export function EventForm({
                     setSessionId('');
                   }}
                   className={input}
+                  {...aria('groupId')}
                 >
                   <option value="">All</option>
                   {cls.groups.map((g) => (
@@ -316,7 +370,7 @@ export function EventForm({
                     </option>
                   ))}
                 </select>
-              </label>
+              </Field>
             )}
           </div>
         )}
@@ -360,7 +414,7 @@ export function EventForm({
             </span>
           </div>
         )}
-        <label className={label}>
+        <Field className={label} error={error} formId={FORM_ID} name="title">
           <span className="req">Title</span>
           <input
             name="title"
@@ -369,10 +423,11 @@ export function EventForm({
             maxLength={100}
             defaultValue={initial.title}
             className={input}
+            {...aria('title')}
           />
-        </label>
+        </Field>
         <div className="flex flex-col gap-3.5">
-          <label className={label}>
+          <Field className={label} error={error} formId={FORM_ID} name="date">
             <span className="req">Date</span>
             <input
               type="date"
@@ -385,14 +440,14 @@ export function EventForm({
                 setStatus('');
               }}
               className={input}
+              {...aria('date')}
             />
-          </label>
-          <label className={label}>
+          </Field>
+          <Field className={label} error={error} formId={FORM_ID} name="start">
             Starts
             <input
               type="time"
               name="start"
-              aria-describedby="event-all-day-hint"
               value={startTime}
               onChange={(e) => {
                 setStartTime(e.target.value);
@@ -400,14 +455,14 @@ export function EventForm({
                 setStatus('');
               }}
               className={input}
+              {...aria('start', 'event-all-day-hint')}
             />
-          </label>
-          <label className={label}>
+          </Field>
+          <Field className={label} error={error} formId={FORM_ID} name="end">
             Ends
             <input
               type="time"
               name="end"
-              aria-describedby="event-all-day-hint"
               value={endTime}
               onChange={(e) => {
                 setEndTime(e.target.value);
@@ -415,32 +470,50 @@ export function EventForm({
                 setStatus('');
               }}
               className={input}
+              {...aria('end', 'event-all-day-hint')}
             />
-          </label>
+          </Field>
         </div>
         <p id="event-all-day-hint" className="m-0 -mt-2 text-xs text-muted">
           Without a time the event lasts all day.
         </p>
         {eventId === undefined && (
           <div className="flex flex-col gap-3.5">
-            <label className={label}>
+            <Field
+              className={label}
+              error={error}
+              formId={FORM_ID}
+              name="repeat"
+            >
               Repeat
               <select
                 name="repeat"
                 value={repeat}
                 onChange={(e) => setRepeat(e.target.value)}
                 className={input}
+                {...aria('repeat')}
               >
                 <option value="">Don&apos;t repeat</option>
                 <option value="weekly">every week</option>
                 <option value="biweekly">every 2 weeks</option>
               </select>
-            </label>
+            </Field>
             {repeat && (
-              <label className={label}>
+              <Field
+                className={label}
+                error={error}
+                formId={FORM_ID}
+                name="until"
+              >
                 <span className="req">Until</span>
-                <input type="date" name="until" required className={input} />
-              </label>
+                <input
+                  type="date"
+                  name="until"
+                  required
+                  className={input}
+                  {...aria('until')}
+                />
+              </Field>
             )}
           </div>
         )}
@@ -459,7 +532,7 @@ export function EventForm({
             </label>
           </fieldset>
         )}
-        <label className={label}>
+        <Field className={label} error={error} formId={FORM_ID} name="place">
           Place
           <input
             name="place"
@@ -471,9 +544,10 @@ export function EventForm({
               setStatus('');
             }}
             className={input}
+            {...aria('place')}
           />
-        </label>
-        <label className={label}>
+        </Field>
+        <Field className={label} error={error} formId={FORM_ID} name="note">
           Note
           <textarea
             name="note"
@@ -482,26 +556,33 @@ export function EventForm({
             rows={4}
             defaultValue={initial.note}
             className={`${input} h-auto py-1.5`}
+            {...aria('note')}
           />
-        </label>
-        {error && (
+        </Field>
+        {error && !error.field && (
           <div
             id="event-form-error"
             role="alert"
             className="rounded-md border border-err-line bg-err-bg px-3 py-2 text-err-fg"
           >
-            {error}
+            {error.message}
           </div>
         )}
         <div className="flex items-center gap-3">
           <button
             type="submit"
             aria-disabled={pending || deleted}
-            aria-describedby={error ? 'event-form-error' : undefined}
+            aria-describedby={
+              error && !error.field ? 'event-form-error' : undefined
+            }
             className={primaryBtn}
           >
             <FloppyDisk size={15} aria-hidden />
-            {eventId === undefined ? 'Add event' : 'Save'}
+            {pending && !restoring
+              ? 'Saving…'
+              : eventId === undefined
+                ? 'Add event'
+                : 'Save'}
           </button>
           <Link href={cancelHref} className="link">
             Cancel

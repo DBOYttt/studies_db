@@ -21,6 +21,7 @@ vi.mock('@/lib/db', () => ({ getDb: () => db }));
 
 let cookieSid: string | undefined;
 vi.mock('next/headers', () => ({
+  headers: async () => new Headers(),
   cookies: async () => ({
     get: (n: string) =>
       n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
@@ -133,19 +134,25 @@ describe('event actions', () => {
     expect(await eventRows()).toHaveLength(0);
   });
 
-  it('returns the English message for invalid input', async () => {
+  it('returns the English message and its field for invalid input', async () => {
     cookieSid = alice.sid;
     expect(await A.createEventAction(form({ title: '  ' }))).toEqual({
       ok: false,
       message: 'The title must be 1 to 100 characters.',
+      field: 'title',
     });
     expect(await A.createEventAction(form({ date: '' }))).toEqual({
       ok: false,
       message: 'Enter the event date.',
+      field: 'date',
     });
     expect(
       await A.createEventAction(form({ start: '', end: '11:00' })),
-    ).toEqual({ ok: false, message: 'Enter the start time.' });
+    ).toEqual({ ok: false, message: 'Enter the start time.', field: 'start' });
+    // the db's subject check names the Subject select
+    expect(
+      await A.createEventAction(form({ subjectId: '999999' })),
+    ).toMatchObject({ ok: false, field: 'subjectId' });
     expect(await eventRows()).toHaveLength(0);
   });
 
@@ -156,7 +163,7 @@ describe('event actions', () => {
       A.createEventAction(
         form({ subjectId: String(subjectId), base: 'advanced' }),
       ),
-    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+\?saved=added$/);
+    ).rejects.toThrow(/redirect:\/wydarzenia\/\d+\?notice=event-saved$/);
     // the v_events count in the nav is dropped from the cache
     expect(counts.invalidated).toBeGreaterThan(invalidated);
     const [ev] = await eventRows();
@@ -165,7 +172,7 @@ describe('event actions', () => {
 
     await expect(
       A.updateEventAction(ev.id, form({ title: 'Nowy tytuł' })),
-    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}?saved=edited`);
+    ).rejects.toThrow(`redirect:/s/wydarzenia/${ev.id}?notice=event-saved`);
     expect((await eventRows())[0].title).toBe('Nowy tytuł');
 
     expect((await A.linkTopicAction(ev.id, topicId)).ok).toBe(true);
@@ -182,8 +189,22 @@ describe('event actions', () => {
     await expect(A.restoreEventAction(ev.id)).rejects.toThrow('notFound');
     expect((await eventRows())[0].deletedAt).not.toBeNull();
     cookieSid = admin.sid;
-    expect((await A.restoreEventAction(ev.id)).ok).toBe(true);
+    await expect(A.restoreEventAction(ev.id)).rejects.toThrow(
+      `redirect:/s/wydarzenia/${ev.id}?notice=event-restored`,
+    );
     expect((await eventRows())[0].deletedAt).toBeNull();
+    // From the edit form: no redirect (it would drop the typed values).
+    await A.deleteEventAction(ev.id).catch(() => {});
+    expect((await A.restoreEventAction(ev.id, 'advanced', 'edit')).ok).toBe(
+      true,
+    );
+    expect((await eventRows())[0].deletedAt).toBeNull();
+    // Already live (a double click, another admin): same confirmation.
+    await expect(A.restoreEventAction(ev.id)).rejects.toThrow(
+      `redirect:/s/wydarzenia/${ev.id}?notice=event-restored`,
+    );
+    // An event that does not exist: the refusal comes back, no redirect.
+    expect((await A.restoreEventAction(999_999)).ok).toBe(false);
   });
 
   it('a stale version is refused; the current one saves', async () => {
@@ -218,6 +239,65 @@ describe('event actions', () => {
     ).rejects.toThrow('redirect:/s/plan');
   });
 
+  it('a delete of an already deleted event lands on the timetable with a notice', async () => {
+    cookieSid = alice.sid;
+    await expect(
+      A.createEventAction(form({ title: 'Dwuklik' })),
+    ).rejects.toThrow('redirect');
+    const ev = (await eventRows()).find((e) => e.title === 'Dwuklik');
+    if (!ev) throw new Error('no event');
+    const toPlan = /^redirect:\/s\/plan\?notice=event-deleted$/;
+    await expect(
+      A.deleteEventAction(ev.id, 'simple', 'one', ev.version),
+    ).rejects.toThrow(toPlan);
+    const audits = async () =>
+      (await db.select().from(adminAudit)).filter(
+        (a) => a.action === 'event.delete' && a.target === String(ev.id),
+      );
+    expect(await audits()).toHaveLength(1);
+    // The second click of a double click, or a stale tab (its version is old).
+    await expect(
+      A.deleteEventAction(ev.id, 'simple', 'one', ev.version),
+    ).rejects.toThrow(toPlan);
+    await expect(A.deleteEventAction(ev.id, 'advanced')).rejects.toThrow(
+      /^redirect:\/plan\?notice=event-deleted$/,
+    );
+    // An id that never existed reads the same, so nothing is revealed.
+    await expect(A.deleteEventAction(999_999)).rejects.toThrow(toPlan);
+    expect(await audits()).toHaveLength(1);
+  });
+
+  it('a stale "this and following" delete does not claim success while later ones are live', async () => {
+    cookieSid = alice.sid;
+    await db.delete(events);
+    const until = new Date(Date.now() + 5 * 86_400_000 + 14 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await expect(
+      A.createEventAction(form({ repeat: 'weekly', until })),
+    ).rejects.toThrow('redirect');
+    const all = (await eventRows()).sort((a, b) => a.id - b.id);
+    expect(all).toHaveLength(3);
+    // Another tab deletes only the second occurrence.
+    await expect(
+      A.deleteEventAction(all[1].id, 'simple', 'one'),
+    ).rejects.toThrow('redirect:/s/plan');
+    // This stale tab asks for "this and following" on that same occurrence.
+    const r = await A.deleteEventAction(all[1].id, 'simple', 'following');
+    expect(r).toMatchObject({ ok: false });
+    expect(r.message).toContain('later ones are still');
+    expect(
+      (await eventRows()).filter((e) => e.deletedAt === null),
+    ).toHaveLength(2);
+    // With nothing later left, the same call is the usual "already gone".
+    await expect(
+      A.deleteEventAction(all[2].id, 'simple', 'one'),
+    ).rejects.toThrow('redirect:/s/plan');
+    await expect(
+      A.deleteEventAction(all[1].id, 'simple', 'following'),
+    ).rejects.toThrow('redirect:/s/plan');
+  });
+
   it('searches posts by title within the subject, at most 20', async () => {
     cookieSid = alice.sid;
     const r = await A.searchTopicsAction(subjectId, 'tarc');
@@ -233,7 +313,7 @@ describe('event actions', () => {
       .slice(0, 10);
     await expect(
       A.createEventAction(form({ repeat: 'weekly', until })),
-    ).rejects.toThrow(/redirect:\/s\/wydarzenia\/\d+/);
+    ).rejects.toThrow(/redirect:\/s\/wydarzenia\/\d+\?notice=event-saved$/);
     const rows = async () => (await eventRows()).sort((a, b) => a.id - b.id);
     const all = await rows();
     expect(all).toHaveLength(3);
@@ -246,12 +326,31 @@ describe('event actions', () => {
     expect(unknown).toEqual({
       ok: false,
       message: 'Unknown repeat rule.',
+      field: 'repeat',
     });
     expect(await eventRows()).toHaveLength(before);
 
-    // a missing "do" is refused in Polish
+    // a missing "do" is refused, about Until
     const bad = await A.createEventAction(form({ repeat: 'weekly' }));
-    expect(bad.ok).toBe(false);
+    expect(bad).toMatchObject({ ok: false, field: 'until' });
+    // more than the series' cap of occurrences is about Until too
+    const far = new Date(Date.now() + 300 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    const tooMany = await A.createEventAction(
+      form({ repeat: 'weekly', until: far }),
+    );
+    expect(tooMany).toMatchObject({
+      ok: false,
+      message: expect.stringContaining('occurrences'),
+      field: 'until',
+    });
+    // so is an end date before the first event (the db's own message)
+    const before2 = await A.createEventAction(
+      form({ repeat: 'weekly', until: '2000-01-01' }),
+    );
+    expect(before2).toMatchObject({ ok: false, field: 'until' });
+    expect(await eventRows()).toHaveLength(before);
 
     await expect(
       A.updateEventAction(

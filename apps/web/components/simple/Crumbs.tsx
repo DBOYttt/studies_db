@@ -22,7 +22,7 @@ export function Crumbs({ crumbs }: { crumbs: Crumb[] }) {
         <Link
           href={back.href}
           aria-label={`Back to ${back.label}`}
-          className="grid size-7 shrink-0 place-items-center rounded-md text-accent-ink hover:bg-line md:hidden"
+          className="grid size-7 shrink-0 place-items-center rounded-md text-accent-ink hover:bg-line max-sm:size-11 md:hidden"
         >
           <CaretLeft size={16} aria-hidden />
         </Link>

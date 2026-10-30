@@ -67,7 +67,7 @@ test('browse, preview, search and sql console', async ({ page, context }) => {
   await expect(main.getByText('Processing…')).toBeVisible();
   await expect(main.getByText('Preview unavailable')).toBeVisible();
 
-  await main.getByRole('link', { name: 'sample.pdf' }).click();
+  await main.getByRole('link', { name: 'sample.pdf', exact: true }).click();
   const panel = page.getByRole('complementary', { name: 'File preview' });
   const canvas = panel.locator('canvas').first();
   await expect(canvas).toBeVisible({ timeout: 30_000 });
@@ -89,7 +89,7 @@ test('browse, preview, search and sql console', async ({ page, context }) => {
     .toBeLessThanOrEqual(360);
 
   // A file still being processed: a processing placeholder, not "unavailable".
-  await main.getByRole('link', { name: 'notatki.docx' }).click();
+  await main.getByRole('link', { name: 'notatki.docx', exact: true }).click();
   await expect(panel.getByText('notatki.docx', { exact: true })).toBeVisible();
   await expect(panel.getByText('Processing…')).toBeVisible();
   await expect(
@@ -98,7 +98,9 @@ test('browse, preview, search and sql console', async ({ page, context }) => {
   await expect(panel.getByText('Preview unavailable')).toHaveCount(0);
 
   // A file without a preview: no "Full screen", download works, Discord link set.
-  await main.getByRole('link', { name: 'prezentacja.pptx' }).click();
+  await main
+    .getByRole('link', { name: 'prezentacja.pptx', exact: true })
+    .click();
   await expect(
     panel.getByText('prezentacja.pptx', { exact: true }),
   ).toBeVisible();
@@ -156,7 +158,10 @@ test('browse, preview, search and sql console', async ({ page, context }) => {
   await page.goto(
     '/tables/v_files?sort=filename&dir=asc&f_filename=prezentacja',
   );
-  await main.getByRole('link', { name: 'prezentacja.pptx' }).first().click();
+  await main
+    .getByRole('link', { name: 'prezentacja.pptx', exact: true })
+    .first()
+    .click();
   await expect(page).toHaveURL(/preview=\d+/);
   const tablePanel = page.getByRole('complementary', { name: 'File preview' });
   await expect(

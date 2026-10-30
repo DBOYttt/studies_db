@@ -157,7 +157,7 @@ export function ShellFrame({
         inert={open}
         className="relative flex min-h-0 min-w-0 flex-col [--topbar-end-w:220px] max-md:[--topbar-end-w:72px]"
       >
-        <header className="flex h-[38px] shrink-0 items-center gap-2 border-b border-line bg-bar px-4 max-md:px-2">
+        <header className="flex h-[38px] shrink-0 items-center gap-2 border-b border-line bg-bar px-4 max-md:px-2 max-sm:h-12">
           <button
             ref={menuRef}
             type="button"
@@ -165,7 +165,7 @@ export function ShellFrame({
             aria-label="Open navigation panel"
             aria-expanded={open}
             aria-controls="shell-nav"
-            className="relative z-[2] grid h-[26px] w-[28px] place-items-center rounded text-accent-ink hover:bg-line md:hidden"
+            className="relative z-[2] grid h-[26px] w-[28px] place-items-center rounded text-accent-ink hover:bg-line max-sm:size-11 md:hidden"
           >
             <List size={18} />
           </button>

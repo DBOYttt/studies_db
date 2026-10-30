@@ -37,4 +37,17 @@ describe('safeLoginNext', () => {
     expect(p).toHaveLength(200);
     expect(safeLoginNext(p)).toBe(p);
   });
+
+  it('rejects dot-segment paths that normalise to another origin', () => {
+    for (const p of [
+      '/.//evil.com',
+      '/..//evil.com',
+      '/%2e//evil.com',
+      '/a/..//evil.com',
+      '/./\\evil.com',
+    ]) {
+      expect(safeLoginNext(`/admin${p}`), p).toBeNull();
+      expect(safeLoginNext(`/admin/x${p}`), p).toBeNull();
+    }
+  });
 });

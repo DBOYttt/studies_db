@@ -12,6 +12,7 @@ import {
 } from '@phosphor-icons/react/dist/ssr';
 import { MARK_NOTE_MAX } from '@studies/db';
 import { ASSESSMENT_NAMES } from '@studies/db/constants';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
 import { type ReactNode, Suspense } from 'react';
@@ -47,11 +48,12 @@ import {
   withResolvedSelection,
 } from '@/lib/explorer';
 import { formatDate, safeExternalUrl } from '@/lib/format';
+import { loadSubject } from '@/lib/page-loaders';
+import { subjectMetadata } from '@/lib/page-meta';
 import { nowWall } from '@/lib/plan';
 import { wallDateKey } from '@/lib/plan-view';
 import {
   getExplorerFile,
-  getSubject,
   getSubjectTree,
   listSubjectClasses,
   listSubjectLecturers,
@@ -74,6 +76,14 @@ import {
 } from '@/lib/sql-prefill';
 import { listViewColumns } from '@/lib/tables';
 import { lecturerHref } from '@/lib/view-links';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}): Promise<Metadata> {
+  return subjectMetadata((await params).code);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -98,7 +108,7 @@ export default async function SubjectPage({
   const { code: rawCode } = await params;
   const sp = await searchParams;
   const db = getDb();
-  const subject = await getSubject(db, decodeURIComponent(rawCode));
+  const subject = await loadSubject(decodeURIComponent(rawCode));
   if (!subject) notFound();
   const code = subject.code;
 

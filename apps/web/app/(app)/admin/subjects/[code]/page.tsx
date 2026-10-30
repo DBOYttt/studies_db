@@ -5,12 +5,14 @@ import {
   PencilSimpleLine,
   UserPlus,
 } from '@phosphor-icons/react/dist/ssr';
-import { getSubjectAdmin, listLecturersAdmin } from '@studies/db';
+import { listLecturersAdmin } from '@studies/db';
 import { CLASS_NAMES } from '@studies/db/constants';
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { ActionButton } from '@/components/admin/ActionButton';
 import { AssignLecturerForm } from '@/components/admin/AssignLecturerForm';
+import { CardStatus, CardStatusArea } from '@/components/admin/CardStatus';
 import { ClassForm } from '@/components/admin/ClassForm';
 import { box, boxHead, link } from '@/components/admin/form-styles';
 import { SubjectForm } from '@/components/admin/SubjectForm';
@@ -19,7 +21,17 @@ import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { unassignLecturerAction } from '@/lib/admin-actions';
 import { lecturerLabel, parseSubjectParam } from '@/lib/admin-pages';
 import { getDb } from '@/lib/db';
+import { loadSubjectAdmin } from '@/lib/page-loaders';
+import { adminSubjectMetadata } from '@/lib/page-meta';
 import { requireAdmin } from '@/lib/session';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ code: string }>;
+}): Promise<Metadata> {
+  return adminSubjectMetadata((await params).code);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -39,7 +51,7 @@ export default async function AdminSubjectPage({
   if (code === null) notFound();
   const db = getDb();
   const [subject, lecturers] = await Promise.all([
-    getSubjectAdmin(db, code),
+    loadSubjectAdmin(code),
     listLecturersAdmin(db),
   ]);
   if (!subject) notFound();
@@ -199,66 +211,71 @@ export default async function AdminSubjectPage({
                           />
                         </div>
                         <div className="min-w-0 border-t border-line @2xl:border-t-0">
-                          <h4
-                            id={`${headId}-lecturers`}
-                            className="m-0 px-3 pt-3 text-[13px] font-semibold"
-                          >
-                            Lecturers
-                          </h4>
-                          {c.lecturers.length === 0 ? (
-                            <p className="m-0 px-3 pt-1 text-muted">
-                              None assigned.
-                            </p>
-                          ) : (
-                            <ul
-                              aria-labelledby={`${headId}-lecturers`}
-                              className="px-3 pt-1"
+                          {/* Remove's message outlives the row it removes; Assign clears it. */}
+                          <CardStatus>
+                            <h4
+                              id={`${headId}-lecturers`}
+                              className="m-0 px-3 pt-3 text-[13px] font-semibold"
                             >
-                              {c.lecturers.map((l) => {
-                                const who = lecturerLabel(l);
-                                const where = l.groupName
-                                  ? `${CLASS_NAMES[c.kind]}, ${l.groupName}`
-                                  : CLASS_NAMES[c.kind];
-                                return (
-                                  <li
-                                    key={l.id}
-                                    className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line py-1 last:border-b-0"
-                                  >
-                                    <Link
-                                      href={`/admin/lecturers/${l.lecturerId}`}
-                                      className={`${link} min-w-0 flex-1 truncate`}
-                                      lang="pl"
+                              Lecturers
+                            </h4>
+                            {c.lecturers.length === 0 ? (
+                              <p className="m-0 px-3 pt-1 text-muted">
+                                None assigned.
+                              </p>
+                            ) : (
+                              <ul
+                                aria-labelledby={`${headId}-lecturers`}
+                                className="px-3 pt-1"
+                              >
+                                {c.lecturers.map((l) => {
+                                  const who = lecturerLabel(l);
+                                  const where = l.groupName
+                                    ? `${CLASS_NAMES[c.kind]}, ${l.groupName}`
+                                    : CLASS_NAMES[c.kind];
+                                  return (
+                                    <li
+                                      key={l.id}
+                                      className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b border-line py-1 last:border-b-0"
                                     >
-                                      {who}
-                                    </Link>
-                                    <span className="shrink-0 text-xs text-muted">
-                                      {l.groupName ?? 'all groups'}
-                                    </span>
-                                    <ActionButton
-                                      action={unassignLecturerAction}
-                                      fields={{ id: String(l.id) }}
-                                      label="Remove"
-                                      ariaLabel={`Remove ${who} from ${where}`}
-                                      pendingLabel="Removing…"
-                                      confirm={{
-                                        question: `Remove ${who} from ${where}?`,
-                                        confirmLabel: 'Confirm remove',
-                                      }}
-                                      className="flex flex-col items-end"
-                                    />
-                                  </li>
-                                );
-                              })}
-                            </ul>
-                          )}
-                          {options.length > 0 && (
-                            <AssignLecturerForm
-                              code={subject.code}
-                              kind={c.kind}
-                              lecturers={options}
-                              label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
-                            />
-                          )}
+                                      <Link
+                                        href={`/admin/lecturers/${l.lecturerId}`}
+                                        className={`${link} min-w-0 flex-1 truncate`}
+                                        lang="pl"
+                                      >
+                                        {who}
+                                      </Link>
+                                      <span className="shrink-0 text-xs text-muted">
+                                        {l.groupName ?? 'all groups'}
+                                      </span>
+                                      <ActionButton
+                                        action={unassignLecturerAction}
+                                        fields={{ id: String(l.id) }}
+                                        label="Remove"
+                                        ariaLabel={`Remove ${who} from ${where}`}
+                                        pendingLabel="Removing…"
+                                        confirm={{
+                                          question: `Remove ${who} from ${where}?`,
+                                          confirmLabel: 'Confirm remove',
+                                        }}
+                                        className="flex flex-col items-end"
+                                        cardStatus
+                                      />
+                                    </li>
+                                  );
+                                })}
+                              </ul>
+                            )}
+                            <CardStatusArea />
+                            {options.length > 0 && (
+                              <AssignLecturerForm
+                                code={subject.code}
+                                kind={c.kind}
+                                lecturers={options}
+                                label={`Assign a lecturer to ${CLASS_NAMES[c.kind]}`}
+                              />
+                            )}
+                          </CardStatus>
                         </div>
                       </div>
                     </div>

@@ -200,3 +200,24 @@ export function defaultResultKey(parts: {
     parts.dir ?? null,
   ]);
 }
+
+/** Columns that hold a file's name, in order of preference. */
+const FILE_NAME_COLUMNS = ['filename', 'original_filename'];
+
+/**
+ * Accessible names of a file row's Preview and Download links: every row has
+ * the same visible words, so the name says which file ("Preview file
+ * lab1.pdf"), or its material id when the result has no name column.
+ */
+export function fileActionLabels(
+  columns: readonly string[],
+  row: readonly Cell[],
+  id: number,
+): { preview: string; download: string } {
+  const col = FILE_NAME_COLUMNS.map((c) => columns.indexOf(c)).find(
+    (i) => i >= 0,
+  );
+  const name = col === undefined ? '' : cellText(row[col]).trim();
+  const file = name || `#${id}`;
+  return { preview: `Preview file ${file}`, download: `Download file ${file}` };
+}

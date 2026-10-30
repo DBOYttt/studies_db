@@ -1,5 +1,4 @@
 import {
-  getEvent,
   lastBotRequest,
   listEventUploads,
   retryableUploadIds,
@@ -9,13 +8,20 @@ import { notFound } from 'next/navigation';
 import type { EventPageData } from '@/components/events/EventDetails';
 import { getDb } from './db';
 import { eventFileRows, eventHistory, listTopicsByIds } from './event-queries';
+import { loadEvent } from './page-loaders';
 import type { SessionUser } from './session';
 import { uploadFileExists } from './storage';
 
+/** The `[id]` segment as an event id, or null unless a positive integer. */
+export function eventIdOf(raw: string): number | null {
+  return /^[1-9]\d{0,9}$/.test(raw) ? Number(raw) : null;
+}
+
 /** Parses the `[id]` segment; 404 for anything but a positive integer. */
 export function parseEventId(raw: string): number {
-  if (!/^[1-9]\d{0,9}$/.test(raw)) notFound();
-  return Number(raw);
+  const id = eventIdOf(raw);
+  if (id === null) notFound();
+  return id;
 }
 
 /**
@@ -27,7 +33,7 @@ export async function loadEventPage(
   user: SessionUser,
 ): Promise<EventPageData> {
   const db = getDb();
-  const ev = await getEvent(db, id);
+  const ev = await loadEvent(id);
   if (!ev || (ev.deletedAt !== null && !user.isAdmin)) notFound();
   const postTopicId = ev.series ? ev.series.topicId : ev.topicId;
   const reqTarget = ev.series ? `series:${ev.series.id}` : `event:${id}`;

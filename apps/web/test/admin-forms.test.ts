@@ -193,7 +193,11 @@ describe('parseSubjectEdit: stored semester/ECTS (C9)', () => {
         semester: 3,
         ects: 40,
       }),
-    ).toEqual({ ok: false, message: 'Semester must be 1 or 2.' });
+    ).toEqual({
+      ok: false,
+      message: 'Semester must be 1 or 2.',
+      field: 'semester',
+    });
     expect(
       parseSubjectEdit(form({ ...base, semester: '1', ects: '41' }), {
         semester: 3,
