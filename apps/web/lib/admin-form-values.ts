@@ -84,3 +84,42 @@ export const CONFLICT_MESSAGE = (fields: string[]) =>
 
 /** The hidden `orig_<field>` name of a form field. */
 export const origName = (f: string) => `orig_${f}`;
+
+/**
+ * The orig values an edit form sends, frozen per form instance: taken from
+ * the server values when the form first renders a record (`key`), kept
+ * while a refresh caused by anything else re-renders it with newer values
+ * (the visible inputs keep what the admin typed, so the orig must keep what
+ * they were rendered from), and advanced only by the form's own applied save
+ * (`savedSnapshot`).
+ */
+export type OrigSnapshot = {
+  key: string;
+  values: Readonly<Record<string, string>>;
+};
+
+/** The snapshot to render: `snap` for the same record, else a fresh one. */
+export function currentSnapshot(
+  snap: OrigSnapshot | null,
+  key: string,
+  server: Readonly<Record<string, string>>,
+): OrigSnapshot {
+  return snap !== null && snap.key === key ? snap : { key, values: server };
+}
+
+/**
+ * After the form's own applied save: each field's orig becomes what the form
+ * submitted (what its input shows now); a field it did not send keeps its
+ * snapshot.
+ */
+export function savedSnapshot(
+  snap: OrigSnapshot,
+  submitted: FormData,
+): OrigSnapshot {
+  const values: Record<string, string> = {};
+  for (const [k, v] of Object.entries(snap.values)) {
+    const s = submitted.get(k);
+    values[k] = typeof s === 'string' ? s : v;
+  }
+  return { key: snap.key, values };
+}

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { currentSnapshot, savedSnapshot } from '@/lib/admin-form-values';
 import {
   CONFLICT_MESSAGE,
   classFormValues,
@@ -130,6 +131,23 @@ describe('resolveEdit', () => {
     );
   });
 
+  it('no conflict when both admins chose the same value', () => {
+    // B renamed A to B and set the URL meanwhile; A typed the same values.
+    const orig = { ...cur, name: 'A', platformUrl: '' };
+    const r = resolveEdit(
+      all(
+        { ...orig, name: 'B', ects: '6', platformUrl: 'https://b.example ' },
+        orig,
+      ),
+      cur,
+      SUBJECT_FIELD_LABELS,
+    );
+    if (!r.ok) throw new Error(r.message);
+    expect([...r.touched]).toEqual(['ects']);
+    expect(r.form.get('name')).toBe('B');
+    expect(r.form.get('platformUrl')).toBe('https://b.example');
+  });
+
   it('uses the lecturer labels', () => {
     const lc = {
       name: 'J',
@@ -185,5 +203,37 @@ describe('parseSubjectEdit: stored semester/ECTS (C9)', () => {
     expect(
       parseSubjectEdit(form({ ...base, semester: '3', ects: '5' })).ok,
     ).toBe(false);
+  });
+});
+
+describe('orig snapshot', () => {
+  const server = { name: 'A', note: '' };
+  it('stays put while the server values change for the same record', () => {
+    const snap = currentSnapshot(null, 'X', server);
+    expect(snap).toEqual({ key: 'X', values: server });
+    // A refresh caused by another form brings B's values: not taken.
+    expect(currentSnapshot(snap, 'X', { name: 'B', note: 'n' })).toBe(snap);
+  });
+
+  it('starts again for another record', () => {
+    const snap = currentSnapshot(null, 'X', server);
+    expect(currentSnapshot(snap, 'Y', { name: 'B', note: '' })).toEqual({
+      key: 'Y',
+      values: { name: 'B', note: '' },
+    });
+  });
+
+  it('advances to what this form submitted after its own save', () => {
+    const snap = currentSnapshot(null, 'X', server);
+    const data = form({ name: 'A2', note: 'x', orig_name: 'A', other: '1' });
+    expect(savedSnapshot(snap, data)).toEqual({
+      key: 'X',
+      values: { name: 'A2', note: 'x' },
+    });
+    // A field the form did not send keeps its snapshot.
+    expect(savedSnapshot(snap, form({ name: 'A3' })).values).toEqual({
+      name: 'A3',
+      note: '',
+    });
   });
 });

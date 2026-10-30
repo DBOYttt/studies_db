@@ -8,9 +8,10 @@ import {
 } from '@studies/db/constants';
 import { FIELD_MAX } from '@studies/db/fields';
 import { editClassAction } from '@/lib/admin-actions';
-import { classFormValues, origName } from '@/lib/admin-form-values';
+import { classFormValues } from '@/lib/admin-form-values';
 import { ActionForm } from './ActionForm';
 import { hint, input, label } from './form-styles';
+import { OrigInputs, useOrigSnapshot } from './OrigInputs';
 
 /**
  * The settings of one class (assessment, note, platform link). Each field's
@@ -32,24 +33,21 @@ export function ClassForm({
   platformUrl: string | null;
 }) {
   const values = classFormValues({ assessment, note, platformUrl });
+  const { orig, onSaved } = useOrigSnapshot(`${code}:${kind}`, values);
   return (
     <ActionForm
       action={editClassAction}
       submitLabel="Save class"
+      onSaved={onSaved}
       label={`${CLASS_NAMES[kind]} settings`}
     >
       <input type="hidden" name="code" value={code} />
       <input type="hidden" name="kind" value={kind} />
-      {Object.entries(values).map(([k, v]) => (
-        <input key={k} type="hidden" name={origName(k)} value={v} />
-      ))}
+      <OrigInputs values={orig} />
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[11rem_minmax(0,1fr)]">
         <label className={label}>
           Assessment
-          {/* Keyed by the stored value: React does not re-apply a select's
-              defaultValue, and the hidden orig follows a refresh. */}
           <select
-            key={values.assessment}
             name="assessment"
             defaultValue={values.assessment}
             className={input}

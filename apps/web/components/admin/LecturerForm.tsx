@@ -2,9 +2,10 @@
 
 import { FIELD_MAX } from '@studies/db/fields';
 import { addLecturerAction, editLecturerAction } from '@/lib/admin-actions';
-import { lecturerFormValues, origName } from '@/lib/admin-form-values';
+import { lecturerFormValues } from '@/lib/admin-form-values';
 import { ActionForm } from './ActionForm';
 import { hint, input, label } from './form-styles';
+import { OrigInputs, useOrigSnapshot } from './OrigInputs';
 
 export type LecturerFormValues = {
   id: number;
@@ -24,18 +25,20 @@ export type LecturerFormValues = {
 export function LecturerForm({ lecturer }: { lecturer?: LecturerFormValues }) {
   const add = lecturer === undefined;
   const values = add ? undefined : lecturerFormValues(lecturer);
+  const { orig, onSaved } = useOrigSnapshot(
+    String(lecturer?.id ?? ''),
+    values ?? {},
+  );
   return (
     <ActionForm
       action={add ? addLecturerAction : editLecturerAction}
       submitLabel={add ? 'Add lecturer' : 'Save lecturer'}
       pendingLabel={add ? 'Adding…' : 'Saving…'}
       resetOnSuccess={add}
+      onSaved={add ? undefined : onSaved}
     >
       {add ? null : <input type="hidden" name="id" value={lecturer.id} />}
-      {values &&
-        Object.entries(values).map(([k, v]) => (
-          <input key={k} type="hidden" name={origName(k)} value={v} />
-        ))}
+      {add ? null : <OrigInputs values={orig} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[8rem_minmax(0,1fr)]">
         <label className={label}>
           Title

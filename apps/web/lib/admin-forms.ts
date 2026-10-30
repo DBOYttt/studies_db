@@ -419,6 +419,8 @@ export type ResolvedEdit<K extends string> =
  *   is diffed against the stored row, as before;
  * - an untouched field (submitted equals orig) is replaced by the stored
  *   value, so it is neither validated nor patched;
+ * - a field submitted equal to the stored value is treated as untouched too
+ *   (another admin already made the same change);
  * - a touched field whose stored value no longer equals orig was changed by
  *   someone else meanwhile: the edit is refused, naming the fields.
  * URL fields compare by `sameUrl`; text compares after LF normalisation.
@@ -442,8 +444,11 @@ export function resolveEdit<K extends string>(
       ? sameUrl
       : (a: string, b: string) => a === b;
     const orig = field(form, origName(f));
+    const submitted = field(form, f);
     const now = lf(current[f]);
-    if (same(field(form, f), orig)) out.set(f, now);
+    // Untouched, or set to what is stored now (both admins chose the same
+    // value): nothing to write and nothing to refuse.
+    if (same(submitted, orig) || same(submitted, now)) out.set(f, now);
     else if (!same(now, orig)) conflicts.push(labels[f]);
     else touched.add(f);
   }

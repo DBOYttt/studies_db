@@ -4,9 +4,10 @@ import { ECTS_MAX, ECTS_MIN, FIELD_MAX, SEMESTERS } from '@studies/db/fields';
 import Link from 'next/link';
 import { useId } from 'react';
 import { addSubjectAction, editSubjectAction } from '@/lib/admin-actions';
-import { origName, subjectFormValues } from '@/lib/admin-form-values';
+import { subjectFormValues } from '@/lib/admin-form-values';
 import { ActionForm } from './ActionForm';
 import { hint, input, label, link, textarea } from './form-styles';
+import { OrigInputs, useOrigSnapshot } from './OrigInputs';
 
 export type SubjectFormValues = {
   code: string;
@@ -30,6 +31,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
   const id = useId();
   const add = subject === undefined;
   const values = add ? undefined : subjectFormValues(subject);
+  const { orig, onSaved } = useOrigSnapshot(subject?.code ?? '', values ?? {});
   const oddSemester =
     subject !== undefined &&
     !(SEMESTERS as readonly number[]).includes(subject.semester);
@@ -41,6 +43,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
       submitLabel={add ? 'Add subject' : 'Save subject'}
       pendingLabel={add ? 'Adding…' : 'Saving…'}
       resetOnSuccess={add}
+      onSaved={add ? undefined : onSaved}
       successText={
         add
           ? () => (
@@ -56,10 +59,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
       }
     >
       {add ? null : <input type="hidden" name="code" value={subject.code} />}
-      {values &&
-        Object.entries(values).map(([k, v]) => (
-          <input key={k} type="hidden" name={origName(k)} value={v} />
-        ))}
+      {add ? null : <OrigInputs values={orig} />}
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
         <label className={label}>
           Name
@@ -95,10 +95,7 @@ export function SubjectForm({ subject }: { subject?: SubjectFormValues }) {
       <div className="grid grid-cols-2 gap-3 sm:max-w-[18rem]">
         <label className={label}>
           Semester
-          {/* Keyed by the stored value: React does not re-apply a select's
-              defaultValue, and the hidden orig follows a refresh. */}
           <select
-            key={values?.semester}
             name="semester"
             defaultValue={values?.semester ?? '1'}
             className={input}

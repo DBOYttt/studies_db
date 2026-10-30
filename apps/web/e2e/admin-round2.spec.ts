@@ -382,6 +382,46 @@ test('a request report opens on its own page', async ({ page }) => {
   }
 });
 
+test("a refresh from another form does not hide another admin's change", async ({
+  page,
+  context,
+}) => {
+  await page.goto(`/admin/subjects/${CODE}`);
+  const edit = page.getByRole('region', { name: 'Edit subject' });
+  // Admin A types a description but does not save yet.
+  await edit.getByLabel('Description').fill('Opis od A');
+  // Admin B (another tab) saves a different one meanwhile.
+  const other = await context.newPage();
+  await other.goto(`/admin/subjects/${CODE}`);
+  const otherEdit = other.getByRole('region', { name: 'Edit subject' });
+  await otherEdit.getByLabel('Description').fill('Opis od B');
+  await otherEdit.getByRole('button', { name: 'Save subject' }).click();
+  await expect(otherEdit.getByRole('status')).toHaveText(
+    `Updated subject ${CODE}.`,
+  );
+  await other.close();
+  // A saves the class form: the page refreshes with B's description.
+  const settings = page
+    .getByRole('region', { name: 'Wykład', exact: true })
+    .getByRole('form', { name: 'Wykład settings' });
+  await settings.getByLabel('Note').fill('Pisemny, 60 minut');
+  await settings.getByRole('button', { name: 'Save class' }).click();
+  await expect(settings.getByRole('status')).toHaveText(
+    `Updated ${CODE} / Wykład.`,
+  );
+  // A's subject save is refused instead of overwriting B's description.
+  await edit.getByRole('button', { name: 'Save subject' }).click();
+  await expect(edit.getByRole('alert')).toHaveText(
+    'Someone else changed description meanwhile. Reload the page to see the new values.',
+  );
+  await page.reload();
+  await expect(
+    page
+      .getByRole('region', { name: 'Edit subject' })
+      .getByLabel('Description'),
+  ).toHaveValue('Opis od B');
+});
+
 test.describe('a student', () => {
   loginOnce('nonadmin', process.env.E2E_TOKEN_NONADMIN, { mode: 'simple' });
 
