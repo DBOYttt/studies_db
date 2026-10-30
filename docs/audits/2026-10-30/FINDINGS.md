@@ -55,7 +55,7 @@ Still open after G7:
 - Today has no Test or Entry-quiz badges.
 - In the evening, after today's classes, Today shows no next class.
 - Other `usePathname` components may still hit the F3 hydration window.
-- A deleted event's edit page stays reachable for non-admins (its title is hidden).
+- A deleted event's edit page stays reachable for non-admins (only its tab title is hidden; the crumbs and the form still show the name).
 - The last Save across two tabs silently wins.
 - A failed per-pick save leaves the class marked as changed.
 - The admin field-error focus has no e2e.

@@ -34,7 +34,10 @@ export interface TodayClasses {
   day: Date;
   /** Today's sessions under My groups, cancelled ones included. */
   sessions: PlanSession[];
-  /** The next confirmed class when today has none to go to, else null. */
+  /**
+   * The next confirmed class after today, looked up only when today has no
+   * confirmed session at all (so not in the evening after today's classes).
+   */
   next: PlanSession | null;
   /** Whether a (still valid) group is picked in My groups. */
   groupsPicked: boolean;

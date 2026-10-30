@@ -267,6 +267,37 @@ describe('event actions', () => {
     expect(await audits()).toHaveLength(1);
   });
 
+  it('a stale "this and following" delete does not claim success while later ones are live', async () => {
+    cookieSid = alice.sid;
+    await db.delete(events);
+    const until = new Date(Date.now() + 5 * 86_400_000 + 14 * 86_400_000)
+      .toISOString()
+      .slice(0, 10);
+    await expect(
+      A.createEventAction(form({ repeat: 'weekly', until })),
+    ).rejects.toThrow('redirect');
+    const all = (await eventRows()).sort((a, b) => a.id - b.id);
+    expect(all).toHaveLength(3);
+    // Another tab deletes only the second occurrence.
+    await expect(
+      A.deleteEventAction(all[1].id, 'simple', 'one'),
+    ).rejects.toThrow('redirect:/s/plan');
+    // This stale tab asks for "this and following" on that same occurrence.
+    const r = await A.deleteEventAction(all[1].id, 'simple', 'following');
+    expect(r).toMatchObject({ ok: false });
+    expect(r.message).toContain('later ones are still');
+    expect(
+      (await eventRows()).filter((e) => e.deletedAt === null),
+    ).toHaveLength(2);
+    // With nothing later left, the same call is the usual "already gone".
+    await expect(
+      A.deleteEventAction(all[2].id, 'simple', 'one'),
+    ).rejects.toThrow('redirect:/s/plan');
+    await expect(
+      A.deleteEventAction(all[1].id, 'simple', 'following'),
+    ).rejects.toThrow('redirect:/s/plan');
+  });
+
   it('searches posts by title within the subject, at most 20', async () => {
     cookieSid = alice.sid;
     const r = await A.searchTopicsAction(subjectId, 'tarc');

@@ -51,7 +51,7 @@ function TextPreview({ src, rendered, onError }: { src: string } & Watch) {
 /** Shown on a load error, or when nothing rendered within 15 s. */
 function PreviewFailed({ id }: { id: number }) {
   return (
-    <p role="alert" className="text-sm">
+    <p role="status" className="text-sm">
       Could not load the preview.{' '}
       <a href={`/files/${id}/original`} className="link">
         Download instead

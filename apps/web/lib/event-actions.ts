@@ -18,7 +18,7 @@ import {
 } from '@studies/db';
 import { EVENT_KINDS, type EventKind } from '@studies/db/constants';
 import { EVENT_NOT_FOUND } from '@studies/db/text';
-import { asc, eq } from 'drizzle-orm';
+import { and, asc, eq, gte, isNull } from 'drizzle-orm';
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { invalidateCounts } from './count-cache';
@@ -42,6 +42,9 @@ const isId = (v: unknown): v is number =>
   typeof v === 'number' && Number.isSafeInteger(v) && v > 0;
 
 const fail = (message: string): ActionResult => ({ ok: false, message });
+
+const FOLLOWING_STILL_LIVE =
+  'This occurrence was already deleted, but later ones are still on the timetable. Reload the page to see them.';
 
 type Base = 'simple' | 'advanced';
 const baseOf = (form: FormData): Base =>
@@ -226,7 +229,27 @@ export async function deleteEventAction(
     // user wanted it deleted, so this is not an error. A row that never
     // existed reads the same, so the answer reveals nothing.
     const ev = await getEvent(getDb(), id);
-    if (!ev || ev.deletedAt !== null) redirect(plan);
+    if (!ev) redirect(plan);
+    if (ev.deletedAt !== null) {
+      // "This and following" from a stale tab, after just this occurrence
+      // was deleted: later occurrences are still live, so "deleted" would
+      // be untrue. The shared delete cannot start from a deleted row.
+      if (scopeOf(scope) === 'following' && ev.seriesId !== null) {
+        const [later] = await getDb()
+          .select({ id: events.id })
+          .from(events)
+          .where(
+            and(
+              eq(events.seriesId, ev.seriesId),
+              isNull(events.deletedAt),
+              gte(events.startsAt, ev.startsAt),
+            ),
+          )
+          .limit(1);
+        if (later) return fail(FOLLOWING_STILL_LIVE);
+      }
+      redirect(plan);
+    }
     return r;
   }
   refresh(id);
