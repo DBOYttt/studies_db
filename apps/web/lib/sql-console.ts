@@ -40,7 +40,9 @@ type DbError = Error & { errno?: number };
 
 /** getConnection() failure -> user message (never leaks host/port). */
 export function connectionErrorMessage(err: unknown): string {
-  return (err as DbError)?.errno === ER_TOO_MANY_USER_CONNECTIONS
+  // mysql2 rejects with 'Queue limit reached.' (no errno) when queueLimit is hit.
+  return (err as DbError)?.errno === ER_TOO_MANY_USER_CONNECTIONS ||
+    (err as DbError)?.message === 'Queue limit reached.'
     ? BUSY_ERROR
     : CONNECT_ERROR;
 }

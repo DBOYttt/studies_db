@@ -8,7 +8,7 @@ import { PUBLIC_VIEWS } from '@studies/db/constants';
 import Link from 'next/link';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { plural } from '@/lib/format';
 import { requireUser } from '@/lib/session';
@@ -24,7 +24,7 @@ const action =
 /** Database structure (design lines 155-197): every public view with links and counts. */
 export default async function StructurePage() {
   await requireUser();
-  const pool = getRoPool();
+  const pool = getViewsPool();
   let columns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
   let error: string | null = null;
   try {

@@ -31,7 +31,7 @@ import {
   type Tab,
 } from '@/components/shell/ScreenHeader';
 import type { Cell } from '@/lib/cells';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { loadEntryQuiz } from '@/lib/entry-quiz';
 import {
@@ -611,7 +611,7 @@ async function SqlTab({
   let schema: Record<string, string[]> | undefined;
   let error: string | null = null;
   try {
-    schema = await listViewColumns(getRoPool());
+    schema = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }
@@ -636,7 +636,7 @@ async function SchemaTab({ path }: { path: ReturnType<typeof selectionPath> }) {
   let columns: Awaited<ReturnType<typeof listViewColumns>> | null = null;
   let error: string | null = null;
   try {
-    columns = await listViewColumns(getRoPool());
+    columns = await listViewColumns(getViewsPool());
   } catch (err) {
     error = roErrorMessage(err);
   }

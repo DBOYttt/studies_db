@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 let db: Db;
 vi.mock('@/lib/db', () => ({
   getDb: () => db,
-  getRoPool: () => {
+  getViewsPool: () => {
     throw new Error('no RO pool in this test');
   },
 }));

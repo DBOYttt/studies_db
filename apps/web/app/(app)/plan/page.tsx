@@ -13,7 +13,7 @@ import { ResultGrid } from '@/components/ResultGrid';
 import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { toCells } from '@/lib/cells';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   type EntityGridParams,
@@ -123,7 +123,10 @@ const WALL_COLUMNS = new Set(['starts_at', 'ends_at']);
 
 async function ListTab({ grid }: { grid: EntityGridParams }) {
   const [result, links] = await Promise.all([
-    planListPage(getRoPool(), { page: grid.page, perPage: grid.perPage }).then(
+    planListPage(getViewsPool(), {
+      page: grid.page,
+      perPage: grid.perPage,
+    }).then(
       (page) => ({ page, error: null }),
       (err: unknown) => ({ page: null, error: roErrorMessage(err) }),
     ),

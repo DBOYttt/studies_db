@@ -2,7 +2,7 @@ import { getMyGroups, listEventsInRange } from '@studies/db';
 import { listWeekMarks } from '@studies/db/plan';
 import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   defaultWeek,
@@ -39,7 +39,7 @@ const errBox =
  * decide whether it is already over.
  */
 async function openingWeek(
-  pool: ReturnType<typeof getRoPool>,
+  pool: ReturnType<typeof getViewsPool>,
   now: Date,
   filter: PlanFilter,
 ): Promise<IsoWeek> {
@@ -82,7 +82,7 @@ export async function PlanWeekTab({
   /** Simple view: session links stay in /s, no SQL link. */
   simple?: boolean;
 }) {
-  const pool = getRoPool();
+  const pool = getViewsPool();
   const now = nowWall();
   // Outside the try: a redirect must not end up in the error box.
   const user = myGroupsFilter ? await requireUser() : null;

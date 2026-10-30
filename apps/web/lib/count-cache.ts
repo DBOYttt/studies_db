@@ -1,5 +1,5 @@
 import type { PublicView } from '@studies/db/constants';
-import { getDb, getRoPool } from './db';
+import { getDb, getViewsPool } from './db';
 import type { NavSubject } from './nav-tree';
 import { getNavSubjects } from './queries';
 import { listSubjectCards, type SubjectCard } from './simple-queries';
@@ -35,7 +35,7 @@ g.__studiesCounts ??= {
     COUNTS_TTL_MS,
     async () => {
       try {
-        return await countViewRows(getRoPool());
+        return await countViewRows(getViewsPool());
       } catch {
         return null; // e.g. DATABASE_RO_URL missing: no counts
       }

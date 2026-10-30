@@ -4,6 +4,7 @@ import mysql from 'mysql2/promise';
 interface Cache {
   db?: { db: Db; pool: mysql.Pool };
   ro?: mysql.Pool;
+  views?: mysql.Pool;
   rw?: mysql.Pool;
 }
 
@@ -27,7 +28,8 @@ export function getDb(): Db {
 export const RO_POOL_OPTIONS = {
   charset: 'utf8mb4',
   timezone: 'Z',
-  // MAX_USER_CONNECTIONS is 10: leave room for watchdog KILL connections.
+  // MAX_USER_CONNECTIONS is 10: views pool 4 + RO pool 4 + 2 spare for the
+  // watchdog KILL connections (they open fresh connections as studies_ro).
   connectionLimit: 4,
   // Security: one statement per query, always (the server also enforces it).
   multipleStatements: false,
@@ -36,9 +38,35 @@ export const RO_POOL_OPTIONS = {
   bigNumberStrings: true,
 } as const satisfies mysql.PoolOptions;
 
+/** The views pool: same credentials, fixed application queries only. */
+export const VIEWS_POOL_OPTIONS = {
+  ...RO_POOL_OPTIONS,
+  connectionLimit: 4,
+} as const satisfies mysql.PoolOptions;
+
+/**
+ * studies_ro pool for fixed application queries on the public views (plan,
+ * home, groups, counts). Kept apart so slow user SQL cannot starve pages.
+ */
+export function getViewsPool(): mysql.Pool {
+  cache.views ??= mysql.createPool({
+    ...VIEWS_POOL_OPTIONS,
+    uri: env('DATABASE_RO_URL'),
+  });
+  return cache.views;
+}
+
+/** Waiting getConnection() calls the RO pool queues before failing fast. */
+export const RO_QUEUE_LIMIT = 8;
+
+/**
+ * studies_ro pool for user-supplied SQL only (console, table browser,
+ * reports). A full queue fails fast; see connectionErrorMessage.
+ */
 export function getRoPool(): mysql.Pool {
   cache.ro ??= mysql.createPool({
     ...RO_POOL_OPTIONS,
+    queueLimit: RO_QUEUE_LIMIT,
     uri: env('DATABASE_RO_URL'),
   });
   return cache.ro;

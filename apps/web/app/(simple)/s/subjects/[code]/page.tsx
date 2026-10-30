@@ -12,7 +12,7 @@ import { SimplePreview } from '@/components/simple/SimplePreview';
 import type { Crumb } from '@/components/simple/SimpleShell';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { loadEntryQuiz } from '@/lib/entry-quiz';
 import { safeExternalUrl } from '@/lib/format';
 import { nowWall } from '@/lib/plan';
@@ -60,7 +60,7 @@ export default async function SimpleSubject({
     listSubjectTags(db, subject.id),
     listSubjectLecturers(db, subject.id),
     // cancellations must not crowd out real classes: over-fetch, keep 3 confirmed
-    nextSessions(getRoPool(), subject.id, nowWall(), 10),
+    nextSessions(getViewsPool(), subject.id, nowWall(), 10),
   ]);
   const sessions = upcoming.filter((s) => s.status !== 'cancelled').slice(0, 3);
   const lecturers = groupLecturers(lecturerRows);

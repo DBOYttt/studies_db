@@ -5,7 +5,7 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { SubjectCards } from '@/components/simple/SubjectCards';
 import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
 import { cachedSubjectCards } from '@/lib/count-cache';
-import { getDb, getRoPool } from '@/lib/db';
+import { getDb, getViewsPool } from '@/lib/db';
 import { nowWall } from '@/lib/plan';
 import { requireUser } from '@/lib/session';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
@@ -30,7 +30,7 @@ export default async function SimpleStart({
     listSimpleFiles(db, { limit: 5 }),
     loadSimplePreview(db, sp, cardsP),
     // Events are optional on the start page: a failure leaves the card empty.
-    upcomingForUser(db, getRoPool(), user.id, nowWall()).catch(() => []),
+    upcomingForUser(db, getViewsPool(), user.id, nowWall()).catch(() => []),
   ]);
   return (
     <SimpleShell

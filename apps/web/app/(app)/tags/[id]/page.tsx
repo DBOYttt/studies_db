@@ -7,7 +7,7 @@ import {
 } from '@/components/EntityFilesGrid';
 import { ScreenHeader, type Tab } from '@/components/shell/ScreenHeader';
 import { TagBadge } from '@/components/TagBadge';
-import { getRoPool } from '@/lib/db';
+import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import {
   parseEntityGrid,
@@ -40,7 +40,7 @@ export default async function TagPage({
   const id = parseEntityId((await params).id);
   if (id === null) notFound();
   const sp = await searchParams;
-  const pool = getRoPool();
+  const pool = getViewsPool();
   const base = tagHref(id);
 
   let tag: Awaited<ReturnType<typeof getTag>> = null;
