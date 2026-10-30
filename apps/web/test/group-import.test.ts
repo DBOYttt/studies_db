@@ -82,6 +82,20 @@ function form(fields: Record<string, string | File>): FormData {
 const icsFile = (text: string, name = 'personal.ics') =>
   new File([text], name, { type: 'text/calendar' });
 
+/** A calendar with one VEVENT over the 5000 cap. */
+function hugeCalendar() {
+  const lines = ['BEGIN:VCALENDAR'];
+  for (let i = 0; i <= 5000; i++)
+    lines.push(
+      'BEGIN:VEVENT',
+      'DTSTART:20261001T094500',
+      'SUMMARY:X',
+      'END:VEVENT',
+    );
+  lines.push('END:VCALENDAR');
+  return lines.join('\r\n');
+}
+
 beforeAll(async () => {
   db = await resetTestDb();
   const [{ id: s }] = await db
@@ -293,24 +307,36 @@ describe('previewGroupImportAction', () => {
   it('does not log the expected failures', async () => {
     await signIn();
     const err = vi.spyOn(console, 'error').mockImplementation(() => {});
-    await previewGroupImportAction(form({ file: icsFile('<html>') }));
+    // NotACalendarError
+    const notCal = await previewGroupImportAction(
+      form({ file: icsFile('<html>') }),
+    );
+    expect(notCal).toEqual({ ok: false, error: NOT_A_CALENDAR_MESSAGE });
+    // TooManyEntriesError
+    const huge = await previewGroupImportAction(
+      form({ file: icsFile(hugeCalendar()) }),
+    );
+    expect(huge).toEqual({ ok: false, error: TOO_MANY_ENTRIES_MESSAGE });
+    // SafeSyncError (a failed fetch)
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new Error(`connect failed for ${SECRET_URL}`);
+      }),
+    );
+    const down = await previewGroupImportAction(form({ url: SECRET_URL }));
+    expect(down).toEqual({
+      ok: false,
+      error: `Could not download the timetable from ${URL_HOST}`,
+    });
     expect(err).not.toHaveBeenCalled();
     err.mockRestore();
   });
 
   it('shows the too-many-entries message for a huge calendar', async () => {
     await signIn();
-    const lines = ['BEGIN:VCALENDAR'];
-    for (let i = 0; i <= 5000; i++)
-      lines.push(
-        'BEGIN:VEVENT',
-        'DTSTART:20261001T094500',
-        'SUMMARY:X',
-        'END:VEVENT',
-      );
-    lines.push('END:VCALENDAR');
     const r = await previewGroupImportAction(
-      form({ file: icsFile(lines.join('\r\n')) }),
+      form({ file: icsFile(hugeCalendar()) }),
     );
     expect(r).toEqual({ ok: false, error: TOO_MANY_ENTRIES_MESSAGE });
   });

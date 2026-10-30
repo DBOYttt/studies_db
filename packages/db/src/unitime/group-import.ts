@@ -109,13 +109,33 @@ export function logGroupImportError(err: unknown): void {
     err instanceof TooManyEntriesError
   )
     return;
+  console.error('group import failed:', safeErrorFields(err));
+}
+
+const FIELD_CLIP = 64;
+
+/**
+ * The parts of an error that are safe to log: `name` and `code` only when
+ * they are strings (clipped to 64 characters), `errno` only when it is a
+ * number. Never the message.
+ */
+export function safeErrorFields(err: unknown): {
+  name: string | undefined;
+  code: string | undefined;
+  errno: number | undefined;
+} {
   const e = (typeof err === 'object' && err !== null ? err : {}) as {
     name?: unknown;
     code?: unknown;
     errno?: unknown;
   };
-  const { name, code, errno } = e;
-  console.error('group import failed:', { name, code, errno });
+  const str = (v: unknown) =>
+    typeof v === 'string' ? v.slice(0, FIELD_CLIP) : undefined;
+  return {
+    name: str(e.name),
+    code: str(e.code),
+    errno: typeof e.errno === 'number' ? e.errno : undefined,
+  };
 }
 
 /** The matched pairs that change My groups (already saved ones are left out). */
@@ -212,9 +232,11 @@ export async function planGroupImport(
         ...new Set(entries.map((e) => e.unitimeName)),
       ]),
     );
-  // The SQL filter runs under the column's _ci, PAD SPACE collation; the
-  // lookup normalises both sides the same way.
-  const nameKey = (n: string) => n.trimEnd().toLowerCase();
+  // The SQL filter runs under the column's utf8mb4_unicode_ci, PAD SPACE
+  // collation (case, accents and trailing spaces ignored); the lookup
+  // normalises both sides the same way.
+  const nameKey = (n: string) =>
+    n.normalize('NFD').replace(/\p{M}/gu, '').trimEnd().toLowerCase();
   const subjectByName = new Map(
     subjectRows.map((s) => [nameKey(s.unitimeName ?? ''), s]),
   );

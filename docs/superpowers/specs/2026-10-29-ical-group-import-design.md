@@ -51,7 +51,7 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
 
 `planGroupImport(db, icsText)` returns a preview. It has no side effects.
 
-1. `parseIcs`, then `classifyEvent` for each VEVENT. A calendar with more than 5000 VEVENTs is refused first ("The calendar has too many entries (max 5000)."). Each event is weighted by its number of occurrences (`countOccurrences`: the rules and caps of `expandOccurrences`, without allocating); an entry with no occurrence left is skipped as `noDates` ("N without dates"). Subject names are matched like the column's collation (case and trailing spaces ignored).
+1. `parseIcs`, then `classifyEvent` for each VEVENT. A calendar with more than 5000 VEVENTs is refused first ("The calendar has too many entries (max 5000)."). Each event is weighted by its number of occurrences (`countOccurrences`: the rules and caps of `expandOccurrences`, without allocating); an entry with no occurrence left is skipped as `noDates` ("N without dates"). Subject names are matched like the column's `utf8mb4_unicode_ci` collation: case, accents and trailing spaces are ignored on both sides.
 2. **Skipped entries:**
    - exams (`sessionKind = 'exam'`);
    - entries with no class kind;
@@ -86,7 +86,7 @@ Today the student picks groups one class at a time (`MyGroupsForm`, bot `groupsV
   - it writes in one transaction with an upsert;
   - it **merges**: classes not in `pairs` keep their saved group;
   - it returns `{ set: number, skipped: number }`. Invalid pairs are skipped, never an error.
-- **Size cap:** `pairs` is capped at 100 entries: the web client, the web action and the bot keep the first 100. The group check runs inside the transaction (`LOCK IN SHARE MODE`), so a group deleted meanwhile is skipped. A failed save says "Could not save the groups."; unexpected errors are logged as `group import failed:` with only `name`, `code` and `errno`.
+- **Size cap:** `pairs` is capped at 100 entries: the web client, the web action and the bot keep the first 100. The group check runs inside the transaction (`LOCK IN SHARE MODE`), so a group deleted meanwhile is skipped. A failed save says "Could not save the groups."; unexpected errors are logged as `group import failed:` with only `name` and `code` (when strings, clipped to 64 characters) and `errno` (when a number), via `safeErrorFields`.
 
 ### Web
 

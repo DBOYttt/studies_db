@@ -15,6 +15,7 @@ import {
   notInDbMessage,
   planGroupImport,
   previewHasNothing,
+  safeErrorFields,
   TOO_MANY_ENTRIES_MESSAGE,
   TooManyEntriesError,
 } from '../src/unitime/group-import.js';
@@ -407,6 +408,37 @@ describe('hardening', () => {
     );
     expect(p.unmatched).toEqual([]);
     expect(p.matched.map((m) => m.groupId)).toEqual([grp['FK.cwiczenia.1']]);
+  });
+
+  it('matches a subject whose UniTime name differs only in accents', async () => {
+    await addSubject('BD', 'Bazy danych (1rok)', { cwiczenia: [1] });
+    const p = await planGroupImport(
+      db,
+      userId,
+      oneEvent([], 'CWA 1', 'Bązy dańych (1rok)'),
+    );
+    expect(p.unmatched).toEqual([]);
+    expect(p.matched.map((m) => m.groupId)).toEqual([grp['BD.cwiczenia.1']]);
+  });
+
+  it('keeps only string name/code (clipped) and a number errno for the log', () => {
+    const long = 'x'.repeat(200);
+    expect(
+      safeErrorFields({ name: long, code: { url: 'secret' }, errno: '1452' }),
+    ).toEqual({ name: 'x'.repeat(64), code: undefined, errno: undefined });
+    expect(
+      safeErrorFields(
+        Object.assign(new Error('secret link'), {
+          code: 'ER_NO_REFERENCED_ROW_2',
+          errno: 1452,
+        }),
+      ),
+    ).toEqual({ name: 'Error', code: 'ER_NO_REFERENCED_ROW_2', errno: 1452 });
+    expect(safeErrorFields('secret')).toEqual({
+      name: undefined,
+      code: undefined,
+      errno: undefined,
+    });
   });
 
   it('skips a group deleted after planning without throwing', async () => {
