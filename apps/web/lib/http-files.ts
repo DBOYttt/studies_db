@@ -1,7 +1,6 @@
-import { createReadStream } from 'node:fs';
-import { open, stat } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { Readable } from 'node:stream';
-import { materials, resolveInStorage, topics } from '@studies/db';
+import { materials, openInStorage, topics } from '@studies/db';
 import { and, eq, isNull } from 'drizzle-orm';
 import { getDb } from './db';
 import { contentSecurityPolicy } from './security-headers';
@@ -63,15 +62,10 @@ function looksLikePdf(mimeType: string, filename: string): boolean {
   return mime === 'application/pdf' || /\.pdf$/i.test(filename);
 }
 
-async function startsWithPdfMagic(path: string): Promise<boolean> {
-  const fh = await open(path, 'r');
-  try {
-    const buf = Buffer.alloc(5);
-    const { bytesRead } = await fh.read(buf, 0, 5, 0);
-    return bytesRead === 5 && buf.toString('latin1') === '%PDF-';
-  } finally {
-    await fh.close();
-  }
+async function startsWithPdfMagic(fh: FileHandle): Promise<boolean> {
+  const buf = Buffer.alloc(5);
+  const { bytesRead } = await fh.read(buf, 0, 5, 0);
+  return bytesRead === 5 && buf.toString('latin1') === '%PDF-';
 }
 
 /**
@@ -199,52 +193,55 @@ export async function handleFileRequest(
     }
   }
 
-  let abs: string;
+  // openInStorage refuses symlinks, symlinked directories and non-regular
+  // files; the response streams from this handle, never reopens the path.
+  let opened: { handle: FileHandle; size: number };
   try {
-    abs = resolveInStorage(storageDir(), rel);
+    opened = await openInStorage(storageDir(), rel);
   } catch {
     return notFound();
   }
-  let size: number;
+  const { handle, size } = opened;
+  let streaming = false;
   try {
-    const s = await stat(abs);
-    if (!s.isFile()) return notFound();
-    size = s.size;
-  } catch {
-    return notFound();
-  }
-  if (sniffPdf && !(await startsWithPdfMagic(abs))) return notFound();
+    if (sniffPdf && !(await startsWithPdfMagic(handle))) return notFound();
 
-  // Content-addressed: the original's sha256, plus a suffix when a converted
-  // preview file is served (so the ETag changes when the conversion lands).
-  const etag =
-    rel === m.storagePath ? `"${m.sha256}"` : `"${m.sha256}-preview"`;
-  headers.set('ETag', etag);
-  if (etagMatches(req.headers.get('if-none-match'), etag)) {
-    return new Response(null, { status: 304, headers });
-  }
+    // Content-addressed: the original's sha256, plus a suffix when a converted
+    // preview file is served (so the ETag changes when the conversion lands).
+    const etag =
+      rel === m.storagePath ? `"${m.sha256}"` : `"${m.sha256}-preview"`;
+    headers.set('ETag', etag);
+    if (etagMatches(req.headers.get('if-none-match'), etag)) {
+      return new Response(null, { status: 304, headers });
+    }
 
-  // If-Range with another validator: the client's partial copy is stale,
-  // send the whole file.
-  const ifRange = req.headers.get('if-range');
-  const rangeHeader =
-    ifRange === null || ifRange.trim() === etag
-      ? req.headers.get('range')
-      : null;
-  const range = parseRange(rangeHeader, size);
-  if (range === 'invalid') {
-    headers.set('Content-Range', `bytes */${size}`);
-    return new Response(null, { status: 416, headers });
+    // If-Range with another validator: the client's partial copy is stale,
+    // send the whole file.
+    const ifRange = req.headers.get('if-range');
+    const rangeHeader =
+      ifRange === null || ifRange.trim() === etag
+        ? req.headers.get('range')
+        : null;
+    const range = parseRange(rangeHeader, size);
+    if (range === 'invalid') {
+      headers.set('Content-Range', `bytes */${size}`);
+      return new Response(null, { status: 416, headers });
+    }
+    if (size === 0) {
+      headers.set('Content-Length', '0');
+      return new Response(null, { status: 200, headers });
+    }
+    const { start, end } = range ?? { start: 0, end: size - 1 };
+    headers.set('Content-Length', String(end - start + 1));
+    if (range) headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
+    // The stream owns the handle from here (autoClose: closed at the end, on
+    // an error, or when the client goes away).
+    const body = Readable.toWeb(
+      handle.createReadStream({ start, end }),
+    ) as ReadableStream;
+    streaming = true;
+    return new Response(body, { status: range ? 206 : 200, headers });
+  } finally {
+    if (!streaming) await handle.close().catch(() => {});
   }
-  if (size === 0) {
-    headers.set('Content-Length', '0');
-    return new Response(null, { status: 200, headers });
-  }
-  const { start, end } = range ?? { start: 0, end: size - 1 };
-  headers.set('Content-Length', String(end - start + 1));
-  if (range) headers.set('Content-Range', `bytes ${start}-${end}/${size}`);
-  const body = Readable.toWeb(
-    createReadStream(abs, { start, end }),
-  ) as ReadableStream;
-  return new Response(body, { status: range ? 206 : 200, headers });
 }

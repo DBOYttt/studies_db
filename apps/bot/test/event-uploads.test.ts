@@ -2,6 +2,7 @@ import { mkdtempSync } from 'node:fs';
 import {
   mkdir,
   readdir,
+  rename,
   symlink,
   unlink,
   utimes,
@@ -40,7 +41,7 @@ import {
   vi,
 } from 'vitest';
 import type { EventPostFields } from '../src/events/posts.js';
-import { cleanupUploads } from '../src/events/uploads.js';
+import { cleanupUploads, type UploadFile } from '../src/events/uploads.js';
 import {
   drainEventRequests,
   recoverInterruptedRequests,
@@ -64,11 +65,7 @@ function fakeGuild() {
     async postExists(id: string) {
       return g.posts.has(id);
     },
-    async sendFiles(
-      threadId: string,
-      content: string,
-      files: { path: string; name: string }[],
-    ) {
+    async sendFiles(threadId: string, content: string, files: UploadFile[]) {
       if (g.failSend) throw g.failSend;
       g.sent.push({ threadId, content, names: files.map((f) => f.name) });
       const mid = `m-${g.sent.length}`;
@@ -455,6 +452,57 @@ describe('event uploads', () => {
       error: 'The file does not exist on the server.',
     });
     expect(guild.sent).toEqual([]);
+  });
+
+  it('an uploads/ directory that is a symlink is never read or sent', async () => {
+    const id = await mkEvent();
+    await drain();
+    const [rowId] = await queueUploads(id, ['a.pdf']);
+    // The temp file now lives outside storage, reached via uploads -> outside.
+    const outside = mkdtempSync(join(tmpdir(), 'uploads-outside-'));
+    await rename(join(dir, 'uploads'), join(outside, 'real'));
+    await symlink(join(outside, 'real'), join(dir, 'uploads'));
+    const ingest = vi.spyOn(ingestMod, 'ingestAttachment');
+    try {
+      await drain();
+      const [after] = await rows();
+      expect(after).toMatchObject({
+        id: rowId,
+        status: 'failed',
+        error: 'The file does not exist on the server.',
+      });
+      expect(guild.sent).toEqual([]);
+      expect(ingest).not.toHaveBeenCalled();
+    } finally {
+      ingest.mockRestore();
+    }
+  });
+
+  it('sends the file content from the opened file, not by path', async () => {
+    const id = await mkEvent();
+    await drain();
+    await queueUploads(id, ['a.pdf']);
+    const bodies: string[] = [];
+    guild.sendFiles = async (_t, _c, files) => {
+      for (const f of files) {
+        const chunks: Buffer[] = [];
+        for await (const c of f.data) chunks.push(Buffer.from(c));
+        bodies.push(Buffer.concat(chunks).toString());
+      }
+      return files.map((f, i) => ({
+        id: `a-x${i}`,
+        messageId: 'm-x',
+        url: `https://cdn/${f.name}`,
+        name: f.name,
+        contentType: null,
+        size: 4,
+        postedAt: new Date(),
+      }));
+    };
+    await drain();
+    expect(bodies).toEqual(['data']);
+    const [after] = await rows();
+    expect(after.status).toBe('done');
   });
 
   it('a missing temp file fails only that row', async () => {

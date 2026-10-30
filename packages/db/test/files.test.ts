@@ -1,13 +1,18 @@
+import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
+import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   fileExtension,
+  openInStorage,
   originalRelPath,
   planProcessing,
   previewRelPath,
   resolveInStorage,
   resolveStorageDir,
+  StorageAccessError,
   StoragePathError,
   searchNameFor,
 } from '../src/files.js';
@@ -108,6 +113,105 @@ describe('resolveInStorage', () => {
   it('uses a message that does not echo the path', () => {
     expect(() => resolveInStorage(root, '/etc/passwd')).toThrow(
       /^Invalid file path$/,
+    );
+  });
+});
+
+describe('openInStorage', () => {
+  let root: string;
+  let outside: string;
+  afterEach(async () => {
+    await rm(root, { recursive: true, force: true });
+    await rm(outside, { recursive: true, force: true });
+  });
+  const setup = async () => {
+    root = await mkdtemp(join(tmpdir(), 'open-in-storage-'));
+    outside = await mkdtemp(join(tmpdir(), 'open-outside-'));
+    await mkdir(join(root, 'originals'));
+    await writeFile(join(root, 'originals', 'a.txt'), 'hello');
+    await writeFile(join(outside, 'secret'), 'secret');
+  };
+
+  it('opens a regular file and reports its size', async () => {
+    await setup();
+    const { handle, size } = await openInStorage(root, 'originals/a.txt');
+    try {
+      expect(size).toBe(5);
+      expect((await handle.readFile()).toString()).toBe('hello');
+    } finally {
+      await handle.close();
+    }
+  });
+
+  it('refuses a leaf symlink to a file outside storage', async () => {
+    await setup();
+    await symlink('/etc/hosts', join(root, 'originals', 'hosts'));
+    await expect(openInStorage(root, 'originals/hosts')).rejects.toThrow(
+      StorageAccessError,
+    );
+  });
+
+  it('refuses a leaf symlink even when it points inside storage', async () => {
+    await setup();
+    await symlink(
+      join(root, 'originals', 'a.txt'),
+      join(root, 'originals', 'b.txt'),
+    );
+    await expect(openInStorage(root, 'originals/b.txt')).rejects.toThrow(
+      StorageAccessError,
+    );
+  });
+
+  it('refuses a symlinked directory component', async () => {
+    await setup();
+    await symlink('/etc', join(root, 'uploads'));
+    await expect(openInStorage(root, 'uploads/hosts')).rejects.toThrow(
+      StorageAccessError,
+    );
+    await symlink(outside, join(root, 'up2'));
+    await expect(openInStorage(root, 'up2/secret')).rejects.toThrow(
+      StorageAccessError,
+    );
+  });
+
+  it('refuses a directory and a FIFO (without blocking)', async () => {
+    await setup();
+    await expect(openInStorage(root, 'originals')).rejects.toThrow(
+      StorageAccessError,
+    );
+    execFileSync('mkfifo', [join(root, 'originals', 'fifo')]);
+    await expect(openInStorage(root, 'originals/fifo')).rejects.toThrow(
+      StorageAccessError,
+    );
+  });
+
+  it('refuses a missing file and a path that escapes', async () => {
+    await setup();
+    await expect(openInStorage(root, 'originals/nope')).rejects.toThrow(
+      StorageAccessError,
+    );
+    await expect(openInStorage(root, '../x')).rejects.toThrow(
+      StorageAccessError,
+    );
+  });
+
+  it('works when the root itself is reached through a symlink', async () => {
+    await setup();
+    const link = `${root}-link`;
+    await symlink(root, link);
+    try {
+      const { handle, size } = await openInStorage(link, 'originals/a.txt');
+      await handle.close();
+      expect(size).toBe(5);
+    } finally {
+      await rm(link, { force: true });
+    }
+  });
+
+  it('uses a message that does not echo the path', async () => {
+    await setup();
+    await expect(openInStorage(root, 'originals/nope')).rejects.toThrow(
+      /^File not available$/,
     );
   });
 });

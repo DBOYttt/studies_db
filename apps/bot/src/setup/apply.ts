@@ -1,13 +1,13 @@
 // Executes a /setup plan against the guild, one action at a time. A failing
 // action is recorded and later actions for the same subject are skipped; the
 // rest of the plan still runs.
-import { access } from 'node:fs/promises';
 import {
   CLASS_NAMES,
   type Db,
   ensureClass,
   getSetting,
   materials,
+  openInStorage,
   plural,
   resolveInStorage,
   setSetting,
@@ -181,8 +181,11 @@ export async function applySetup(
       } catch {
         throw new Error(`file ${f.name} has an invalid storage path`);
       }
+      // A symlink, a symlinked directory or a non-regular file counts as
+      // missing: openInStorage refuses it (the handle is only a check).
       try {
-        await access(path);
+        const { handle } = await openInStorage(storageDir, f.storagePath);
+        await handle.close();
       } catch {
         throw new Error(`file ${f.name} is missing from storage`);
       }
