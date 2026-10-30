@@ -126,7 +126,7 @@ services:
     <<: *hardening
     # soffice/pdftotext get a fresh profile and HOME under the OS temp dir.
     tmpfs:
-      - /tmp:size=512m
+      - /tmp:size=1g  # two concurrent soffice runs may each stage a 200 MiB preview
     # Only what the worker reads: it opens files named by DB rows, so keep
     # Discord/RW/RO/tunnel secrets out of its environment.
     environment:

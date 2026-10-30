@@ -73,7 +73,7 @@ and the image has no curl, so to query it directly use
 (container name may differ; see `podman ps`).
 
 Register slash commands once if commands changed. The bot image has no pnpm, so on the server run
-`podman compose run --rm bot node --import tsx src/register-commands.ts`.
+`podman compose --profile app run --rm bot node --import tsx src/register-commands.ts`.
 
 ### Upgrading to the class/group hierarchy (migration 0004)
 
@@ -250,10 +250,10 @@ Back up first (`scripts/backup.sh`). Steps, in order:
    (nothing is published, no curl in the image); use `podman compose ps` or the `podman exec ... node -e
    "fetch(...)"` command under "Run".
 8. **CLI inside containers.** The bot runtime image has no pnpm or corepack. Re-register slash commands on
-   the server with `podman compose run --rm bot node --import tsx src/register-commands.ts` (this replaces
+   the server with `podman compose --profile app run --rm bot node --import tsx src/register-commands.ts` (this replaces
    `pnpm --filter @studies/bot register` in the older sections above). `migrate` no longer has
    `DATABASE_URL` or `WEB_BASE_URL`, so a login link needs them passed in:
-   `podman compose run --rm -e DATABASE_URL=... -e WEB_BASE_URL=... migrate node --import tsx src/cli/login-link.ts <discordUserId>`.
+   `podman compose --profile app run --rm -e DATABASE_URL=... -e WEB_BASE_URL=... migrate node --import tsx src/cli/login-link.ts <discordUserId>`.
    Note `pnpm db:seed --reset` needs a root `DATABASE_URL` (it TRUNCATEs); `studies_app` cannot.
 9. **Resource limits.** web and bot have `mem_limit: 1g`; the worker has `cpus: "1.5"` on top of its 2 GB /
    512 pids. On rootless podman `cpus` needs the `cpu` cgroup controller delegated to the user. Check
@@ -270,7 +270,11 @@ Back up first (`scripts/backup.sh`). Steps, in order:
 11. **Migrate resets the app grants.** Every `migrate` run does REVOKE then GRANT for `studies_app`, so new
     connections can fail for a few milliseconds. Compose runs `migrate` before the services start; if you
     re-run it by hand against a live stack, accept that blip.
-12. **Rollback.** Point `DATABASE_URL` back at root (`mysql://root:<MARIADB_ROOT_PASSWORD>@mariadb:3306/studies`)
+12. **First-deploy checklist (not verified locally).** Build `apps/web/Containerfile` on the server (the local
+    2 GB podman VM could not finish `next build`), then check: cloudflared starts read-only once `web` is
+    healthy; the bot renders a plan image (`/plan`) on its read-only root; an admin edit that revalidates a
+    page (e.g. renaming a subject) shows the new value; a document preview converts.
+13. **Rollback.** Point `DATABASE_URL` back at root (`mysql://root:<MARIADB_ROOT_PASSWORD>@mariadb:3306/studies`)
     and recreate the services. The storage ownership change is harmless for a root process.
 
 Also changed: responses carry `Permissions-Policy` (camera, microphone, geolocation and payment off) and

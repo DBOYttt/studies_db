@@ -33,6 +33,11 @@ Still open after G5:
 - The web image build was never run end to end (VM too small); test it on the server.
 - TOCTOU windows remain where `soffice`, `pdftotext` and the setup re-reads open files by path.
 - "Preview too large." is treated as a normal failure and retried.
+- Parked by ruling: per-column worker grants (one `studies_app` for all services), root login from any host
+  (`MARIADB_ROOT_HOST=%`), separate uids per service, a conversion container without network or DB
+  credentials, outbound network for mariadb on `backend`, backup encryption, and worker/migrate images that
+  still copy the whole repo with dev dependencies.
+- `DATABASE_URL` and `DB_APP_PASSWORD` must be kept in sync by hand.
 
 ## Not verified / needs a live check
 - **Preview "Loading…" hang:** reported by 4 personas. Re-checked on a quiet sandbox, where the PDF loaded in about 3 s, so it was dev-server load. A preview timeout fallback (curator E5) is still worth adding under G7.
