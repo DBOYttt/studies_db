@@ -43,18 +43,30 @@ test('SQL write console: a cascading DELETE needs the typed table name', async (
 }) => {
   await page.goto('/admin/sql');
   const editor = page.getByRole('textbox', { name: 'SQL statement (write)' });
-  await editor.click();
-  await page.keyboard.type("DELETE FROM subjects WHERE code = 'NO-SUCH'");
-  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const previewBtn = page.getByRole('button', { name: 'Preview', exact: true });
   const preview = page.getByRole('region', { name: 'Change preview' });
-  await expect(
-    preview.getByText(
-      'Rows in other tables that reference these rows are deleted too.',
-    ),
-  ).toBeVisible();
   const run = page.getByRole('button', { name: 'Run', exact: true });
+  const note = preview.getByText(
+    'Rows in other tables that reference these rows are deleted too.',
+  );
+  // Only previewed (rolled back), never run: it would delete a seeded tag.
+  await editor.click();
+  await page.keyboard.type("DELETE FROM tags WHERE name = 'Kolokwium'");
+  await previewBtn.click();
+  await expect(note).toBeVisible();
   await expect(run).toBeDisabled();
-  await preview.getByRole('textbox', { name: /To confirm/ }).fill('subjects');
+  await preview.getByRole('textbox', { name: /To confirm/ }).fill('tags');
+  await expect(run).toBeEnabled();
+  // Matching no rows, it deletes nothing anywhere: no confirmation.
+  await editor.click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.type("DELETE FROM subjects WHERE code = 'NO-SUCH'");
+  await previewBtn.click();
+  await expect(preview.getByText(/will be changed/)).toContainText('0 rows');
+  await expect(note).toHaveCount(0);
+  await expect(
+    preview.getByRole('textbox', { name: /To confirm/ }),
+  ).toHaveCount(0);
   await expect(run).toBeEnabled();
 });
 

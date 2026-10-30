@@ -479,6 +479,49 @@ describe('handleAdminSqlRequest', () => {
     expect(upd.cascade).toBe(false);
   });
 
+  it('a cascading DELETE that matches no rows needs no confirmation', async () => {
+    const sql = 'DELETE FROM class_groups WHERE number = 12345';
+    const preview = await json(await call({ mode: 'preview', sql }));
+    expect(preview).toMatchObject({ ok: true, affected: 0, cascade: true });
+    const res = await call({ mode: 'execute', sql, token: preview.token });
+    expect(res.status).toBe(200);
+    expect((await json(res)).affected).toBe(0);
+  });
+
+  it('an unconfirmed cascading DELETE that matched no rows is rolled back if rows appeared', async () => {
+    const [s] = await db
+      .select({ id: subjects.id })
+      .from(subjects)
+      .where(eq(subjects.code, 'ASD'));
+    const [c] = await db
+      .select({ id: classes.id })
+      .from(classes)
+      .where(eq(classes.subjectId, s.id));
+    const sql = 'DELETE FROM class_groups WHERE number = 98';
+    const token = signPreview({
+      userId: admin.id,
+      sql,
+      affected: 0,
+      at: Date.now(),
+    });
+    await db
+      .insert(classGroups)
+      .values({ classId: c.id, number: 98, name: 'Gr. 98' });
+    const res = await call({ mode: 'execute', sql, token });
+    expect(res.status).toBe(400);
+    expect((await json(res)).error).toMatch(
+      /since the preview.*Run the preview again/,
+    );
+    expect(
+      (
+        await db
+          .select({ n: count() })
+          .from(classGroups)
+          .where(eq(classGroups.number, 98))
+      )[0].n,
+    ).toBe(1);
+  });
+
   it('rolls back an unconfirmed change that grew past 100 rows since the preview', async () => {
     const sql = 'UPDATE subjects SET ects = 3 WHERE semester = 7';
     const token = signPreview({

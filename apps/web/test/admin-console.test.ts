@@ -82,6 +82,11 @@ describe('cascading deletes', () => {
     expect(canExecute(del)).toBe(false);
     expect(canExecute({ ...del, confirm: 'class_groups' })).toBe(true);
   });
+  it('matching no rows need no confirmation (nothing can cascade)', () => {
+    const none = { ...del, preview: { ...del.preview, affected: 0 } };
+    expect(needsConfirm(none.preview, 100)).toBe(false);
+    expect(canExecute(none)).toBe(true);
+  });
   it('have a note', () => {
     expect(CASCADE_NOTE).toBe(
       'Rows in other tables that reference these rows are deleted too.',

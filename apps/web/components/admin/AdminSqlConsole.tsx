@@ -393,7 +393,7 @@ export function AdminSqlConsole({
                 to execute it.
               </p>
             )}
-            {preview.cascade && (
+            {preview.cascade && preview.affected > 0 && (
               <p className="m-0 flex items-center gap-1.5 border-b border-line bg-warn-bg px-3 py-2 text-warn-fg">
                 <Warning weight="fill" size={16} aria-hidden />
                 {CASCADE_NOTE}

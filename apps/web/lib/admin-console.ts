@@ -30,11 +30,14 @@ export interface WritePreview {
 export const CASCADE_NOTE =
   'Rows in other tables that reference these rows are deleted too.';
 
-/** The typed confirmation is required: a large change, or a cascade. */
+/**
+ * The typed confirmation is required: a large change, or a cascade that
+ * matches at least one row (one that matches none deletes nothing anywhere).
+ */
 export const needsConfirm = (
   p: Pick<WritePreview, 'affected' | 'cascade'>,
   threshold: number,
-): boolean => p.cascade || p.affected > threshold;
+): boolean => (p.cascade && p.affected > 0) || p.affected > threshold;
 
 /** Word the user types to confirm a large change. */
 export const confirmWord = (table: string | null): string => table ?? 'YES';

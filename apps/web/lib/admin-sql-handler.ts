@@ -338,10 +338,12 @@ async function execute(
   );
   if (!token.ok) return fail(400, token.reason);
   const confirmed = body.confirm === confirmWord(table);
-  // A cascading DELETE/REPLACE is confirmed whatever its row count: the
-  // count does not include the rows it takes from other tables.
+  // A cascading DELETE/REPLACE is confirmed whatever its row count (the
+  // count does not include the rows it takes from other tables), unless its
+  // preview matched no rows: then it deletes nothing anywhere.
+  const cascade = cascadeConfirm(kind, table);
   if (
-    (token.affected > CONFIRM_THRESHOLD || cascadeConfirm(kind, table)) &&
+    (token.affected > CONFIRM_THRESHOLD || (cascade && token.affected > 0)) &&
     !confirmed
   ) {
     return fail(400, confirmMessage(table, token.affected));
@@ -355,8 +357,11 @@ async function execute(
   const r = await inTransaction(deps.rw, async (conn, commit) => {
     const res = await runStatement(conn, sql);
     // The data may have changed since the preview: never commit a large
-    // change that was not confirmed.
-    if (res.affected > CONFIRM_THRESHOLD && !confirmed) {
+    // change, or a cascade that now matches rows, that was not confirmed.
+    if (
+      (res.affected > CONFIRM_THRESHOLD || (cascade && res.affected > 0)) &&
+      !confirmed
+    ) {
       overLimit = res.affected;
       return null;
     }
