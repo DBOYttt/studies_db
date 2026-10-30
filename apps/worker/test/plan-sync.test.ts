@@ -8,12 +8,14 @@ import {
   getPlanSyncStatus,
   type PlanSyncStatus,
   requestPlanSync,
+  unitimeFeeds,
 } from '@studies/db';
 import { closeTestDb, resetTestDb } from '@studies/db/testing';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import {
   fetchTimetable,
   planSyncDue,
+  resetNoSourceLog,
   runPlanSyncOnce,
   SafeSyncError,
 } from '../src/plan-sync.js';
@@ -416,5 +418,216 @@ describe('runPlanSyncOnce with an exam feed', () => {
     expect(rows.map((r) => [r.uid, r.kind, r.source])).toEqual([
       ['700000001', 'exam', 'exams'],
     ]);
+  });
+});
+
+describe('runPlanSyncOnce with semester feeds', () => {
+  let db: Db;
+  beforeAll(async () => {
+    db = await resetTestDb();
+  });
+  afterAll(async () => {
+    await closeTestDb(db);
+  });
+
+  const env = {
+    UNITIME_IMPORT_HOSTS: 'unitime.example.edu,exams.example.edu',
+  } as NodeJS.ProcessEnv;
+  const C3 = 'https://unitime.example.edu/ical/three?x=secret3';
+  const C5 = 'https://unitime.example.edu/ical/five?x=secret5';
+  const E3 = 'https://exams.example.edu/ical/exam3?x=examsecret3';
+  const ENV_URL = 'https://unitime.example.edu/ical/env?x=envsecret';
+  const icsFor = (n: string) => ics.replace(/^UID:/gm, `UID:s${n}-`);
+  const examIcs = [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'X-WR-CALNAME:Egzaminy',
+    'BEGIN:VEVENT',
+    'DTSTART;TZID=Europe/Warsaw:20270201T090000',
+    'DTEND;TZID=Europe/Warsaw:20270201T110000',
+    'LOCATION:A-0 1',
+    'STATUS:CONFIRMED',
+    'SEQUENCE:0',
+    'UID:e3-1',
+    'SUMMARY:Algebra liniowa (1rok)',
+    'DESCRIPTION:Pisemny',
+    'END:VEVENT',
+    'END:VCALENDAR',
+    '',
+  ].join('\r\n');
+
+  function feedFetch(seen: string[], failing: string[] = []): typeof fetch {
+    return (async (input: string | URL | Request) => {
+      const url = String(input);
+      seen.push(url);
+      if (failing.includes(url)) throw new Error(`connect failed for ${url}`);
+      const body =
+        url === C3
+          ? icsFor('3')
+          : url === C5
+            ? icsFor('5')
+            : url === E3
+              ? examIcs
+              : ics;
+      return new Response(body, {
+        headers: { 'content-type': 'text/calendar' },
+      });
+    }) as typeof fetch;
+  }
+
+  async function setFeeds(
+    rows: { semester: number; classUrl: string; examUrl?: string }[],
+  ) {
+    await db.delete(unitimeFeeds);
+    if (rows.length) await db.insert(unitimeFeeds).values(rows);
+  }
+
+  it('syncs every stored feed in semester order with its feed_semester', async () => {
+    await db.delete(classSessions);
+    await setFeeds([
+      { semester: 5, classUrl: C5 },
+      { semester: 3, classUrl: C3 },
+    ]);
+    const seen: string[] = [];
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen) });
+    expect(seen).toEqual([C3, C5]);
+    const rows = await db.select().from(classSessions);
+    expect(new Set(rows.map((r) => r.feedSemester))).toEqual(new Set([3, 5]));
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastError).toBeNull();
+    expect(s.stats?.feeds?.map((f) => [f.semester, f.ok])).toEqual([
+      [3, true],
+      [5, true],
+    ]);
+  });
+
+  it('a failing feed does not stop the others and never leaks its URL', async () => {
+    await db.delete(classSessions);
+    await setFeeds([
+      { semester: 3, classUrl: C3 },
+      { semester: 5, classUrl: C5 },
+    ]);
+    const seen: string[] = [];
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    try {
+      await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen, [C3]) });
+      const out = [...errSpy.mock.calls, ...logSpy.mock.calls]
+        .flat()
+        .join('\n');
+      expect(out).not.toContain('secret');
+      expect(out).not.toContain('/ical/');
+    } finally {
+      errSpy.mockRestore();
+      logSpy.mockRestore();
+    }
+    expect(seen).toEqual([C3, C5]);
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastError).toContain('Semester 3:');
+    expect(s.lastError).toContain('unitime.example.edu');
+    expect(s.lastError).not.toContain('secret');
+    expect(s.lastError).not.toContain('https://');
+    expect(s.lastOkAt).not.toBeNull();
+    expect(s.stats?.feeds?.map((f) => [f.semester, f.ok])).toEqual([
+      [3, false],
+      [5, true],
+    ]);
+    const rows = await db.select().from(classSessions);
+    expect(rows.every((r) => r.feedSemester === 5)).toBe(true);
+  });
+
+  it('refuses a stored feed on a host that is not allowed', async () => {
+    await setFeeds([
+      { semester: 4, classUrl: 'https://evil.example.org/x?k=s' },
+    ]);
+    const seen: string[] = [];
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen) });
+    expect(seen).toEqual([]);
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastError).toBe('Semester 4: host not allowed');
+  });
+
+  it('removes unscoped leftovers only when every class feed succeeded', async () => {
+    await db.delete(classSessions);
+    await setFeeds([]);
+    await runPlanSyncOnce({
+      db,
+      url: ENV_URL,
+      env,
+      fetchImpl: feedFetch([]),
+    });
+    const nullRows = async () =>
+      (await db.select().from(classSessions)).filter(
+        (r) => r.feedSemester === null,
+      ).length;
+    expect(await nullRows()).toBeGreaterThan(0);
+
+    await setFeeds([
+      { semester: 3, classUrl: C3 },
+      { semester: 5, classUrl: C5 },
+    ]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([], [C5]) });
+    expect(await nullRows()).toBeGreaterThan(0);
+
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([]) });
+    expect(await nullRows()).toBe(0);
+  });
+
+  it('without stored feeds the env feed behaves as before (rows NULL)', async () => {
+    await db.delete(classSessions);
+    await setFeeds([]);
+    await runPlanSyncOnce({ db, url: ENV_URL, env, fetchImpl: feedFetch([]) });
+    const rows = await db.select().from(classSessions);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows.every((r) => r.feedSemester === null)).toBe(true);
+  });
+
+  it('with no feeds and no URL nothing is fetched, status is untouched and the notice logs once', async () => {
+    await setFeeds([]);
+    const before = await getPlanSyncStatus(db);
+    const seen: string[] = [];
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    resetNoSourceLog();
+    try {
+      await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen) });
+      await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen) });
+      const lines = logSpy.mock.calls
+        .flat()
+        .filter((l) => String(l).includes('brak źródeł planu'));
+      expect(lines).toHaveLength(1);
+    } finally {
+      logSpy.mockRestore();
+    }
+    expect(seen).toEqual([]);
+    expect(await getPlanSyncStatus(db)).toEqual(before);
+  });
+
+  it("runs a semester's exam feed right after its class feed as exams", async () => {
+    await db.delete(classSessions);
+    await setFeeds([
+      { semester: 3, classUrl: C3, examUrl: E3 },
+      { semester: 5, classUrl: C5 },
+    ]);
+    const seen: string[] = [];
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch(seen) });
+    expect(seen).toEqual([C3, E3, C5]);
+    const exam = (await db.select().from(classSessions)).find(
+      (r) => r.uid === 'e3-1',
+    );
+    expect(exam).toMatchObject({
+      kind: 'exam',
+      source: 'exams',
+      feedSemester: 3,
+    });
+  });
+
+  it('an exam feed failure marks only the exam part', async () => {
+    await db.delete(classSessions);
+    await setFeeds([{ semester: 3, classUrl: C3, examUrl: E3 }]);
+    await runPlanSyncOnce({ db, env, fetchImpl: feedFetch([], [E3]) });
+    const s = await getPlanSyncStatus(db);
+    expect(s.lastError).toContain('Semester 3');
+    expect(s.lastError).not.toContain('secret');
+    expect(s.stats?.feeds?.[0]).toMatchObject({ semester: 3, ok: true });
   });
 });
