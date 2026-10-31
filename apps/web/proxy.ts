@@ -48,11 +48,12 @@ export function proxy(req: NextRequest) {
   return NextResponse.redirect(new URL(to, req.url));
 }
 
-// The upload route is excluded on purpose: when the proxy runs, Next buffers
+// The manifest and the home-screen icons load without a session (browsers
+// fetch the manifest without credentials). The upload route is excluded on purpose: when the proxy runs, Next buffers
 // the whole request body in memory before the route sees it. The route calls
 // requireUser() itself.
 export const config = {
   matcher: [
-    '/((?!login-info(?:/|$)|auth/|_next/|favicon\\.ico$|icon\\.svg$|api/wydarzenia/[^/]+/pliki$|pdf\\.worker\\.[0-9A-Za-z.-]+\\.min\\.mjs$).*)',
+    '/((?!login-info(?:/|$)|auth/|_next/|favicon\\.ico$|icon\\.svg$|manifest\\.webmanifest$|icons/|apple-icon\\.png$|api/wydarzenia/[^/]+/pliki$|pdf\\.worker\\.[0-9A-Za-z.-]+\\.min\\.mjs$).*)',
   ],
 };

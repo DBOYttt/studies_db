@@ -22,6 +22,9 @@ describe('proxy', () => {
       '/api/wydarzenia/12/pliki/x',
       '/api/wydarzenia/12',
       '/login-infox',
+      '/icons',
+      '/iconsx/a.png',
+      '/manifest.webmanifestx',
     ]) {
       expect(matches(u), u).toBe(true);
     }
@@ -39,6 +42,11 @@ describe('proxy', () => {
       '/icon.svg?3f9a1c2b',
       '/pdf.worker.6.3.289.min.mjs',
       '/api/wydarzenia/12/pliki',
+      '/manifest.webmanifest',
+      '/icons/icon-192.png',
+      '/icons/icon-maskable-512.png',
+      '/apple-icon.png',
+      '/apple-icon.png?abc123',
     ]) {
       expect(matches(u), u).toBe(false);
     }
