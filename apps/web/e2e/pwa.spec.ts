@@ -103,7 +103,8 @@ test.describe('installed app', () => {
     await field.fill('https://evil.example/auth/callback?token=abc');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(field).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.getByRole('alert')).toHaveText(
+    // Scoped to the form: Next's route announcer is an (empty) alert too.
+    await expect(page.locator('form').getByRole('alert')).toHaveText(
       'This is not a Studies DB sign-in link.',
     );
 
