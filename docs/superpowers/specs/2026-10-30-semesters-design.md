@@ -39,9 +39,12 @@ a group and a session) so the switcher and `/setup` have something to show.
 `/setup` already plans one `Semestr N` category per semester that has
 subjects and sorts forums by semester then code. Changes:
 
-- Categories are ordered Semestr 1 … Semestr 7 by number (not by string, so
-  10+ would sort right too), above the fixed channels; existing tests extended
-  to 7 semesters.
+- Categories are created in numeric order (Semestr 1 … Semestr 7, not by
+  string); a semester category created in a later run is appended and may be
+  dragged into place. Existing tests extended to 7 semesters.
+- A category is recognised as a semester's by `/^\s*semestr\s+(\d+)\s*$/i`
+  (so `SEMESTR 3` or `semestr  3` is adopted, not duplicated); a forum under
+  any other category is imported as semester 1 with a warning to move it.
 - A planner warning (in the dry-run report) when a semester has more than 50
   subjects (Discord's channels-per-category limit); the extra forums are not
   created.

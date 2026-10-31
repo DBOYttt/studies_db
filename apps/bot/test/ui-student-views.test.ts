@@ -498,8 +498,13 @@ describe('groupsView', () => {
       },
     );
     expectValid(v);
-    const day = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:day:0:0');
-    const hour = buttons(v).find((b) => b.custom_id === 'v1:stu:rem:hour:1:0');
+    const sid = idOf('Analiza');
+    const day = buttons(v).find(
+      (b) => b.custom_id === `v1:stu:rem:day:0:${sid}`,
+    );
+    const hour = buttons(v).find(
+      (b) => b.custom_id === `v1:stu:rem:hour:1:${sid}`,
+    );
     expect([day?.label, day?.style]).toEqual([
       'Reminder 24 h: on',
       ButtonStyle.Success,
@@ -528,6 +533,10 @@ describe('groupsView', () => {
       'Fizyka',
     ]);
     expect(subj.options.find((o: Json) => o.default)?.label).toBe('Analiza');
+    expect(subj.options.map((o: Json) => o.value)).toEqual([
+      String(idOf('Analiza')),
+      String(idOf('Fizyka')),
+    ]);
     expect(classSelects.map((s) => s.custom_id)).toEqual([
       'v1:stu:groups:set:1',
       'v1:stu:groups:set:2',
@@ -542,8 +551,8 @@ describe('groupsView', () => {
       expect.objectContaining({ value: '0' }),
     ]);
     expect(buttons(v).map((b) => [b.custom_id, b.label])).toEqual([
-      ['v1:stu:rem:day:1:0', 'Reminder 24 h: off'],
-      ['v1:stu:rem:hour:1:0', 'Reminder 1 h: off'],
+      [`v1:stu:rem:day:1:${idOf('Analiza')}`, 'Reminder 24 h: off'],
+      [`v1:stu:rem:hour:1:${idOf('Analiza')}`, 'Reminder 1 h: off'],
       ['v1:stu:groups:clear', 'Clear'],
       ['v1:stu:plan:day', 'Show my timetable'],
       ['v1:stu:groups:import', 'Import from UniTime'],
@@ -584,11 +593,67 @@ describe('groupsView', () => {
     const [subj, ...classSelects] = selects(v);
     expect(subj.options).toHaveLength(2);
     expect(subj.options.filter((o: Json) => o.default)).toEqual([
-      expect.objectContaining({ value: '1' }),
+      expect.objectContaining({ value: '103' }),
+    ]);
+    expect(subj.options.map((o: Json) => o.label)).toEqual([
+      'S1 · Język angielski',
+      'S3 · Język angielski',
     ]);
     expect(classSelects.map((c) => c.custom_id)).toEqual([
       'v1:stu:groups:set:2',
     ]);
+  });
+
+  it('prefixes S<n> when the subjects span semesters, in the select and the summary', () => {
+    const options = [
+      opt(1, 'Analiza', 'Laboratorium', 2, 11, 1),
+      opt(2, 'Fizyka', 'Laboratorium', 2, 12, 3),
+    ];
+    const v = groupsView(options, 11, { '1': 101, '2': 201 });
+    const [subj] = selects(v);
+    expect(subj.options.map((o: Json) => o.label)).toEqual([
+      'S1 · Analiza',
+      'S3 · Fizyka',
+    ]);
+    expect(allText(v)).toContain('S1 · Analiza · Laboratorium');
+    expect(allText(v)).toContain('S3 · Fizyka · Laboratorium');
+  });
+
+  it('prefixes S<n> when two subjects share a name, even within one semester', () => {
+    const options = [
+      opt(1, 'Seminarium', 'Seminarium', 2, 11, 2),
+      opt(2, 'Seminarium', 'Seminarium', 2, 12, 2),
+      opt(3, 'Fizyka', 'Laboratorium', 2, 13, 2),
+    ];
+    const [subj] = selects(groupsView(options, null, {}));
+    expect(subj.options.map((o: Json) => o.label)).toEqual([
+      'S2 · Seminarium',
+      'S2 · Seminarium',
+      'S2 · Fizyka',
+    ]);
+  });
+
+  it('has no prefix for few subjects of one semester with distinct names', () => {
+    const options = [
+      opt(1, 'Analiza', 'Laboratorium', 2, 11, 2),
+      opt(2, 'Fizyka', 'Laboratorium', 2, 12, 2),
+    ];
+    const v = groupsView(options, null, { '1': 101 });
+    expect(selects(v)[0].options.map((o: Json) => o.label)).toEqual([
+      'Analiza',
+      'Fizyka',
+    ]);
+    expect(allText(v)).toContain('Analiza · Laboratorium');
+    expect(allText(v)).not.toContain('S2 ·');
+  });
+
+  it('says how many subjects past 75 are not listed', () => {
+    const options = Array.from({ length: 80 }, (_, i) =>
+      opt(i + 1, `Przedmiot ${i}`, 'Laboratorium', 2),
+    );
+    const v = groupsView(options, null, {});
+    expectValid(v);
+    expect(allText(v)).toMatch(/…and 5 more\. Open the website/);
   });
 
   it('pages 30 classes of one subject within the limits', () => {
@@ -675,6 +740,29 @@ describe('entry quiz views', () => {
     expect(ids(v)).toEqual(['v1:stu:quiz:subj', 'v1:stu:quiz:subj:1']);
     expect(selects(v)[0].options[0].value).toBe('1000');
     expect(allText(v)).toContain('Entry quizzes');
+  });
+
+  it('subjects: S<n> prefix across semesters or for a shared name', () => {
+    const labels = (xs: { id: number; name: string; semester: number }[]) =>
+      selects(quizSubjectsView(xs))[0].options.map((o: Json) => o.label);
+    expect(
+      labels([
+        { id: 1, name: 'Analiza', semester: 1 },
+        { id: 2, name: 'Fizyka', semester: 2 },
+      ]),
+    ).toEqual(['S1 · Analiza', 'S2 · Fizyka']);
+    expect(
+      labels([
+        { id: 1, name: 'Seminarium', semester: 4 },
+        { id: 2, name: 'Seminarium', semester: 4 },
+      ]),
+    ).toEqual(['S4 · Seminarium', 'S4 · Seminarium']);
+    expect(
+      labels([
+        { id: 1, name: 'Analiza', semester: 4 },
+        { id: 2, name: 'Fizyka', semester: 4 },
+      ]),
+    ).toEqual(['Analiza', 'Fizyka']);
   });
 
   it('classes: "All groups" and every group per class, 25 options per select', () => {

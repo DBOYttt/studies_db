@@ -68,7 +68,8 @@ export function desiredTags(s: SubjectSpec): string[] {
 const categoryName = (s: SubjectSpec) => `Semestr ${s.semester}`;
 const MAX_CODE = 20;
 const MAX_CATEGORY_CHANNELS = 50;
-const SEMESTER_RE = /^Semestr (\d+)$/;
+/** A category the planner treats as a semester's: case and spacing are free. */
+const SEMESTER_RE = /^\s*semestr\s+(\d+)\s*$/i;
 
 /** `asd-algorytmy-i-struktury` → ASD / "Algorytmy i struktury"; null if no code. */
 export function parseForumName(
@@ -549,6 +550,14 @@ export function planSetup(
   const { actions, roleId: adminRoleId } = planRole(role, g);
 
   const categories = new Set(g.categories.map((c) => c.name));
+  // An existing 'SEMESTR 3' / 'semestr  3' is adopted for semester 3.
+  const adopted = new Map<string, string>();
+  for (const c of g.categories) {
+    const m = SEMESTER_RE.exec(c.name);
+    if (!m) continue;
+    const canonical = `Semestr ${Number(m[1])}`;
+    if (!adopted.has(canonical)) adopted.set(canonical, c.name);
+  }
   const forums = new Map(g.forums.map((f) => [f.id, f]));
   const ordered = [...subjects].sort(
     (a, b) => a.semester - b.semester || a.code.localeCompare(b.code),
@@ -571,7 +580,7 @@ export function planSetup(
     const topic = render(s);
 
     if (s.channelId === null) {
-      const category = categoryName(s);
+      const category = adopted.get(categoryName(s)) ?? categoryName(s);
       if ((inCategory.get(category) ?? 0) >= MAX_CATEGORY_CHANNELS) {
         skipped.set(category, [...(skipped.get(category) ?? []), s.code]);
         continue;
@@ -688,11 +697,17 @@ export function planSetup(
     codes.add(parsed.code);
     const catName = categoryById.get(f.parentId ?? '') ?? '';
     const m = SEMESTER_RE.exec(catName);
-    if (m && !isSemester(Number(m[1]))) {
+    if (!m && catName) {
       actions.push({
         type: 'warn',
         code: parsed.code,
-        message: `#${f.name} is under '${catName}'; imported as semester 1 — fix it with /subject edit.`,
+        message: `#${f.name} is not under a 'Semestr N' category; imported as semester 1 — fix it with /subject edit and move the forum.`,
+      });
+    } else if (m && !isSemester(Number(m[1]))) {
+      actions.push({
+        type: 'warn',
+        code: parsed.code,
+        message: `#${f.name} is under '${catName.trim()}'; imported as semester 1 — fix it with /subject edit and move the forum.`,
       });
     }
     actions.push({

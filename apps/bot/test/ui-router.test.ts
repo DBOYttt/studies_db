@@ -354,23 +354,21 @@ describe('handleUi', () => {
     const subj = component('v1:stu:groups:subj', {
       ephemeral: true,
       select: true,
-      values: ['0'],
+      values: [String(id.subj)],
     });
     await handler()(subj);
     expect(
       nodes(subj.editReply.mock.calls[0][0]).map((n) => n.custom_id),
     ).toContain(`v1:stu:groups:set:${id.cls}`);
 
-    // Out of range: no subject selected, not an error.
+    // Not a known subject id (a stale panel with a position): answered as stale.
     const far = component('v1:stu:groups:subj', {
       ephemeral: true,
       select: true,
-      values: ['99'],
+      values: ['99999'],
     });
     await handler()(far);
-    expect(
-      nodes(far.editReply.mock.calls[0][0]).map((n) => n.custom_id),
-    ).not.toContain(`v1:stu:groups:set:${id.cls}`);
+    expect(textOf(far.editReply.mock.calls[0][0])).toContain('out of date');
 
     const set = component(`v1:stu:groups:set:${id.cls}`, {
       ephemeral: true,
@@ -423,7 +421,7 @@ describe('handleUi', () => {
       .insert(users)
       .values({ discordUserId: 'stud', displayName: 'stud' })
       .$returningId();
-    const day = component('v1:stu:rem:day:1:0', { ephemeral: true });
+    const day = component(`v1:stu:rem:day:1:${id.subj}`, { ephemeral: true });
     await handler()(day);
     expect(day.calls).toEqual(['deferUpdate', 'editReply']);
     expect(await getReminderPrefs(db, u.id)).toMatchObject({

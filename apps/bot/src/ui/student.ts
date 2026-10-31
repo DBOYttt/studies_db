@@ -77,7 +77,7 @@ export type StudentAction =
   | { kind: 'planDay'; day: Date | null }
   | { kind: 'planWeek'; week: IsoWeek | null }
   | { kind: 'groupsOpen' }
-  | { kind: 'groupsSubject'; index: number }
+  | { kind: 'groupsSubject'; subjectId: number }
   | { kind: 'groupsSet'; classId: number; groupId: number | null }
   | { kind: 'groupsClear' }
   /** The "Import from UniTime" button: opens the link modal. */
@@ -216,7 +216,7 @@ export function parseStudentAction(
     if (sub !== 'day' && sub !== 'hour') return null;
     const subj = args[2];
     if (arg !== '0' && arg !== '1') return null;
-    if (subj !== undefined && !INDEX_RE.test(subj)) return null;
+    if (subj !== undefined && !ID_RE.test(subj)) return null;
     return {
       kind: 'remToggle',
       which: sub,
@@ -233,8 +233,12 @@ export function parseStudentAction(
         : null;
     const value = values[0];
     if (value === undefined || !INDEX_RE.test(value)) return null;
-    // Subject values are global indexes, so the page arg is not needed.
-    if (sub === 'subj') return { kind: 'groupsSubject', index: Number(value) };
+    // Subject values are subject ids, so the page arg is not needed.
+    if (sub === 'subj') {
+      return ID_RE.test(value)
+        ? { kind: 'groupsSubject', subjectId: Number(value) }
+        : null;
+    }
     if (sub === 'set' && arg !== undefined && ID_RE.test(arg)) {
       const groupId = Number(value);
       return {
@@ -344,14 +348,17 @@ async function showGroups(
   ctx: StudentContext,
   pick: (
     options: Awaited<ReturnType<typeof listMyGroupOptions>>,
-  ) => number | null,
+  ) => number | null | undefined,
 ): Promise<void> {
   const [options, my, rem] = await Promise.all([
     listMyGroupOptions(ctx.deps.pool),
     getMyGroups(ctx.deps.ingest.db, ctx.userId),
     getReminderPrefs(ctx.deps.ingest.db, ctx.userId),
   ]);
-  await ctx.show(groupsView(options, pick(options), my, rem));
+  const picked = pick(options);
+  // undefined: the choice is not a known subject (a stale panel).
+  if (picked === undefined) return ctx.show(notice(STALE_TEXT));
+  await ctx.show(groupsView(options, picked, my, rem));
 }
 
 /**
@@ -588,8 +595,13 @@ export async function runStudentAction(
     case 'groupsOpen':
       return showGroups(ctx, () => null);
     case 'groupsSubject':
-      // An index past the list (options changed since) selects nothing.
-      return showGroups(ctx, (o) => groupSubjects(o)[a.index]?.id ?? null);
+      // An id that is not a listed subject (gone, or an old positional
+      // value) is a stale panel.
+      return showGroups(ctx, (o) =>
+        groupSubjects(o).some((s) => s.id === a.subjectId)
+          ? a.subjectId
+          : undefined,
+      );
     case 'groupsSet':
       // A group not of this class is refused by setMyGroup; the re-render
       // then shows what is actually saved.
@@ -618,7 +630,9 @@ export async function runStudentAction(
         'discord',
       );
       return showGroups(ctx, (o) =>
-        a.subject === null ? null : (groupSubjects(o)[a.subject]?.id ?? null),
+        a.subject !== null && groupSubjects(o).some((s) => s.id === a.subject)
+          ? a.subject
+          : null,
       );
     }
     case 'login': {

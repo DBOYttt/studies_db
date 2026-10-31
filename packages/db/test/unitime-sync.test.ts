@@ -815,4 +815,35 @@ describe('feed semesters', () => {
     expect(text).toContain('Semester 3: +1 ~0 -2');
     expect(text).toContain('Semester 5: failed');
   });
+
+  it('planStatusText hides the per-semester lines of an older run after a failed one', () => {
+    const base = {
+      requestedAt: null,
+      lastOkAt: new Date('2026-10-12T10:30:00Z'),
+      stats: {
+        created: 1,
+        updated: 0,
+        deleted: 2,
+        unchanged: 0,
+        warnings: [],
+        feeds: [{ semester: 3, ok: true, created: 1, updated: 0, deleted: 2 }],
+      },
+    };
+    const failed = planStatusText(
+      {
+        ...base,
+        lastRunAt: new Date('2026-10-12T16:30:00Z'),
+        lastError: 'fetch failed',
+      },
+      new Date(),
+    );
+    expect(failed).toContain('Last sync:');
+    expect(failed).toContain('Error: fetch failed');
+    expect(failed).not.toContain('Semester 3');
+    const ok = planStatusText(
+      { ...base, lastRunAt: base.lastOkAt, lastError: null },
+      new Date(),
+    );
+    expect(ok).toContain('Semester 3: +1 ~0 -2');
+  });
 });

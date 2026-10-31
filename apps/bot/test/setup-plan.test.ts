@@ -458,10 +458,52 @@ describe('planSetup: Discord → DB', () => {
     expect(actions[0]).toMatchObject({
       type: 'warn',
       message: expect.stringMatching(
-        /^#.+ is under 'Semestr 9'; imported as semester 1 — fix it with \/subject edit\.$/,
+        /^#.+ is under 'Semestr 9'; imported as semester 1 — fix it with \/subject edit and move the forum\.$/,
       ),
     });
     expect(actions[1]).toMatchObject({ type: 'importForum', semester: 1 });
+  });
+
+  it.each([
+    ['SEMESTR 3', 3],
+    ['semestr  3', 3],
+    [' Semestr 3 ', 3],
+  ])('recognises the category %j', (name, sem) => {
+    const g = withRole({
+      categories: [{ id: 'cx', name }],
+      forums: [unlinkedForum({ parentId: 'cx' })],
+    });
+    const actions = planSetup([], g, ROLE, render);
+    expect(actions.find((x) => x.type === 'warn')).toBeUndefined();
+    expect(actions.find((x) => x.type === 'importForum')).toMatchObject({
+      semester: sem,
+    });
+  });
+
+  it('warns for a category that is not a recognised Semestr N', () => {
+    const g = withRole({
+      categories: [{ id: 'cr', name: 'Semestr III' }],
+      forums: [unlinkedForum({ parentId: 'cr' })],
+    });
+    const actions = planSetup([], g, ROLE, render).filter(
+      (x) => x.type === 'warn' || x.type === 'importForum',
+    );
+    expect(actions[0]).toMatchObject({
+      type: 'warn',
+      message: expect.stringMatching(
+        /^#.+ is not under a 'Semestr N' category; imported as semester 1 — fix it with \/subject edit and move the forum\.$/,
+      ),
+    });
+    expect(actions[1]).toMatchObject({ type: 'importForum', semester: 1 });
+  });
+
+  it('adopts a differently written category instead of creating a duplicate', () => {
+    const g = withRole({ categories: [{ id: 'cx', name: 'SEMESTR 3' }] });
+    const actions = planSetup([{ ...ASD, channelId: null }], g, ROLE, render);
+    expect(actions.some((x) => x.type === 'createCategory')).toBe(false);
+    expect(actions.find((x) => x.type === 'createForum')).toMatchObject({
+      categoryName: 'SEMESTR 3',
+    });
   });
 
   it('counts every channel in the category and lists up to 10 skipped codes', () => {

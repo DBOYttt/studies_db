@@ -87,7 +87,9 @@ export function planStatusText(s: PlanSyncStatus, _now: Date): string {
   } else {
     lines.push('Never synced.');
   }
-  for (const f of s.stats?.feeds ?? [])
+  // After a failed run the stats (and their feeds) are from an older run.
+  const stale = s.lastRunAt && s.lastOkAt && s.lastRunAt > s.lastOkAt;
+  for (const f of stale ? [] : (s.stats?.feeds ?? []))
     lines.push(
       f.ok
         ? `Semester ${f.semester}: +${f.created} ~${f.updated} -${f.deleted}`
