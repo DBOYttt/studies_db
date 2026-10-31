@@ -447,7 +447,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'BD',
     name: 'Bazy danych',
-    semester: 1,
+    semester: 2,
     ects: 5,
     description: 'Model relacyjny, SQL, normalizacja, transakcje, indeksy.',
     platformUrl: 'https://upel.example.edu/course/bd',
@@ -625,7 +625,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'AM2',
     name: 'Analiza matematyczna 2',
-    semester: 1,
+    semester: 2,
     ects: 6,
     description: 'Funkcje wielu zmiennych, całki wielokrotne, szeregi.',
     tags: ['Kolokwium', 'Egzamin', 'Zadania'],
@@ -692,7 +692,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'SK',
     name: 'Sieci komputerowe',
-    semester: 1,
+    semester: 2,
     ects: 4,
     description:
       'Model OSI/TCP-IP, adresacja, routing, protokoły warstwy aplikacji.',
@@ -788,7 +788,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'SYK',
     name: 'Systemy kontroli wersji',
-    semester: 3,
+    semester: 1,
     ects: 3,
     description: 'Git, gałęzie, przeglądy kodu i praca zespołowa.',
     tags: [],
@@ -808,7 +808,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'UM',
     name: 'Uczenie maszynowe',
-    semester: 5,
+    semester: 2,
     ects: 5,
     description: 'Regresja, klasyfikacja, sieci neuronowe, walidacja modeli.',
     tags: [],
@@ -826,7 +826,7 @@ const SUBJECTS: SubjectSpec[] = [
   {
     code: 'PD',
     name: 'Seminarium dyplomowe',
-    semester: 7,
+    semester: 2,
     ects: 2,
     description: 'Prezentacje postępów prac inżynierskich.',
     tags: [],
