@@ -19,6 +19,11 @@ const config: NextConfig = {
   poweredByHeader: false,
   // Dev only: a bigger compiled-page buffer for the QA sandbox (qa-serve.mjs).
   onDemandEntries: onDemandEntriesFromEnv(process.env),
+  // Dev only: extra hostnames (comma-separated, e.g. a LAN IP) that may load
+  // dev assets, so the dev server can be opened from a phone on the network.
+  allowedDevOrigins: process.env.DEV_ALLOWED_ORIGINS?.split(',')
+    .map((h) => h.trim())
+    .filter(Boolean),
   // Nothing uses next/image; keep /_next/image from fetching or resizing.
   images: { unoptimized: true },
   // "Import from UniTime" accepts a .ics upload of up to 2 MiB (checked again
