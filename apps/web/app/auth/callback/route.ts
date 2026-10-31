@@ -2,13 +2,13 @@ import { consumeLoginToken } from '@studies/db';
 import type { NextRequest } from 'next/server';
 import { getDb } from '@/lib/db';
 import { forbiddenOrigin, seeOther } from '@/lib/http';
+import { MAX_TOKEN_LEN } from '@/lib/install-app';
 import { safeLoginNext } from '@/lib/login-next';
 import { MODE_COOKIE, modeCookieOptions } from '@/lib/mode';
 import { isCrossOrigin } from '@/lib/same-origin';
 import { SESSION_COOKIE, sessionCookieOptions } from '@/lib/session';
 
 const EXPIRED = '/login-info?error=expired';
-const MAX_TOKEN_LEN = 512;
 
 const escapeHtml = (s: string) =>
   s.replace(
