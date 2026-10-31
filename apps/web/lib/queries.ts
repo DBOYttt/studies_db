@@ -764,9 +764,10 @@ const liveFiles = (cond: SQL) =>
   );
 
 /**
- * Subjects -> classes -> groups with live file counts, in one query. Every
- * class and group is listed (also empty ones); "Uncategorized" is added only
- * when the subject has files in topics without a class.
+ * Subjects (by semester, then name) -> classes -> groups with live file
+ * counts, in one query. Every class and group is listed (also empty ones);
+ * "Uncategorized" is added only when the subject has files in topics without
+ * a class.
  */
 export async function getNavSubjects(
   db: Db,
@@ -792,7 +793,12 @@ export async function getNavSubjects(
     .leftJoin(classes, eq(classes.subjectId, subjects.id))
     .leftJoin(classGroups, eq(classGroups.classId, classes.id))
     .where(semester == null ? undefined : eq(subjects.semester, semester))
-    .orderBy(asc(subjects.name), asc(subjects.code), asc(classGroups.number));
+    .orderBy(
+      asc(subjects.semester),
+      asc(subjects.name),
+      asc(subjects.code),
+      asc(classGroups.number),
+    );
 
   const out: (NavSubject & { none: number })[] = [];
   const bySubject = new Map<string, NavSubject & { none: number }>();

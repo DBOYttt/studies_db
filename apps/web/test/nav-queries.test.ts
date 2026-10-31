@@ -137,6 +137,27 @@ describe('getNavSubjects semester', () => {
     expect((await getNavSubjects(db, 2)).map((s) => s.code)).toEqual(['FIZ']);
     expect(await getNavSubjects(db, 5)).toEqual([]);
   });
+  it('sorts by semester, then name (like the other subject lists)', async () => {
+    const [{ id }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Zoologia',
+        code: 'ZOO',
+        semester: 1,
+        ects: 1,
+        discordChannelId: 'c-zoo',
+      })
+      .$returningId();
+    try {
+      expect((await getNavSubjects(db)).map((s) => s.code)).toEqual([
+        'ALG',
+        'ZOO',
+        'FIZ',
+      ]);
+    } finally {
+      await db.delete(subjects).where(eq(subjects.id, id));
+    }
+  });
 });
 
 describe('getNavSubjects', () => {
