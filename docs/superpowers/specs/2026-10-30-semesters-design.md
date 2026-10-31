@@ -69,7 +69,7 @@ New table `unitime_feeds`:
 The URLs are secrets (personal tokens in the query string). The table is not
 in `CONTENT_TABLES` (so `studies_rw` gets no grant) and has no public view. A
 URL is never logged, audited, shown in full or put in an error. The web shows
-only `host` and the last 4 characters of the URL (`plan.agh.edu.pl/…k3x9`).
+only `host` and a short sha256 fingerprint of the URL (`plan.agh.edu.pl/…#a1b2c3`, no path or query character).
 
 `class_sessions` gets `feed_semester tinyint NULL`: the semester feed that
 imported the row, NULL for the env feed (and for rows imported before this

@@ -5,6 +5,7 @@ import {
   type Db,
   getPlanSyncStatus,
   listFeeds,
+  maskFeedUrl,
   planSync,
   setFeed,
   upsertUser,
@@ -291,10 +292,9 @@ describe('loadFeedRows', () => {
     });
     const rows = await loadFeedRows(db);
     expect(rows.map((r) => r.semester)).toEqual([1, 2, 3, 4, 5, 6, 7]);
-    expect(rows[1]?.classMasked).toBe(
-      'plan.agh.edu.pl/…en1'.replace('en1', CLASS.slice(-4)),
-    );
-    expect(rows[1]?.examMasked).toContain('plan.agh.edu.pl/…');
+    expect(rows[1]?.classMasked).toBe(maskFeedUrl(CLASS));
+    expect(rows[1]?.classMasked).toMatch(/^plan\.agh\.edu\.pl\/…#[0-9a-f]{6}$/);
+    expect(rows[1]?.examMasked).toMatch(/^plan\.agh\.edu\.pl\/…#[0-9a-f]{6}$/);
     expect(rows[0]).toMatchObject({
       classMasked: null,
       examMasked: null,

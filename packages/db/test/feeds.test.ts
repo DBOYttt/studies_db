@@ -70,7 +70,16 @@ describe('validateFeedUrl', () => {
   it('masks', () => {
     expect(
       maskFeedUrl('https://plan.agh.edu.pl/UniTime/export?x=abcdk3x9'),
-    ).toBe('plan.agh.edu.pl/…k3x9');
+    ).toMatch(/^plan\.agh\.edu\.pl\/…#[0-9a-f]{6}$/);
+    const a = maskFeedUrl('https://plan.agh.edu.pl/UniTime/export?x=abcdk3x9');
+    expect(a).not.toContain('k3x9');
+    expect(a).not.toContain('UniTime');
+    expect(
+      maskFeedUrl('https://plan.agh.edu.pl/UniTime/export?x=abcdk3x8'),
+    ).not.toBe(a);
+    expect(a).toBe(
+      maskFeedUrl('https://plan.agh.edu.pl/UniTime/export?x=abcdk3x9'),
+    );
   });
 });
 

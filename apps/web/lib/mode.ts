@@ -73,7 +73,7 @@ function parse(next: string | null): { path: string; params: URLSearchParams } {
   return { path: u.pathname, params: u.searchParams };
 }
 
-function enc(segment: string): string {
+export function enc(segment: string): string {
   try {
     return encodeURIComponent(decodeURIComponent(segment));
   } catch {

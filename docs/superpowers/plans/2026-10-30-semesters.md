@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - Never `drizzle-kit push`; generate migrations with `pnpm --filter @studies/db exec drizzle-kit generate --name <name>` and validate with `node .claude/skills/create-migration/check-migrations.mjs`.
-- Feed URLs are secrets: never in logs, audit payloads, errors, HTML (only `host` + `/…` + last 4 chars), never in `CONTENT_TABLES`, `PUBLIC_VIEWS` or any `studies_rw` grant.
+- Feed URLs are secrets: never in logs, audit payloads, errors, HTML (only `host` + `/…#` + 6-hex sha256 fingerprint), never in `CONTENT_TABLES`, `PUBLIC_VIEWS` or any `studies_rw` grant.
 - UI strings English (`pnpm check:lang`); Discord category names stay Polish `Semestr N`; log messages may be Polish.
 - Client components import only from `@studies/db/constants` and `@studies/db/fields`.
 - Every page/route handler calls `requireUser()`; every admin page/action calls `requireAdmin()`; redirect targets go through `safeNext`.

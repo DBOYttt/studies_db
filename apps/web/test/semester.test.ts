@@ -120,6 +120,33 @@ describe('GET /semester', () => {
     }
   });
 
+  it('does not 500 on a non-ASCII next', async () => {
+    const res = await call('to=2&next=/s/%C5%BC');
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/s/%C5%BC');
+    const raw = await call(`to=2&next=${encodeURIComponent('/s/ż?q=ą')}`);
+    expect(raw.headers.get('location')).toBe('/s/%C5%BC?q=%C4%85');
+  });
+
+  it('leaves the cookie alone on a cross-site request', async () => {
+    const { GET } = await import('../app/semester/route');
+    const { NextRequest } = await import('next/server');
+    const res = await GET(
+      new NextRequest('http://localhost/semester?to=4&next=/s/plan', {
+        headers: { 'sec-fetch-site': 'cross-site' },
+      }),
+    );
+    expect(res.status).toBe(303);
+    expect(res.headers.get('location')).toBe('/s/plan');
+    expect(res.cookies.get('studiesdb.semester')).toBeUndefined();
+    const same = await GET(
+      new NextRequest('http://localhost/semester?to=4&next=/s/plan', {
+        headers: { 'sec-fetch-site': 'same-origin' },
+      }),
+    );
+    expect(same.cookies.get('studiesdb.semester')?.value).toBe('4');
+  });
+
   it('marks the cookie secure in production only', () => {
     vi.stubEnv('NODE_ENV', 'production');
     expect(semesterCookieOptions().secure).toBe(true);

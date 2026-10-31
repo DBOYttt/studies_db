@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { asc, eq } from 'drizzle-orm';
 import { isSemester, type Semester } from '../admin-fields.js';
 import type { DbExecutor } from '../client.js';
@@ -56,7 +57,7 @@ export function validateFeedUrl(
   return { ok: true, url: text, host };
 }
 
-/** Shows a feed link without its secret: host plus the last 4 characters. */
+/** Shows a feed link without its secret: host plus a short sha256 fingerprint (never any path or query character). */
 export function maskFeedUrl(url: string): string {
   let host: string;
   try {
@@ -64,7 +65,8 @@ export function maskFeedUrl(url: string): string {
   } catch {
     return '(invalid link)';
   }
-  return `${host}/…${url.slice(-4)}`;
+  const tag = createHash('sha256').update(url).digest('hex').slice(0, 6);
+  return `${host}/…#${tag}`;
 }
 
 export interface StoredFeed {

@@ -196,6 +196,30 @@ describe('studies_rw grants', () => {
     });
   });
 
+  describe('class_sessions feed columns', () => {
+    const denied = [
+      "UPDATE class_sessions SET source = 'exams'",
+      'UPDATE class_sessions SET feed_semester = 1',
+      "UPDATE class_sessions SET source = 'exams', feed_semester = 2",
+      'REPLACE INTO class_sessions (id, feed_semester) VALUES (1, 1)',
+    ];
+    it.each(denied)('refuses: %s', async (sql) => {
+      await asRw(async (c) => {
+        await expect(c.query(sql)).rejects.toMatchObject({
+          errno: expect.toSatisfy((n: number) => [1142, 1143].includes(n)),
+        });
+      });
+    });
+
+    it('may read them and edit other columns', async () => {
+      await asRw(async (c) => {
+        await c.query('SELECT source, feed_semester FROM class_sessions');
+        await c.query('UPDATE class_sessions SET uid = uid WHERE id = -1');
+        await c.query('DELETE FROM class_sessions WHERE id = -1');
+      });
+    });
+  });
+
   it('is idempotent and resets manual extra grants', async () => {
     const url = process.env.TEST_DATABASE_URL as string;
     const admin = await mysql.createConnection({ uri: url });

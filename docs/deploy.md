@@ -314,7 +314,7 @@ is set too (the env fallback; stored feeds carry their own optional exam link).
 Migration 0027 adds the `unitime_feeds` table (one row per semester 1-7: class link, optional exam link) and
 the nullable column `class_sessions.feed_semester`. It has no backfill: existing sessions keep
 `feed_semester` NULL. Feed URLs are secrets stored in that table, which `studies_ro` and `studies_rw` cannot
-read; the admin panel shows only host + `/...` + the last 4 characters and the audit log keeps hosts only.
+read; the admin panel shows only host + `/…#` + a short sha256 fingerprint and the audit log keeps hosts only.
 
 1. Back up (`scripts/backup.sh`).
 2. Deploy (`compose up`; `migrate` applies 0027).
