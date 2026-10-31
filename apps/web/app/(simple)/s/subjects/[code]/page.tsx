@@ -26,6 +26,7 @@ import {
   listSubjectLecturers,
   listSubjectTags,
 } from '@/lib/queries';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { chipHref, groupLecturers, parseSimpleFilters } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
@@ -65,7 +66,7 @@ export default async function SimpleSubject({
   const subject = await loadSubject(code);
   if (!subject) notFound();
   const [cards, classes, tags, lecturerRows, upcoming] = await Promise.all([
-    cachedSubjectCards(),
+    cachedSubjectCards(await currentSemester(sp)),
     listSubjectClasses(db, subject.id),
     listSubjectTags(db, subject.id),
     listSubjectLecturers(db, subject.id),
@@ -92,7 +93,7 @@ export default async function SimpleSubject({
       tagId: cur.tag ?? undefined,
       limit: MAX_FILES,
     }),
-    loadSimplePreview(db, sp, cards),
+    loadSimplePreview(db, sp, cachedSubjectCards()),
     // The selected class only (the timetable's "Edit" lands here), else all.
     loadEntryQuiz(db, cls ? [cls] : classes, {
       isAdmin: user.isAdmin,

@@ -24,6 +24,7 @@ import {
   myGroupsHref,
   nextSessionWhat,
   panelDescription,
+  planFilterLabel,
   SAVE_FAILED,
   sessionLinks,
   sessionPanelHeading,
@@ -569,5 +570,14 @@ describe('syncLine', () => {
     expect(syncLine(null)).toBe(
       'Not synced from UniTime yet. The timetable shows the classes stored so far.',
     );
+  });
+});
+
+describe('planFilterLabel', () => {
+  it('names the semester and My groups, whichever apply', () => {
+    expect(planFilterLabel(3, true)).toBe('Filter: Semester 3 · My groups');
+    expect(planFilterLabel(null, true)).toBe('Filter: My groups');
+    expect(planFilterLabel(5, false)).toBe('Filter: Semester 5');
+    expect(planFilterLabel(null, false)).toBeNull();
   });
 });

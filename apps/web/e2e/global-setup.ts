@@ -687,6 +687,93 @@ export default async function globalSetup() {
     );
     if (!uklQuiz.ok) throw new Error(`e2e UKL entry quiz: ${uklQuiz.message}`);
 
+    // Semester switcher (semesters.spec.ts): subject SEM3 (semester 3) with a
+    // class, a group, a session today and an event a few days ahead. FIZ
+    // (semester 1) is the other side of the filter.
+    const [{ id: sem3Id }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Semestr trzeci',
+        code: 'SEM3',
+        semester: 3,
+        ects: 2,
+        discordChannelId: 'e2e-ch-sem3',
+      })
+      .$returningId();
+    const sem3Cw = await ensureClass(db, sem3Id, 'cwiczenia');
+    const sem3Gr1 = await ensureGroup(db, sem3Cw, 1);
+    await db
+      .insert(classSessions)
+      .values(
+        session(
+          'e2e-sem3-today',
+          sem3Id,
+          sem3Cw,
+          sem3Gr1,
+          null,
+          'Ćwiczenia gr 1',
+          'S-3 303',
+          today(16),
+          today(17, 30),
+        ),
+      );
+    await db.insert(events).values({
+      kind: 'inne',
+      title: 'Wyjazd trzeciego semestru',
+      subjectId: sem3Id,
+      startsAt: ahead(3, 10),
+      endsAt: ahead(3, 12),
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    // Semester 1 counterpart (SEM1): a session today and an event in 2 days,
+    // both on page 1 / in the current week, gone once semester 3 is chosen.
+    const [{ id: sem1Id }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Semestr pierwszy',
+        code: 'SEM1',
+        semester: 1,
+        ects: 2,
+        discordChannelId: 'e2e-ch-sem1',
+      })
+      .$returningId();
+    const sem1Cw = await ensureClass(db, sem1Id, 'cwiczenia');
+    const sem1Gr1 = await ensureGroup(db, sem1Cw, 1);
+    await db
+      .insert(classSessions)
+      .values(
+        session(
+          'e2e-sem1-today',
+          sem1Id,
+          sem1Cw,
+          sem1Gr1,
+          null,
+          'Ćwiczenia gr 1',
+          'S-1 101',
+          today(18),
+          today(19, 30),
+        ),
+      );
+    await db.insert(events).values({
+      kind: 'inne',
+      title: 'Wyjazd pierwszego semestru',
+      subjectId: sem1Id,
+      startsAt: ahead(2, 10),
+      endsAt: ahead(2, 12),
+      createdBy: userId,
+      updatedBy: userId,
+    });
+    const semestersUserId = await upsertUser(db, {
+      discordUserId: 'e2e-semesters',
+      displayName: 'Sylwia Semestralna',
+      avatarUrl: null,
+    });
+    process.env.E2E_TOKEN_SEMESTERS = await createLoginToken(
+      db,
+      semestersUserId,
+    );
+
     // Audit log (admin.spec.ts) and mobile pages (mobile.spec.ts): an event
     // far ahead, with its event.add audit row.
     const [{ id: auditEventId }] = await db
@@ -807,6 +894,8 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_EVENTS_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_ADMIN_SIMPLE = await createLoginToken(db, adminId);
+    // Timetable feeds card (semesters.spec.ts).
+    process.env.E2E_TOKEN_SEMESTERS_ADMIN = await createLoginToken(db, adminId);
     // Sync tab report page (admin-round2.spec.ts): a finished resync with a
     // short report.
     const [adminReq] = await db.insert(botRequests).values({

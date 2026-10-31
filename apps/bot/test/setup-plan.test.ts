@@ -323,6 +323,41 @@ describe('planSetup', () => {
     ).toEqual(['Semestr 1', 'AA', 'ZZ', 'Semestr 3', 'ASD']);
   });
 
+  it('orders categories numerically, 10 after 7', () => {
+    const mk = (id: number, semester: number) => ({
+      ...ASD,
+      id,
+      code: `C${id}`,
+      semester,
+    });
+    const actions = planSetup(
+      [mk(1, 10), mk(2, 7), mk(3, 2)],
+      withRole({ categories: [] }),
+      ROLE,
+      render,
+    );
+    expect(
+      actions.flatMap((a) => (a.type === 'createCategory' ? [a.name] : [])),
+    ).toEqual(['Semestr 2', 'Semestr 7', 'Semestr 10']);
+  });
+
+  it('plans 50 forums and one warning for 51 subjects in a semester', () => {
+    const many = Array.from({ length: 51 }, (_, i) => ({
+      ...ASD,
+      id: 100 + i,
+      code: `M${String(i).padStart(2, '0')}`,
+      semester: 4,
+    }));
+    const actions = planSetup(many, withRole({ categories: [] }), ROLE, render);
+    expect(actions.filter((a) => a.type === 'createForum')).toHaveLength(50);
+    const warns = actions.filter(
+      (a) =>
+        a.type === 'warn' &&
+        a.message.startsWith('Semestr 4 has no room for more channels'),
+    );
+    expect(warns).toHaveLength(1);
+  });
+
   it('is a no-op once everything exists', () => {
     const linked = { ...ASD, channelId: 'f-asd' };
     const g = withRole({
@@ -410,6 +445,95 @@ describe('planSetup: Discord → DB', () => {
     const g = withRole({ forums: [unlinkedForum({ parentId: 'c3' })] });
     const [a] = planSetup([], g, ROLE, render);
     expect(a).toMatchObject({ type: 'importForum', semester: 3 });
+  });
+
+  it('warns and imports as semester 1 under an out-of-range Semestr N', () => {
+    const g = withRole({
+      categories: [{ id: 'c9', name: 'Semestr 9' }],
+      forums: [unlinkedForum({ parentId: 'c9' })],
+    });
+    const actions = planSetup([], g, ROLE, render).filter(
+      (x) => x.type === 'warn' || x.type === 'importForum',
+    );
+    expect(actions[0]).toMatchObject({
+      type: 'warn',
+      message: expect.stringMatching(
+        /^#.+ is under 'Semestr 9'; imported as semester 1 — fix it with \/subject edit and move the forum\.$/,
+      ),
+    });
+    expect(actions[1]).toMatchObject({ type: 'importForum', semester: 1 });
+  });
+
+  it.each([
+    ['SEMESTR 3', 3],
+    ['semestr  3', 3],
+    [' Semestr 3 ', 3],
+  ])('recognises the category %j', (name, sem) => {
+    const g = withRole({
+      categories: [{ id: 'cx', name }],
+      forums: [unlinkedForum({ parentId: 'cx' })],
+    });
+    const actions = planSetup([], g, ROLE, render);
+    expect(actions.find((x) => x.type === 'warn')).toBeUndefined();
+    expect(actions.find((x) => x.type === 'importForum')).toMatchObject({
+      semester: sem,
+    });
+  });
+
+  it('warns for a category that is not a recognised Semestr N', () => {
+    const g = withRole({
+      categories: [{ id: 'cr', name: 'Semestr III' }],
+      forums: [unlinkedForum({ parentId: 'cr' })],
+    });
+    const actions = planSetup([], g, ROLE, render).filter(
+      (x) => x.type === 'warn' || x.type === 'importForum',
+    );
+    expect(actions[0]).toMatchObject({
+      type: 'warn',
+      message: expect.stringMatching(
+        /^#.+ is not under a 'Semestr N' category; imported as semester 1 — fix it with \/subject edit and move the forum\.$/,
+      ),
+    });
+    expect(actions[1]).toMatchObject({ type: 'importForum', semester: 1 });
+  });
+
+  it('adopts a differently written category instead of creating a duplicate', () => {
+    const g = withRole({ categories: [{ id: 'cx', name: 'SEMESTR 3' }] });
+    const actions = planSetup([{ ...ASD, channelId: null }], g, ROLE, render);
+    expect(actions.some((x) => x.type === 'createCategory')).toBe(false);
+    expect(actions.find((x) => x.type === 'createForum')).toMatchObject({
+      categoryName: 'SEMESTR 3',
+    });
+  });
+
+  it('counts every channel in the category and lists up to 10 skipped codes', () => {
+    const many = Array.from({ length: 14 }, (_, i) => ({
+      ...ASD,
+      id: 200 + i,
+      code: `K${String(i).padStart(2, '0')}`,
+      semester: 4,
+    }));
+    const g = withRole({
+      categories: [{ id: 'c4', name: 'Semestr 4' }],
+      categoryChannelCounts: { c4: 45 },
+    });
+    const actions = planSetup(many, g, ROLE, render);
+    expect(actions.filter((x) => x.type === 'createForum')).toHaveLength(5);
+    const warn = actions.find((x) => x.type === 'warn');
+    expect(warn).toMatchObject({
+      message:
+        'Semestr 4 has no room for more channels (Discord allows 50 per category); not created: K05, K06, K07, K08, K09, K10, K11, K12, K13',
+    });
+    const more = planSetup(
+      [
+        ...many,
+        ...many.map((m) => ({ ...m, id: m.id + 50, code: `L${m.code}` })),
+      ],
+      g,
+      ROLE,
+      render,
+    ).find((x) => x.type === 'warn');
+    expect(more?.type === 'warn' && more.message.endsWith(', …')).toBe(true);
   });
 
   it('skips with a warning when the code clashes with the DB or another forum', () => {

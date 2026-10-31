@@ -360,15 +360,34 @@ export function weekDays(sessions: PlanSession[], w: IsoWeek): Date[] {
 export interface PlanFilter {
   subjectId?: number;
   lecturerId?: number;
+  /** Only sessions of subjects in this semester (1-7). */
+  semester?: number | null;
 }
 
 /** Wall Date → DATETIME literal (UTC fields are the wall clock). */
 export const wallSql = (d: Date) =>
   d.toISOString().slice(0, 19).replace('T', ' ');
 
-export function filterWhere(f: PlanFilter, alias: string) {
+/**
+ * WHERE parts for a plan filter. The semester condition is `s.semester = ?`
+ * when the caller joins `v_subjects` under `subjectAlias`, otherwise a
+ * subquery on `v_subjects`, so callers reading `v_class_sessions` alone work.
+ */
+export function filterWhere(
+  f: PlanFilter,
+  alias: string,
+  subjectAlias?: string,
+) {
   const where: string[] = [];
   const params: (string | number)[] = [];
+  if (f.semester != null) {
+    where.push(
+      subjectAlias
+        ? `${subjectAlias}.semester = ?`
+        : `${alias}subject_id IN (SELECT id FROM v_subjects WHERE semester = ?)`,
+    );
+    params.push(f.semester);
+  }
   if (f.subjectId !== undefined) {
     where.push(`${alias}subject_id = ?`);
     params.push(f.subjectId);
@@ -411,7 +430,7 @@ export function weekSessionsQuery(
   w: IsoWeek,
   f: PlanFilter = {},
 ): { sql: string; params: (string | number)[] } {
-  const extra = filterWhere(f, 'cs.');
+  const extra = filterWhere(f, 'cs.', 's');
   const where = ['cs.starts_at >= ?', 'cs.starts_at < ?', ...extra.where];
   const params = [
     wallSql(weekStart(w)),
@@ -443,7 +462,9 @@ export async function listWeekSessionRows(
 
 export interface MyGroupOption {
   classId: number;
+  subjectId: number;
   subjectName: string;
+  semester: number;
   className: string;
   groups: { id: number; name: string }[];
 }
@@ -455,18 +476,21 @@ export interface MyGroupOption {
  */
 export async function listMyGroupOptions(
   pool: mysql.Pool,
+  semester?: number | null,
 ): Promise<MyGroupOption[]> {
+  const bySemester = semester == null ? '' : ' AND s.semester = ?';
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `SELECT c.id AS class_id, c.kind, c.name AS class_name,
-            s.id AS subject_id, s.name AS subject_name,
+            s.id AS subject_id, s.name AS subject_name, s.semester,
             g.id AS group_id, g.name AS group_name
        FROM v_classes c
        JOIN v_subjects s ON s.id = c.subject_id
        JOIN v_class_groups g ON g.class_id = c.id
-      WHERE ${hasSessionSql('')}
+      WHERE ${hasSessionSql('')}${bySemester}
       ORDER BY c.id, g.number`,
+    semester == null ? [] : [semester],
   );
-  type Row = MyGroupOption & { subjectId: number; order: number };
+  type Row = MyGroupOption & { order: number };
   const byClass = new Map<number, Row>();
   for (const r of rows) {
     const classId = Number(r.class_id);
@@ -474,10 +498,11 @@ export async function listMyGroupOptions(
     if (!o) {
       o = {
         classId,
+        subjectId: Number(r.subject_id),
         subjectName: String(r.subject_name),
+        semester: Number(r.semester),
         className: String(r.class_name),
         groups: [],
-        subjectId: Number(r.subject_id),
         order: KIND_ORDER.indexOf(r.kind as ClassKind),
       };
       byClass.set(classId, o);
@@ -492,5 +517,5 @@ export async function listMyGroupOptions(
         a.order - b.order ||
         a.classId - b.classId,
     )
-    .map(({ subjectId: _s, order: _o, ...rest }) => rest);
+    .map(({ order: _o, ...rest }) => rest);
 }

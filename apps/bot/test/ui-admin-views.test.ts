@@ -113,6 +113,7 @@ const subjects = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
     code: `S${String(i).padStart(2, '0')}`,
     name: `Przedmiot ${i}`,
+    semester: (i % 7) + 1,
   }));
 const lecturers = (n: number) =>
   Array.from({ length: n }, (_, i) => ({
@@ -282,6 +283,13 @@ describe('subjectPicker', () => {
     expect(button(last, 'v1:adm:subj:list:2').disabled).toBe(true);
   });
 
+  it('prefixes labels with the semester only past 25 subjects', () => {
+    const big = selects(subjectPicker(subjects(30), 0))[0].options[0].label;
+    expect(big).toBe('S1 · S00 Przedmiot 0');
+    const small = selects(subjectPicker(subjects(25), 0))[0].options[0].label;
+    expect(small).toBe('S00 Przedmiot 0');
+  });
+
   it('clamps an out-of-range page and handles one or no pages', () => {
     const v = subjectPicker(subjects(30), 9);
     expect(selects(v)[0].options[0].value).toBe('S25');
@@ -300,7 +308,10 @@ describe('subjectPicker', () => {
   });
 
   it('clips long names in labels', () => {
-    const v = subjectPicker([{ code: 'X', name: 'n'.repeat(300) }], 0);
+    const v = subjectPicker(
+      [{ code: 'X', name: 'n'.repeat(300), semester: 1 }],
+      0,
+    );
     expectValid(v);
   });
 });
@@ -541,6 +552,12 @@ describe('modals', () => {
       'ects',
       'description',
     ]);
+  });
+
+  it('subjectModal(): the semester label gives the range', () => {
+    const json = JSON.stringify(subjectModal().toJSON());
+    expect(json).toContain('"Semester (1–7)"');
+    expect(json).not.toContain(' or ');
   });
 
   it('subjectModal(existing) has no code field and is prefilled', () => {

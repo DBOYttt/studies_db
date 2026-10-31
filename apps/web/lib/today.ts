@@ -1,7 +1,8 @@
 /**
  * "Today" on the start page: the class sessions of the student's Warsaw day
  * under My groups (every group while none is picked), and the next class
- * when the day has none. Fixed queries on the views pool.
+ * when the day has none, both limited to the chosen semester when there is
+ * one. Fixed queries on the views pool.
  */
 import type { DbExecutor } from '@studies/db';
 import { toPlanSession, wallSql } from '@studies/db/plan';
@@ -51,16 +52,28 @@ const SELECT = `SELECT cs.id, cs.starts_at, cs.ends_at, cs.subject_id,
        FROM v_class_sessions cs
        JOIN v_subjects s ON s.id = cs.subject_id`;
 
+/** `s.semester = ?` (bound) with a semester, else no condition. */
+function semesterWhere(semester: number | null): {
+  sql: string;
+  params: number[];
+} {
+  return semester === null
+    ? { sql: 'TRUE', params: [] }
+    : { sql: 's.semester = ?', params: [semester] };
+}
+
 async function sessionsBetween(
   pool: mysql.Pool,
   from: Date,
   to: Date,
+  semester: number | null,
 ): Promise<PlanSession[]> {
+  const sem = semesterWhere(semester);
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `${SELECT}
-      WHERE cs.starts_at >= ? AND cs.starts_at < ?
+      WHERE cs.starts_at >= ? AND cs.starts_at < ? AND ${sem.sql}
       ORDER BY cs.starts_at, cs.ends_at, cs.id`,
-    [wallSql(from), wallSql(to)],
+    [wallSql(from), wallSql(to), ...sem.params],
   );
   return rows.map(toPlanSession);
 }
@@ -91,14 +104,17 @@ async function nextConfirmed(
   pool: mysql.Pool,
   from: Date,
   mine: MyGroups,
+  semester: number | null,
 ): Promise<PlanSession | null> {
   const g = myGroupsWhere(mine);
+  const sem = semesterWhere(semester);
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `${SELECT}
       WHERE cs.starts_at >= ? AND cs.status = 'confirmed' AND ${g.sql}
+        AND ${sem.sql}
       ORDER BY cs.starts_at, cs.ends_at, cs.id
       LIMIT 1`,
-    [wallSql(from), ...g.params],
+    [wallSql(from), ...g.params, ...sem.params],
   );
   return rows[0] ? toPlanSession(rows[0]) : null;
 }
@@ -108,18 +124,23 @@ export async function todayForUser(
   pool: mysql.Pool,
   userId: number,
   now: Date,
-  /** My groups already being loaded for this request (`loadMyGroups`). */
-  opts: { mine?: Promise<MyGroups> } = {},
+  opts: {
+    /** My groups already being loaded for this request (`loadMyGroups`). */
+    mine?: Promise<MyGroups>;
+    /** The chosen semester: only its subjects' sessions. */
+    semester?: number | null;
+  } = {},
 ): Promise<TodayClasses> {
   const { start, end } = wallDay(now);
+  const semester = opts.semester ?? null;
   const [day, mine] = await Promise.all([
-    sessionsBetween(pool, start, end),
+    sessionsBetween(pool, start, end, semester),
     opts.mine ?? loadMyGroups(db, pool, userId),
   ]);
   const sessions = filterMyGroups(day, mine);
   const next = sessions.some((s) => s.status === 'confirmed')
     ? null
-    : await nextConfirmed(pool, end, mine);
+    : await nextConfirmed(pool, end, mine, semester);
   return {
     day: start,
     sessions,

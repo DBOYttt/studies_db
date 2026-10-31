@@ -1,7 +1,11 @@
 /** Pure helpers of the /admin/sync page (admin bot requests). */
 import {
   type AdminRequestKind,
+  type Db,
   isCancelled,
+  listFeeds,
+  maskFeedUrl,
+  SEMESTERS,
   STUCK_AFTER_MS,
 } from '@studies/db';
 
@@ -66,3 +70,52 @@ export const reportLabel = (chars: number): string =>
   `Report (${countFmt.format(chars)} chars)`;
 
 export const requestHref = (id: number): string => `/admin/sync/requests/${id}`;
+
+export type FeedRow = {
+  semester: number;
+  classMasked: string | null;
+  examMasked: string | null;
+  updatedAt: Date | null;
+};
+
+/**
+ * One row per semester (always 7) for the Timetable feeds card. Only the
+ * masked form of a link leaves this function: the stored link is a secret.
+ */
+export async function loadFeedRows(db: Db): Promise<FeedRow[]> {
+  const stored = new Map((await listFeeds(db)).map((f) => [f.semester, f]));
+  return SEMESTERS.map((semester) => {
+    const f = stored.get(semester);
+    return {
+      semester,
+      classMasked: f ? maskFeedUrl(f.classUrl) : null,
+      examMasked: f?.examUrl ? maskFeedUrl(f.examUrl) : null,
+      updatedAt: f?.updatedAt ?? null,
+    };
+  });
+}
+
+const hhmm = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Warsaw',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * The Timetable card's line while a sync request waits for the worker (no
+ * run since it was requested), else null.
+ */
+export function planPendingText(plan: {
+  requestedAt: Date | null;
+  lastRunAt: Date | null;
+}): string | null {
+  const { requestedAt, lastRunAt } = plan;
+  if (requestedAt === null) return null;
+  if (lastRunAt !== null && requestedAt <= lastRunAt) return null;
+  return `Sync requested at ${hhmm.format(requestedAt)} (Warsaw), waiting for the worker.`;
+}
+
+/** The Class feed input's hint: the first allowed host, like the refusal. */
+export const feedHostHint = (hosts: readonly string[]): string =>
+  `Only https links on ${hosts[0] ?? 'the configured host'}.`;

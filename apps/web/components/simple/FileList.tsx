@@ -153,17 +153,27 @@ export function FileList({
   baseHref: string;
   q?: string;
   emptyText?: string;
-  emptyAction?: { label: string; href: string };
+  /** `reload`: a plain link (a route handler such as `/semester`, never prefetched). */
+  emptyAction?: { label: string; href: string; reload?: boolean };
 }) {
   if (files.length === 0) {
     return (
       <div className="flex flex-col items-center gap-2 rounded-lg border border-line-strong bg-panel px-4 py-8 text-center text-muted">
         <FolderDashed size={28} className="text-subtle" aria-hidden />
         <span>{emptyText}</span>
-        {emptyAction && (
-          <Link href={emptyAction.href} className="link">
+        {emptyAction?.reload ? (
+          <a
+            href={emptyAction.href}
+            className="link max-sm:inline-flex max-sm:min-h-11 max-sm:items-center"
+          >
             {emptyAction.label}
-          </Link>
+          </a>
+        ) : (
+          emptyAction && (
+            <Link href={emptyAction.href} className="link">
+              {emptyAction.label}
+            </Link>
+          )
         )}
       </div>
     );

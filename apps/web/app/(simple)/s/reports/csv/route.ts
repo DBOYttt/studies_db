@@ -1,7 +1,8 @@
 import { toCsv } from '@/lib/csv';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
-import { EXAMPLE_QUERIES } from '@/lib/example-queries';
+import { reportQuery } from '@/lib/example-queries';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import {
   MAX_ROWS,
@@ -14,14 +15,24 @@ import { runReadonlyQuery } from '@/lib/sql-console';
 
 export const dynamic = 'force-dynamic';
 
-/** CSV of one ready-made report (`?r=0..2`), headed by the English labels. */
+/**
+ * CSV of one ready-made report (`?r=0..2`), headed by the English labels,
+ * for the chosen semester like the page.
+ */
 export async function GET(req: Request) {
   await requireUser();
-  const r = parseReportIndex(new URL(req.url).searchParams.getAll('r'));
+  const params = new URL(req.url).searchParams;
+  const r = parseReportIndex(params.getAll('r'));
+  // The same semester as the page: `?sem=`, else the cookie.
+  const q = reportQuery(
+    r,
+    await currentSemester({ sem: params.get('sem') ?? undefined }),
+  );
   let res: Awaited<ReturnType<typeof runReadonlyQuery>>;
   try {
-    res = await runReadonlyQuery(getRoPool(), EXAMPLE_QUERIES[r].sql, {
+    res = await runReadonlyQuery(getRoPool(), q.sql, {
       maxRows: MAX_ROWS,
+      values: q.values,
     });
   } catch (err) {
     res = { ok: false, error: roErrorMessage(err) };

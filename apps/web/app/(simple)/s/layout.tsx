@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { SemesterProvider } from '@/components/SemesterSwitcher';
+import { cachedPresentSemesters } from '@/lib/count-cache';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
 /**
@@ -12,5 +15,14 @@ export default async function SimpleLayout({
   children: ReactNode;
 }) {
   await requireUser();
-  return children;
+  // Layouts get no searchParams: follows the cookie only (see the app layout).
+  const [current, present] = await Promise.all([
+    currentSemester({}),
+    cachedPresentSemesters(),
+  ]);
+  return (
+    <SemesterProvider present={present} current={current}>
+      {children}
+    </SemesterProvider>
+  );
 }

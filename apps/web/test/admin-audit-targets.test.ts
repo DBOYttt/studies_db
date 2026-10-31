@@ -144,3 +144,14 @@ describe('loadAuditTargets', () => {
     ).toBe(0);
   });
 });
+
+describe('semester targets', () => {
+  it('names semester:<n> as "Semester n"', async () => {
+    const { parseAuditTarget } = await import('../lib/admin-audit');
+    expect(parseAuditTarget('plan.feed_set', 'semester:3')).toEqual({
+      type: 'semester',
+      n: 3,
+    });
+    expect(parseAuditTarget('plan.feed_set', 'semester:8')).toBeNull();
+  });
+});

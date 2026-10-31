@@ -202,6 +202,19 @@ describe('commandDefinitions', () => {
     expect(find('lecturer', 'add', 'email')).toBe(200);
   });
 
+  it('offers semesters 1 to 7 as slash choices', () => {
+    type Opt = { name: string; choices?: { value: number }[]; options?: Opt[] };
+    const found: number[][] = [];
+    const walk = (o: Opt) => {
+      if (o.name === 'semester' && o.choices)
+        found.push(o.choices.map((c) => c.value));
+      for (const x of o.options ?? []) walk(x);
+    };
+    for (const c of commandDefinitions) walk(c as unknown as Opt);
+    expect(found.length).toBeGreaterThan(0);
+    for (const f of found) expect(f).toEqual([1, 2, 3, 4, 5, 6, 7]);
+  });
+
   it('lecturer assign takes class choices and optional group 1-99', () => {
     type Opt = {
       name: string;

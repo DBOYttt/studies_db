@@ -131,6 +131,35 @@ afterAll(async () => {
   await closeTestDb(db);
 });
 
+describe('getNavSubjects semester', () => {
+  it('lists only the subjects of the semester', async () => {
+    expect((await getNavSubjects(db, 1)).map((s) => s.code)).toEqual(['ALG']);
+    expect((await getNavSubjects(db, 2)).map((s) => s.code)).toEqual(['FIZ']);
+    expect(await getNavSubjects(db, 5)).toEqual([]);
+  });
+  it('sorts by semester, then name (like the other subject lists)', async () => {
+    const [{ id }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Zoologia',
+        code: 'ZOO',
+        semester: 1,
+        ects: 1,
+        discordChannelId: 'c-zoo',
+      })
+      .$returningId();
+    try {
+      expect((await getNavSubjects(db)).map((s) => s.code)).toEqual([
+        'ALG',
+        'ZOO',
+        'FIZ',
+      ]);
+    } finally {
+      await db.delete(subjects).where(eq(subjects.id, id));
+    }
+  });
+});
+
 describe('getNavSubjects', () => {
   it('lists subjects by name with classes, groups and live file counts', async () => {
     const nav = await getNavSubjects(db);
@@ -138,6 +167,7 @@ describe('getNavSubjects', () => {
     expect(nav[0]).toEqual({
       code: 'ALG',
       name: 'Algebra',
+      semester: 1,
       fileCount: 0,
       href: '/subjects/ALG',
       classes: [],

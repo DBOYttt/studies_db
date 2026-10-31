@@ -2,6 +2,7 @@ import { getTableColumns } from 'drizzle-orm';
 import type { MySqlTable } from 'drizzle-orm/mysql-core';
 import mysql from 'mysql2/promise';
 import {
+  CLASS_SESSION_FEED_COLUMNS,
   CONTENT_TABLES,
   EVENT_LINK_COLUMNS,
   EVENT_SERIES_LINK_COLUMNS,
@@ -12,6 +13,7 @@ import {
   TOPIC_LINK_COLUMNS,
 } from './constants.js';
 import {
+  classSessions,
   eventSeries,
   events,
   materials,
@@ -49,6 +51,11 @@ const RESTRICTED: Record<
   subjects: { table: subjects, denied: SUBJECT_LINK_COLUMNS, insert: true },
   topics: { table: topics, denied: TOPIC_LINK_COLUMNS, insert: true },
   tags: { table: tags, denied: TAG_LINK_COLUMNS, insert: true },
+  class_sessions: {
+    table: classSessions,
+    denied: CLASS_SESSION_FEED_COLUMNS,
+    insert: true,
+  },
 };
 
 /**
@@ -59,7 +66,8 @@ const RESTRICTED: Record<
  * `event_series` it may not write the thread/owner links (the bot acts on the
  * thread they point at), and on `subjects`, `topics` and `tags` it may not
  * write the Discord channel, thread and tag ids (catch-up ingests the forum
- * they point at).
+ * they point at). On `class_sessions` it may not write `source` and
+ * `feed_semester` (each sync feed removes only its own rows).
  */
 export async function ensureReadWriteUser(
   adminUrl: string,

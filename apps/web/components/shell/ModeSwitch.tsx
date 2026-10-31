@@ -13,7 +13,7 @@ import type { UiMode } from '@/lib/mode';
  * hydration, so the href is written once more after hydration; the warning is
  * expected here and silenced for this element only.
  */
-function ModeLink({
+export function ModeLink({
   href,
   title,
   cls,

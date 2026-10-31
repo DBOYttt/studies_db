@@ -20,6 +20,8 @@ export const AUDIT_ACTIONS = [
   'user.ban',
   'user.unban',
   'plan.sync',
+  'plan.feed_set',
+  'plan.feed_clear',
   'bot.request',
   'bot.request_cancel',
   'bot.setup',
@@ -41,6 +43,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   'user.ban': 'Access blocked',
   'user.unban': 'Access unblocked',
   'plan.sync': 'Timetable sync requested',
+  'plan.feed_set': 'Timetable feed saved',
+  'plan.feed_clear': 'Timetable feed cleared',
   'bot.request': 'Bot request queued',
   'bot.request_cancel': 'Bot request cancelled',
   'bot.setup': 'Server set up',
@@ -131,6 +135,7 @@ export type AuditTargetRef =
   | { type: 'event'; id: number }
   | { type: 'series'; id: number }
   | { type: 'class_mark'; id: number }
+  | { type: 'semester'; n: number }
   | { type: 'subject'; code: string };
 
 /** Actions whose target is a subject code (bot admin panel). */
@@ -153,6 +158,8 @@ export function parseAuditTarget(
   target: string | null,
 ): AuditTargetRef | null {
   if (!target) return null;
+  const sem = /^semester:([1-7])$/.exec(target);
+  if (sem) return { type: 'semester', n: Number(sem[1]) };
   const m = /^(series|event|class_mark):([1-9]\d{0,9})$/.exec(target);
   if (m) {
     const type = m[1] as 'series' | 'event' | 'class_mark';

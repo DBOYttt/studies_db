@@ -99,7 +99,14 @@ type Row = {
 
 export async function searchAll(
   db: DbExecutor,
-  opts: { q: string; subjectId?: number; tagId?: number; limit?: number },
+  opts: {
+    q: string;
+    subjectId?: number;
+    tagId?: number;
+    /** Only hits of subjects in this semester (1-7). */
+    semester?: number;
+    limit?: number;
+  },
 ): Promise<SearchHit[]> {
   const q = sanitizeQuery(opts.q);
   if (!q) return [];
@@ -111,6 +118,7 @@ export async function searchAll(
   const subj = opts.subjectId
     ? sql`AND t.subject_id = ${opts.subjectId}`
     : sql``;
+  const sem = opts.semester ? sql`AND s.semester = ${opts.semester}` : sql``;
   const tag = opts.tagId
     ? sql`AND EXISTS (SELECT 1 FROM topic_tags tt WHERE tt.topic_id = t.id AND tt.tag_id = ${opts.tagId})`
     : sql``;
@@ -142,7 +150,7 @@ export async function searchAll(
         WHERE m.deleted_at IS NULL AND t.deleted_at IS NULL
           AND MATCH(m.search_name, m.search_text)
               AGAINST (${fq} IN NATURAL LANGUAGE MODE)
-          ${subj} ${tag}
+          ${subj} ${sem} ${tag}
         UNION ALL
         SELECT NULL, t.id, t.title, s.code, s.name, NULL,
                MATCH(t.title) AGAINST (${q} IN NATURAL LANGUAGE MODE)
@@ -150,7 +158,7 @@ export async function searchAll(
         JOIN subjects s ON s.id = t.subject_id
         WHERE t.deleted_at IS NULL
           AND MATCH(t.title) AGAINST (${q} IN NATURAL LANGUAGE MODE)
-          ${subj} ${tag}
+          ${subj} ${sem} ${tag}
       ) hits
       ORDER BY score DESC, material_id IS NULL, material_id, topic_id
       LIMIT ${limit}

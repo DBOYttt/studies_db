@@ -168,7 +168,22 @@ describe('example queries', () => {
       const r = await runReadonlyQuery(roPool, ex.sql);
       expect(r).toMatchObject({ ok: true });
     });
+    it(`${ex.name} (one semester)`, async () => {
+      const r = await runReadonlyQuery(roPool, ex.semesterSql, {
+        values: [1],
+      });
+      expect(r).toMatchObject({ ok: true });
+    });
   }
+  it('every semester twin has exactly one placeholder', () => {
+    for (const ex of EXAMPLE_QUERIES)
+      expect(ex.semesterSql.split('?').length - 1).toBe(1);
+  });
+  it('uploaders by semester keep files of subject-less topics', () => {
+    expect(EXAMPLE_QUERIES[1].semesterSql).toContain(
+      't.subject_id IS NULL OR s.semester = ?',
+    );
+  });
   it('has exactly the three named examples', () => {
     expect(EXAMPLE_QUERIES.map((e) => e.name)).toEqual([
       'Files per subject',

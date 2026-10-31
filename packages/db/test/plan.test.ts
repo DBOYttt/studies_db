@@ -216,6 +216,22 @@ describe('weekSessionsQuery', () => {
     expect(f.params).toEqual(['2026-10-12 00:00:00', '2026-10-19 00:00:00', 3]);
     expect(f.sql).toContain('cs.subject_id = ?');
   });
+
+  it('treats a null semester as all', () => {
+    const w = { year: 2026, week: 42 };
+    expect(weekSessionsQuery(w, { semester: null })).toEqual(
+      weekSessionsQuery(w, {}),
+    );
+  });
+
+  it('binds the semester on the joined subject', () => {
+    const q = weekSessionsQuery({ year: 2026, week: 42 }, { semester: 3 });
+    expect(q.params).toEqual(['2026-10-12 00:00:00', '2026-10-19 00:00:00', 3]);
+    expect(q.sql).toContain('s.semester = ?');
+    expect(q.sql).toContain('s.semester = ?');
+    const none = weekSessionsQuery({ year: 2026, week: 42 }, {});
+    expect(none.sql).not.toContain('semester');
+  });
 });
 
 describe('DB queries', () => {
@@ -346,19 +362,25 @@ describe('DB queries', () => {
     expect(await listMyGroupOptions(pool)).toEqual([
       {
         classId: id.algC,
+        subjectId: id.alg,
         subjectName: 'Algebra',
+        semester: 1,
         className: 'Ćwiczenia',
         groups: [{ id: id.algC1, name: 'Gr. 1' }],
       },
       {
         classId: id.fizW,
+        subjectId: id.fiz,
         subjectName: 'Fizyka',
+        semester: 1,
         className: 'Wykład',
         groups: [{ id: id.fizW1, name: 'Gr. 1' }],
       },
       {
         classId: id.fizC,
+        subjectId: id.fiz,
         subjectName: 'Fizyka',
+        semester: 1,
         className: 'Ćwiczenia',
         groups: [
           { id: id.fizC1, name: 'Gr. 1' },

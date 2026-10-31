@@ -15,10 +15,15 @@ import { closeTestDb, resetTestDb } from '../src/testing.js';
 import { expandOccurrences, parseIcs } from '../src/unitime/ics.js';
 import {
   getPlanSyncStatus,
+  planStatusText,
   recordPlanSync,
   requestPlanSync,
 } from '../src/unitime/status.js';
-import { syncTimetable } from '../src/unitime/sync.js';
+import {
+  removeFeedScopedSessions,
+  removeUnownedSessions,
+  syncTimetable,
+} from '../src/unitime/sync.js';
 
 const FIXTURE = readFileSync(
   new URL('./fixtures/unitime.ics', import.meta.url),
@@ -599,5 +604,246 @@ describe('syncTimetable exam sessions', () => {
     // Nor does a class sync without it delete it.
     await syncTimetable(db, calendar(LECTURE));
     expect((await sessionsByUid(db)).get('800000002')).toEqual(before);
+  });
+});
+
+function ev(uid: string, day: string, summary = 'Algebra liniowa (1rok)') {
+  return vevent({
+    uid,
+    start: `${day}T080000`,
+    end: `${day}T093000`,
+    summary,
+    description: 'Wykład 1',
+  });
+}
+
+describe('feed semesters', () => {
+  let db: Db;
+  beforeAll(async () => {
+    db = await resetTestDb();
+  });
+  afterAll(async () => {
+    await closeTestDb(db);
+  });
+
+  const feedOf = async () => {
+    const rows = await db.select().from(classSessions);
+    return new Map(rows.map((r) => [r.uid, r.feedSemester]));
+  };
+
+  it('feed 3 does not delete feed 5 rows', async () => {
+    await syncTimetable(
+      db,
+      calendar(ev('a1', '20261006'), ev('a2', '20261007')),
+      {
+        feedSemester: 3,
+      },
+    );
+    await syncTimetable(
+      db,
+      calendar(ev('b1', '20261008'), ev('b2', '20261009')),
+      {
+        feedSemester: 5,
+      },
+    );
+    const stats = await syncTimetable(db, calendar(ev('a1', '20261006')), {
+      feedSemester: 3,
+    });
+    expect(stats.deleted).toBe(1);
+    expect([...(await feedOf()).keys()].sort()).toEqual(['a1', 'b1', 'b2']);
+  });
+
+  it('a row in two feeds is taken over, not deleted', async () => {
+    await resetTestDb();
+    const same = calendar(ev('x1', '20261006'));
+    await syncTimetable(db, same, { feedSemester: 3 });
+    const to5 = await syncTimetable(db, same, { feedSemester: 5 });
+    expect(to5).toMatchObject({ updated: 1, deleted: 0, created: 0 });
+    expect((await feedOf()).get('x1')).toBe(5);
+    const back = await syncTimetable(db, same, { feedSemester: 3 });
+    expect(back).toMatchObject({ updated: 1, deleted: 0, created: 0 });
+    expect((await feedOf()).get('x1')).toBe(3);
+    expect(await count(db, classSessions)).toBe(1);
+  });
+
+  it('new subject gets the feed semester', async () => {
+    await resetTestDb();
+    await syncTimetable(
+      db,
+      calendar(ev('s1', '20261006', 'Nowy przedmiot (1rok)')),
+      {
+        feedSemester: 6,
+      },
+    );
+    await syncTimetable(
+      db,
+      calendar(ev('s1', '20261006', 'Nowy przedmiot (1rok)')),
+      {
+        feedSemester: 2,
+      },
+    );
+    const [subj] = await db.select().from(subjects);
+    expect(subj?.semester).toBe(6);
+  });
+
+  it('env feed keeps semesterFor', async () => {
+    await resetTestDb();
+    await syncTimetable(db, calendar(ev('e1', '20261006')));
+    expect((await feedOf()).get('e1')).toBeNull();
+    const [subj] = await db.select().from(subjects);
+    expect(subj?.semester).toBe(1);
+  });
+
+  it('exam feed scoped too', async () => {
+    await resetTestDb();
+    const exam = (uid: string, day: string) =>
+      vevent({
+        uid,
+        start: `${day}T090000`,
+        end: `${day}T110000`,
+        summary: 'Algebra liniowa (1rok)',
+        description: 'Egzamin 1',
+      });
+    const opts = (n: 3 | 5) => ({
+      allExams: true,
+      source: 'exams' as const,
+      feedSemester: n,
+    });
+    await syncTimetable(
+      db,
+      calendar(exam('q3', '20270201'), exam('q3b', '20270202')),
+      opts(3),
+    );
+    await syncTimetable(db, calendar(exam('q5', '20270203')), opts(5));
+    const stats = await syncTimetable(
+      db,
+      calendar(exam('q3', '20270201')),
+      opts(3),
+    );
+    expect(stats.deleted).toBe(1);
+    expect([...(await feedOf()).keys()].sort()).toEqual(['q3', 'q5']);
+  });
+
+  it('removeUnownedSessions deletes NULL rows of kept semesters and semesters outside keep', async () => {
+    await resetTestDb();
+    // Env rows: "(1rok)" lands in semester 1, "(2rok)" in semester 3.
+    await syncTimetable(
+      db,
+      calendar(
+        ev('e1', '20261005', 'Fizyka (1rok)'),
+        ev('e3', '20261006', 'Chemia (2rok)'),
+      ),
+    );
+    await syncTimetable(db, calendar(ev('n3', '20261007')), {
+      feedSemester: 3,
+    });
+    await syncTimetable(db, calendar(ev('n5', '20261008')), {
+      feedSemester: 5,
+    });
+    expect(await removeUnownedSessions(db, [3])).toBe(2);
+    expect([...(await feedOf()).keys()].sort()).toEqual(['e1', 'n3']);
+  });
+
+  it('removeUnownedSessions with an empty keep deletes only feed rows', async () => {
+    await resetTestDb();
+    await syncTimetable(db, calendar(ev('n1', '20261006')));
+    await syncTimetable(db, calendar(ev('n2', '20261007')), {
+      feedSemester: 4,
+    });
+    expect(await removeUnownedSessions(db, [])).toBe(1);
+    expect([...(await feedOf()).keys()]).toEqual(['n1']);
+  });
+
+  it('removeFeedScopedSessions deletes every feed row and keeps env rows', async () => {
+    await resetTestDb();
+    await syncTimetable(db, calendar(ev('n1', '20261006')));
+    await syncTimetable(db, calendar(ev('n3', '20261007')), {
+      feedSemester: 3,
+    });
+    await syncTimetable(db, calendar(ev('n5', '20261008')), {
+      feedSemester: 5,
+    });
+    expect(await removeFeedScopedSessions(db)).toBe(2);
+    expect([...(await feedOf()).keys()]).toEqual(['n1']);
+  });
+
+  it('a class feed takes over an env exam row it also lists (feed_semester only)', async () => {
+    await resetTestDb();
+    await syncTimetable(db, calendar(MAIN_EXAM), {
+      allExams: true,
+      source: 'exams',
+    });
+    const before = (await sessionsByUid(db)).get('800000002');
+    expect(before).toMatchObject({ source: 'exams', feedSemester: null });
+    const moved = MAIN_EXAM.replace('LOCATION:D-1 101', 'LOCATION:B-2 7');
+    const stats = await syncTimetable(db, calendar(LECTURE, moved), {
+      feedSemester: 1,
+    });
+    expect(stats).toMatchObject({ updated: 1, created: 1, deleted: 0 });
+    const after = (await sessionsByUid(db)).get('800000002');
+    expect(after).toMatchObject({
+      source: 'exams',
+      feedSemester: 1,
+      room: before?.room,
+    });
+    // Cleanup with semester 1 stored no longer drops it.
+    expect(await removeUnownedSessions(db, [1])).toBe(0);
+    expect((await sessionsByUid(db)).has('800000002')).toBe(true);
+  });
+
+  it('planStatusText lists feeds', () => {
+    const text = planStatusText(
+      {
+        requestedAt: null,
+        lastRunAt: null,
+        lastOkAt: new Date('2026-10-12T10:30:00Z'),
+        lastError: null,
+        stats: {
+          created: 1,
+          updated: 0,
+          deleted: 2,
+          unchanged: 0,
+          warnings: [],
+          feeds: [
+            { semester: 3, ok: true, created: 1, updated: 0, deleted: 2 },
+            { semester: 5, ok: false, created: 0, updated: 0, deleted: 0 },
+          ],
+        },
+      },
+      new Date(),
+    );
+    expect(text).toContain('Semester 3: +1 ~0 -2');
+    expect(text).toContain('Semester 5: failed');
+  });
+
+  it('planStatusText hides the per-semester lines of an older run after a failed one', () => {
+    const base = {
+      requestedAt: null,
+      lastOkAt: new Date('2026-10-12T10:30:00Z'),
+      stats: {
+        created: 1,
+        updated: 0,
+        deleted: 2,
+        unchanged: 0,
+        warnings: [],
+        feeds: [{ semester: 3, ok: true, created: 1, updated: 0, deleted: 2 }],
+      },
+    };
+    const failed = planStatusText(
+      {
+        ...base,
+        lastRunAt: new Date('2026-10-12T16:30:00Z'),
+        lastError: 'fetch failed',
+      },
+      new Date(),
+    );
+    expect(failed).toContain('Last sync:');
+    expect(failed).toContain('Error: fetch failed');
+    expect(failed).not.toContain('Semester 3');
+    const ok = planStatusText(
+      { ...base, lastRunAt: base.lastOkAt, lastError: null },
+      new Date(),
+    );
+    expect(ok).toContain('Semester 3: +1 ~0 -2');
   });
 });

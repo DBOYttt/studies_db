@@ -2,6 +2,7 @@ import { getMyGroups } from '@studies/db';
 import { listWeekMarks } from '@studies/db/plan';
 import { MyGroupsImport } from '@/components/plan/MyGroupsImport';
 import { WeekView } from '@/components/plan/WeekView';
+import { semesterAllHref } from '@/components/SemesterEmpty';
 import { getDb, getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { isoWeekOf, nowWall, sanitizeMyGroups, weekDays } from '@/lib/plan';
@@ -47,7 +48,9 @@ export async function PlanWeekTab({
         loadPlanWeek(pool, raw, now, filter),
         // Without the lookups blocks link to the subject only.
         loadLinkContext(getDb()).catch(() => undefined),
-        myGroupsFilter ? listMyGroupOptions(pool) : Promise.resolve(null),
+        myGroupsFilter
+          ? listMyGroupOptions(pool, filter.semester)
+          : Promise.resolve(null),
         user ? getMyGroups(getDb(), user.id) : Promise.resolve(null),
       ]);
     const marks = await listWeekMarks(
@@ -80,6 +83,16 @@ export async function PlanWeekTab({
           myGroupsFilter={myGroupsFilter}
           myGroups={myGroups}
           simple={simple}
+          semester={
+            filter.semester == null
+              ? null
+              : {
+                  n: filter.semester,
+                  allHref: semesterAllHref(
+                    weekNav(path, week, week, extra).today,
+                  ),
+                }
+          }
           newEventHref={newEventHref(
             week,
             now,

@@ -352,12 +352,31 @@ export const classSessions = mysqlTable(
       .default('confirmed'),
     kind: mysqlEnum('kind', SESSION_KINDS).notNull().default('class'),
     source: mysqlEnum('source', SESSION_SOURCES).notNull().default('classes'),
+    feedSemester: tinyint('feed_semester'),
     sequence: int('sequence').notNull().default(0),
     updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
   },
   (t) => [
     unique('uq_class_sessions_occurrence').on(t.uid, t.occurrenceStart),
     index('idx_class_sessions_starts').on(t.startsAt),
+  ],
+);
+
+// Per-semester UniTime feed links, set by admins. Private: not a content table
+// and not in PUBLIC_VIEWS, since the links carry a secret token.
+export const unitimeFeeds = mysqlTable(
+  'unitime_feeds',
+  {
+    semester: tinyint('semester').primaryKey(),
+    classUrl: varchar('class_url', { length: 500 }).notNull(),
+    examUrl: varchar('exam_url', { length: 500 }),
+    updatedAt: datetime('updated_at').notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedBy: int('updated_by').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+  },
+  (t) => [
+    check('chk_unitime_feeds_semester', sql`${t.semester} BETWEEN 1 AND 7`),
   ],
 );
 

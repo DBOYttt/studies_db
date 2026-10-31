@@ -437,6 +437,18 @@ export function hiddenNote(h: { count: number; codes: string[] }): string {
   return `${plural(h.count, 'class', 'classes')} hidden: pick a group for ${shown}${more}`;
 }
 
+/** The timetable's filter chip: the chosen semester and My groups, or null. */
+export function planFilterLabel(
+  semester: number | null,
+  myGroups: boolean,
+): string | null {
+  const parts = [
+    ...(semester === null ? [] : [`Semester ${semester}`]),
+    ...(myGroups ? ['My groups'] : []),
+  ];
+  return parts.length ? `Filter: ${parts.join(' · ')}` : null;
+}
+
 /** "Showing all groups. Pick yours": no group saved, and the week has groups. */
 export function showAllGroupsPrompt(
   sessions: PlanSession[],

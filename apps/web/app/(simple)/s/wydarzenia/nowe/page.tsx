@@ -6,6 +6,7 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { loadNewEventForm, newEventHeading } from '@/lib/event-form-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
 
@@ -30,7 +31,7 @@ export default async function SimpleNewEvent({
   const sp = await searchParams;
   const db = getDb();
   const [cards, options, form] = await Promise.all([
-    cachedSubjectCards(),
+    cachedSubjectCards(await currentSemester(sp)),
     listEventSubjectOptions(db),
     loadNewEventForm(sp),
   ]);

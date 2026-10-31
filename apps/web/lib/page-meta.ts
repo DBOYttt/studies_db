@@ -9,6 +9,7 @@ import {
   loadSubject,
   loadSubjectAdmin,
 } from './page-loaders';
+import { currentSemester } from './semester';
 import { currentUser } from './session';
 import { isPublicView } from './tables';
 
@@ -39,6 +40,21 @@ export const NOT_FOUND_TITLE = `Page not found · ${SITE_NAME}`;
 
 /** A page's title: `<page> · Studies DB` (through the root template). */
 export const pageTitle = (page: string): Metadata => ({ title: page });
+
+/** `<page> · Semester N` while a semester is filtered, else `<page>`. */
+export const semesterTitle = (page: string, semester: number | null): string =>
+  semester === null ? page : `${page} · Semester ${semester}`;
+
+/**
+ * A semester-filtered page's title (`?sem=`, then the cookie), so a screen
+ * reader hears the filter after the /semester redirect reloads the page.
+ */
+export async function semesterPageMetadata(
+  page: string,
+  sp: Record<string, string | string[] | undefined>,
+): Promise<Metadata> {
+  return pageTitle(semesterTitle(page, await currentSemester(sp)));
+}
 
 /** The title of a page the visitor gets as a 404. */
 const HIDDEN: Metadata = { title: { absolute: NOT_FOUND_TITLE } };

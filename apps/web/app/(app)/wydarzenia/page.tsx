@@ -7,10 +7,18 @@ import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getViewsPool } from '@/lib/db';
 import { parseEventsPage, upcomingEventsPage } from '@/lib/events-index';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { nowWall } from '@/lib/plan';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
-export const metadata: Metadata = { title: 'Events' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Events', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -24,10 +32,12 @@ export default async function EventsIndexPage({
 }) {
   await requireUser();
   const sp = await searchParams;
+  const semester = await currentSemester(sp);
   const data = await upcomingEventsPage(
     getViewsPool(),
     nowWall(),
     parseEventsPage(sp),
+    semester,
   ).catch(() => null);
   return (
     <>
@@ -40,7 +50,7 @@ export default async function EventsIndexPage({
       />
       <div className="flex flex-col gap-3.5">
         <Notice text={noticeFromSearchParams(sp)} />
-        <EventsIndex data={data} simple={false} />
+        <EventsIndex data={data} simple={false} semester={semester} />
       </div>
     </>
   );

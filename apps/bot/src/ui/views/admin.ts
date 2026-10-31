@@ -22,13 +22,23 @@ import {
 } from 'discord.js';
 import { encodeId } from '../ids.js';
 import { MAX_OPTIONS, MAX_TEXT } from '../limits.js';
-import { button, clip, divider, row, text, type View, view } from './parts.js';
+import {
+  button,
+  clip,
+  divider,
+  row,
+  subjectOptionLabel,
+  text,
+  type View,
+  view,
+} from './parts.js';
 
 /* ---------- data ---------- */
 
 export interface SubjectOption {
   code: string;
   name: string;
+  semester: number;
 }
 
 export interface LecturerOption {
@@ -254,7 +264,7 @@ export function subjectPicker(subjects: SubjectOption[], page: number): View {
           .addOptions(
             pg.items.map((s) =>
               new StringSelectMenuOptionBuilder()
-                .setLabel(clip(`${s.code} · ${s.name}`))
+                .setLabel(subjectOptionLabel(s, subjects.length))
                 .setValue(s.code),
             ),
           ),

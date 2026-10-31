@@ -760,6 +760,18 @@ const SELECT_EVENTS = `
     LEFT JOIN v_class_groups g ON g.id = e.group_id
     LEFT JOIN v_classes c ON c.id = COALESCE(e.class_id, g.class_id)`;
 
+/**
+ * Semester filter of event lists: events without a subject always show, the
+ * others only when their subject is in the semester (bound parameter).
+ */
+const eventSemesterSql = (semester: number | null | undefined) =>
+  semester == null
+    ? { sql: '', params: [] as number[] }
+    : {
+        sql: ' AND (e.subject_id IS NULL OR e.subject_id IN (SELECT id FROM v_subjects WHERE semester = ?))',
+        params: [semester],
+      };
+
 const numOrNull = (v: unknown) => (v == null ? null : Number(v));
 const strOrNull = (v: unknown) => (v == null ? null : String(v));
 
@@ -807,12 +819,14 @@ export async function listEventsInRange(
   pool: mysql.Pool,
   fromWall: Date,
   toWall_: Date,
+  semester?: number | null,
 ): Promise<PlanSession[]> {
+  const sem = eventSemesterSql(semester);
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `${SELECT_EVENTS}
-     WHERE e.starts_at >= ? AND e.starts_at < ?
+     WHERE e.starts_at >= ? AND e.starts_at < ?${sem.sql}
      ORDER BY e.starts_at, e.id`,
-    [wallLiteral(fromWall), wallLiteral(toWall_)],
+    [wallLiteral(fromWall), wallLiteral(toWall_), ...sem.params],
   );
   return rows.map(toEventSession);
 }
@@ -835,15 +849,23 @@ export async function listUpcomingEvents(
   nowWall_: Date,
   limit: number,
   offset = 0,
+  semester?: number | null,
 ): Promise<PlanSession[]> {
   const now = wallLiteral(nowWall_);
+  const sem = eventSemesterSql(semester);
   const [rows] = await pool.query<mysql.RowDataPacket[]>(
     `${SELECT_EVENTS}
      WHERE e.starts_at >= ? - INTERVAL ${UPCOMING_MAX_SPAN_DAYS} DAY
-       AND ${END_SQL} >= ?
+       AND ${END_SQL} >= ?${sem.sql}
      ORDER BY e.starts_at, e.id
      LIMIT ? OFFSET ?`,
-    [now, now, Math.max(0, Math.floor(limit)), Math.max(0, Math.floor(offset))],
+    [
+      now,
+      now,
+      ...sem.params,
+      Math.max(0, Math.floor(limit)),
+      Math.max(0, Math.floor(offset)),
+    ],
   );
   return rows.map(toEventSession);
 }

@@ -203,6 +203,13 @@ export const SUBJECT_LINK_COLUMNS = ['discord_channel_id'] as const;
 export const TOPIC_LINK_COLUMNS = ['discord_thread_id'] as const;
 export const TAG_LINK_COLUMNS = ['discord_tag_id'] as const;
 
+/**
+ * `class_sessions` columns recording which sync feed made a row. The console's
+ * read-write user may not write them: each feed removes only its own rows, so
+ * editing these would let a row escape (or be hit by) a sync clean-up.
+ */
+export const CLASS_SESSION_FEED_COLUMNS = ['source', 'feed_semester'] as const;
+
 /** Website uploads for events (Discord's attachment limit is the cap). */
 export const MAX_UPLOAD_FILES = 10;
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024;

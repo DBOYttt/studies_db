@@ -19,6 +19,7 @@ import {
   editClass,
   editLecturer,
   editSubject,
+  type Semester,
   upsertUser,
 } from '@studies/db';
 import type { ModalBuilder } from 'discord.js';
@@ -89,7 +90,7 @@ import { notice, type View } from './views/parts.js';
 
 export const NO_PERMISSION = 'You do not have permission.';
 export const WORKING = 'Working…';
-export const SEMESTER_TEXT = 'Semester must be 1 or 2.';
+export const SEMESTER_TEXT = 'Semester must be a whole number from 1 to 7.';
 export const ECTS_TEXT = 'ECTS must be a number from 0 to 30.';
 export const CODE_TEXT =
   'The code may contain only letters, digits, dots, hyphens and underscores (up to 20 characters).';
@@ -308,11 +309,11 @@ async function openModal(
 const textField = (i: UiInteraction, id: string) =>
   i.isModalSubmit() ? i.fields.getTextInputValue(id) : '';
 
-function parseSemester(s: string): 1 | 2 | null {
+function parseSemester(s: string): Semester | null {
   const t = s.trim();
   if (!NUM_RE.test(t)) return null;
   const n = Number(t);
-  return (SEMESTERS as readonly number[]).includes(n) ? (n as 1 | 2) : null;
+  return (SEMESTERS as readonly number[]).includes(n) ? (n as Semester) : null;
 }
 
 function parseEcts(s: string): number | null {

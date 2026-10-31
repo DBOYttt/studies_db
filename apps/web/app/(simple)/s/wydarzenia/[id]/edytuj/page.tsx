@@ -8,6 +8,7 @@ import { loadEventForm } from '@/lib/event-form-page';
 import { parseEventId } from '@/lib/event-page';
 import { listEventSubjectOptions } from '@/lib/event-queries';
 import { eventMetadata } from '@/lib/page-meta';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
 
@@ -31,7 +32,7 @@ export default async function SimpleEditEvent({
   const db = getDb();
   const [{ values: initial, deleted }, cards, options] = await Promise.all([
     loadEventForm(id),
-    cachedSubjectCards(),
+    cachedSubjectCards(await currentSemester({})),
     listEventSubjectOptions(db),
   ]);
   return (

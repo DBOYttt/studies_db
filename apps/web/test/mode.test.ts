@@ -99,6 +99,20 @@ describe('modeTarget simple -> advanced', () => {
   });
   it('maps reports to SQL console', () => {
     expect(t('/s/reports?r=1')).toBe(sqlHref('/sql', EXAMPLE_QUERIES[1].sql));
+    expect(t('/s/reports?r=1&sem=all')).toBe(
+      sqlHref('/sql', EXAMPLE_QUERIES[1].sql),
+    );
+  });
+  it('maps a semester report to the SQL it ran, semester written in', () => {
+    const href = t('/s/reports?r=0&sem=3');
+    expect(href).toBe(
+      sqlHref('/sql', EXAMPLE_QUERIES[0].semesterSql.replace('?', '3')),
+    );
+    expect(decodeURIComponent(href)).toContain('s.semester = 3');
+    // A bad sem never reaches the SQL text.
+    expect(t('/s/reports?r=0&sem=1;drop')).toBe(
+      sqlHref('/sql', EXAMPLE_QUERIES[0].sql),
+    );
   });
   it('out of range / bad report index -> /', () => {
     expect(t(`/s/reports?r=${EXAMPLE_QUERIES.length}`)).toBe('/');
@@ -179,5 +193,27 @@ describe('modeTarget event pages', () => {
   it('falls back for unknown event paths', () => {
     expect(modeTarget('advanced', '/s/wydarzenia/x/y')).toBe('/');
     expect(modeTarget('simple', '/wydarzenia/abc')).toBe('/s');
+  });
+});
+
+describe('modeTarget keeps a valid sem on every target', () => {
+  it('keeps sem on the start-page fallbacks', () => {
+    expect(modeTarget('advanced', '/s?sem=2')).toBe('/?sem=2');
+    expect(modeTarget('advanced', '/s/recent?sem=all')).toBe('/?sem=all');
+    expect(modeTarget('simple', '/?sem=5')).toBe('/s?sem=5');
+    expect(modeTarget('simple', '/admin/sync?sem=3')).toBe('/s?sem=3');
+    expect(modeTarget('advanced', '/s/wydarzenia/x/y?sem=4')).toBe('/?sem=4');
+  });
+  it('keeps sem on event pages', () => {
+    expect(modeTarget('advanced', '/s/wydarzenia/12?sem=3')).toBe(
+      '/wydarzenia/12?sem=3',
+    );
+    expect(modeTarget('simple', '/wydarzenia/nowe?sem=7')).toBe(
+      '/s/wydarzenia/nowe?sem=7',
+    );
+  });
+  it('drops an invalid sem', () => {
+    expect(modeTarget('advanced', '/s?sem=8')).toBe('/');
+    expect(modeTarget('simple', '/?sem=1%0a')).toBe('/s');
   });
 });

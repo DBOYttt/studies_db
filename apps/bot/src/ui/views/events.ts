@@ -28,6 +28,7 @@ import {
   divider,
   linkButton,
   row,
+  subjectOptionLabel,
   text,
   type View,
   view,
@@ -378,6 +379,7 @@ export function linkView(
 export interface ModalSubject {
   code: string;
   name: string;
+  semester: number;
 }
 
 export interface ModalCurrent {
@@ -426,7 +428,7 @@ export function eventModal(
                 .setDefault(!cur?.subjectCode),
               ...subjects.map((s) =>
                 new StringSelectMenuOptionBuilder()
-                  .setLabel(clip(`${s.code} ${s.name}`))
+                  .setLabel(subjectOptionLabel(s, subjects.length))
                   .setValue(s.code)
                   .setDefault(s.code === cur?.subjectCode),
               ),

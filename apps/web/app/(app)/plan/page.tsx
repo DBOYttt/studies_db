@@ -26,13 +26,21 @@ import {
   parseEntityTab,
 } from '@/lib/entity-page';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { planListPage } from '@/lib/plan-queries';
 import { syncFailed, syncLine, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { listFrom } from '@/lib/today';
 
-export const metadata: Metadata = { title: 'Timetable' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Timetable', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -55,6 +63,7 @@ export default async function PlanPage({
 }) {
   await requireUser();
   const sp = await searchParams;
+  const semester = await currentSemester(sp);
   const tab = parseEntityTab(sp, TABS);
   // Without the status the screen still works, just without the footer.
   // Not awaited here: it loads alongside the tab's data.
@@ -106,13 +115,22 @@ export default async function PlanPage({
         <SyncWarningSlot status={status} />
         {tab === 'week' && (
           <Suspense fallback={<PlanWeekSkeleton />}>
-            <PlanWeekTab week={sp.week} path="/plan" myGroupsFilter />
+            <PlanWeekTab
+              week={sp.week}
+              path="/plan"
+              filter={{ semester }}
+              myGroupsFilter
+            />
           </Suspense>
         )}
         {tab === 'list' && (
-          <ListTab grid={parseEntityGrid(sp)} from={listFrom(sp, new Date())} />
+          <ListTab
+            grid={parseEntityGrid(sp)}
+            from={listFrom(sp, new Date())}
+            semester={semester}
+          />
         )}
-        {tab === 'groups' && <GroupsTab weekHref="/plan" />}
+        {tab === 'groups' && <GroupsTab weekHref="/plan" semester={semester} />}
         <SyncFooter status={status} />
       </div>
     </>
@@ -159,8 +177,10 @@ const WALL_COLUMNS = new Set(['starts_at', 'ends_at']);
 async function ListTab({
   grid,
   from,
+  semester,
 }: {
   grid: EntityGridParams;
+  semester: number | null;
   /** Wall today 00:00, or null with "Show past". */
   from: Date | null;
 }) {
@@ -169,6 +189,7 @@ async function ListTab({
       page: grid.page,
       perPage: grid.perPage,
       from,
+      semester,
     }).then(
       (page) => ({ page, error: null }),
       (err: unknown) => ({ page: null, error: roErrorMessage(err) }),

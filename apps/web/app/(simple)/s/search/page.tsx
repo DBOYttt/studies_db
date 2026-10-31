@@ -1,17 +1,26 @@
 import type { Metadata } from 'next';
+import { semesterAllHref } from '@/components/SemesterEmpty';
 import { FileList } from '@/components/simple/FileList';
 import { SimpleAdminEntry } from '@/components/simple/SimpleAdminEntry';
 import { SimplePreview } from '@/components/simple/SimplePreview';
 import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { searchCounts, searchCountText } from '@/lib/search-count';
+import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { advancedSearchHref, parseSearchQuery } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { searchSimpleFiles } from '@/lib/simple-queries';
 
-export const metadata: Metadata = { title: 'Search' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Search', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -29,13 +38,14 @@ export default async function SimpleSearch({
   const sp = await searchParams;
   const db = getDb();
   const q = parseSearchQuery(sp);
-  const cardsP = cachedSubjectCards();
+  const semester = await currentSemester(sp);
+  const cardsP = cachedSubjectCards(semester);
   const [cards, { files: hits, topics }, preview] = await Promise.all([
     cardsP,
     q
-      ? searchSimpleFiles(db, q, SEARCH_LIMIT)
+      ? searchSimpleFiles(db, q, SEARCH_LIMIT, semester)
       : Promise.resolve({ files: [], topics: 0 }),
-    loadSimplePreview(db, sp, cardsP),
+    loadSimplePreview(db, sp, cachedSubjectCards()),
   ]);
   const baseHref = q ? `/s/search?q=${encodeURIComponent(q)}` : '/s/search';
   return (
@@ -96,7 +106,20 @@ export default async function SimpleSearch({
           selectedId={preview?.file.id ?? null}
           baseHref={baseHref}
           q={q}
-          emptyText="Nothing found. Try another word."
+          emptyText={
+            semester === null
+              ? 'Nothing found. Try another word.'
+              : `Nothing found in semester ${semester}.`
+          }
+          emptyAction={
+            semester === null
+              ? undefined
+              : {
+                  label: 'Search all semesters',
+                  href: semesterAllHref(baseHref),
+                  reload: true,
+                }
+          }
         />
       )}
     </SimpleShell>

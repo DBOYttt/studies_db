@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
-import { EXAMPLE_QUERIES } from './example-queries';
+import { EXAMPLE_QUERIES, reportSqlText } from './example-queries';
+import { parseSemesterValue } from './semester-pure';
 import { sqlHref } from './sql-editor';
 
 export type UiMode = 'simple' | 'advanced';
@@ -73,7 +74,7 @@ function parse(next: string | null): { path: string; params: URLSearchParams } {
   return { path: u.pathname, params: u.searchParams };
 }
 
-function enc(segment: string): string {
+export function enc(segment: string): string {
   try {
     return encodeURIComponent(decodeURIComponent(segment));
   } catch {
@@ -103,6 +104,9 @@ function pick(params: URLSearchParams, keys: string[]): string {
     const v = params.get(k);
     if (v) out.set(k, v);
   }
+  // The semester choice travels with every mapped page.
+  const sem = params.get('sem');
+  if (sem !== null && /^([1-7]|all)$/.test(sem)) out.set('sem', sem);
   const s = out.toString();
   return s ? `?${s}` : '';
 }
@@ -126,8 +130,10 @@ export function modeTarget(to: UiMode, next: string | null): string {
   // A rejected `next` is not mapped either: it falls back to the start page.
   const { path, params } = parse(safe);
   const seg = path.split('/').filter(Boolean);
+  // Fallbacks and event pages carry only the semester choice.
+  const keep = pick(params, []);
   if (to === 'advanced') {
-    if (seg[0] !== 's') return '/';
+    if (seg[0] !== 's') return `/${keep}`;
     if (seg[1] === 'subjects' && seg[2] && seg.length === 3)
       return `/subjects/${enc(seg[2])}${pick(params, ['class', 'group'])}`;
     if (seg[1] === 'plan' && seg.length === 2)
@@ -137,18 +143,20 @@ export function modeTarget(to: UiMode, next: string | null): string {
     if (seg[1] === 'wydarzenia') {
       if (seg.length === 2) return `/wydarzenia${pick(params, ['page'])}`;
       const e = eventPath(seg.slice(2));
-      if (e) return `/wydarzenia${e}`;
+      if (e) return `/wydarzenia${e}${keep}`;
     }
     if (seg[1] === 'reports' && seg.length === 2) {
       const r = params.get('r');
       if (r !== null && /^\d+$/.test(r)) {
-        const q = EXAMPLE_QUERIES[Number(r)];
-        if (q) return sqlHref('/sql', q.sql);
+        if (EXAMPLE_QUERIES[Number(r)]) {
+          const sem = parseSemesterValue(params.get('sem') ?? undefined);
+          return sqlHref('/sql', reportSqlText(Number(r), sem));
+        }
       }
     }
-    return '/';
+    return `/${keep}`;
   }
-  if (seg.length === 0) return '/s';
+  if (seg.length === 0) return `/s${keep}`;
   if (seg[0] === 'subjects' && seg[1] && seg.length === 2)
     return `/s/subjects/${enc(seg[1])}${pick(params, ['class', 'group'])}`;
   if (seg[0] === 'plan' && seg.length === 1)
@@ -158,7 +166,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
   if (seg[0] === 'wydarzenia') {
     if (seg.length === 1) return `/s/wydarzenia${pick(params, ['page'])}`;
     const e = eventPath(seg.slice(1));
-    if (e) return `/s/wydarzenia${e}`;
+    if (e) return `/s/wydarzenia${e}${keep}`;
   }
-  return '/s';
+  return `/s${keep}`;
 }

@@ -54,21 +54,21 @@ async function addMaterial(
 
 beforeAll(async () => {
   db = await resetTestDb();
-  const mk = async (code: string, ch: string) =>
+  const mk = async (code: string, ch: string, semester = 1) =>
     (
       await db
         .insert(subjects)
         .values({
           name: `Przedmiot ${code}`,
           code,
-          semester: 1,
+          semester,
           ects: 3,
           discordChannelId: ch,
         })
         .$returningId()
     )[0].id;
   s1 = await mk('MECH', 'c1');
-  s2 = await mk('AUTO', 'c2');
+  s2 = await mk('AUTO', 'c2', 2);
   const [u] = await db
     .insert(users)
     .values({ discordUserId: 'u1', displayName: 'Ala' })
@@ -214,6 +214,16 @@ describe('searchAll', () => {
   it('filters by subject', async () => {
     const hits = await searchAll(db, { q: 'tarcie', subjectId: s1 });
     expect(hits.map((h) => h.filename)).toEqual(['tarcie.txt']);
+  });
+  it('filters by semester', async () => {
+    const all = await searchAll(db, { q: 'tarcie' });
+    expect(new Set(all.map((h) => h.subjectCode))).toEqual(
+      new Set(['MECH', 'AUTO']),
+    );
+    const one = await searchAll(db, { q: 'tarcie', semester: 2 });
+    expect(one.length).toBeGreaterThan(0);
+    expect(one.every((h) => h.subjectCode === 'AUTO')).toBe(true);
+    expect(await searchAll(db, { q: 'tarcie', semester: 6 })).toEqual([]);
   });
   it('filters by tag', async () => {
     const hits = await searchAll(db, { q: 'tarcie', tagId: tag1 });

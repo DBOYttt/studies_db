@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { SemesterBar } from '@/components/SemesterSwitcher';
 import { SkipLink } from './SkipLink';
 
 /**
@@ -177,6 +178,7 @@ export function ShellFrame({
             {topbarEnd}
           </div>
         </header>
+        <SemesterBar />
         <main
           id="content"
           tabIndex={-1}

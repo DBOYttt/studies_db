@@ -7,7 +7,8 @@ import {
   FIELD_MAX,
   GROUP_MAX,
   GROUP_MIN,
-  SEMESTERS,
+  isSemester,
+  type Semester,
   type SubjectInput,
   textOrNull,
   urlOrNull,
@@ -61,7 +62,7 @@ export type Parsed<T> = { ok: true; value: T } | Refusal;
 const fail = (message: string, field?: string): Refusal =>
   field === undefined ? { ok: false, message } : { ok: false, message, field };
 
-export const SEMESTER_TEXT = 'Semester must be 1 or 2.';
+export const SEMESTER_TEXT = 'Semester must be a whole number from 1 to 7.';
 export const ECTS_TEXT = `ECTS must be a whole number from ${ECTS_MIN} to ${ECTS_MAX}.`;
 export const GROUP_TEXT = `Group must be a whole number from ${GROUP_MIN} to ${GROUP_MAX}.`;
 export const CODE_TEXT =
@@ -158,7 +159,7 @@ const sameNumber = (v: string, stored: number | undefined) =>
  * The semester and ECTS. On edit, a value equal to the stored one is accepted
  * even when today's range refuses it (one written through the SQL console),
  * so it does not block editing the other fields; the action then leaves it
- * as it is. Any other value is in range, so a changed semester is 1 or 2.
+ * as it is. Any other value is in range, so a changed semester is in SEMESTERS.
  */
 function parseSemesterEcts(
   form: FormData,
@@ -167,11 +168,8 @@ function parseSemesterEcts(
   const sv = field(form, 'semester');
   const s = sameNumber(sv, stored.semester)
     ? (stored.semester as number)
-    : wholeIn(sv, 0, 9);
-  if (
-    s === null ||
-    (s !== stored.semester && !(SEMESTERS as readonly number[]).includes(s))
-  )
+    : wholeIn(sv, 0, 99);
+  if (s === null || (s !== stored.semester && !isSemester(s)))
     return fail(SEMESTER_TEXT, 'semester');
   const ev = field(form, 'ects');
   const ects = sameNumber(ev, stored.ects)
@@ -216,7 +214,7 @@ export function parseSubjectAdd(form: FormData): Parsed<SubjectInput> {
       name: name.value,
       code: code.value,
       // No stored value on add: the semester passed the range check.
-      semester: se.value.semester as 1 | 2,
+      semester: se.value.semester as Semester,
       ects: se.value.ects,
       ...(description.value === null ? {} : { description: description.value }),
     },
@@ -226,7 +224,7 @@ export function parseSubjectAdd(form: FormData): Parsed<SubjectInput> {
 export type SubjectEdit = {
   code: string;
   name: string;
-  /** 1 or 2, unless it is the stored value (see `parseSemesterEcts`). */
+  /** In SEMESTERS, unless it is the stored value (see `parseSemesterEcts`). */
   semester: number;
   ects: number;
   description: string | null;

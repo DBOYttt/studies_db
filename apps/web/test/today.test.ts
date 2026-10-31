@@ -9,6 +9,7 @@ import {
 } from '@studies/db';
 import { toWall } from '@studies/db/plan';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
+import { eq } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { RO_POOL_OPTIONS } from '../lib/db';
@@ -234,6 +235,51 @@ describe('todayForUser', () => {
     );
     expect(ids(t.sessions)).toEqual([id.mid26]);
     expect(t.next).toBeNull();
+  });
+});
+
+describe('todayForUser with a semester', () => {
+  it("keeps only the semester's sessions, today and next", async () => {
+    const [{ id: sem3 }] = await db
+      .insert(subjects)
+      .values({ name: 'Optyka', code: 'OPT', semester: 3, ects: 2 })
+      .$returningId();
+    const mk = async (uid: string, start: Date) =>
+      (
+        await db
+          .insert(classSessions)
+          .values({
+            uid,
+            occurrenceStart: start,
+            startsAt: start,
+            endsAt: new Date(start.getTime() + 45 * 60_000),
+            label: uid,
+            subjectId: sem3,
+            status: 'confirmed',
+          })
+          .$returningId()
+      )[0].id;
+    const today3 = await mk('sem3-today', W(2026, 10, 25, 11, 0));
+    const next3 = await mk('sem3-next', W(2026, 10, 30, 9, 0));
+    try {
+      const day = new Date('2026-10-25T12:00:00Z');
+      const s3 = await todayForUser(db, ro, id.none, day, { semester: 3 });
+      expect(ids(s3.sessions)).toEqual([today3]);
+      const s1 = await todayForUser(db, ro, id.none, day, { semester: 1 });
+      expect(ids(s1.sessions)).toEqual([id.mid25, id.c2, id.c1]);
+      const all = await todayForUser(db, ro, id.none, day);
+      expect(ids(all.sessions)).toEqual([id.mid25, id.c2, id.c1, today3]);
+
+      const later = new Date('2026-10-27T08:00:00Z');
+      const n3 = await todayForUser(db, ro, id.none, later, { semester: 3 });
+      expect(n3.sessions).toEqual([]);
+      expect(n3.next?.id).toBe(next3);
+      const n1 = await todayForUser(db, ro, id.none, later, { semester: 1 });
+      expect(n1.next?.id).toBe(id.next2);
+    } finally {
+      await db.delete(classSessions).where(eq(classSessions.subjectId, sem3));
+      await db.delete(subjects).where(eq(subjects.id, sem3));
+    }
   });
 });
 

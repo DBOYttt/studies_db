@@ -32,6 +32,28 @@ export const view = (...components: ViewComponent[]): View => ({
 export const clip = (s: string, n = MAX_ID) =>
   s.length <= n ? s : `${s.slice(0, n - 1)}…`;
 
+/** `S<n> · <code> <name>` when `prefix` (the semester orients), else `<code> <name>`. */
+export const subjectOptionLabel = (
+  s: { code: string; name: string; semester: number },
+  prefix: boolean | number,
+  nameOnly = false,
+): string => {
+  const base = nameOnly ? s.name : `${s.code} ${s.name}`;
+  const on = typeof prefix === 'number' ? prefix > 25 : prefix;
+  return clip(on ? `S${s.semester} · ${base}` : base);
+};
+
+/**
+ * Whether a subject list needs the `S<n> · ` prefix to be told apart: more
+ * than 25 subjects, more than one semester, or two subjects with one name.
+ */
+export const needsSemesterPrefix = (
+  subjects: { name: string; semester: number }[],
+): boolean =>
+  subjects.length > 25 ||
+  new Set(subjects.map((s) => s.semester)).size > 1 ||
+  new Set(subjects.map((s) => s.name)).size < subjects.length;
+
 export const chunk = <T>(xs: T[], n: number): T[][] =>
   Array.from({ length: Math.ceil(xs.length / n) }, (_, i) =>
     xs.slice(i * n, i * n + n),

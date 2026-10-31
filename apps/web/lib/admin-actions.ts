@@ -15,6 +15,7 @@ import {
   enqueueAdminBotRequest,
   getLecturerAdmin,
   requestPlanSync,
+  type Semester,
   subjects,
   textOrNull,
   unassignLecturer,
@@ -147,9 +148,9 @@ export async function editSubjectAction(
   // fields.
   const patch: Parameters<typeof editSubject>[2] = {};
   if (t.has('name') && v.name !== cur.name) patch.name = v.name;
-  // A semester other than the stored one passed the 1-or-2 check.
+  // A semester other than the stored one passed the SEMESTERS check.
   if (t.has('semester') && v.semester !== cur.semester)
-    patch.semester = v.semester as 1 | 2;
+    patch.semester = v.semester as Semester;
   if (t.has('ects') && v.ects !== cur.ects) patch.ects = v.ects;
   if (t.has('description') && v.description !== cur.description)
     patch.description = v.description;

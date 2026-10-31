@@ -53,7 +53,10 @@ export interface SubjectCard {
 const toDate = (v: unknown): Date =>
   v instanceof Date ? v : new Date(`${String(v).replace(' ', 'T')}Z`);
 
-export async function listSubjectCards(db: Db): Promise<SubjectCard[]> {
+export async function listSubjectCards(
+  db: Db,
+  semester?: number | null,
+): Promise<SubjectCard[]> {
   const [subs, kindRows, stats] = await Promise.all([
     db
       .select({
@@ -64,6 +67,7 @@ export async function listSubjectCards(db: Db): Promise<SubjectCard[]> {
         ects: subjects.ects,
       })
       .from(subjects)
+      .where(semester == null ? undefined : eq(subjects.semester, semester))
       .orderBy(asc(subjects.semester), asc(subjects.name), asc(subjects.id)),
     db
       .selectDistinct({ subjectId: classes.subjectId, kind: classes.kind })
@@ -140,6 +144,8 @@ export interface SimpleFileFilter {
   kind?: ClassKind;
   group?: number;
   tagId?: number;
+  /** Only files of this semester's subjects (null or missing: all). */
+  semester?: number | null;
   limit: number;
   offset?: number;
   /** false: skip the COUNT(*) (callers that never show a total). */
@@ -172,6 +178,12 @@ export async function listSimpleFiles(
   if (f.tagId !== undefined) {
     conds.push(
       sql`EXISTS (SELECT 1 FROM topic_tags tt WHERE tt.topic_id = ${topics.id} AND tt.tag_id = ${f.tagId})`,
+    );
+  }
+  // A subquery, so the count (which does not join subjects) filters the same.
+  if (f.semester != null) {
+    conds.push(
+      sql`${topics.subjectId} IN (SELECT s.id FROM subjects s WHERE s.semester = ${f.semester})`,
     );
   }
   const where = and(...conds);
@@ -213,6 +225,7 @@ export async function searchSimpleFiles(
   db: Db,
   q: string,
   limit = 100,
+  semester?: number | null,
 ): Promise<SimpleSearchResult> {
   const term = q.trim().slice(0, 200);
   if (!term) return { files: [], topics: 0 };
@@ -224,12 +237,17 @@ export async function searchSimpleFiles(
       .where(
         and(
           ...live(),
+          semester == null ? undefined : eq(subjects.semester, semester),
           sql`(${like(materials.originalFilename)} OR ${like(topics.title)} OR ${like(subjects.name)})`,
         ),
       )
       .orderBy(desc(materials.createdAt), desc(materials.id))
       .limit(limit),
-    searchAll(db, { q: term, limit }),
+    searchAll(db, {
+      q: term,
+      limit,
+      ...(semester == null ? {} : { semester }),
+    }),
   ]);
   // A file without extracted text "matches" by its name only: no snippet.
   const snippets = new Map<number, string>();

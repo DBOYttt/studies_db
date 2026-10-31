@@ -19,7 +19,12 @@ export const FIELD_MAX = {
   classNote: 500,
 } as const;
 
-export const SEMESTERS = [1, 2] as const;
+export const SEMESTERS = [1, 2, 3, 4, 5, 6, 7] as const;
+export type Semester = (typeof SEMESTERS)[number];
+
+export function isSemester(n: unknown): n is Semester {
+  return (SEMESTERS as readonly unknown[]).includes(n);
+}
 export const ECTS_MIN = 0;
 export const ECTS_MAX = 30;
 export const GROUP_MIN = 1;

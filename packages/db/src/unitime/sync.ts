@@ -1,4 +1,14 @@
-import { and, eq, inArray, isNull, sql } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+  or,
+  sql,
+} from 'drizzle-orm';
+import type { Semester } from '../admin-fields.js';
 import type { Db, DbExecutor } from '../client.js';
 import type { SessionKind, SessionSource } from '../constants.js';
 import { ensureClass, ensureGroup } from '../hierarchy.js';
@@ -23,6 +33,16 @@ export interface SyncStats {
   deleted: number;
   unchanged: number;
   warnings: string[];
+  /** Per-feed results of a worker run with configured semester feeds. */
+  feeds?: FeedStats[];
+}
+
+export interface FeedStats {
+  semester: number;
+  ok: boolean;
+  created: number;
+  updated: number;
+  deleted: number;
 }
 
 const MAX_WARNINGS = 50;
@@ -43,6 +63,7 @@ interface SessionRow {
   kind: SessionKind;
   source: SessionSource;
   sequence: number;
+  feedSemester: number | null;
 }
 
 export interface SyncOptions {
@@ -55,6 +76,12 @@ export interface SyncOptions {
    * Default 'classes'.
    */
   source?: SessionSource;
+  /**
+   * The semester this feed belongs to. Rows are stored with it, rows missing
+   * from the feed are removed only when their feed_semester matches, and new
+   * subjects get this semester. Absent = the env feed (NULL, `semesterFor`).
+   */
+  feedSemester?: Semester;
 }
 
 function sessionKey(uid: string, occurrenceStart: Date): string {
@@ -74,7 +101,8 @@ function sameSession(a: SessionRow, b: SessionRow): boolean {
     a.status === b.status &&
     a.kind === b.kind &&
     a.source === b.source &&
-    a.sequence === b.sequence
+    a.sequence === b.sequence &&
+    a.feedSemester === b.feedSemester
   );
 }
 
@@ -96,6 +124,7 @@ class Resolver {
     private db: DbExecutor,
     private calendarName: string,
     private takenCodes: Set<string>,
+    private feedSemester: Semester | null = null,
   ) {}
 
   async subject(c: ClassifiedEvent): Promise<number> {
@@ -116,7 +145,8 @@ class Resolver {
         .values({
           name,
           code,
-          semester: semesterFor(this.calendarName, c.yearOfStudy),
+          semester:
+            this.feedSemester ?? semesterFor(this.calendarName, c.yearOfStudy),
           ects: 0,
           discordChannelId: null,
           unitimeName,
@@ -272,6 +302,7 @@ export async function syncTimetable(
       tx,
       calendar.name,
       new Set(codes.map((x) => x.code.toUpperCase())),
+      opts.feedSemester ?? null,
     );
 
     const desired = new Map<string, SessionRow>();
@@ -299,6 +330,7 @@ export async function syncTimetable(
           kind: c.sessionKind,
           source,
           sequence: ev.sequence,
+          feedSemester: opts.feedSemester ?? null,
         });
       }
     }
@@ -320,6 +352,7 @@ export async function syncTimetable(
         kind: classSessions.kind,
         source: classSessions.source,
         sequence: classSessions.sequence,
+        feedSemester: classSessions.feedSemester,
       })
       .from(classSessions);
 
@@ -336,7 +369,11 @@ export async function syncTimetable(
       const want = desired.get(key);
       if (!want) {
         // Another feed's row: that feed's own sync decides about it.
-        if (row.source === source) toDelete.push(row.id);
+        if (
+          row.source === source &&
+          (row.feedSemester ?? null) === (opts.feedSemester ?? null)
+        )
+          toDelete.push(row.id);
         continue;
       }
       desired.delete(key);
@@ -344,7 +381,18 @@ export async function syncTimetable(
       // feed's row wins. The class sync leaves it alone; the exam sync takes
       // over a row the class feed imported first.
       if (row.source === 'exams' && source !== 'exams') {
-        stats.unchanged++;
+        // An env exam row (NULL) the semester feed also lists is claimed for
+        // that semester only, so its cleanup does not delete it.
+        if (row.feedSemester === null && opts.feedSemester !== undefined) {
+          await tx
+            .update(classSessions)
+            .set({
+              feedSemester: opts.feedSemester,
+              updatedAt: sql`CURRENT_TIMESTAMP`,
+            })
+            .where(eq(classSessions.id, row.id));
+          stats.updated++;
+        } else stats.unchanged++;
         continue;
       }
       if (sameSession(row, want)) {
@@ -368,4 +416,46 @@ export async function syncTimetable(
     }
     return stats;
   });
+}
+
+/**
+ * Deletes the sessions no stored semester feed owns: rows of a semester not
+ * in `keep` (its feed was cleared), and env-feed rows (feed_semester NULL)
+ * of subjects whose semester is in `keep` (that semester's feed replaced
+ * them). Env rows of a semester without a stored feed stay until its feed is
+ * added. Returns how many were removed.
+ */
+export async function removeUnownedSessions(
+  db: Db,
+  keep: readonly number[],
+): Promise<number> {
+  if (keep.length === 0) return removeFeedScopedSessions(db);
+  const keptSubjects = db
+    .select({ id: subjects.id })
+    .from(subjects)
+    .where(inArray(subjects.semester, [...keep]));
+  const [res] = await db
+    .delete(classSessions)
+    .where(
+      or(
+        and(
+          isNull(classSessions.feedSemester),
+          inArray(classSessions.subjectId, keptSubjects),
+        ),
+        notInArray(classSessions.feedSemester, [...keep]),
+      ),
+    );
+  return res.affectedRows;
+}
+
+/**
+ * Deletes every row a semester feed imported (feed_semester NOT NULL). The
+ * worker runs it when no feed is stored, so clearing the last feed removes
+ * its sessions; env-feed rows stay. Returns how many were removed.
+ */
+export async function removeFeedScopedSessions(db: Db): Promise<number> {
+  const [res] = await db
+    .delete(classSessions)
+    .where(isNotNull(classSessions.feedSemester));
+  return res.affectedRows;
 }

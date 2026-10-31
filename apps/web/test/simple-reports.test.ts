@@ -8,6 +8,7 @@ import {
 } from '@studies/db';
 import { nowWall } from '@studies/db/plan';
 import { closeTestDb, resetTestDb, testRoUrl } from '@studies/db/testing';
+import { eq, inArray } from 'drizzle-orm';
 import mysql from 'mysql2/promise';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
@@ -21,21 +22,33 @@ vi.mock('@/lib/db', async (importOriginal) => ({
 }));
 
 let cookieSid: string | undefined;
+let cookieSem: string | undefined;
 vi.mock('next/headers', () => ({
   headers: async () => new Headers(),
   cookies: async () => ({
     get: (n: string) =>
-      n === 'sid' && cookieSid ? { name: n, value: cookieSid } : undefined,
+      n === 'sid' && cookieSid
+        ? { name: n, value: cookieSid }
+        : n === 'studiesdb.semester' && cookieSem
+          ? { name: n, value: cookieSem }
+          : undefined,
   }),
 }));
 
 const { RO_POOL_OPTIONS } = await import('../lib/db');
 const { GET } = await import('../app/(simple)/s/reports/csv/route');
 const { parseReportIndex, REPORT_SLUGS } = await import('../lib/simple');
+const { reportQuery } = await import('../lib/example-queries');
+const { runReadonlyQuery } = await import('../lib/sql-console');
 
 let sid: string;
-const call = (r?: string) =>
-  GET(new Request(`http://x/s/reports/csv${r === undefined ? '' : `?r=${r}`}`));
+let userId: number;
+const call = (r?: string, extra = '') =>
+  GET(
+    new Request(
+      `http://x/s/reports/csv${r === undefined ? '' : `?r=${r}`}${extra}`,
+    ),
+  );
 
 beforeAll(async () => {
   db = await resetTestDb();
@@ -51,7 +64,7 @@ beforeAll(async () => {
     ects: 5,
     discordChannelId: 'c1',
   });
-  const userId = await upsertUser(db, {
+  userId = await upsertUser(db, {
     discordUserId: 'u1',
     displayName: 'Ann',
     avatarUrl: null,
@@ -205,5 +218,82 @@ describe('GET /s/reports/csv', () => {
     expect(body[1]).toMatch(/,Test,MECH,Kolokwium 1$/);
     expect(body[2]).toMatch(/,Exam,MECH,Egzamin$/);
     expect(body[3]).toMatch(/,Exam,MECH,Na granicy$/);
+  });
+});
+
+describe('reports with a semester', () => {
+  const body = async (r: string, extra = '') =>
+    (await (await call(r, extra)).text())
+      .replace(/^\uFEFF/, '')
+      .split('\r\n')
+      .slice(1)
+      .filter(Boolean);
+
+  it('reportQuery binds the semester as a parameter', () => {
+    for (const i of [0, 1, 2]) {
+      expect(reportQuery(i, null).values).toBeUndefined();
+      const q = reportQuery(i, 3);
+      expect(q.values).toEqual([3]);
+      expect(q.sql).toContain('s.semester = ?');
+      expect(q.sql).not.toMatch(/semester = 3/);
+    }
+  });
+
+  it('every filtered report runs on the read-only pool', async () => {
+    for (const i of [0, 1, 2]) {
+      const q = reportQuery(i, 1);
+      const r = await runReadonlyQuery(roPool, q.sql, { values: q.values });
+      expect(r, String(i)).toMatchObject({ ok: true });
+    }
+  });
+
+  it('the CSV follows the cookie and ?sem, and keeps subject-less events', async () => {
+    const [{ id: optId }] = await db
+      .insert(subjects)
+      .values({
+        name: 'Optyka',
+        code: 'OPT',
+        semester: 3,
+        ects: 2,
+        discordChannelId: 'c3',
+      })
+      .$returningId();
+    const soon = new Date(nowWall().getTime() + 5 * 86_400_000);
+    await db.insert(events).values([
+      {
+        kind: 'kolokwium',
+        title: 'Optyka test',
+        subjectId: optId,
+        startsAt: soon,
+        createdBy: userId,
+      },
+      {
+        kind: 'egzamin',
+        title: 'Bez przedmiotu',
+        subjectId: null,
+        startsAt: soon,
+        createdBy: userId,
+      },
+    ]);
+    try {
+      cookieSem = '3';
+      expect(await body('0')).toEqual(['OPT,Optyka,0']);
+      const r2 = await body('2');
+      expect(r2.map((l) => l.split(',').slice(2).join(','))).toEqual([
+        'OPT,Optyka test',
+        ',Bez przedmiotu',
+      ]);
+      // ?sem wins over the cookie.
+      expect(await body('0', '&sem=1')).toEqual(['MECH,Mechanika,0']);
+      cookieSem = undefined;
+      expect(await body('0')).toHaveLength(2);
+      expect(await body('2')).toHaveLength(6);
+    } finally {
+      cookieSem = undefined;
+      await db
+        .delete(events)
+        .where(inArray(events.title, ['Optyka test', 'Bez przedmiotu']));
+      await db.delete(subjects).where(eq(subjects.id, optId));
+    }
   });
 });

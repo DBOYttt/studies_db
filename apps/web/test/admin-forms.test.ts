@@ -183,29 +183,29 @@ describe('parseSubjectEdit: stored semester/ECTS (C9)', () => {
   const base = { code: 'X', name: 'N', description: '', platformUrl: '' };
   it('accepts a stored out-of-range value unchanged, refuses another', () => {
     expect(
-      parseSubjectEdit(form({ ...base, semester: '3', ects: '40' }), {
-        semester: 3,
+      parseSubjectEdit(form({ ...base, semester: '8', ects: '40' }), {
+        semester: 8,
         ects: 40,
       }),
-    ).toMatchObject({ ok: true, value: { semester: 3, ects: 40 } });
+    ).toMatchObject({ ok: true, value: { semester: 8, ects: 40 } });
     expect(
-      parseSubjectEdit(form({ ...base, semester: '4', ects: '40' }), {
-        semester: 3,
+      parseSubjectEdit(form({ ...base, semester: '9', ects: '40' }), {
+        semester: 8,
         ects: 40,
       }),
     ).toEqual({
       ok: false,
-      message: 'Semester must be 1 or 2.',
+      message: 'Semester must be a whole number from 1 to 7.',
       field: 'semester',
     });
     expect(
       parseSubjectEdit(form({ ...base, semester: '1', ects: '41' }), {
-        semester: 3,
+        semester: 8,
         ects: 40,
       }).ok,
     ).toBe(false);
     expect(
-      parseSubjectEdit(form({ ...base, semester: '3', ects: '5' })).ok,
+      parseSubjectEdit(form({ ...base, semester: '8', ects: '5' })).ok,
     ).toBe(false);
   });
 });

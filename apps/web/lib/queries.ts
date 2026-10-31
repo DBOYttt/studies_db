@@ -764,15 +764,20 @@ const liveFiles = (cond: SQL) =>
   );
 
 /**
- * Subjects -> classes -> groups with live file counts, in one query. Every
- * class and group is listed (also empty ones); "Uncategorized" is added only
- * when the subject has files in topics without a class.
+ * Subjects (by semester, then name) -> classes -> groups with live file
+ * counts, in one query. Every class and group is listed (also empty ones);
+ * "Uncategorized" is added only when the subject has files in topics without
+ * a class.
  */
-export async function getNavSubjects(db: Db): Promise<NavSubject[]> {
+export async function getNavSubjects(
+  db: Db,
+  semester?: number | null,
+): Promise<NavSubject[]> {
   const rows = await db
     .select({
       code: subjects.code,
       name: subjects.name,
+      semester: subjects.semester,
       subjectFiles: liveFiles(sql`t.subject_id = ${subjects.id}`),
       noClassFiles: liveFiles(
         sql`t.subject_id = ${subjects.id} AND t.class_id IS NULL`,
@@ -787,7 +792,13 @@ export async function getNavSubjects(db: Db): Promise<NavSubject[]> {
     .from(subjects)
     .leftJoin(classes, eq(classes.subjectId, subjects.id))
     .leftJoin(classGroups, eq(classGroups.classId, classes.id))
-    .orderBy(asc(subjects.name), asc(subjects.code), asc(classGroups.number));
+    .where(semester == null ? undefined : eq(subjects.semester, semester))
+    .orderBy(
+      asc(subjects.semester),
+      asc(subjects.name),
+      asc(subjects.code),
+      asc(classGroups.number),
+    );
 
   const out: (NavSubject & { none: number })[] = [];
   const bySubject = new Map<string, NavSubject & { none: number }>();
@@ -797,6 +808,7 @@ export async function getNavSubjects(db: Db): Promise<NavSubject[]> {
       s = {
         code: r.code,
         name: r.name,
+        semester: r.semester,
         fileCount: r.subjectFiles,
         href: explorerHref(r.code, {}),
         classes: [],

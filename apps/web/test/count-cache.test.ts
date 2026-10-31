@@ -3,10 +3,12 @@ import { closeTestDb, resetTestDb } from '@studies/db/testing';
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 
 let db: Db;
+let viewsPool: unknown = null;
 vi.mock('@/lib/db', () => ({
   getDb: () => db,
   getViewsPool: () => {
-    throw new Error('no RO pool in this test');
+    if (!viewsPool) throw new Error('no RO pool in this test');
+    return viewsPool;
   },
 }));
 
@@ -46,8 +48,40 @@ describe('count caches', () => {
     expect((await C.cachedNavSubjects()).map((s) => s.code)).toContain('GAM');
   });
 
+  it('a chosen semester filters the cached lists', async () => {
+    C.invalidateCounts();
+    expect((await C.cachedSubjectCards(2)).map((s) => s.semester)).toEqual([2]);
+    expect((await C.cachedNavSubjects(1)).map((s) => s.code)).not.toContain(
+      'GAM',
+    );
+    expect((await C.cachedNavSubjects(2)).map((s) => s.code)).toContain('GAM');
+    expect((await C.cachedSubjectCards(null)).length).toBeGreaterThan(2);
+  });
+
   it('view counts are null without an RO pool, and null is not cached', async () => {
     C.invalidateCounts();
     expect(await C.cachedViewCounts()).toBeNull();
+  });
+
+  it('present semesters are cached until invalidated; a failure is not kept', async () => {
+    C.invalidateCounts();
+    expect(await C.cachedPresentSemesters()).toEqual([]);
+    let calls = 0;
+    viewsPool = {
+      query: async () => {
+        calls++;
+        return [[{ semester: 1 }, { semester: 3 }]];
+      },
+    };
+    try {
+      expect(await C.cachedPresentSemesters()).toEqual([1, 3]);
+      expect(await C.cachedPresentSemesters()).toEqual([1, 3]);
+      expect(calls).toBe(1);
+      C.invalidateCounts();
+      await C.cachedPresentSemesters();
+      expect(calls).toBe(2);
+    } finally {
+      viewsPool = null;
+    }
   });
 });
