@@ -129,8 +129,10 @@ export function modeTarget(to: UiMode, next: string | null): string {
   // A rejected `next` is not mapped either: it falls back to the start page.
   const { path, params } = parse(safe);
   const seg = path.split('/').filter(Boolean);
+  // Fallbacks and event pages carry only the semester choice.
+  const keep = pick(params, []);
   if (to === 'advanced') {
-    if (seg[0] !== 's') return '/';
+    if (seg[0] !== 's') return `/${keep}`;
     if (seg[1] === 'subjects' && seg[2] && seg.length === 3)
       return `/subjects/${enc(seg[2])}${pick(params, ['class', 'group'])}`;
     if (seg[1] === 'plan' && seg.length === 2)
@@ -140,7 +142,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
     if (seg[1] === 'wydarzenia') {
       if (seg.length === 2) return `/wydarzenia${pick(params, ['page'])}`;
       const e = eventPath(seg.slice(2));
-      if (e) return `/wydarzenia${e}`;
+      if (e) return `/wydarzenia${e}${keep}`;
     }
     if (seg[1] === 'reports' && seg.length === 2) {
       const r = params.get('r');
@@ -149,9 +151,9 @@ export function modeTarget(to: UiMode, next: string | null): string {
         if (q) return sqlHref('/sql', q.sql);
       }
     }
-    return '/';
+    return `/${keep}`;
   }
-  if (seg.length === 0) return '/s';
+  if (seg.length === 0) return `/s${keep}`;
   if (seg[0] === 'subjects' && seg[1] && seg.length === 2)
     return `/s/subjects/${enc(seg[1])}${pick(params, ['class', 'group'])}`;
   if (seg[0] === 'plan' && seg.length === 1)
@@ -161,7 +163,7 @@ export function modeTarget(to: UiMode, next: string | null): string {
   if (seg[0] === 'wydarzenia') {
     if (seg.length === 1) return `/s/wydarzenia${pick(params, ['page'])}`;
     const e = eventPath(seg.slice(1));
-    if (e) return `/s/wydarzenia${e}`;
+    if (e) return `/s/wydarzenia${e}${keep}`;
   }
-  return '/s';
+  return `/s${keep}`;
 }
