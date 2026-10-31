@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
+import { InstallAppButton } from '@/components/InstallAppButton';
 import { Notice } from '@/components/Notice';
+import { PasteSignInLink } from '@/components/PasteSignInLink';
 import { SESSION_ENDED } from '@/lib/notices';
 
 export const metadata: Metadata = { title: 'Sign in' };
@@ -24,6 +26,8 @@ export default async function LoginInfo({
         To sign in, type /link on your year's Discord server. The bot will send
         you a sign-in link.
       </p>
+      <PasteSignInLink />
+      <InstallAppButton variant="page" />
     </main>
   );
 }

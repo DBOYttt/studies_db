@@ -6,7 +6,12 @@ const IPHONE_SAFARI =
 
 loginOnce('pwa-shell', process.env.E2E_TOKEN_PWA_SHELL, { mode: 'simple' });
 
-test.use({ userAgent: IPHONE_SAFARI, hasTouch: true, isMobile: true });
+test.use({
+  userAgent: IPHONE_SAFARI,
+  hasTouch: true,
+  isMobile: true,
+  viewport: { width: 390, height: 844 },
+});
 
 for (const mode of ['simple', 'advanced'] as const) {
   test(`${mode} top bar: Install app opens the iOS guide`, async ({

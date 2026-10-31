@@ -121,3 +121,20 @@ test.describe('installed app', () => {
     expect(sid?.expires).toBeGreaterThan(Date.now() / 1000 + 300 * 24 * 3600);
   });
 });
+
+test('Chromium finds and parses the manifest without errors', async ({
+  page,
+  context,
+}) => {
+  await page.goto('/login-info');
+  const cdp = await context.newCDPSession(page);
+  const m = (await cdp.send('Page.getAppManifest')) as {
+    url: string;
+    errors: unknown[];
+    manifest?: { display: string; icons?: { url: string }[] };
+  };
+  expect(m.url).toBe('http://localhost:3100/manifest.webmanifest');
+  expect(m.errors).toEqual([]);
+  expect(m.manifest?.display).toBe('kStandalone');
+  expect(m.manifest?.icons?.length).toBe(3);
+});

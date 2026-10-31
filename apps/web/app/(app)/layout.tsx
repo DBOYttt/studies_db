@@ -1,6 +1,7 @@
 import { SignOut } from '@phosphor-icons/react/dist/ssr';
 import { PUBLIC_VIEWS } from '@studies/db/constants';
 import type { ReactNode } from 'react';
+import { InstallAppButton } from '@/components/InstallAppButton';
 import {
   SemesterProvider,
   SemesterSwitcher,
@@ -48,6 +49,7 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
         footer={<ConsoleFooter />}
         topbarEnd={
           <>
+            <InstallAppButton variant="bar" />
             <SemesterSwitcher />
             <ModeSwitch mode="advanced" />
             <span className="text-subtle max-md:hidden" aria-hidden>
