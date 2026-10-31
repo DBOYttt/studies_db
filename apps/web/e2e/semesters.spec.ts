@@ -58,6 +58,12 @@ test('simple: choosing 3 hides semester-1 subjects, the choice sticks, All bring
   await expect(page.getByText('Wyjazd pierwszego semestru')).toBeVisible();
   await page.goto('/s');
 
+  // Segments are at least 24 px (WCAG 2.5.8).
+  const seg = await segments(page)
+    .getByRole('link', { name: 'Semester 3' })
+    .boundingBox();
+  expect(seg?.height ?? 0).toBeGreaterThanOrEqual(24);
+  expect(seg?.width ?? 0).toBeGreaterThanOrEqual(24);
   await choose(page, '3', /\/s$/);
   await expect(segments(page).locator('[aria-current="true"]')).toHaveText(
     'Semester 3',
@@ -105,6 +111,19 @@ test('simple: an empty filtered list offers all semesters', async ({
   await expect(
     page.getByText('Nothing found. Try another word.'),
   ).toBeVisible();
+
+  // A semester without subjects: no extra segment, a note after them.
+  await page.goto('/semester?to=6&next=/s');
+  await expect(page).toHaveURL(/\/s$/);
+  await expect(page.getByText('No subjects in semester 6.')).toBeVisible();
+  await expect(segments(page)).toContainText('Semester 6 (no subjects)');
+  await expect(
+    segments(page).getByRole('link', { name: 'Semester 6' }),
+  ).toHaveCount(0);
+  await expect(page).toHaveTitle('Start · Semester 6 · Studies DB');
+  await page.getByRole('link', { name: 'Show all semesters' }).click();
+  await expect(page).toHaveURL(/\/s$/);
+  await expect(page.getByText('No subjects in semester 6.')).toHaveCount(0);
 });
 
 test('advanced: the same switcher filters the home grid, timetable and events', async ({
@@ -162,6 +181,7 @@ test.describe('phone', () => {
     await expect(select).toBeVisible();
     const box = await select.boundingBox();
     expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    expect(box?.width ?? 0).toBeGreaterThanOrEqual(44);
     // The select may be changed before hydration (no handler yet): retry.
     await expect(async () => {
       await select.selectOption('3');
@@ -182,5 +202,52 @@ test.describe('phone', () => {
         page.getByRole('link', { name: /Fizyka techniczna/ }).first(),
       ).toBeVisible({ timeout: 3000 });
     }).toPass();
+  });
+});
+
+test.describe('admin feeds card', () => {
+  loginOnce('semesters-admin', process.env.E2E_TOKEN_SEMESTERS_ADMIN);
+
+  test('set, then clear a feed: hints, names, confirmation and result', async ({
+    page,
+  }) => {
+    await page.goto('/admin/sync');
+    const card = page.getByRole('region', { name: 'Timetable feeds' });
+    await expect(card).toContainText('is a fingerprint of the link');
+    const row = card.getByRole('row').filter({ hasText: /^6/ });
+    await row.getByRole('button', { name: 'Set semester 6 feed' }).click();
+    const form = card.getByRole('form', { name: 'Semester 6 feed' });
+    await expect(
+      card.getByText('Only https links on plan.agh.edu.pl.'),
+    ).toBeVisible();
+    await expect(
+      card.getByRole('button', { name: 'Close semester 6 feed' }),
+    ).toBeVisible();
+    // The form may be used before hydration: retry until the save lands.
+    await expect(async () => {
+      await form
+        .getByLabel('Class feed link')
+        .fill('https://plan.agh.edu.pl/e2e-semester-6.ics');
+      await form.getByRole('button', { name: 'Save feed' }).click();
+      await expect(card.getByText('Semester 6 feed saved.')).toBeVisible({
+        timeout: 3000,
+      });
+    }).toPass();
+    await expect(row).toContainText(/plan\.agh\.edu\.pl\/…#[0-9a-f]{6}/);
+    await expect(
+      page.getByText(/Sync requested at \d{2}:\d{2} \(Warsaw\)/),
+    ).toBeVisible();
+
+    await row.getByRole('button', { name: 'Clear semester 6 feed' }).click();
+    await expect(
+      row.getByText(
+        'Clear the semester 6 feeds? Its imported sessions are removed at the next successful sync.',
+      ),
+    ).toBeVisible();
+    await row.getByRole('button', { name: 'Confirm clear' }).click();
+    await expect(
+      card.getByRole('status').filter({ hasText: 'Semester 6 feed cleared.' }),
+    ).toBeVisible();
+    await expect(row).toContainText('Not set');
   });
 });

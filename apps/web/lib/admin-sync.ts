@@ -94,3 +94,28 @@ export async function loadFeedRows(db: Db): Promise<FeedRow[]> {
     };
   });
 }
+
+const hhmm = new Intl.DateTimeFormat('en-GB', {
+  timeZone: 'Europe/Warsaw',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+});
+
+/**
+ * The Timetable card's line while a sync request waits for the worker (no
+ * run since it was requested), else null.
+ */
+export function planPendingText(plan: {
+  requestedAt: Date | null;
+  lastRunAt: Date | null;
+}): string | null {
+  const { requestedAt, lastRunAt } = plan;
+  if (requestedAt === null) return null;
+  if (lastRunAt !== null && requestedAt <= lastRunAt) return null;
+  return `Sync requested at ${hhmm.format(requestedAt)} (Warsaw), waiting for the worker.`;
+}
+
+/** The Class feed input's hint: the first allowed host, like the refusal. */
+export const feedHostHint = (hosts: readonly string[]): string =>
+  `Only https links on ${hosts[0] ?? 'the configured host'}.`;

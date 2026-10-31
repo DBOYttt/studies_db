@@ -20,6 +20,13 @@ export type FeedCardRow = {
 
 const dash = <span className="text-faint">—</span>;
 const notSet = <span className="text-muted">Not set</span>;
+/** A masked link (`host/…#fingerprint`) in mono, or "Not set" in the body font. */
+const feedCell = (masked: string | null) =>
+  masked === null ? (
+    notSet
+  ) : (
+    <span className="font-mono text-xs">{masked}</span>
+  );
 
 /**
  * Body of the "Timetable feeds" card: one row per semester. The page
@@ -28,7 +35,14 @@ const notSet = <span className="text-muted">Not set</span>;
  * are uncontrolled, so what the admin is typing survives a refresh. Stored
  * links are never sent here (masked values only) and never prefill an input.
  */
-export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
+export function FeedsCard({
+  rows,
+  hostHint,
+}: {
+  rows: FeedCardRow[];
+  /** "Only https links on <first allowed host>." (from the server's env). */
+  hostHint: string;
+}) {
   const [editing, setEditing] = useState<number | null>(null);
   // A cleared semester closes its edit row.
   const closeAfterClear = (semester: number) => (s: ActionState) => {
@@ -38,7 +52,16 @@ export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
   return (
     <CardStatus>
       <div className="overflow-x-auto">
-        <table className="w-full border-collapse text-[13px]">
+        {/* Fixed columns: a row's buttons or an open form never move the
+            feed columns. */}
+        <table className="w-full min-w-[880px] table-fixed border-collapse text-[13px]">
+          <colgroup>
+            <col className="w-24" />
+            <col />
+            <col />
+            <col className="w-52" />
+            <col className="w-64" />
+          </colgroup>
           <thead>
             <tr>
               <th className={th}>Semester</th>
@@ -54,16 +77,20 @@ export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
             {rows.map((r, i) => {
               const open = editing === r.semester;
               const zebra = i % 2 ? 'bg-zebra' : '';
+              const editText = open ? 'Close' : r.classMasked ? 'Edit' : 'Set';
               return [
                 <tr key={r.semester} className={zebra}>
-                  <td className={`${td} whitespace-nowrap font-semibold`}>
+                  <th
+                    scope="row"
+                    className={`${td} text-left whitespace-nowrap font-semibold`}
+                  >
                     {r.semester}
+                  </th>
+                  <td className={`${td} break-all`}>
+                    {feedCell(r.classMasked)}
                   </td>
-                  <td className={`${td} font-mono text-xs`}>
-                    {r.classMasked ?? notSet}
-                  </td>
-                  <td className={`${td} font-mono text-xs`}>
-                    {r.classMasked === null ? dash : (r.examMasked ?? notSet)}
+                  <td className={`${td} break-all`}>
+                    {feedCell(r.examMasked)}
                   </td>
                   <td className={`${td} whitespace-nowrap tabular-nums`}>
                     {r.updated ?? dash}
@@ -74,11 +101,12 @@ export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
                         type="button"
                         aria-expanded={open}
                         aria-controls={`feed-edit-${r.semester}`}
-                        aria-label={`Edit semester ${r.semester} feed`}
+                        // The name starts with the visible text (WCAG 2.5.3).
+                        aria-label={`${editText} semester ${r.semester} feed`}
                         className={`${secondaryBtn} max-sm:min-h-11`}
                         onClick={() => setEditing(open ? null : r.semester)}
                       >
-                        {open ? 'Close' : r.classMasked ? 'Edit' : 'Set'}
+                        {editText}
                       </button>
                       {r.classMasked !== null && (
                         <ActionButton
@@ -90,7 +118,7 @@ export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
                           cardStatus
                           onResult={closeAfterClear(r.semester)}
                           confirm={{
-                            question: `Clear the semester ${r.semester} feeds?`,
+                            question: `Clear the semester ${r.semester} feeds? Its imported sessions are removed at the next successful sync.`,
                             confirmLabel: 'Confirm clear',
                           }}
                         />
@@ -116,26 +144,39 @@ export function FeedsCard({ rows }: { rows: FeedCardRow[] }) {
                                 value={r.semester}
                               />
                               <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                <Field
-                                  className={label}
-                                  error={error}
-                                  formId={id}
-                                  name="class_url"
-                                >
-                                  Class feed link
-                                  <input
-                                    type="url"
+                                <div className="flex min-w-0 flex-col gap-1">
+                                  <Field
+                                    className={label}
+                                    error={error}
+                                    formId={id}
                                     name="class_url"
-                                    autoComplete="off"
-                                    className={input}
-                                    placeholder={
-                                      r.classMasked
-                                        ? 'Leave empty to keep the current link'
-                                        : 'https://…'
-                                    }
-                                    {...fieldAria(error, id, 'class_url')}
-                                  />
-                                </Field>
+                                  >
+                                    Class feed link
+                                    <input
+                                      type="url"
+                                      name="class_url"
+                                      autoComplete="off"
+                                      className={input}
+                                      placeholder={
+                                        r.classMasked
+                                          ? 'Leave empty to keep the current link'
+                                          : 'https://…'
+                                      }
+                                      {...fieldAria(
+                                        error,
+                                        id,
+                                        'class_url',
+                                        `${id}-class-hint`,
+                                      )}
+                                    />
+                                  </Field>
+                                  <span
+                                    id={`${id}-class-hint`}
+                                    className={hint}
+                                  >
+                                    {hostHint}
+                                  </span>
+                                </div>
                                 <Field
                                   className={label}
                                   error={error}

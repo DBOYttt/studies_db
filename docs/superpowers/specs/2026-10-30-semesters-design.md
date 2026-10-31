@@ -100,7 +100,13 @@ button. The form has two `type="url"` inputs that are never pre-filled; an
 empty class input keeps the stored class URL, an empty exam input keeps the
 stored exam URL, and a "Remove exam feed" checkbox clears it. Setting a feed
 for a semester with no class URL requires the class URL. Clear removes the row
-(with a confirm). Server Actions call `requireAdmin()`, use `getDb()`, and
+(with a confirm that says the semester's imported sessions are removed at the
+next successful sync, and a success line in the card). The card explains the
+fingerprint in plain words, shows "Not set" for a missing link, keeps its
+columns fixed, and hints "Only https links on <first allowed host>." under
+the class input; the Edit button is named "Set/Edit/Close semester N feed".
+While a sync request waits, the Timetable card says "Sync requested at HH:MM
+(Warsaw), waiting for the worker." Server Actions call `requireAdmin()`, use `getDb()`, and
 audit `plan.feed_set` / `plan.feed_clear` with target `semester:<n>`, payload
 `{ classHost, examHost }` (hosts only), `source: 'web'`. Saving also calls
 `requestPlanSync` so the new feed runs within a minute.

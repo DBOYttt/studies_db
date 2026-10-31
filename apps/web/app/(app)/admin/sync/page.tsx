@@ -9,6 +9,7 @@ import {
 import {
   type AdminRequestKind,
   BOT_BUSY_MESSAGE,
+  feedAllowedHosts,
   getPlanSyncStatus,
   listAdminBotRequests,
   planStatusText,
@@ -30,8 +31,10 @@ import { formatAuditTime } from '@/lib/admin-audit';
 import {
   activeRequestText,
   canCancelRequest,
+  feedHostHint,
   hasActiveRequest,
   loadFeedRows,
+  planPendingText,
   REQUEST_KIND_LABELS,
   reportLabel,
   requestHref,
@@ -83,9 +86,7 @@ export default async function AdminSyncPage() {
     (r) => r.status === 'queued' || r.status === 'running',
   )?.id;
   const stale = staleNotice(requests, now);
-  const planPending =
-    plan.requestedAt !== null &&
-    (plan.lastRunAt === null || plan.requestedAt > plan.lastRunAt);
+  const planPending = planPendingText(plan);
 
   const botButtons: {
     kind: AdminRequestKind;
@@ -157,8 +158,8 @@ export default async function AdminSyncPage() {
               </p>
               {planPending && (
                 <p className="m-0 text-muted">
-                  A sync is requested and waits for the worker (within a minute
-                  while it runs). Reload to see the result.
+                  {planPending} It starts within a minute while the worker runs.
+                  Reload to see the result.
                 </p>
               )}
               <ActionButton
@@ -214,14 +215,22 @@ export default async function AdminSyncPage() {
               Timetable feeds
             </h2>
           </div>
-          <p className="m-0 border-b border-line px-3 py-2 text-muted">
-            One UniTime iCal link per semester. Links are secret: only the host
-            and a short fingerprint are shown. A semester&apos;s feed replaces
-            the sessions the env feed imported for that semester; semesters
-            without a feed keep theirs. Clearing a semester removes its imported
-            sessions at the next successful sync.
-          </p>
+          <div className="flex flex-col gap-1 border-b border-line px-3 py-2 text-pretty text-muted *:max-w-[80ch]">
+            <p className="m-0">
+              One UniTime calendar link per semester. A semester&apos;s link
+              replaces the sessions imported for it so far; a semester without a
+              link keeps its sessions. Clearing a link removes that
+              semester&apos;s imported sessions at the next successful sync.
+            </p>
+            <p className="m-0">
+              Links are secret, so only the host is shown.{' '}
+              <span className="font-mono text-xs">#a1b2c3</span> is a
+              fingerprint of the link, so you can tell links apart without
+              showing them.
+            </p>
+          </div>
           <FeedsCard
+            hostHint={feedHostHint(feedAllowedHosts())}
             rows={feedRows.map((r) => ({
               semester: r.semester,
               classMasked: r.classMasked,

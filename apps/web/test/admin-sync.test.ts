@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
   activeRequestText,
   canCancelRequest,
+  feedHostHint,
   hasActiveRequest,
   isStaleRequest,
+  planPendingText,
   REQUEST_KIND_LABELS,
   reportLabel,
   requestHref,
@@ -135,5 +137,46 @@ describe('admin request helpers', () => {
     expect(reportLabel(12)).toBe('Report (12 chars)');
     expect(reportLabel(60_001)).toBe('Report (60,001 chars)');
     expect(requestHref(42)).toBe('/admin/sync/requests/42');
+  });
+});
+
+describe('planPendingText', () => {
+  const at = new Date('2026-10-31T01:05:00Z'); // 02:05 in Warsaw (CET)
+  it('says when the sync was requested while the worker has not run since', () => {
+    const text = 'Sync requested at 02:05 (Warsaw), waiting for the worker.';
+    expect(planPendingText({ requestedAt: at, lastRunAt: null })).toBe(text);
+    expect(
+      planPendingText({
+        requestedAt: at,
+        lastRunAt: new Date('2026-10-31T00:00:00Z'),
+      }),
+    ).toBe(text);
+  });
+  it('is null with no request, or once the worker ran after it', () => {
+    expect(planPendingText({ requestedAt: null, lastRunAt: null })).toBeNull();
+    expect(
+      planPendingText({
+        requestedAt: at,
+        lastRunAt: new Date('2026-10-31T01:06:00Z'),
+      }),
+    ).toBeNull();
+    expect(planPendingText({ requestedAt: at, lastRunAt: at })).toBeNull();
+  });
+  it('uses summer time in summer', () => {
+    expect(
+      planPendingText({
+        requestedAt: new Date('2026-07-01T10:30:00Z'),
+        lastRunAt: null,
+      }),
+    ).toBe('Sync requested at 12:30 (Warsaw), waiting for the worker.');
+  });
+});
+
+describe('feedHostHint', () => {
+  it('names the first allowed host only', () => {
+    expect(feedHostHint(['plan.agh.edu.pl', 'other.example'])).toBe(
+      'Only https links on plan.agh.edu.pl.',
+    );
+    expect(feedHostHint([])).toBe('Only https links on the configured host.');
   });
 });

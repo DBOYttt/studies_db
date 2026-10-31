@@ -894,6 +894,8 @@ export default async function globalSetup() {
     process.env.E2E_TOKEN_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_EVENTS_ADMIN = await createLoginToken(db, adminId);
     process.env.E2E_TOKEN_ADMIN_SIMPLE = await createLoginToken(db, adminId);
+    // Timetable feeds card (semesters.spec.ts).
+    process.env.E2E_TOKEN_SEMESTERS_ADMIN = await createLoginToken(db, adminId);
     // Sync tab report page (admin-round2.spec.ts): a finished resync with a
     // short report.
     const [adminReq] = await db.insert(botRequests).values({
