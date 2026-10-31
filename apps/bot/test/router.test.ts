@@ -330,7 +330,7 @@ describe('router', () => {
     expect(send).toHaveBeenCalledTimes(1);
     const msg = send.mock.calls[0]?.[0];
     expect(msg.content).toMatch(
-      /^Your Studies DB link \(valid for 15 minutes, single use\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
+      /^Your Studies DB link \(valid for 15 minutes, single use\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>\nUsing the installed app\? Copy this link and paste it on the app's sign-in screen\.$/,
     );
     expect(msg.flags).toBe(MessageFlags.SuppressEmbeds);
     expect(i.editReply.mock.calls[0]?.[0].content).toBe(

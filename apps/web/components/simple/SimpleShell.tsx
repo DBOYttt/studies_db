@@ -9,6 +9,7 @@ import {
   useRef,
   useState,
 } from 'react';
+import { InstallAppButton } from '@/components/InstallAppButton';
 import { SemesterBar, SemesterSwitcher } from '@/components/SemesterSwitcher';
 import { ModeSwitch } from '@/components/shell/ModeSwitch';
 import { SkipLink } from '@/components/shell/SkipLink';
@@ -170,6 +171,7 @@ export function SimpleShell({
           </button>
           <Crumbs crumbs={crumbs} />
           <div className="flex shrink-0 items-center gap-2 text-[13px] text-muted">
+            <InstallAppButton variant="bar" />
             <SemesterSwitcher />
             <ModeSwitch mode="simple" />
             {user.avatarUrl ? (

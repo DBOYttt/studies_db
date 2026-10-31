@@ -89,7 +89,7 @@ describe('auth', () => {
     expect(await setBanned(db, 'unknown-user', true)).toBe(false);
   });
 
-  it('session expires after 30 days', async () => {
+  it('an unused session expires after 30 days', async () => {
     const u = await newUser();
     const now = new Date('2026-01-01T00:00:00Z');
     const s = must(
@@ -99,16 +99,72 @@ describe('auth', () => {
       await getSessionUser(
         db,
         s.sessionToken,
-        new Date(now.getTime() + SESSION_TTL_MS - 1),
+        new Date(now.getTime() + SESSION_TTL_MS + 1),
+      ),
+    ).toBeNull();
+  });
+
+  const expiryOf = async (token: string) =>
+    (
+      await db
+        .select({ e: sessions.expiresAt })
+        .from(sessions)
+        .where(eq(sessions.tokenHash, hashToken(token)))
+    )[0]?.e.getTime();
+
+  it('a used session slides: renewed at most once a day', async () => {
+    const u = await newUser();
+    const now = new Date('2026-01-01T00:00:00Z');
+    const s = must(
+      await consumeLoginToken(db, await createLoginToken(db, u.id, now), now),
+    );
+    const t0 = now.getTime();
+    // Used within the first day: not renewed yet.
+    await getSessionUser(db, s.sessionToken, new Date(t0 + 3600_000));
+    expect(await expiryOf(s.sessionToken)).toBe(t0 + SESSION_TTL_MS);
+    // Used two days later: moved to 30 days from then.
+    const t2 = t0 + 2 * 24 * 3600_000;
+    expect(
+      await getSessionUser(db, s.sessionToken, new Date(t2)),
+    ).not.toBeNull();
+    expect(await expiryOf(s.sessionToken)).toBe(t2 + SESSION_TTL_MS);
+    // An hour later: unchanged.
+    await getSessionUser(db, s.sessionToken, new Date(t2 + 3600_000));
+    expect(await expiryOf(s.sessionToken)).toBe(t2 + SESSION_TTL_MS);
+    // Valid past the original 30 days, refused 30 days after the last renewal.
+    expect(
+      await getSessionUser(
+        db,
+        s.sessionToken,
+        new Date(t0 + SESSION_TTL_MS + 1),
       ),
     ).not.toBeNull();
     expect(
       await getSessionUser(
         db,
         s.sessionToken,
-        new Date(now.getTime() + SESSION_TTL_MS + 1),
+        new Date(t0 + SESSION_TTL_MS + 1 + SESSION_TTL_MS + 1),
       ),
     ).toBeNull();
+  });
+
+  it('a session of a banned user (flag set without the purge) is not renewed', async () => {
+    const u = await newUser();
+    const now = new Date('2026-01-01T00:00:00Z');
+    const s = must(
+      await consumeLoginToken(db, await createLoginToken(db, u.id, now), now),
+    );
+    await db.update(users).set({ isBanned: true }).where(eq(users.id, u.id));
+    const before = await expiryOf(s.sessionToken);
+    expect(before).toBe(now.getTime() + SESSION_TTL_MS);
+    expect(
+      await getSessionUser(
+        db,
+        s.sessionToken,
+        new Date(now.getTime() + 2 * 24 * 3600_000),
+      ),
+    ).toBeNull();
+    expect(await expiryOf(s.sessionToken)).toBe(before);
   });
 
   it('deleteSession removes the session', async () => {

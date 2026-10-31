@@ -22,6 +22,9 @@ describe('proxy', () => {
       '/api/wydarzenia/12/pliki/x',
       '/api/wydarzenia/12',
       '/login-infox',
+      '/icons',
+      '/iconsx/a.png',
+      '/manifest.webmanifestx',
     ]) {
       expect(matches(u), u).toBe(true);
     }
@@ -39,6 +42,11 @@ describe('proxy', () => {
       '/icon.svg?3f9a1c2b',
       '/pdf.worker.6.3.289.min.mjs',
       '/api/wydarzenia/12/pliki',
+      '/manifest.webmanifest',
+      '/icons/icon-192.png',
+      '/icons/icon-maskable-512.png',
+      '/apple-icon.png',
+      '/apple-icon.png?abc123',
     ]) {
       expect(matches(u), u).toBe(false);
     }
@@ -98,5 +106,29 @@ describe('proxy', () => {
         method,
       ).toBe('/login-info');
     }
+  });
+
+  it('re-sets an existing sid on page navigations only (sliding session)', () => {
+    const nav = (headers: Record<string, string>, method = 'GET') =>
+      proxy(
+        new NextRequest('http://localhost:3000/sql', {
+          method,
+          headers: { cookie: 'sid=abc', ...headers },
+        }),
+      ).headers.get('set-cookie');
+    for (const h of [{ 'sec-fetch-mode': 'navigate' }, {}] as Record<
+      string,
+      string
+    >[]) {
+      const c = nav(h);
+      expect(c, JSON.stringify(h)).toContain('sid=abc');
+      expect(c).toContain('Max-Age=34560000');
+      expect(c).toContain('HttpOnly');
+      expect(c?.toLowerCase()).toContain('samesite=lax');
+    }
+    expect(nav({ 'sec-fetch-mode': 'navigate', rsc: '1' })).toBeNull();
+    expect(nav({ 'sec-fetch-mode': 'cors' })).toBeNull();
+    expect(nav({ 'next-action': 'x' }, 'POST')).toBeNull();
+    expect(nav({ 'sec-fetch-mode': 'navigate' }, 'POST')).toBeNull();
   });
 });

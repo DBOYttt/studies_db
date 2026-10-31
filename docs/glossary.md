@@ -188,3 +188,6 @@ Every task follows this table and adds any term it introduces. Dates display as 
 | Semestr (1-7) | Semester |
 | Plan zajęć: źródło UniTime (iCal) per semestr | Timetable feed |
 | Pokaż wszystkie semestry | Show all semesters |
+| Zainstaluj aplikację | Install app |
+| Aplikacja na ekranie głównym (PWA) | installed app |
+| Wklej link logowania | Paste your sign-in link |
