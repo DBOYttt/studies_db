@@ -56,7 +56,7 @@ export default async function SimpleReports({
       error: roErrorMessage(err),
     })),
   ]);
-  const sqlHref = `/mode?to=advanced&next=${encodeURIComponent(`/s/reports?r=${r}`)}`;
+  const sqlHref = `/mode?to=advanced&next=${encodeURIComponent(`/s/reports?r=${r}&sem=${semester ?? 'all'}`)}`;
   return (
     <SimpleShell
       subjects={navSubjects(cards)}

@@ -60,8 +60,8 @@ LIMIT 10`,
 FROM v_materials m
 JOIN v_users u ON u.id = m.uploader_id
 JOIN v_topics t ON t.id = m.topic_id
-JOIN v_subjects s ON s.id = t.subject_id
-WHERE s.semester = ?
+LEFT JOIN v_subjects s ON s.id = t.subject_id
+WHERE (t.subject_id IS NULL OR s.semester = ?)
 GROUP BY u.id, u.display_name
 ORDER BY files DESC
 LIMIT 10`,
@@ -103,4 +103,15 @@ export function reportQuery(
   return semester === null
     ? { sql: q.sql }
     : { sql: q.semesterSql, values: [semester] };
+}
+
+/**
+ * The SQL text of a report as the console should show it: the plain SQL, or
+ * the semester twin with the (validated, 1–7) semester written in, so "View
+ * SQL query" opens exactly what the report ran.
+ */
+export function reportSqlText(index: number, semester: number | null): string {
+  const q = EXAMPLE_QUERIES[index];
+  if (semester === null) return q.sql;
+  return q.semesterSql.replace('?', String(Math.trunc(semester)));
 }

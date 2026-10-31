@@ -99,6 +99,20 @@ describe('modeTarget simple -> advanced', () => {
   });
   it('maps reports to SQL console', () => {
     expect(t('/s/reports?r=1')).toBe(sqlHref('/sql', EXAMPLE_QUERIES[1].sql));
+    expect(t('/s/reports?r=1&sem=all')).toBe(
+      sqlHref('/sql', EXAMPLE_QUERIES[1].sql),
+    );
+  });
+  it('maps a semester report to the SQL it ran, semester written in', () => {
+    const href = t('/s/reports?r=0&sem=3');
+    expect(href).toBe(
+      sqlHref('/sql', EXAMPLE_QUERIES[0].semesterSql.replace('?', '3')),
+    );
+    expect(decodeURIComponent(href)).toContain('s.semester = 3');
+    // A bad sem never reaches the SQL text.
+    expect(t('/s/reports?r=0&sem=1;drop')).toBe(
+      sqlHref('/sql', EXAMPLE_QUERIES[0].sql),
+    );
   });
   it('out of range / bad report index -> /', () => {
     expect(t(`/s/reports?r=${EXAMPLE_QUERIES.length}`)).toBe('/');

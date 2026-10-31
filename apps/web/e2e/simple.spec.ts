@@ -181,7 +181,7 @@ test('reports: card shows table with Author header and CSV link', async ({
   ).toBeVisible();
   await expect(
     page.getByRole('link', { name: 'Download CSV' }),
-  ).toHaveAttribute('href', '/s/reports/csv?r=1');
+  ).toHaveAttribute('href', '/s/reports/csv?r=1&sem=all');
 });
 
 test('Timetable from the sidebar shows week blocks', async ({ page }) => {

@@ -1,5 +1,6 @@
 import { cookies } from 'next/headers';
-import { EXAMPLE_QUERIES } from './example-queries';
+import { EXAMPLE_QUERIES, reportSqlText } from './example-queries';
+import { parseSemesterValue } from './semester-pure';
 import { sqlHref } from './sql-editor';
 
 export type UiMode = 'simple' | 'advanced';
@@ -147,8 +148,10 @@ export function modeTarget(to: UiMode, next: string | null): string {
     if (seg[1] === 'reports' && seg.length === 2) {
       const r = params.get('r');
       if (r !== null && /^\d+$/.test(r)) {
-        const q = EXAMPLE_QUERIES[Number(r)];
-        if (q) return sqlHref('/sql', q.sql);
+        if (EXAMPLE_QUERIES[Number(r)]) {
+          const sem = parseSemesterValue(params.get('sem') ?? undefined);
+          return sqlHref('/sql', reportSqlText(Number(r), sem));
+        }
       }
     }
     return `/${keep}`;
