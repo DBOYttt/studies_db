@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { fieldAria, fieldErrorId } from '@/lib/field-errors';
 import { parseSignInLink, SIGN_IN_LINK_ERROR } from '@/lib/install-app';
 import { runsStandalone, useMounted } from './InstallAppButton';
@@ -14,7 +14,15 @@ const FORM_ID = 'paste-sign-in';
  */
 export function PasteSignInLink() {
   const mounted = useMounted();
-  const [error, setError] = useState<{ field: string } | null>(null);
+  // How many times a bad link was submitted; > 0 shows the error. Keying the
+  // message by it re-mounts the alert, so a repeated mistake is read again.
+  const [failures, setFailures] = useState(0);
+  const error = failures > 0 ? { field: 'link' } : null;
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Focus after the message is rendered and described (field-error pattern).
+  useEffect(() => {
+    if (failures > 0) inputRef.current?.focus();
+  }, [failures]);
   if (!mounted || !runsStandalone()) return null;
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -25,8 +33,7 @@ export function PasteSignInLink() {
       window.location.origin,
     );
     if (!path) {
-      setError({ field: 'link' });
-      if (input instanceof HTMLInputElement) input.focus();
+      setFailures((n) => n + 1);
       return;
     }
     window.location.assign(path);
@@ -48,6 +55,7 @@ export function PasteSignInLink() {
       </p>
       <div className="flex gap-2 max-sm:flex-col">
         <input
+          ref={inputRef}
           id={`${FORM_ID}-link`}
           name="link"
           type="text"
@@ -55,7 +63,7 @@ export function PasteSignInLink() {
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
-          onChange={() => setError(null)}
+          onChange={() => setFailures(0)}
           className="min-w-0 flex-1 rounded-md border border-line-strong bg-surface px-2.5 py-1.5 text-sm max-sm:min-h-11"
           {...fieldAria(error, FORM_ID, 'link', `${FORM_ID}-hint`)}
         />
@@ -68,7 +76,9 @@ export function PasteSignInLink() {
       </div>
       {error && (
         <p
+          key={failures}
           id={fieldErrorId(FORM_ID, 'link')}
+          role="alert"
           className="m-0 text-sm text-err-fg"
         >
           {SIGN_IN_LINK_ERROR}

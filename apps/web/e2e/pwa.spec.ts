@@ -103,9 +103,9 @@ test.describe('installed app', () => {
     await field.fill('https://evil.example/auth/callback?token=abc');
     await page.getByRole('button', { name: 'Sign in' }).click();
     await expect(field).toHaveAttribute('aria-invalid', 'true');
-    await expect(
-      page.getByText('This is not a Studies DB sign-in link.'),
-    ).toBeVisible();
+    await expect(page.getByRole('alert')).toHaveText(
+      'This is not a Studies DB sign-in link.',
+    );
 
     await field.fill(
       `<http://localhost:3100/auth/callback?token=${process.env.E2E_TOKEN_PWA}>`,

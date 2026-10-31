@@ -91,6 +91,24 @@ describe('parseSignInLink', () => {
     );
   });
 
+  it('finds the link in the whole copied DM (mobile "Copy Text")', () => {
+    const dm =
+      `Your Studies DB link (valid for 15 minutes, single use): <${O}/auth/callback?token=${T}>\n` +
+      "Using the installed app? Copy this link and paste it on the app's sign-in screen.";
+    expect(parseSignInLink(dm, O)).toBe(`/auth/callback?token=${T}`);
+    // Without the <> (a client that copies the displayed text).
+    expect(parseSignInLink(dm.replace(/[<>]/g, ''), O)).toBe(
+      `/auth/callback?token=${T}`,
+    );
+    // A message whose only link is another site's stays refused.
+    expect(
+      parseSignInLink(
+        `Sign in: https://evil.example/auth/callback?token=${T}`,
+        O,
+      ),
+    ).toBeNull();
+  });
+
   it('rejects anything else', () => {
     for (const bad of [
       '',

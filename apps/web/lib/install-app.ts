@@ -55,12 +55,16 @@ const validToken = (t: string | null): t is string =>
 /**
  * The in-app path for a pasted sign-in link, or null. Accepts the bot's link
  * on this origin (optionally with `next=/admin`, the only value it sends) or
- * a bare token; Discord's `<…>` wrapping and spaces are ignored. The callback
- * still shows its confirmation page and checks `next` itself.
+ * a bare token; Discord's `<…>` wrapping, spaces and the rest of a copied DM
+ * are ignored. The callback still shows its confirmation page and checks
+ * `next` itself.
  */
 export function parseSignInLink(input: string, origin: string): string | null {
-  const raw = input
-    .trim()
+  // A whole copied DM ("Copy Text" on a phone): take its first callback link.
+  const inMessage = input.match(
+    /https?:\/\/[^\s<>]+\/auth\/callback\?[^\s<>]+/,
+  );
+  const raw = (inMessage ? inMessage[0] : input.trim())
     .replace(/^<(.*)>$/, '$1')
     .trim();
   if (!raw) return null;

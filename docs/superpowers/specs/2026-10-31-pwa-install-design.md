@@ -49,8 +49,8 @@ Pure detection lives in `apps/web/lib/install-app.ts` so it is unit-tested:
   - iOS/iPadOS (iPhone/iPad/iPod UA, or a Mac UA with touch points > 1) → `ios`;
   - anything else → `hidden` (e.g. desktop Firefox, or Chrome before the event fires).
 - `prompt`: clicking calls the saved event's `prompt()`; on `appinstalled` or an `accepted` outcome the button
-  hides. A `dismissed` outcome keeps it (the browser may not fire the event again this page load; then it
-  hides on the next render, which is fine).
+  hides. After any outcome the used event is dropped (it works once), so the button hides until Chromium offers
+  install again with a new event.
 - `ios`: clicking opens a small dialog (native `<dialog>`, focus trapped by the browser, closes on Esc and a
   Close button) titled "Install Studies DB":
   - in Safari: "1. Tap the Share button. 2. Choose Add to Home Screen. 3. Tap Add."
@@ -86,6 +86,10 @@ sign the app in.
   refused exactly as before; sign-out still deletes the row.
 - `sessionCookieOptions().maxAge` becomes 400 days (`SESSION_COOKIE_MAX_AGE_S`, the Chrome cap). The DB expiry
   is the authority; the cookie only has to outlive it.
+- No absolute lifetime (decided 2026-10-31, the user asked to stay signed in at all times): a session used at least
+  once every 30 days never ends; sign-out (this device), a ban (all of the user's sessions) or 30 idle days end it.
+  A copied `sid` therefore lives as long as it is used. Possible later additions: "Sign out everywhere" (delete all
+  of the user's sessions) or an absolute cap on `sessions.created_at`.
 - Cookies issued before this change carry a 30-day `maxAge`. `proxy.ts` re-sets an existing `sid` cookie with
   the same value and the new options on top-level page navigations (`GET` with `Sec-Fetch-Mode: navigate`, or
   no such header). The proxy still reads no DB and still never gates: an invalid `sid` is refused by
