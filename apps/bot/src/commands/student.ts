@@ -43,7 +43,9 @@ export const LINK_DM_CLOSED =
 export async function sendLoginDm(user: User, url: string): Promise<boolean> {
   try {
     await user.send({
-      content: `Your Studies DB link (valid for 15 minutes, single use): <${url}>`,
+      content:
+        `Your Studies DB link (valid for 15 minutes, single use): <${url}>\n` +
+        "Using the installed app? Copy this link and paste it on the app's sign-in screen.",
       flags: MessageFlags.SuppressEmbeds,
     });
     return true;

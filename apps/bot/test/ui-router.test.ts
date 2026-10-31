@@ -506,7 +506,7 @@ describe('handleUi', () => {
     await handler()(i);
     expect(i.calls).toEqual(['deferReply', 'editReply']);
     expect(i.user.send.mock.calls[0][0].content).toMatch(
-      /^Your Studies DB link \(valid for 15 minutes, single use\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>$/,
+      /^Your Studies DB link \(valid for 15 minutes, single use\): <https:\/\/x\.pl\/auth\/callback\?token=[^>\s]+>\nUsing the installed app\? Copy this link and paste it on the app's sign-in screen\.$/,
     );
     expect(i.user.send.mock.calls[0][0].flags).toBe(
       MessageFlags.SuppressEmbeds,
