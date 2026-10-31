@@ -8,12 +8,19 @@ import { dbTabs } from '@/components/shell/db-tabs';
 import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getDb } from '@/lib/db';
 import { explorerHref } from '@/lib/explorer';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { listAllTags, listSubjectOptions } from '@/lib/queries';
 import { searchCounts, searchCountText } from '@/lib/search-count';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
-export const metadata: Metadata = { title: 'Search' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Search', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -191,8 +198,16 @@ export default async function SearchPage({
             className="flex items-center gap-2 rounded-md border border-warn-line bg-warn-bg px-3 py-2 text-warn-fg"
           >
             <WarningCircle size={16} weight="fill" aria-hidden />
-            <span>No results for “{q}”.</span>
-            <SemesterEmpty semester={semester} path={returnPath} />
+            {semester === null ? (
+              <span>No results for “{q}”.</span>
+            ) : (
+              <SemesterEmpty
+                semester={semester}
+                path={returnPath}
+                text={`No results for “${q}” in semester ${semester}.`}
+                label="Search all semesters"
+              />
+            )}
           </div>
         )}
       </div>

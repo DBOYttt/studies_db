@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { semesterOptions } from '@/lib/semester-pure';
+import { semesterOptions, unlistedSemester } from '@/lib/semester-pure';
 
 describe('semesterOptions', () => {
   it('is empty with fewer than two distinct semesters', () => {
@@ -16,13 +16,23 @@ describe('semesterOptions', () => {
     ]);
   });
 
-  it('lists an active semester that has no subjects', () => {
+  it('does not add a segment for an active semester without subjects', () => {
     const o = semesterOptions([1, 3], 4, '/s');
-    expect(o.map((x) => x.label)).toEqual(['All', '1', '3', '4']);
-    expect(o.find((x) => x.current)?.label).toBe('4');
-    expect(semesterOptions([], 5, '/s').map((x) => x.label)).toEqual([
-      'All',
-      '5',
+    expect(o.map((x) => x.label)).toEqual(['All', '1', '3']);
+    expect(o.some((x) => x.current)).toBe(false);
+    // Still shown, so the filter can be undone.
+    expect(semesterOptions([], 5, '/s').map((x) => x.label)).toEqual(['All']);
+    expect(unlistedSemester([1, 3], 4)).toBe(4);
+    expect(unlistedSemester([1, 3], 3)).toBeNull();
+    expect(unlistedSemester([1, 3], null)).toBeNull();
+  });
+
+  it('names each entry for screen readers', () => {
+    const o = semesterOptions([1, 3], null, '/s');
+    expect(o.map((x) => x.name)).toEqual([
+      'All semesters',
+      'Semester 1',
+      'Semester 3',
     ]);
   });
 

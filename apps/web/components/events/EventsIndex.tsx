@@ -58,14 +58,18 @@ export function EventsIndex({
         </p>
       ) : data.events.length === 0 ? (
         <div className="flex flex-col gap-1.5 rounded-md border border-line-strong bg-zebra px-4 py-3 text-muted">
-          <p className="m-0">
-            {data.page > 1 ? 'No more upcoming events.' : 'No upcoming events.'}
-          </p>
-          {data.page === 1 && (
+          {data.page === 1 && semester !== null ? (
             <SemesterEmpty
               semester={semester}
               path={eventsIndexHref(simple, 1)}
+              text={`No upcoming events in semester ${semester}.`}
             />
+          ) : (
+            <p className="m-0">
+              {data.page > 1
+                ? 'No more upcoming events.'
+                : 'No upcoming events.'}
+            </p>
           )}
         </div>
       ) : (

@@ -28,13 +28,14 @@ function thisWeek(): string {
 const blocks = (page: import('@playwright/test').Page, name: string) =>
   page.getByTestId('plan-block').filter({ hasText: name });
 
-/** Clicks a segment and waits for the /semester redirect to land. */
+/** Clicks a segment (`All` or a number) and waits for the redirect to land. */
 async function choose(
   page: import('@playwright/test').Page,
   label: string,
   url: RegExp,
 ) {
-  await segments(page).getByRole('link', { name: label, exact: true }).click();
+  const name = label === 'All' ? 'All semesters' : `Semester ${label}`;
+  await segments(page).getByRole('link', { name, exact: true }).click();
   await expect(page).toHaveURL(url);
 }
 
@@ -58,7 +59,10 @@ test('simple: choosing 3 hides semester-1 subjects, the choice sticks, All bring
   await page.goto('/s');
 
   await choose(page, '3', /\/s$/);
-  await expect(segments(page).locator('[aria-current="page"]')).toHaveText('3');
+  await expect(segments(page).locator('[aria-current="true"]')).toHaveText(
+    'Semester 3',
+  );
+  await expect(page).toHaveTitle('Start · Semester 3 · Studies DB');
   await expect(
     page.getByRole('link', { name: /Semestr trzeci/ }).first(),
   ).toBeVisible();
@@ -70,6 +74,7 @@ test('simple: choosing 3 hides semester-1 subjects, the choice sticks, All bring
   await page.goto(`/s/plan?week=${thisWeek()}`);
   await expect(blocks(page, 'SEM3')).toHaveCount(1);
   await expect(blocks(page, 'SEM1')).toHaveCount(0);
+  await expect(page.getByText('Filter: Semester 3')).toBeVisible();
 
   // Events index too.
   await page.goto('/s/wydarzenia');
@@ -93,10 +98,13 @@ test('simple: an empty filtered list offers all semesters', async ({
   await expect(page).toHaveURL(/\/s$/);
   // Nothing matches in semester 1.
   await page.goto('/s/search?q=zzzniczegonie');
-  await expect(page.getByText('Showing semester 1 only.')).toBeVisible();
-  await page.getByRole('link', { name: 'Show all semesters' }).click();
+  await expect(page.getByText('Nothing found in semester 1.')).toBeVisible();
+  await page.getByRole('link', { name: 'Search all semesters' }).click();
   await expect(page).toHaveURL(/\/s\/search\?q=zzzniczegonie$/);
-  await expect(page.getByText('Showing semester 1 only.')).toHaveCount(0);
+  await expect(page.getByText('Nothing found in semester 1.')).toHaveCount(0);
+  await expect(
+    page.getByText('Nothing found. Try another word.'),
+  ).toBeVisible();
 });
 
 test('advanced: the same switcher filters the home grid, timetable and events', async ({

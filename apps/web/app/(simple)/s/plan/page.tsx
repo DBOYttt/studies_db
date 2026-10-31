@@ -17,12 +17,19 @@ import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { parseEntityTab } from '@/lib/entity-page';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { syncFailed, syncLine } from '@/lib/plan-view';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { navSubjects } from '@/lib/simple-page';
 
-export const metadata: Metadata = { title: 'Timetable' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Timetable', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 

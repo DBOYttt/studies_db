@@ -151,21 +151,37 @@ Filtered (when a semester is chosen): simple Start subject cards and sidebar,
 `/s/subjects`, advanced home and `/subjects` grid and the nav tree, the
 timetable (week and list, both modes), the events index and the Start
 "Upcoming events" card, search (simple and advanced), and the My groups class
-list. Events without a subject always show (they are not tied to a
-semester). Today card and My groups saved choices are not filtered (they are
-already personal). Admin pages are never filtered; the admin subjects list
-shows the semester column and can be sorted by it.
+list, the Start Today / Next class card (still under My groups), Recently
+added (Start and `/s/recent`) and the ready-made reports (page and CSV).
+Events without a subject always show (they are not tied to a semester). My
+groups saved choices are not filtered. Admin pages are never filtered; the
+admin subjects list shows the semester column and can be sorted by it.
+(Revised 2026-10-31 after the QA run: Today, Recently added and Reports
+were unfiltered at first, which read as a broken filter.)
+
+Reports are fixed app SQL on the RO pool: each has a `semesterSql` twin with
+one `?` that `reportQuery` binds (never interpolated); the plain SQL stays
+the console example.
 
 Queries: `PlanFilter` gains `semester?: number`, applied as `s.semester = ?`
 on the `v_subjects` join; list and search queries take an optional
-`semester` argument the same way. A filter that empties a page shows the
-normal empty state plus "Showing semester N only — show all semesters".
+`semester` argument the same way. A filter that empties a list says what is
+empty, with the way back in the same box: "No subjects in semester N. Show
+all semesters" (search: "Nothing found in semester N. Search all
+semesters"). An empty sidebar list hides its heading. The timetable's filter
+chip names the semester ("Filter: Semester 3 · My groups").
 
 UI: a compact segmented control "All · 1 · 2 … 7" in the simple top bar and
 the advanced header, listing only semesters that have at least one subject
-(plus All; hidden entirely when only one semester has subjects). On phones it
-is a native `<select>`. It is a set of links to `/semester?...` (works without
-JS). The current choice is `aria-current`. `modeTarget` keeps `?sem`.
+(plus All; hidden entirely when only one semester has subjects and none is
+chosen). A chosen semester without subjects gets no segment (the bar would
+shift) but a "Semester N (no subjects)" note after the segments. Segments are
+at least 24 px; on phones it is a native `<select>` (44 px) and empty-state
+links are 44 px tall. It is a set of links to `/semester?...` (works without
+JS). Entries are named "All semesters" / "Semester N" with the visible text
+`All` / `N`; the current choice is `aria-current`. Filtered pages are titled
+`<Page> · Semester N · Studies DB`. `modeTarget` keeps `?sem`, on its
+fallback targets too.
 
 ## 5. Errors and limits
 

@@ -129,38 +129,46 @@ export function SimpleSidebar({
         {adminEntry}
       </nav>
 
-      <h2 className="m-0 shrink-0 border-t border-line px-[18px] pt-3.5 pb-1.5 text-xs font-semibold tracking-[0.04em] text-muted uppercase">
-        Subjects
-      </h2>
-      <nav
-        aria-label="Subjects"
-        className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3"
-      >
-        {subjects.map((s) => {
-          const cur = active.screen === 'subject' && active.code === s.code;
-          return (
-            <Link
-              key={s.code}
-              href={`/s/subjects/${encodeURIComponent(s.code)}`}
-              aria-current={cur ? 'page' : undefined}
-              className={`${row} py-1.5 ${cur ? on : `text-fg ${idle}`}`}
-            >
-              <BookOpenText
-                size={17}
-                className="shrink-0 text-accent-ink"
-                aria-hidden
-              />
-              <span lang="pl" className="min-w-0 flex-1 leading-snug">
-                {s.name}
-              </span>
-              <span className="text-xs font-normal text-faint tabular-nums">
-                <span className="sr-only">files: </span>
-                {s.count}
-              </span>
-            </Link>
-          );
-        })}
-      </nav>
+      {/* An emptied list (a semester without subjects) gets no bare heading;
+          the spacer keeps the sidebar's layout. */}
+      {subjects.length === 0 ? (
+        <div className="flex-1" />
+      ) : (
+        <>
+          <h2 className="m-0 shrink-0 border-t border-line px-[18px] pt-3.5 pb-1.5 text-xs font-semibold tracking-[0.04em] text-muted uppercase">
+            Subjects
+          </h2>
+          <nav
+            aria-label="Subjects"
+            className="flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto px-2 pb-3"
+          >
+            {subjects.map((s) => {
+              const cur = active.screen === 'subject' && active.code === s.code;
+              return (
+                <Link
+                  key={s.code}
+                  href={`/s/subjects/${encodeURIComponent(s.code)}`}
+                  aria-current={cur ? 'page' : undefined}
+                  className={`${row} py-1.5 ${cur ? on : `text-fg ${idle}`}`}
+                >
+                  <BookOpenText
+                    size={17}
+                    className="shrink-0 text-accent-ink"
+                    aria-hidden
+                  />
+                  <span lang="pl" className="min-w-0 flex-1 leading-snug">
+                    {s.name}
+                  </span>
+                  <span className="text-xs font-normal text-faint tabular-nums">
+                    <span className="sr-only">files: </span>
+                    {s.count}
+                  </span>
+                </Link>
+              );
+            })}
+          </nav>
+        </>
+      )}
     </>
   );
 }

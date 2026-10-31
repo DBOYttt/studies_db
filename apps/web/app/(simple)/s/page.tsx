@@ -11,6 +11,7 @@ import { UpcomingEvents } from '@/components/simple/UpcomingEvents';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb, getViewsPool } from '@/lib/db';
 import { loadMyGroups } from '@/lib/my-groups-load';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { nowWall, type PlanSession } from '@/lib/plan';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
@@ -19,7 +20,13 @@ import { listSimpleFiles } from '@/lib/simple-queries';
 import { type TodayClasses, todayForUser } from '@/lib/today';
 import { upcomingForUser } from '@/lib/upcoming-events';
 
-export const metadata: Metadata = { title: 'Start' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Start', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -51,12 +58,13 @@ export default async function SimpleStart({
     semester,
   ).catch(() => []);
   // Today's classes stream the same way; a failure says so in the card.
-  const today = todayForUser(db, pool, user.id, new Date(), { mine }).catch(
-    () => 'error' as const,
-  );
+  const today = todayForUser(db, pool, user.id, new Date(), {
+    mine,
+    semester,
+  }).catch(() => 'error' as const);
   const [cards, recent, preview] = await Promise.all([
     cardsP,
-    listSimpleFiles(db, { limit: 5, withTotal: false }),
+    listSimpleFiles(db, { limit: 5, withTotal: false, semester }),
     loadSimplePreview(db, sp, cachedSubjectCards()),
   ]);
   return (
@@ -87,19 +95,34 @@ export default async function SimpleStart({
       </Suspense>
       <div>
         <h2 className="mt-3 mb-0 text-base font-semibold">Subjects</h2>
-        <p className="mt-1 mb-0 text-pretty text-muted">
-          Pick a subject to see its class materials.
-        </p>
+        {cards.length > 0 && (
+          <p className="mt-1 mb-0 text-pretty text-muted">
+            Pick a subject to see its class materials.
+          </p>
+        )}
       </div>
-      <SubjectCards cards={cards} />
-      {cards.length === 0 && <SemesterEmpty semester={semester} path="/s" />}
+      {cards.length > 0 ? (
+        <SubjectCards cards={cards} />
+      ) : (
+        <div className="rounded-lg border border-line-strong bg-panel px-4 py-6 text-center text-muted">
+          {semester === null ? (
+            'No subjects yet.'
+          ) : (
+            <SemesterEmpty semester={semester} path="/s" />
+          )}
+        </div>
+      )}
       <h2 className="mt-3 mb-0 text-base font-semibold">Recently added</h2>
       <FileList
         files={isoFiles(recent.rows)}
         withSubject
         selectedId={preview?.file.id ?? null}
         baseHref="/s"
-        emptyText="No files have been added yet."
+        emptyText={
+          semester === null
+            ? 'No files have been added yet.'
+            : `No files in semester ${semester} yet.`
+        }
       />
     </SimpleShell>
   );

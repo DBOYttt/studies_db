@@ -7,13 +7,20 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getDb } from '@/lib/db';
 import { plural } from '@/lib/format';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { parsePageParam } from '@/lib/simple';
 import { isoFiles, loadSimplePreview, navSubjects } from '@/lib/simple-page';
 import { listSimpleFiles } from '@/lib/simple-queries';
 
-export const metadata: Metadata = { title: 'Recently added' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Recently added', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -36,7 +43,7 @@ export default async function SimpleRecent({
   const cardsP = cachedSubjectCards(semester);
   const [cards, list, preview] = await Promise.all([
     cardsP,
-    listSimpleFiles(db, { limit: page * PER_PAGE }),
+    listSimpleFiles(db, { limit: page * PER_PAGE, semester }),
     loadSimplePreview(db, sp, cachedSubjectCards()),
   ]);
   const baseHref = page > 1 ? `/s/recent?page=${page}` : '/s/recent';
@@ -75,7 +82,11 @@ export default async function SimpleRecent({
         withSubject
         selectedId={preview?.file.id ?? null}
         baseHref={baseHref}
-        emptyText="No files have been added yet."
+        emptyText={
+          semester === null
+            ? 'No files have been added yet.'
+            : `No files in semester ${semester} yet.`
+        }
       />
       {list.total > 0 && (
         <div className="flex flex-wrap items-center gap-3 text-[13px] text-muted">

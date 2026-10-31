@@ -43,6 +43,7 @@ import {
   hiddenNote,
   mergedBarText,
   myGroupsHref,
+  planFilterLabel,
   type SessionLinks,
   showAllGroupsPrompt,
   unpickedHidden,
@@ -99,6 +100,8 @@ export interface WeekViewProps {
   simple?: boolean;
   /** Link of the "+ Add event" button (the event form, prefilled). */
   newEventHref?: string;
+  /** The chosen semester (named in the filter chip) and the way back. */
+  semester?: { n: number; allHref: string } | null;
 }
 
 const EXAM_STYLE = {
@@ -147,6 +150,7 @@ export function WeekView({
   myGroups = EMPTY_GROUPS,
   simple = false,
   newEventHref,
+  semester = null,
 }: WeekViewProps) {
   const filterOn = myGroupsFilter && Object.keys(myGroups).length > 0;
 
@@ -260,16 +264,27 @@ export function WeekView({
         </nav>
       </div>
 
-      {filterOn && (
+      {(filterOn || semester) && (
         <div className="flex flex-wrap items-center gap-x-1.5 gap-y-1 self-start rounded-md border border-line-strong bg-box-head px-2.5 py-1">
           <Funnel size={14} className="text-accent-ink" aria-hidden />
-          <span>Filter: My groups</span>
-          <Link
-            href={groupsHref}
-            className="text-accent-ink hover:text-accent-ink-hover hover:underline"
-          >
-            change
-          </Link>
+          <span>{planFilterLabel(semester?.n ?? null, filterOn)}</span>
+          {filterOn && (
+            <Link
+              href={groupsHref}
+              className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+            >
+              {semester ? 'change groups' : 'change'}
+            </Link>
+          )}
+          {semester && (
+            // A plain link: /semester sets a cookie and must not be prefetched.
+            <a
+              href={semester.allHref}
+              className="text-accent-ink hover:text-accent-ink-hover hover:underline"
+            >
+              show all semesters
+            </a>
+          )}
           {hidden && hidden.count > 0 && (
             <Link href={groupsHref} className="ml-1 text-muted hover:underline">
               {hiddenNote(hidden)}

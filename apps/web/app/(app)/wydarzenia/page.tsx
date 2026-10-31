@@ -7,11 +7,18 @@ import { ScreenHeader } from '@/components/shell/ScreenHeader';
 import { getViewsPool } from '@/lib/db';
 import { parseEventsPage, upcomingEventsPage } from '@/lib/events-index';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { nowWall } from '@/lib/plan';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 
-export const metadata: Metadata = { title: 'Events' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Events', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 

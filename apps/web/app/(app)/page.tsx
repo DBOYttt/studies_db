@@ -9,6 +9,7 @@ import { getViewsPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
 import { formatDate } from '@/lib/format';
 import { currentMode } from '@/lib/mode';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import {
@@ -18,7 +19,13 @@ import {
   subjectsGridSql,
 } from '@/lib/subjects-grid';
 
-export const metadata: Metadata = { title: 'Subjects' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Subjects', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 

@@ -26,6 +26,7 @@ import {
   parseEntityTab,
 } from '@/lib/entity-page';
 import { noticeFromSearchParams } from '@/lib/notices';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { planListPage } from '@/lib/plan-queries';
 import { syncFailed, syncLine, wallSqlText } from '@/lib/plan-view';
 import { loadLinkContext } from '@/lib/queries';
@@ -33,7 +34,13 @@ import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import { listFrom } from '@/lib/today';
 
-export const metadata: Metadata = { title: 'Timetable' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Timetable', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 

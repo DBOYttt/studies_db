@@ -7,6 +7,7 @@ import {
   type Semester,
   semesterFromRequest,
   semesterOptions,
+  unlistedSemester,
 } from '@/lib/semester-pure';
 
 type Ctx = { present: number[]; cookie: string | undefined };
@@ -51,18 +52,36 @@ function useOptions() {
   );
   // Admin pages are never filtered: no switcher there.
   const admin = pathname === '/admin' || pathname.startsWith('/admin/');
+  const options = admin ? [] : semesterOptions(present, current, path);
   return {
     path,
-    options: admin ? [] : semesterOptions(present, current, path),
+    options,
+    unlisted: options.length ? unlistedSemester(present, current) : null,
   };
+}
+
+/** Visible `All` / `3`, named `All semesters` / `Semester 3`. */
+function OptionText({ label }: { label: string }) {
+  return label === 'All' ? (
+    <>
+      All<span className="sr-only"> semesters</span>
+    </>
+  ) : (
+    <>
+      <span className="sr-only">Semester </span>
+      {label}
+    </>
+  );
 }
 
 /** Segmented links for the top bar (tablet and desktop). */
 function Segments() {
-  const { options } = useOptions();
+  const { options, unlisted } = useOptions();
   if (options.length === 0) return null;
+  // At least 24 px square (WCAG 2.5.8); every entry is styled alike, only the
+  // current one is filled.
   const base =
-    'flex items-center justify-center rounded px-2 py-0.5 text-[12px] font-medium tabular-nums';
+    'flex min-h-6 min-w-6 items-center justify-center rounded px-2 text-[12px] font-medium tabular-nums';
   return (
     <nav
       aria-label="Semester"
@@ -75,20 +94,25 @@ function Segments() {
         o.current ? (
           <span
             key={o.label}
-            aria-current="page"
+            aria-current="true"
             className={`${base} bg-accent-fill text-on-accent`}
           >
-            {o.label}
+            <OptionText label={o.label} />
           </span>
         ) : (
           <ModeLink
             key={o.label}
             href={o.href}
-            cls={`${base} text-accent-ink hover:bg-list-hover`}
+            cls={`${base} text-accent-ink transition-colors hover:bg-list-hover`}
           >
-            {o.label}
+            <OptionText label={o.label} />
           </ModeLink>
         ),
+      )}
+      {unlisted !== null && (
+        <span aria-current="true" className="px-1.5 text-[12px] text-muted">
+          Semester {unlisted} (no subjects)
+        </span>
       )}
     </nav>
   );
@@ -100,9 +124,13 @@ function Segments() {
  * JS the noscript button submits the form to the same route.
  */
 function PhoneRow() {
-  const { path, options } = useOptions();
+  const { path, options, unlisted } = useOptions();
   if (options.length === 0) return null;
   const val = (label: string) => (label === 'All' ? 'all' : label);
+  const current =
+    unlisted !== null
+      ? String(unlisted)
+      : val(options.find((o) => o.current)?.label ?? 'All');
   return (
     <form
       action="/semester"
@@ -114,21 +142,27 @@ function PhoneRow() {
       <select
         id="semester-select"
         name="to"
-        value={val(options.find((o) => o.current)?.label ?? 'All')}
+        value={current}
         onChange={(e) => {
           const o = options.find((x) => val(x.label) === e.target.value);
           if (o) window.location.assign(o.href);
         }}
-        className="min-h-11 rounded border-0 bg-transparent px-1 text-[13px] font-medium text-fg"
+        className="min-h-11 min-w-11 rounded border-0 bg-transparent px-2 text-[13px] font-medium text-fg"
       >
         {options.map((o) => (
           <option key={o.label} value={val(o.label)}>
             {o.label}
           </option>
         ))}
+        {unlisted !== null && (
+          <option value={String(unlisted)}>{unlisted} (no subjects)</option>
+        )}
       </select>
       <noscript>
-        <button type="submit" className="min-h-11 px-1 text-accent-ink">
+        <button
+          type="submit"
+          className="min-h-11 min-w-11 px-1 text-accent-ink"
+        >
           Go
         </button>
       </noscript>

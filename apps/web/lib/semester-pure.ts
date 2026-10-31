@@ -29,12 +29,21 @@ export function semesterFromRequest(
   return parseSemesterValue(raw) ?? parseSemesterValue(cookieValue);
 }
 
-export type SemesterOption = { label: string; href: string; current: boolean };
+export type SemesterOption = {
+  /** Visible text: `All` or the number. */
+  label: string;
+  /** Accessible name: `All semesters` or `Semester N`. */
+  name: string;
+  href: string;
+  current: boolean;
+};
 
 /**
- * Switcher entries: `All` then the present semesters (plus the active one)
- * ascending; `[]` when no semester is active and fewer than two distinct
- * semesters exist (nothing to switch between).
+ * Switcher entries: `All` then the present semesters ascending; `[]` when no
+ * semester is active and fewer than two distinct semesters exist (nothing to
+ * switch between). An active semester without subjects gets no entry of its
+ * own (the bar would shift): see `unlistedSemester`, and with it the bar
+ * stays visible so the filter can be undone.
  * Each href is the `/semester` route with `path` (path + query) as `next`.
  */
 export function semesterOptions(
@@ -42,22 +51,29 @@ export function semesterOptions(
   current: Semester | null,
   path: string,
 ): SemesterOption[] {
-  // An active semester is always listed (and keeps the switcher visible),
-  // so the filter it applies can be seen and undone.
-  const all = current === null ? present : [...present, current];
-  const sems = [...new Set(all)].sort((a, b) => a - b);
+  const sems = [...new Set(present)].sort((a, b) => a - b);
   if (current === null && sems.length < 2) return [];
   const next = encodeURIComponent(path);
   return [
     {
       label: 'All',
+      name: 'All semesters',
       href: `/semester?to=all&next=${next}`,
       current: current === null,
     },
     ...sems.map((n) => ({
       label: String(n),
+      name: `Semester ${n}`,
       href: `/semester?to=${n}&next=${next}`,
       current: current === n,
     })),
   ];
+}
+
+/** The active semester when no subject is in it (not listed), else null. */
+export function unlistedSemester(
+  present: number[],
+  current: Semester | null,
+): Semester | null {
+  return current !== null && !present.includes(current) ? current : null;
 }
