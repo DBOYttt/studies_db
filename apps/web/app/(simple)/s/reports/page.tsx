@@ -6,8 +6,9 @@ import { SimpleShell } from '@/components/simple/SimpleShell';
 import { cachedSubjectCards } from '@/lib/count-cache';
 import { getRoPool } from '@/lib/db';
 import { roErrorMessage } from '@/lib/db-errors';
-import { EXAMPLE_QUERIES } from '@/lib/example-queries';
+import { EXAMPLE_QUERIES, reportQuery } from '@/lib/example-queries';
 import { plural } from '@/lib/format';
+import { semesterPageMetadata } from '@/lib/page-meta';
 import { currentSemester } from '@/lib/semester';
 import { requireUser } from '@/lib/session';
 import {
@@ -19,7 +20,13 @@ import {
 import { navSubjects } from '@/lib/simple-page';
 import { runReadonlyQuery } from '@/lib/sql-console';
 
-export const metadata: Metadata = { title: 'Ready-made reports' };
+export async function generateMetadata({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}): Promise<Metadata> {
+  return semesterPageMetadata('Ready-made reports', await searchParams);
+}
 
 export const dynamic = 'force-dynamic';
 
@@ -37,11 +44,17 @@ export default async function SimpleReports({
   const sp = await searchParams;
   const r = parseReportIndex(sp.r);
   const query = EXAMPLE_QUERIES[r];
+  const semester = await currentSemester(sp);
+  const run = reportQuery(r, semester);
   const [cards, result] = await Promise.all([
-    cachedSubjectCards(await currentSemester(sp)),
-    runReadonlyQuery(getRoPool(), query.sql, { maxRows: MAX_ROWS }).catch(
-      (err: unknown) => ({ ok: false as const, error: roErrorMessage(err) }),
-    ),
+    cachedSubjectCards(semester),
+    runReadonlyQuery(getRoPool(), run.sql, {
+      maxRows: MAX_ROWS,
+      values: run.values,
+    }).catch((err: unknown) => ({
+      ok: false as const,
+      error: roErrorMessage(err),
+    })),
   ]);
   const sqlHref = `/mode?to=advanced&next=${encodeURIComponent(`/s/reports?r=${r}`)}`;
   return (
@@ -74,6 +87,7 @@ export default async function SimpleReports({
           {result.ok && (
             <span className="text-[13px] text-muted">
               {plural(result.rows.length, 'row', 'rows')}
+              {semester !== null && ` · semester ${semester}`}
             </span>
           )}
           <span className="flex-1" />
@@ -86,7 +100,7 @@ export default async function SimpleReports({
           </a>
           {result.ok && (
             <a
-              href={`/s/reports/csv?r=${r}`}
+              href={`/s/reports/csv?r=${r}&sem=${semester ?? 'all'}`}
               download
               className="inline-flex h-8 items-center gap-1.5 rounded-md bg-accent-fill px-3.5 font-semibold text-on-accent transition-colors duration-100 hover:bg-accent-fill-hover active:translate-y-px"
             >

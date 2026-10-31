@@ -144,6 +144,8 @@ export interface SimpleFileFilter {
   kind?: ClassKind;
   group?: number;
   tagId?: number;
+  /** Only files of this semester's subjects (null or missing: all). */
+  semester?: number | null;
   limit: number;
   offset?: number;
   /** false: skip the COUNT(*) (callers that never show a total). */
@@ -176,6 +178,12 @@ export async function listSimpleFiles(
   if (f.tagId !== undefined) {
     conds.push(
       sql`EXISTS (SELECT 1 FROM topic_tags tt WHERE tt.topic_id = ${topics.id} AND tt.tag_id = ${f.tagId})`,
+    );
+  }
+  // A subquery, so the count (which does not join subjects) filters the same.
+  if (f.semester != null) {
+    conds.push(
+      sql`${topics.subjectId} IN (SELECT s.id FROM subjects s WHERE s.semester = ${f.semester})`,
     );
   }
   const where = and(...conds);

@@ -300,6 +300,22 @@ describe('listSimpleFiles', () => {
     const empty = await listSimpleFiles(db, { subjectId: id.pus, limit: 9 });
     expect(empty.total).toBe(0);
   });
+  it('filters by semester, the total too', async () => {
+    const s1 = await listSimpleFiles(db, { semester: 1, limit: 9 });
+    expect(s1.rows.map((x) => x.filename)).toEqual([
+      'macierze.pdf',
+      'inne.pdf',
+    ]);
+    expect(s1.total).toBe(2);
+    const s2 = await listSimpleFiles(db, { semester: 2, limit: 9 });
+    expect(s2.total).toBe(4);
+    const s5 = await listSimpleFiles(db, { semester: 5, limit: 9 });
+    expect(s5.rows).toEqual([]);
+    expect(s5.total).toBe(0);
+    expect(
+      (await listSimpleFiles(db, { semester: null, limit: 9 })).total,
+    ).toBe(6);
+  });
 });
 
 describe('searchSimpleFiles', () => {
