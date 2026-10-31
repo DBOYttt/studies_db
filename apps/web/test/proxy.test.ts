@@ -99,4 +99,28 @@ describe('proxy', () => {
       ).toBe('/login-info');
     }
   });
+
+  it('re-sets an existing sid on page navigations only (sliding session)', () => {
+    const nav = (headers: Record<string, string>, method = 'GET') =>
+      proxy(
+        new NextRequest('http://localhost:3000/sql', {
+          method,
+          headers: { cookie: 'sid=abc', ...headers },
+        }),
+      ).headers.get('set-cookie');
+    for (const h of [{ 'sec-fetch-mode': 'navigate' }, {}] as Record<
+      string,
+      string
+    >[]) {
+      const c = nav(h);
+      expect(c, JSON.stringify(h)).toContain('sid=abc');
+      expect(c).toContain('Max-Age=34560000');
+      expect(c).toContain('HttpOnly');
+      expect(c?.toLowerCase()).toContain('samesite=lax');
+    }
+    expect(nav({ 'sec-fetch-mode': 'navigate', rsc: '1' })).toBeNull();
+    expect(nav({ 'sec-fetch-mode': 'cors' })).toBeNull();
+    expect(nav({ 'next-action': 'x' }, 'POST')).toBeNull();
+    expect(nav({ 'sec-fetch-mode': 'navigate' }, 'POST')).toBeNull();
+  });
 });

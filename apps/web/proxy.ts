@@ -1,9 +1,20 @@
 import { type NextRequest, NextResponse } from 'next/server';
+import { SESSION_COOKIE, sessionCookieOptions } from './lib/session-cookie';
 import {
   fromLoadedPage,
   SESSION_ENDED_PATH,
   SIGN_IN_PATH,
 } from './lib/session-ended';
+
+/**
+ * A top-level page load (not a fetch, RSC request or Server Action). Browsers
+ * without Fetch Metadata send no Sec-Fetch-Mode; they count as navigations.
+ */
+function isPageNavigation(req: NextRequest): boolean {
+  if (req.method !== 'GET' || req.headers.has('rsc')) return false;
+  const mode = req.headers.get('sec-fetch-mode');
+  return mode === null || mode === 'navigate';
+}
 
 /**
  * Cheap first line of defence: no `sid` cookie -> /login-info (with
@@ -12,7 +23,17 @@ import {
  * every (app) page and route handler.
  */
 export function proxy(req: NextRequest) {
-  if (req.cookies.get('sid')?.value) return NextResponse.next();
+  const sid = req.cookies.get(SESSION_COOKIE)?.value;
+  if (sid) {
+    const res = NextResponse.next();
+    // Sliding session: keep the cookie as long-lived as the DB session, also
+    // for cookies issued with the old 30-day max-age. Same value; an invalid
+    // one is still refused by requireUser().
+    if (isPageNavigation(req)) {
+      res.cookies.set(SESSION_COOKIE, sid, sessionCookieOptions());
+    }
+    return res;
+  }
   // A Server Action from a page left open after signing out: a redirect here
   // would hand the action an HTML page, which Next shows as an error. The
   // action's own requireUser() answers with a redirect the client follows.

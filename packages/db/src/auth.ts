@@ -5,6 +5,8 @@ import { loginTokens, sessions, users } from './schema.js';
 
 export const LOGIN_TOKEN_TTL_MS = 15 * 60_000;
 export const SESSION_TTL_MS = 30 * 24 * 3600_000;
+/** A used session is pushed to `now + SESSION_TTL_MS` at most once per this. */
+export const SESSION_RENEW_AFTER_MS = 24 * 3600_000;
 
 export function hashToken(token: string): string {
   return createHash('sha256').update(token).digest('hex');
@@ -99,6 +101,7 @@ export async function getSessionUser(
       displayName: users.displayName,
       avatarUrl: users.avatarUrl,
       isAdmin: users.isAdmin,
+      expiresAt: sessions.expiresAt,
     })
     .from(sessions)
     .innerJoin(users, eq(users.id, sessions.userId))
@@ -109,7 +112,33 @@ export async function getSessionUser(
         eq(users.isBanned, false),
       ),
     );
-  return row ?? null;
+  if (!row) return null;
+  const { expiresAt, ...user } = row;
+  // Sliding session: a session in use never runs out; one idle for
+  // SESSION_TTL_MS does. Renewed at most once a day to keep writes rare.
+  if (
+    expiresAt.getTime() <
+    now.getTime() + SESSION_TTL_MS - SESSION_RENEW_AFTER_MS
+  ) {
+    try {
+      await db
+        .update(sessions)
+        .set({ expiresAt: new Date(now.getTime() + SESSION_TTL_MS) })
+        .where(
+          and(
+            eq(sessions.tokenHash, hashToken(sessionToken)),
+            gt(sessions.expiresAt, now),
+          ),
+        );
+    } catch (err) {
+      // The session is still valid; only its renewal waits for the next use.
+      console.error(
+        'session renew failed',
+        (err as { code?: string }).code ?? 'unknown',
+      );
+    }
+  }
+  return user;
 }
 
 export async function deleteSession(

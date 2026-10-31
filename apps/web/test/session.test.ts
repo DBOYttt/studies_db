@@ -57,7 +57,7 @@ describe('sessionCookieOptions', () => {
       httpOnly: true,
       sameSite: 'lax',
       secure: false,
-      maxAge: 30 * 24 * 3600,
+      maxAge: 400 * 24 * 3600,
       path: '/',
     });
   });

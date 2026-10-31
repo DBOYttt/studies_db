@@ -1,31 +1,26 @@
-import { getSessionUser, SESSION_TTL_MS } from '@studies/db';
+import { getSessionUser } from '@studies/db';
 import { cookies, headers } from 'next/headers';
 import { notFound, redirect } from 'next/navigation';
 import { cache } from 'react';
 import { getDb } from './db';
+import { SESSION_COOKIE } from './session-cookie';
 import {
   fromLoadedPage,
   SESSION_ENDED_PATH,
   SIGN_IN_PATH,
 } from './session-ended';
 
-export const SESSION_COOKIE = 'sid';
+export {
+  SESSION_COOKIE,
+  SESSION_COOKIE_MAX_AGE_S,
+  sessionCookieOptions,
+} from './session-cookie';
 
 export interface SessionUser {
   id: number;
   displayName: string;
   avatarUrl: string | null;
   isAdmin: boolean;
-}
-
-export function sessionCookieOptions() {
-  return {
-    httpOnly: true,
-    sameSite: 'lax' as const,
-    secure: process.env.NODE_ENV === 'production',
-    maxAge: SESSION_TTL_MS / 1000,
-    path: '/',
-  };
 }
 
 /**
