@@ -1,7 +1,8 @@
 import { loadFont } from '@remotion/google-fonts/Geist';
 import { loadFont as loadMono } from '@remotion/google-fonts/GeistMono';
 
-// The web app's typeface (Geist) and accent (#235a81, app/globals.css).
+// The web app's typeface (Geist) and its dark-theme accent ink (#84b9e2,
+// app/globals.css); the screenshots are captured in the dark theme.
 export const { fontFamily } = loadFont('normal', {
   weights: ['400', '500', '600', '700'],
   subsets: ['latin', 'latin-ext'],
@@ -12,13 +13,13 @@ export const { fontFamily: monoFamily } = loadMono('normal', {
 });
 
 export const colors = {
-  bg: '#f4f4f5',
-  ink: '#18181b',
-  muted: '#52525b',
-  accent: '#235a81',
+  bg: '#111113',
+  ink: '#fafafa',
+  muted: '#a1a1aa',
+  accent: '#84b9e2',
   highlight: '#f59e0b',
-  panel: '#ffffff',
-  line: '#e4e4e7',
+  panel: '#09090b',
+  line: '#3f3f46',
 };
 
 /** Screenshot space: every desktop capture is 1920x1080. */

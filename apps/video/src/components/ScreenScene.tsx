@@ -101,7 +101,7 @@ const Screen = ({ shots, steps }: Pick<Props, 'shots' | 'steps'>) => {
         overflow: 'hidden',
         borderRadius: 14,
         border: `1px solid ${colors.line}`,
-        boxShadow: '0 24px 60px rgba(24,24,27,0.12)',
+        boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
         backgroundColor: colors.panel,
       }}
     >
@@ -147,7 +147,7 @@ const Screen = ({ shots, steps }: Pick<Props, 'shots' | 'steps'>) => {
             height: focus[3] * k + 2 * pad,
             borderRadius: 12,
             border: `4px solid ${colors.highlight}`,
-            boxShadow: '0 0 0 4000px rgba(24,24,27,0.28)',
+            boxShadow: '0 0 0 4000px rgba(0,0,0,0.5)',
             opacity: outline,
           }}
         />

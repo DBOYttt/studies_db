@@ -57,18 +57,19 @@ export const Tutorial = () => (
           { from: 0, caption: 'Start shows your day at a glance.' },
           {
             from: 3,
-            caption: "Today's classes and your next class.",
-            focus: [332, 88, 1296, 180],
+            caption:
+              "Today's classes. On a day without classes, your next one.",
+            focus: [332, 88, 1296, 130],
           },
           {
             from: 6.5,
             caption: 'Upcoming tests, exams and other events.',
-            focus: [332, 285, 1296, 270],
+            focus: [332, 240, 1296, 270],
           },
           {
             from: 10,
             caption: 'All subjects of your year. Open one to see its files.',
-            focus: [332, 590, 1296, 490],
+            focus: [332, 545, 1296, 535],
           },
         ]}
       />

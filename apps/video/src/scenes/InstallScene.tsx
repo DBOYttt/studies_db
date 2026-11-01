@@ -52,8 +52,9 @@ export const InstallScene = () => {
           width: PHONE.width + 32,
           height: PHONE.height + 32,
           borderRadius: 64,
-          backgroundColor: '#18181b',
-          boxShadow: '0 24px 60px rgba(24,24,27,0.2)',
+          backgroundColor: '#27272a',
+          border: `2px solid ${colors.line}`,
+          boxShadow: '0 24px 60px rgba(0,0,0,0.5)',
         }}
       />
       <div

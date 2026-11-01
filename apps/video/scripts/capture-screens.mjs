@@ -1,6 +1,6 @@
 // Captures the screenshots the tutorial video is built from, from the running
 // dev server (pnpm dev:web on :3000, seeded with pnpm db:seed) as the seeded
-// student seed-u1. Desktop shots are 1600x900 CSS px at 1.2x = 1920x1080.
+// student seed-u1, in the dark theme. Desktop shots are 1600x900 CSS px at 1.2x = 1920x1080.
 //   node apps/video/scripts/capture-screens.mjs
 import { execSync } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -42,7 +42,7 @@ const browser = await chromium.launch();
 const desk = await browser.newContext({
   viewport: { width: 1600, height: 900 },
   deviceScaleFactor: 1.2,
-  colorScheme: 'light',
+  colorScheme: 'dark',
 });
 const page = await desk.newPage();
 await shot(page, 'login-info', '/login-info');
@@ -77,7 +77,10 @@ await shot(page, 'search', '/s/search?q=sortowanie');
 await desk.close();
 
 // iPhone Safari: the Install app guide.
-const phone = await browser.newContext({ ...devices['iPhone 13'] });
+const phone = await browser.newContext({
+  ...devices['iPhone 13'],
+  colorScheme: 'dark',
+});
 const mob = await phone.newPage();
 await mob.goto(base + loginLink().replace(base, ''), {
   waitUntil: 'networkidle',
