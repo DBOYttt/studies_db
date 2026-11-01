@@ -3,6 +3,10 @@
 Nothing is published on the host: the web container only `expose`s 3000 on the compose network and
 `cloudflared` connects outward to Cloudflare.
 
+**Fresh install:** follow the runbook in `.claude/skills/server-setup/SKILL.md` (written for an agent running
+on the server, also readable by hand). The "Upgrading to …" sections below are for existing installs only; on a
+fresh one `migrate` applies every migration on the first `up`.
+
 ## Prerequisites
 
 Compose provider (not installed by default with podman):
@@ -395,4 +399,7 @@ conditions (`service_healthy`, `service_completed_successfully`) need podman-com
 
 The image builds and individual containers were verified with `podman build`/`podman run`; the
 full `podman compose` flow was not run on the dev machine (no compose provider), so do the first
-`compose up` and the Discord DOCX upload check on the server.
+`compose up` and the Discord DOCX upload check on the server. On 2026-11-01 the web production build
+(`next build`, standalone output) was built natively and smoke-tested with `NODE_ENV=production`
+(sign-in page, manifest, icons, static assets, security headers); the web container image itself is still
+first built on the server.
