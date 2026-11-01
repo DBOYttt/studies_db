@@ -16,7 +16,8 @@
     "qa:sandbox": "pnpm --filter @studies/db qa sandbox",
     "qa:login": "pnpm --filter @studies/db qa login",
     "qa:serve": "pnpm --filter @studies/web qa:serve",
-    "check:lang": "node scripts/check-ui-language.mjs"
+    "check:lang": "node scripts/check-ui-language.mjs",
+    "dev:video": "pnpm --filter @studies/video dev"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.5.0",
