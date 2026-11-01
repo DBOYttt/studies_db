@@ -6,7 +6,9 @@ the year's tests, exams and other events. Students sign in with a one-time link 
 
 ## Tutorial video
 
-[![Studies DB tutorial (2 min): click to watch](docs/media/tutorial-poster.jpg)](docs/media/studies-db-tutorial.mp4)
+
+https://github.com/user-attachments/assets/d7ee41d2-e3ea-437f-8f1b-46dd12f391f6
+
 
 A two-minute tour for students covering signing in, Start, semesters, subjects and files, the timetable and My
 groups, events, search and installing the app. It is made from real screenshots of the app with
