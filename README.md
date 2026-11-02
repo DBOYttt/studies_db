@@ -11,8 +11,7 @@ https://github.com/user-attachments/assets/d7ee41d2-e3ea-437f-8f1b-46dd12f391f6
 
 
 A two-minute tour for students covering signing in, Start, semesters, subjects and files, the timetable and My
-groups, events, search and installing the app. It is made from real screenshots of the app with
-[Remotion](https://www.remotion.dev/) (`apps/video`).
+groups, events, search and installing the app, made from real screenshots of the app.
 
 ## What it does
 
@@ -39,7 +38,6 @@ A pnpm monorepo. The apps never call each other: they talk only through the data
 | `apps/bot` | discord.js bot: ingestion, slash commands, `/setup`, panels, reminders |
 | `apps/worker` | job queue (previews, text extraction) and the UniTime sync loop |
 | `apps/web` | Next.js 16 website (App Router, React 19, Tailwind 4) |
-| `apps/video` | Remotion project for the tutorial video |
 
 ## Getting started
 
@@ -63,7 +61,6 @@ Other commands:
 pnpm test                         # all packages, sequentially
 pnpm lint                         # biome
 pnpm --filter @studies/web e2e    # Playwright end-to-end tests
-pnpm dev:video                    # Remotion Studio
 ```
 
 ## Deployment

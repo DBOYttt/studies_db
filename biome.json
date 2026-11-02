@@ -31,8 +31,7 @@
       "!**/next-env.d.ts",
       "!**/test-results",
       "!**/playwright-report",
-      "!.worktrees",
-      "!.claude/skills/remotion-*"
+      "!.worktrees"
     ]
   }
 }
