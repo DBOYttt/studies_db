@@ -1,4 +1,5 @@
 import { existsSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import { cacheHeaderRules } from './lib/cache-headers';
@@ -9,6 +10,8 @@ import { securityHeaderRules } from './lib/security-headers';
 // (--env-file-if-exists can't be used: Next forwards it into worker NODE_OPTIONS.)
 const rootEnv = fileURLToPath(new URL('../../.env', import.meta.url));
 if (existsSync(rootEnv)) process.loadEnvFile(rootEnv);
+
+const require = createRequire(import.meta.url);
 
 const config: NextConfig = {
   // e2e / side-by-side dev servers set NEXT_DIST_DIR so they don't fight over the .next lock.
@@ -40,6 +43,14 @@ const config: NextConfig = {
     cfg.resolve.extensionAlias = {
       ...cfg.resolve.extensionAlias,
       '.js': ['.ts', '.tsx', '.js'],
+    };
+    // The modern pdf.js build reads the global `Iterator` as soon as it loads
+    // (Safari 18.4+), which crashed the whole page on older iPhones. The legacy
+    // build polyfills it; react-pdf imports `pdfjs-dist` and gets it too. The
+    // worker copy is the legacy one as well (scripts/copy-pdf-worker.mjs).
+    cfg.resolve.alias = {
+      ...cfg.resolve.alias,
+      'pdfjs-dist$': require.resolve('pdfjs-dist/legacy/build/pdf.mjs'),
     };
     // packages/db computes the repo root with `new URL('../../..', import.meta.url)`;
     // webpack would otherwise try to resolve that as an asset and fail the build.

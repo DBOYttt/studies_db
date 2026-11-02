@@ -4,7 +4,7 @@
  * No nonce: Next's inline bootstrap scripts need `'unsafe-inline'` without
  * one (audit ruling R1). `'unsafe-eval'` is for React's dev tooling only.
  * Avatars are hot-linked from Discord's CDN. pdf.js runs its worker from
- * /pdf.worker.<version>.min.mjs; CodeMirror and React Flow inject inline styles.
+ * /pdf.worker.<version>-legacy.min.mjs; CodeMirror and React Flow inject inline styles.
  */
 export function contentSecurityPolicy(nodeEnv: string | undefined): string {
   const dev = nodeEnv === 'development';

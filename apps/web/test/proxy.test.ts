@@ -41,6 +41,7 @@ describe('proxy', () => {
       '/icon.svg',
       '/icon.svg?3f9a1c2b',
       '/pdf.worker.6.3.289.min.mjs',
+      '/pdf.worker.6.3.289-legacy.min.mjs',
       '/api/wydarzenia/12/pliki',
       '/manifest.webmanifest',
       '/icons/icon-192.png',

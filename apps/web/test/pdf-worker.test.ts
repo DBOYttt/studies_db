@@ -8,15 +8,18 @@ import {
   PDF_WORKER_CACHE,
   pdfWorkerFile,
 } from '../lib/cache-headers';
+import nextConfig from '../next.config';
 
 const require = createRequire(import.meta.url);
 const pdfjsVersion = (require('pdfjs-dist/package.json') as { version: string })
   .version;
 
 describe('pdf.js worker caching', () => {
-  it('the worker file name carries the pdf.js version', () => {
+  it('the worker file name carries the pdf.js version and the build', () => {
+    // A new name for the legacy build: a phone that cached the modern worker
+    // (immutable) must not keep using it.
     expect(pdfWorkerFile(pdfjsVersion)).toBe(
-      `pdf.worker.${pdfjsVersion}.min.mjs`,
+      `pdf.worker.${pdfjsVersion}-legacy.min.mjs`,
     );
   });
 
@@ -41,5 +44,36 @@ describe('pdf.js worker caching', () => {
       'utf8',
     );
     expect(src).toContain('pdfWorkerFile(pdfjs.version)');
+  });
+});
+
+// The modern pdf.js build needs the newest browsers (it reads the global
+// `Iterator` as soon as it loads, which Safari has only since 18.4), so an
+// older iPhone could not even load the viewer. The legacy build polyfills it.
+describe('pdf.js legacy build', () => {
+  const read = (rel: string) =>
+    readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+
+  it('webpack resolves pdfjs-dist (also inside react-pdf) to the legacy build', () => {
+    const cfg = nextConfig.webpack?.(
+      { resolve: {}, module: {} },
+      // biome-ignore lint/suspicious/noExplicitAny: the context is unused
+      {} as any,
+    );
+    expect(cfg.resolve.alias['pdfjs-dist$']).toBe(
+      require.resolve('pdfjs-dist/legacy/build/pdf.mjs'),
+    );
+  });
+
+  it('the copied worker is the legacy one', () => {
+    expect(read('../scripts/copy-pdf-worker.mjs')).toContain(
+      "require.resolve('pdfjs-dist/legacy/build/pdf.worker.min.mjs')",
+    );
+  });
+
+  it('a viewer that throws shows the preview fallback, not the error page', () => {
+    const src = read('../components/FilePreview.tsx');
+    expect(src).toContain('class PreviewBoundary');
+    expect(src).toMatch(/<PreviewBoundary[^>]*>\s*<PdfViewer/);
   });
 });

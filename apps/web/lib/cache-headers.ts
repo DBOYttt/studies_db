@@ -6,9 +6,13 @@
  */
 export const PDF_WORKER_CACHE = 'public, max-age=31536000, immutable';
 
-/** `public/` file name of the pdf.js worker for that pdf.js version. */
+/**
+ * `public/` file name of the pdf.js (legacy build) worker for that pdf.js
+ * version. `-legacy` keeps it apart from the modern worker that was served
+ * under `pdf.worker.<version>.min.mjs` and may still be cached.
+ */
 export const pdfWorkerFile = (version: string) =>
-  `pdf.worker.${version}.min.mjs`;
+  `pdf.worker.${version}-legacy.min.mjs`;
 
 export function cacheHeaderRules(): {
   source: string;

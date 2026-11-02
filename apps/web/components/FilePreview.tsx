@@ -1,7 +1,7 @@
 'use client';
 
 import dynamic from 'next/dynamic';
-import { useEffect, useState } from 'react';
+import { Component, type ReactNode, useEffect, useState } from 'react';
 import { usePreviewWatchdog } from '@/lib/preview-watchdog';
 
 const PdfViewer = dynamic(() => import('./PdfViewer'), {
@@ -46,6 +46,27 @@ function TextPreview({ src, rendered, onError }: { src: string } & Watch) {
       {text}
     </pre>
   );
+}
+
+/**
+ * Catches an error thrown while the viewer loads or renders (e.g. the pdf.js
+ * chunk failing to evaluate in an old browser) and reports it as a load error,
+ * so the preview shows its fallback instead of Next's whole-page error screen.
+ */
+class PreviewBoundary extends Component<
+  { onError: () => void; children: ReactNode },
+  { failed: boolean }
+> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch() {
+    this.props.onError();
+  }
+  render() {
+    return this.state.failed ? null : this.props.children;
+  }
 }
 
 /** Shown on a load error, or when nothing rendered within 15 s. */
@@ -95,11 +116,13 @@ export function FilePreview({
   if (watch.failed) return <PreviewFailed id={id} />;
   if (kind === 'pdf')
     return (
-      <PdfViewer
-        src={src}
-        onRendered={watch.rendered}
-        onError={watch.onError}
-      />
+      <PreviewBoundary onError={watch.onError}>
+        <PdfViewer
+          src={src}
+          onRendered={watch.rendered}
+          onError={watch.onError}
+        />
+      </PreviewBoundary>
     );
   if (kind === 'text')
     return (
