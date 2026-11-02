@@ -1,4 +1,4 @@
-// QA sandbox for the persona agents (.claude/agents/qa-*.md, /qa-run):
+// QA sandbox for manual and persona-based QA runs (docs/qa/RULES.md):
 //   qa.ts sandbox          reset `studies_qa_test`, seed example data, add the
 //                          persona users and a few events
 //   qa.ts login <persona>  print a one-time login link for that persona

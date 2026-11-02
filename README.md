@@ -65,11 +65,9 @@ pnpm --filter @studies/web e2e    # Playwright end-to-end tests
 
 ## Deployment
 
-Production runs on Podman Compose behind a Cloudflare Tunnel. See [docs/deploy.md](docs/deploy.md) and the
-step-by-step runbook in [.claude/skills/server-setup/SKILL.md](.claude/skills/server-setup/SKILL.md).
+Production runs on Podman Compose behind a Cloudflare Tunnel. See [docs/deploy.md](docs/deploy.md).
 
 ## Documentation
 
-- [CLAUDE.md](CLAUDE.md): a detailed tour of the codebase and its conventions
 - [docs/glossary.md](docs/glossary.md): UI vocabulary
 - [docs/superpowers/specs/](docs/superpowers/specs/): design specs for each feature

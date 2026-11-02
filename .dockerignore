@@ -15,5 +15,7 @@ apps/web/public/pdf.worker.*min.mjs
 **/.next-*
 .qa
 .playwright-mcp
-.claude/settings.local.json
+.claude/
+CLAUDE.md
+.mcp.json
 .worktrees

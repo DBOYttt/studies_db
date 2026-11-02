@@ -17,7 +17,11 @@ apps/web/public/pdf.worker.*.min.mjs
 apps/web/test-results/
 apps/web/playwright-report/
 
-.claude/settings.local.json
+# Local tool settings (not published)
+.claude/
+CLAUDE.md
+.mcp.json
+AGENTS.md
 
 # QA persona sandbox (pnpm qa:sandbox / qa:serve): files and screenshots
 .qa/
